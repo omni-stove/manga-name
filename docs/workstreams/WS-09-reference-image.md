@@ -16,7 +16,7 @@ Phase 2 / 開発中の依存: DOC のみ / 統合時: WS-04, WS-06, WS-07 / パ�
 - キャラクターの参照画像（`Character.referenceRef`）の読み込みも同じ経路で行う。`CharacterInspector.onPickReference` から呼ぶ。
 
 ## モック
-- `MemoryStorageAdapter` を使う。`resolveAsset` は `URL.createObjectURL`。
+- `createMemoryStorage` を使う。`resolveAsset` は `URL.createObjectURL`。
 
 ## 受け入れ条件
 - [ ] 3 形式が読み込めて表示される

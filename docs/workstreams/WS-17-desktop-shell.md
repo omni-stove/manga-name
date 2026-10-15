@@ -7,7 +7,7 @@ Tauri 2 で `apps/web` をラップし、ローカルファイル保存を提供
 
 ## スコープ
 - Tauri 2 プロジェクト。`apps/web` の Vite ビルドを `frontendDist` に指定。開発時は `devUrl` で Vite に接続。
-- `FileStorageAdapter`: プロジェクトを `<name>.manga.json`、アセットを同名ディレクトリ `<name>.manga.assets/` に保存。`ref` は `file:<relative path>`。
+- `createFileStorage`: プロジェクトを `<name>.manga.json`、アセットを同名ディレクトリ `<name>.manga.assets/` に保存。`ref` は `file:<relative path>`。
 - ネイティブダイアログ（開く、保存、名前を付けて保存、書き出し先）。
 - 最近開いたファイル一覧。
 - メニュー: ファイル、編集（Undo / Redo をアプリにディスパッチ）、表示。

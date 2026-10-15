@@ -19,44 +19,41 @@ const DIGITS: Record<string, number[]> = {
   '9': [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100],
 }
 
-class Raster {
-  readonly pixels: Uint8Array
-  constructor(
-    readonly width: number,
-    readonly height: number,
-  ) {
-    this.pixels = new Uint8Array(width * height).fill(GRAY)
+/** 灰色で初期化した width x height のグレー画素列と、そこに INK で描く関数 */
+function createRaster(width: number, height: number) {
+  const pixels = new Uint8Array(width * height).fill(GRAY)
+
+  const set = (x: number, y: number) => {
+    if (x >= 0 && x < width && y >= 0 && y < height) pixels[y * width + x] = INK
   }
 
-  set(x: number, y: number) {
-    if (x >= 0 && x < this.width && y >= 0 && y < this.height) this.pixels[y * this.width + x] = INK
+  const fill = (x0: number, y0: number, w: number, h: number) => {
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y)
   }
 
-  fill(x0: number, y0: number, w: number, h: number) {
-    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) this.set(x, y)
-  }
-
-  line(x0: number, y0: number, x1: number, y1: number, thickness: number) {
+  const line = (x0: number, y0: number, x1: number, y1: number, thickness: number) => {
     const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1)
     for (let i = 0; i <= steps; i++) {
       const x = Math.round(x0 + ((x1 - x0) * i) / steps)
       const y = Math.round(y0 + ((y1 - y0) * i) / steps)
-      this.fill(x - (thickness >> 1), y - (thickness >> 1), thickness, thickness)
+      fill(x - (thickness >> 1), y - (thickness >> 1), thickness, thickness)
     }
   }
 
-  text(digits: string, x0: number, y0: number, scale: number) {
+  const text = (digits: string, x0: number, y0: number, scale: number) => {
     ;[...digits].forEach((d, i) => {
       const rows = DIGITS[d] ?? []
       rows.forEach((row, y) => {
         for (let x = 0; x < 5; x++) {
           if (row & (1 << (4 - x))) {
-            this.fill(x0 + (i * 6 + x) * scale, y0 + y * scale, scale, scale)
+            fill(x0 + (i * 6 + x) * scale, y0 + y * scale, scale, scale)
           }
         }
       })
     })
   }
+
+  return { pixels, fill, line, text }
 }
 
 /** コマの実寸の縦横比で、長辺を 512px にした出力サイズ */
@@ -75,7 +72,7 @@ export function placeholderPng(
   order: number,
   size: { w: number; h: number },
 ): Uint8Array<ArrayBuffer> {
-  const r = new Raster(size.w, size.h)
+  const r = createRaster(size.w, size.h)
   const border = Math.max(2, Math.round(Math.min(size.w, size.h) / 64))
   r.fill(0, 0, size.w, border)
   r.fill(0, size.h - border, size.w, border)
