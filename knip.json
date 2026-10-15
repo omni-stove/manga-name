@@ -5,6 +5,9 @@
     "packages/render": {
       "entry": ["src/index.ts", "src/backend-node.ts"]
     },
+    "apps/web": {
+      "entry": ["src/store/project-store.ts"]
+    },
     "workers/api": {
       "ignoreDependencies": ["cloudflare"]
     }
