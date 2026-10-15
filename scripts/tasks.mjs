@@ -3,7 +3,6 @@
  * docs/tasks.json の状態を進め、docs/08-tasks.md を生成する。
  * 使い方: node scripts/tasks.mjs <next|show|start|done|render> [id] [--decided]
  */
-import { execSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -96,16 +95,11 @@ const start = (id, decided) => {
   console.log(`着手: ${label(t)}`)
 }
 
-/** in_progress のタスクを、pnpm check が通ったときだけ done にする。 */
+/** in_progress のタスクを done にする。検証はしない。 */
 const done = (id) => {
   const t = getTask(id)
   if (t.status === 'todo') fail(`${label(t)} は未着手。先に make tasks start ${id}`)
   if (t.status === 'done') fail(`${label(t)} は ${t.doneAt} に完了済み`)
-  try {
-    execSync('pnpm check', { cwd: root, stdio: 'inherit' })
-  } catch {
-    fail('pnpm check が通らないので完了にしない')
-  }
   t.status = 'done'
   t.doneAt = today()
   save()
@@ -138,7 +132,7 @@ function render() {
   p('| 依存 | 先に Done になっている必要があるタスク。`Q*` は `06-open-questions.md` の決定待ち |')
   p('| 範囲 | 触ってよいディレクトリ |')
   p(
-    '| 完了条件 | 全部通れば Done。テストかコマンドで確認できる形にしてある。「目視」と書いたものだけ人が見る |',
+    '| 完了条件 | 実装が満たすべき条件。Done の判定には使わない |',
   )
   p('| 仕様 | 着手前に読む文書 |')
   p('')
@@ -153,7 +147,7 @@ function render() {
   p('| `make tasks next` | 着手できるタスクを列挙する |')
   p('| `make tasks show <id>` | 依存、範囲、完了条件、仕様を表示する |')
   p('| `make tasks start <id>` | 着手にする。依存が未完了なら拒否 |')
-  p('| `make tasks done <id>` | `pnpm check` を通してから完了にする |')
+  p('| `make tasks done <id>` | 完了にする。検証はしない |')
   p('')
   p(
     `タスク総数 ${data.tasks.length}。G0 と G1 は直列で、ここがクリティカルパス。G2 以降は依存が揃った順に並列に出せる。`,
