@@ -1,0 +1,203 @@
+{
+  "$comment": "sample-page-01.json の pg_1 を、その settings（rtl、既定の閾値）で diagnosePage した出力。packages/diagnosis/src/diagnose.ts のスナップショットテストが数値を 1e-6 に丸めて照合する。",
+  "diagnosis": {
+    "pageId": "pg_1",
+    "readingOrderOk": true,
+    "inferredOrder": ["pn_1", "pn_2", "pn_3", "pn_4", "pn_5", "pn_6"],
+    "panels": [
+      {
+        "panelId": "pn_1",
+        "sweepPath": [
+          { "x": 1, "y": 0.13 },
+          { "x": 0, "y": 0.13 }
+        ],
+        "focus": [
+          {
+            "focusPointId": "fp_1_forest",
+            "kind": "keyObject",
+            "panelId": "pn_1",
+            "t": 0.35,
+            "distance": 0.15,
+            "strong": 0,
+            "weak": 1,
+            "status": "ok"
+          },
+          {
+            "focusPointId": "fp_1_e",
+            "kind": "face",
+            "panelId": "pn_1",
+            "t": 0.7,
+            "distance": 0.28,
+            "strong": 1,
+            "weak": 1,
+            "status": "ok"
+          },
+          {
+            "focusPointId": "bb_1",
+            "kind": "bubble",
+            "panelId": "pn_1",
+            "t": 0.08,
+            "distance": 0.28,
+            "strong": 1,
+            "weak": 0,
+            "status": "ok"
+          }
+        ],
+        "bubbleOrderOk": true,
+        "hint": "視線は中央の glass-crystal forest を大きく捉え、右上の フキダシ から中央下の E tiny, walking へ流れる"
+      },
+      {
+        "panelId": "pn_2",
+        "sweepPath": [
+          { "x": 1, "y": 0.39 },
+          { "x": 0.5, "y": 0.39 }
+        ],
+        "focus": [
+          {
+            "focusPointId": "fp_2_e",
+            "kind": "face",
+            "panelId": "pn_2",
+            "t": 0.25,
+            "distance": 0.2,
+            "strong": 0,
+            "weak": 2,
+            "status": "ok"
+          },
+          {
+            "focusPointId": "fp_2_vial",
+            "kind": "keyObject",
+            "panelId": "pn_2",
+            "t": 0.55,
+            "distance": 0,
+            "strong": 1,
+            "weak": 1,
+            "status": "ok"
+          }
+        ],
+        "bubbleOrderOk": true,
+        "hint": "視線は右の E masked, intent から中央の sample vial, glowing spores へ流れる"
+      },
+      {
+        "panelId": "pn_3",
+        "sweepPath": [
+          { "x": 0.48, "y": 0.39 },
+          { "x": 0, "y": 0.39 }
+        ],
+        "focus": [
+          {
+            "focusPointId": "fp_3_e",
+            "kind": "face",
+            "panelId": "pn_3",
+            "t": 0.55,
+            "distance": 0.05,
+            "strong": 0,
+            "weak": 0,
+            "status": "ok"
+          },
+          {
+            "focusPointId": "bb_3",
+            "kind": "bubble",
+            "panelId": "pn_3",
+            "t": 0.15,
+            "distance": 0.25,
+            "strong": 1,
+            "weak": 0,
+            "status": "ok"
+          }
+        ],
+        "bubbleOrderOk": true,
+        "hint": "視線は右の フキダシ から中央の E looks up へ流れる"
+      },
+      {
+        "panelId": "pn_4",
+        "sweepPath": [
+          { "x": 1, "y": 0.665 },
+          { "x": 0, "y": 0.665 }
+        ],
+        "focus": [
+          {
+            "focusPointId": "fp_4_mask",
+            "kind": "face",
+            "panelId": "pn_4",
+            "t": 0.55,
+            "distance": 0.2,
+            "strong": 1,
+            "weak": 2,
+            "status": "ok"
+          },
+          {
+            "focusPointId": "fp_4_e",
+            "kind": "face",
+            "panelId": "pn_4",
+            "t": 0.18,
+            "distance": 0.38,
+            "strong": 0,
+            "weak": 0,
+            "status": "ok"
+          }
+        ],
+        "bubbleOrderOk": true,
+        "hint": "視線は中央の beast porcelain mask を大きく捉え、右下の E crouched, still へ流れる"
+      },
+      {
+        "panelId": "pn_5",
+        "sweepPath": [
+          { "x": 1, "y": 0.9175 },
+          { "x": 0.5, "y": 0.9175 }
+        ],
+        "focus": [
+          {
+            "focusPointId": "fp_5_e",
+            "kind": "face",
+            "panelId": "pn_5",
+            "t": 0.38,
+            "distance": 0,
+            "strong": 0,
+            "weak": 0,
+            "status": "ok"
+          }
+        ],
+        "bubbleOrderOk": true,
+        "hint": "視線は中央の E eyes behind lenses に集まる"
+      },
+      {
+        "panelId": "pn_6",
+        "sweepPath": [
+          { "x": 0.48, "y": 0.9175 },
+          { "x": 0, "y": 0.9175 }
+        ],
+        "focus": [
+          {
+            "focusPointId": "fp_6_sprouts",
+            "kind": "keyObject",
+            "panelId": "pn_6",
+            "t": 0.6,
+            "distance": 0,
+            "strong": 1,
+            "weak": 1,
+            "status": "ok"
+          },
+          {
+            "focusPointId": "bb_6",
+            "kind": "bubble",
+            "panelId": "pn_6",
+            "t": 0.15,
+            "distance": 0.2,
+            "strong": 1,
+            "weak": 0,
+            "status": "ok"
+          }
+        ],
+        "bubbleOrderOk": true,
+        "hint": "視線は右の フキダシ から中央の fresh sprouts in footprint へ流れる"
+      }
+    ],
+    "bubbleChain": [
+      { "x": 0.92, "y": 0.0572 },
+      { "x": 0.408, "y": 0.3325 },
+      { "x": 0.408, "y": 0.8845 }
+    ],
+    "summary": { "total": 12, "ok": 12, "weak": 0, "miss": 0 },
+    "issues": []
+  }
+}
