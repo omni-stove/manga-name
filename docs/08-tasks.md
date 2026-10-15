@@ -42,7 +42,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 
 ## 進捗
 
-完了 10 / 着手中 0 / 未着手 49
+完了 11 / 着手中 0 / 未着手 48
 
 ### G0 基盤
 
@@ -92,7 +92,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 
 ### G4 クラウドと相談
 
-- [ ] 35 projects CRUD と楽観ロック
+- [x] 35 projects CRUD と楽観ロック（完了 2026-10-15）
 - [ ] 36 assets、usage、レート制限、CORS
 - [ ] 37 staging deploy
 - [ ] 38 認証ミドルウェア
@@ -367,7 +367,7 @@ graph LR
 
 | ID | 着手 | 完了 | タスク | 依存 | 範囲 | 完了条件 | 仕様 |
 |---|---|---|---|---|---|---|---|
-| 35 | [ ] | [ ] | **projects CRUD と楽観ロック**<br>D1 projects / users、5MB 上限、parseProject 不通過は 400、X-Debug-User | 18 | `workers/api` | - 全エンドポイントの統合テスト<br>- If-Match 競合で 409<br>- フィクスチャの PUT / GET スモーク | [workstreams/WS-13-workers-api.md](workstreams/WS-13-workers-api.md) |
+| 35 | [x] | [x] | **projects CRUD と楽観ロック**<br>D1 projects / users、5MB 上限、parseProject 不通過は 400、X-Debug-User | 18 | `workers/api` | - 全エンドポイントの統合テスト<br>- If-Match 競合で 409<br>- フィクスチャの PUT / GET スモーク | [workstreams/WS-13-workers-api.md](workstreams/WS-13-workers-api.md) |
 | 36 | [ ] | [ ] | **assets、usage、レート制限、CORS**<br>R2 署名 URL、GET、DELETE、20MB 上限、60 req/min、`GET /v1/usage`、月間上限 | 35 | `workers/api` | - 10MB PNG を署名 URL で upload して GET できるテスト<br>- 61 回目で 429<br>- 月間上限で生成が 402 | [workstreams/WS-13-workers-api.md](workstreams/WS-13-workers-api.md) |
 | 37 | [ ] | [ ] | **staging deploy** | 36 | `workers/api`<br>`.github` | - `wrangler deploy` が staging に通り health が 200 | [workstreams/WS-13-workers-api.md](workstreams/WS-13-workers-api.md) |
 | 38 | [ ] | [ ] | **認証ミドルウェア** | 35, Q3 | `workers/api` | - Bearer 検証のテスト<br>- `/v1/ai/*` も認証を通る<br>- X-Debug-User が dev 以外で無効 | [workstreams/WS-14-auth.md](workstreams/WS-14-auth.md) |
