@@ -45,7 +45,7 @@ function scripted(responses: (() => Promise<LayoutProposalResponse>)[]) {
       calls.push(req)
       const next = responses[calls.length - 1]
       if (!next) throw new Error('no more responses')
-      return next()
+      return await next()
     },
     critique: fake.critique,
   }
