@@ -1,0 +1,113 @@
+name: PR Review
+
+# Claude reviews every non-draft PR and leaves must-fix findings as inline comments plus a
+# summary comment ending in `Verdict: changes requested` or `Verdict: LGTM`. When threads
+# are left unresolved, a second job fixes them on the PR branch, pushes once with an
+# `[agent-fix]` commit, and replies to each thread. Three consecutive `[agent-fix]`
+# commits stop the fix job. Set ANTHROPIC_API_KEY as a repo secret. Pushes made with
+# GITHUB_TOKEN do not re-trigger this workflow; set AGENT_GITHUB_TOKEN for a full loop.
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  actions: read
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --max-turns 80
+            --allowedTools "Read,Glob,Grep,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh api:*)"
+            --system-prompt "Always write in Japanese."
+          prompt: |
+            Review PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+
+            Read the PR description, its linked issues, commits, comments and review threads (`gh pr view --comments`, `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`) and work out what the PR is meant to achieve and what it leaves out of scope. Then read the diff (`gh pr diff`) and judge each change against that purpose, inspecting the surrounding code and sibling modules in the checkout.
+
+            Report only defects that must be fixed:
+            - Security: check the OWASP Top 10:2025 categories, OWASP ASVS 5.0 and CWE. Derive trust boundaries and deployment assumptions from the repository. Keep a finding only when you can state the input an attacker sends and what it yields. Start the finding with the OWASP / CWE / ASVS item; leave out a number you cannot identify.
+            - Correctness and performance: keep a finding only when a concrete input or state causes a wrong result, a failure, or a material resource cost.
+            - Consistency: keep a finding only when an existing file establishes the pattern the change departs from.
+
+            Drop findings hedged as "likely" or "possibly", findings resolved only by the author's intent, missing features or incomplete work, and anything the author already addressed or decided against in the PR text or threads. Raise a point from a resolved thread again only when the defect is still in the code and nobody explained why it is acceptable. Cite the repository file that states any external constraint a finding rests on.
+
+            Post each finding as an inline comment on the changed line with the inline comment tool. Then post one summary comment with `gh pr comment`: a short list of the findings, or what you checked when there are none, ending with the line `Verdict: changes requested` or `Verdict: LGTM`.
+
+  fix:
+    needs: review
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Decide whether to fix
+        id: gate
+        run: |
+          set -eu
+          consecutive=0
+          for subject in $(git log -n 3 --pretty=%s | sed 's/ .*//'); do
+            [ "$subject" = "[agent-fix]" ] || break
+            consecutive=$((consecutive + 1))
+          done
+          unresolved=$(gh api graphql -f query='query($owner:String!,$repo:String!,$pr:Int!){
+            repository(owner:$owner,name:$repo){ pullRequest(number:$pr){
+              reviewThreads(first:100){ nodes{ isResolved isOutdated } } } } }' \
+            -f owner="${{ github.repository_owner }}" -f repo="${{ github.event.repository.name }}" -F pr="$PR" \
+            --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .isOutdated == false)] | length')
+          echo "consecutive agent-fix commits: $consecutive, unresolved threads: $unresolved"
+          if [ "$consecutive" -ge 3 ] || [ "$unresolved" -eq 0 ]; then echo "run=false" >> "$GITHUB_OUTPUT"; else echo "run=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: jdx/mise-action@v2
+        if: steps.gate.outputs.run == 'true'
+        with:
+          cache: true
+      - run: mise run install
+        if: steps.gate.outputs.run == 'true'
+      - name: Git identity
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          git config user.name "claude[bot]"
+          git config user.email "41898282+claude[bot]@users.noreply.github.com"
+      - uses: anthropics/claude-code-action@v1
+        if: steps.gate.outputs.run == 'true'
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --max-turns 100
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(make:*),Bash(mise run:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh api:*)"
+            --system-prompt "Always write in Japanese."
+          prompt: |
+            Address the unresolved review threads on PR #${{ github.event.pull_request.number }} in ${{ github.repository }}, and nothing else.
+
+            List them with `gh api graphql` on `repository.pullRequest.reviewThreads` (keep `isResolved == false` and `isOutdated == false`; note each thread's first comment `databaseId`). Fix each valid finding with the smallest change that holds the root cause, leaving unrelated code and a test's assertions as they are. Leave lockfiles and generated files to their generators. Skip a finding that is wrong or out of this PR's scope and say why in its reply.
+
+            Run `make lint` and `make test`; fix failures caused by your change.
+
+            Commit everything in one commit whose message starts with `[agent-fix] `, then `git push`. Reply to every thread you addressed or skipped with what you did, through `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments/<databaseId>/replies -f body=...`. Resolve no thread; a person does that.

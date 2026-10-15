@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+  - workers/*
+
+# 全パッケージで同じバージョンを使う依存。各 package.json では "catalog:" と書く。
+catalog:
+  typescript: ^7.0.2
+  vitest: ^5.0.4
+  zod: ^4.6.7

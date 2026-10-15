@@ -1,0 +1,488 @@
+{
+  "$comment": "6 コマ、右綴じの 1 ページを 03-data-model.md の Page として表現したもの。arts は空で、生成前のネーム。04-diagnosis-spec.md の期待値の入力。",
+  "project": {
+    "schemaVersion": 1,
+    "id": "prj_sample",
+    "title": "sample",
+    "createdAt": "2026-10-15T00:00:00.000Z",
+    "updatedAt": "2026-10-15T00:00:00.000Z",
+    "settings": {
+      "direction": "rtl",
+      "pageSize": {
+        "w": 182,
+        "h": 257,
+        "unit": "mm"
+      },
+      "dpi": 300,
+      "style": {
+        "prompt": "manga name rough, monochrome line art, loose sketch",
+        "negative": "text, letters, speech bubbles, color"
+      }
+    },
+    "characters": [
+      {
+        "id": "chr_e",
+        "name": "E",
+        "shortName": "E",
+        "appearance": "少女。ショートカット。丸い保護ゴーグルと布のマスク。丈の長い採集コート。背負い袋。"
+      }
+    ],
+    "episodes": [
+      {
+        "id": "ep_1",
+        "title": "sample episode",
+        "pages": [
+          {
+            "id": "pg_1",
+            "side": "left",
+            "scribbles": [],
+            "panels": [
+              {
+                "id": "pn_1",
+                "order": 1,
+                "rect": {
+                  "x": 0.0,
+                  "y": 0.0,
+                  "w": 1.0,
+                  "h": 0.26
+                },
+                "bubbles": [
+                  {
+                    "id": "bb_1",
+                    "order": 1,
+                    "text": "……",
+                    "shape": "narration",
+                    "pos": {
+                      "x": 0.92,
+                      "y": 0.22
+                    },
+                    "size": {
+                      "w": 0.1,
+                      "h": 0.55
+                    }
+                  }
+                ],
+                "camera": "ロング",
+                "note": "ガラス結晶の森。E は米粒サイズで歩いている。",
+                "arts": [],
+                "focusPoints": [
+                  {
+                    "id": "fp_1_forest",
+                    "kind": "keyObject",
+                    "label": "glass-crystal forest",
+                    "pos": {
+                      "x": 0.65,
+                      "y": 0.35
+                    },
+                    "weight": 0.5
+                  },
+                  {
+                    "id": "fp_1_e",
+                    "kind": "face",
+                    "label": "E tiny, walking",
+                    "pos": {
+                      "x": 0.3,
+                      "y": 0.78
+                    },
+                    "weight": 0.2,
+                    "characterId": "chr_e"
+                  }
+                ],
+                "vectors": [
+                  {
+                    "id": "vc_1_a",
+                    "kind": "motion",
+                    "from": {
+                      "x": 0.42,
+                      "y": 0.78
+                    },
+                    "to": {
+                      "x": 0.31,
+                      "y": 0.78
+                    },
+                    "strength": "strong",
+                    "targetFocusId": "fp_1_e"
+                  },
+                  {
+                    "id": "vc_1_b",
+                    "kind": "speed",
+                    "from": {
+                      "x": 0.2,
+                      "y": 0.8
+                    },
+                    "to": {
+                      "x": 0.29,
+                      "y": 0.79
+                    },
+                    "strength": "weak",
+                    "targetFocusId": "fp_1_e"
+                  },
+                  {
+                    "id": "vc_1_c",
+                    "kind": "gaze",
+                    "from": {
+                      "x": 0.33,
+                      "y": 0.7
+                    },
+                    "to": {
+                      "x": 0.62,
+                      "y": 0.4
+                    },
+                    "strength": "weak",
+                    "sourceFocusId": "fp_1_e",
+                    "targetFocusId": "fp_1_forest"
+                  }
+                ]
+              },
+              {
+                "id": "pn_2",
+                "order": 2,
+                "rect": {
+                  "x": 0.5,
+                  "y": 0.275,
+                  "w": 0.5,
+                  "h": 0.23
+                },
+                "bubbles": [],
+                "camera": "バストアップ",
+                "note": "マスク越しの真剣な目。手元のサンプル瓶が光る。",
+                "arts": [],
+                "focusPoints": [
+                  {
+                    "id": "fp_2_e",
+                    "kind": "face",
+                    "label": "E masked, intent",
+                    "pos": {
+                      "x": 0.75,
+                      "y": 0.3
+                    },
+                    "weight": 0.3,
+                    "characterId": "chr_e"
+                  },
+                  {
+                    "id": "fp_2_vial",
+                    "kind": "keyObject",
+                    "label": "sample vial, glowing spores",
+                    "pos": {
+                      "x": 0.45,
+                      "y": 0.5
+                    },
+                    "weight": 0.3
+                  }
+                ],
+                "vectors": [
+                  {
+                    "id": "vc_2_a",
+                    "kind": "gaze",
+                    "from": {
+                      "x": 0.72,
+                      "y": 0.33
+                    },
+                    "to": {
+                      "x": 0.47,
+                      "y": 0.49
+                    },
+                    "strength": "strong",
+                    "sourceFocusId": "fp_2_e",
+                    "targetFocusId": "fp_2_vial"
+                  },
+                  {
+                    "id": "vc_2_b",
+                    "kind": "speed",
+                    "from": {
+                      "x": 0.95,
+                      "y": 0.2
+                    },
+                    "to": {
+                      "x": 0.78,
+                      "y": 0.28
+                    },
+                    "strength": "weak",
+                    "targetFocusId": "fp_2_e"
+                  },
+                  {
+                    "id": "vc_2_c",
+                    "kind": "speed",
+                    "from": {
+                      "x": 0.9,
+                      "y": 0.45
+                    },
+                    "to": {
+                      "x": 0.78,
+                      "y": 0.33
+                    },
+                    "strength": "weak",
+                    "targetFocusId": "fp_2_e"
+                  },
+                  {
+                    "id": "vc_2_d",
+                    "kind": "speed",
+                    "from": {
+                      "x": 0.3,
+                      "y": 0.6
+                    },
+                    "to": {
+                      "x": 0.43,
+                      "y": 0.52
+                    },
+                    "strength": "weak",
+                    "targetFocusId": "fp_2_vial"
+                  }
+                ]
+              },
+              {
+                "id": "pn_3",
+                "order": 3,
+                "rect": {
+                  "x": 0.0,
+                  "y": 0.275,
+                  "w": 0.48,
+                  "h": 0.23
+                },
+                "bubbles": [
+                  {
+                    "id": "bb_3",
+                    "order": 1,
+                    "speakerId": "chr_e",
+                    "text": "……？",
+                    "shape": "normal",
+                    "pos": {
+                      "x": 0.85,
+                      "y": 0.25
+                    },
+                    "size": {
+                      "w": 0.22,
+                      "h": 0.4
+                    },
+                    "tail": {
+                      "x": 0.64,
+                      "y": 0.38
+                    }
+                  }
+                ],
+                "note": "何かに気づいて見上げる。",
+                "arts": [],
+                "focusPoints": [
+                  {
+                    "id": "fp_3_e",
+                    "kind": "face",
+                    "label": "E looks up",
+                    "pos": {
+                      "x": 0.45,
+                      "y": 0.45
+                    },
+                    "weight": 0.3,
+                    "characterId": "chr_e"
+                  }
+                ],
+                "vectors": [
+                  {
+                    "id": "vc_3_a",
+                    "kind": "motion",
+                    "from": {
+                      "x": 0.44,
+                      "y": 0.47
+                    },
+                    "to": {
+                      "x": 0.15,
+                      "y": 0.95
+                    },
+                    "strength": "weak",
+                    "sourceFocusId": "fp_3_e"
+                  }
+                ]
+              },
+              {
+                "id": "pn_4",
+                "order": 4,
+                "rect": {
+                  "x": 0.0,
+                  "y": 0.51,
+                  "w": 1.0,
+                  "h": 0.31
+                },
+                "bubbles": [],
+                "camera": "ロング、俯瞰気味",
+                "note": "磁器の獣面が画面中央に大きく。E は右下で身を屈めて静止。",
+                "arts": [],
+                "focusPoints": [
+                  {
+                    "id": "fp_4_mask",
+                    "kind": "face",
+                    "label": "beast porcelain mask",
+                    "pos": {
+                      "x": 0.45,
+                      "y": 0.3
+                    },
+                    "weight": 0.7
+                  },
+                  {
+                    "id": "fp_4_e",
+                    "kind": "face",
+                    "label": "E crouched, still",
+                    "pos": {
+                      "x": 0.82,
+                      "y": 0.88
+                    },
+                    "weight": 0.15,
+                    "characterId": "chr_e"
+                  }
+                ],
+                "vectors": [
+                  {
+                    "id": "vc_4_a",
+                    "kind": "gaze",
+                    "from": {
+                      "x": 0.8,
+                      "y": 0.86
+                    },
+                    "to": {
+                      "x": 0.48,
+                      "y": 0.33
+                    },
+                    "strength": "strong",
+                    "sourceFocusId": "fp_4_e",
+                    "targetFocusId": "fp_4_mask"
+                  },
+                  {
+                    "id": "vc_4_b",
+                    "kind": "speed",
+                    "from": {
+                      "x": 0.75,
+                      "y": 0.28
+                    },
+                    "to": {
+                      "x": 0.52,
+                      "y": 0.3
+                    },
+                    "strength": "weak",
+                    "targetFocusId": "fp_4_mask"
+                  },
+                  {
+                    "id": "vc_4_c",
+                    "kind": "speed",
+                    "from": {
+                      "x": 0.2,
+                      "y": 0.45
+                    },
+                    "to": {
+                      "x": 0.4,
+                      "y": 0.34
+                    },
+                    "strength": "weak",
+                    "targetFocusId": "fp_4_mask"
+                  }
+                ]
+              },
+              {
+                "id": "pn_5",
+                "order": 5,
+                "rect": {
+                  "x": 0.5,
+                  "y": 0.835,
+                  "w": 0.5,
+                  "h": 0.165
+                },
+                "bubbles": [],
+                "camera": "目元のアップ",
+                "note": "レンズ越しの目。感情を読ませない。",
+                "arts": [],
+                "focusPoints": [
+                  {
+                    "id": "fp_5_e",
+                    "kind": "face",
+                    "label": "E eyes behind lenses",
+                    "pos": {
+                      "x": 0.62,
+                      "y": 0.5
+                    },
+                    "weight": 0.3,
+                    "characterId": "chr_e"
+                  }
+                ],
+                "vectors": []
+              },
+              {
+                "id": "pn_6",
+                "order": 6,
+                "rect": {
+                  "x": 0.0,
+                  "y": 0.835,
+                  "w": 0.48,
+                  "h": 0.165
+                },
+                "bubbles": [
+                  {
+                    "id": "bb_6",
+                    "order": 1,
+                    "speakerId": "chr_e",
+                    "text": "……芽が",
+                    "shape": "normal",
+                    "pos": {
+                      "x": 0.85,
+                      "y": 0.3
+                    },
+                    "size": {
+                      "w": 0.22,
+                      "h": 0.5
+                    },
+                    "tail": {
+                      "x": 0.7,
+                      "y": 0.58
+                    }
+                  }
+                ],
+                "camera": "足元のアップ",
+                "note": "足跡の中に新芽。",
+                "arts": [],
+                "focusPoints": [
+                  {
+                    "id": "fp_6_sprouts",
+                    "kind": "keyObject",
+                    "label": "fresh sprouts in footprint",
+                    "pos": {
+                      "x": 0.4,
+                      "y": 0.5
+                    },
+                    "weight": 0.3
+                  }
+                ],
+                "vectors": [
+                  {
+                    "id": "vc_6_a",
+                    "kind": "gaze",
+                    "from": {
+                      "x": 0.8,
+                      "y": 0.4
+                    },
+                    "to": {
+                      "x": 0.43,
+                      "y": 0.49
+                    },
+                    "strength": "strong",
+                    "sourceFocusId": "bb_6",
+                    "targetFocusId": "fp_6_sprouts"
+                  },
+                  {
+                    "id": "vc_6_b",
+                    "kind": "speed",
+                    "from": {
+                      "x": 0.15,
+                      "y": 0.55
+                    },
+                    "to": {
+                      "x": 0.37,
+                      "y": 0.51
+                    },
+                    "strength": "weak",
+                    "targetFocusId": "fp_6_sprouts"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

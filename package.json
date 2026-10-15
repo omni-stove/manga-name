@@ -1,0 +1,22 @@
+{
+  "name": "manga",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "pnpm -r --parallel --aggregate-output run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "mise run check"
+  },
+  "devDependencies": {
+    "knip": "^6.41.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

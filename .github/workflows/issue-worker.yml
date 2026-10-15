@@ -1,0 +1,66 @@
+name: Issue Worker
+
+# An issue labeled bug, prototype or implementation is implemented by Claude, which pushes
+# a branch and opens a PR that references the issue. Set ANTHROPIC_API_KEY as a repo
+# secret. A PR opened with GITHUB_TOKEN does not trigger other workflows (CI, PR Review);
+# set AGENT_GITHUB_TOKEN (a PAT or GitHub App token with contents + pull-requests write)
+# when those should run on agent PRs.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+concurrency:
+  group: issue-worker-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    if: contains(fromJSON('["bug","prototype","implementation"]'), github.event.label.name)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+      BRANCH: agent/${{ github.event.label.name }}/issue-${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+      - uses: jdx/mise-action@v2
+        with:
+          cache: true
+      - run: mise run install
+      - name: Git identity
+        run: |
+          git config user.name "claude[bot]"
+          git config user.email "41898282+claude[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --max-turns 150
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh issue view:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(make:*),Bash(mise run:*)"
+            --system-prompt "Always write in Japanese."
+          prompt: |
+            ${{ github.event.label.name == 'bug' && 'Fix the bug reported in' || github.event.label.name == 'prototype' && 'Build a prototype that demonstrates the concept in' || 'Implement, at production quality with real data access, error handling and tests where they apply,' }} issue #${{ github.event.issue.number }} "${{ github.event.issue.title }}":
+
+            ${{ github.event.issue.body }}
+
+            ${{ github.event.label.name == 'prototype' && 'Mock data in place of real DB/API integration is fine.' || 'Review the prototype PR first if the issue references one.' }}
+            Follow the patterns the existing code establishes. Leave lockfiles and generated files to their generators.
+            Run `make lint` and `make test` and fix what fails in your own change.
+
+            You are on branch `${{ env.BRANCH }}`. Commit your change with a message that says what it does, push with `git push -u origin ${{ env.BRANCH }}`, then open the PR:
+            `gh pr create --base ${{ github.event.repository.default_branch }} --head ${{ env.BRANCH }} --label ${{ github.event.label.name }}${{ github.event.label.name == 'prototype' && ' --draft' || '' }} --title "<what the change does>" --body "<body>"`
+            The body has the sections 目的 (starting with `Closes #${{ github.event.issue.number }}` when the issue is fully done, else `refs #${{ github.event.issue.number }}`), 実装方針, 確認方法 and 見て欲しいポイント.
+
+            If nothing needs changing, change nothing, open no PR, and comment why on the issue with `gh issue comment`.
