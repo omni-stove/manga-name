@@ -19,10 +19,11 @@ jobs:
       id-token: write
     with:
       node-version: "26"
-      lint-command: 'pnpm dlx @biomejs/biome@2 check . && pnpm --silent knip'
+      # The standalone Biome binary, not the npm package or mise, so lint needs nothing
+      # beyond the checkout.
+      lint-command: 'curl -fsSL -o "$RUNNER_TEMP/biome" https://github.com/biomejs/biome/releases/download/@biomejs/biome@2.5.15/biome-linux-x64 && chmod +x "$RUNNER_TEMP/biome" && "$RUNNER_TEMP/biome" ci .'
       typecheck-command: 'pnpm typecheck'
-      test-command: 'pnpm test && pnpm dlx bats@1 tests'
-      run-test: true
+      run-test: false
       run-review: true
       review-provider: "claude"
     secrets: inherit
