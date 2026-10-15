@@ -11,7 +11,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "pnpm -r --parallel --aggregate-output run typecheck",
-    "test": "vitest run",
+    "test": "vitest run && pnpm --filter \"./workers/*\" test",
     "test:watch": "vitest",
     "check": "mise run check"
   },

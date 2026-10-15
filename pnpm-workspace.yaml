@@ -3,7 +3,17 @@ packages:
   - packages/*
   - workers/*
 
+# wrangler が連れてくる esbuild・sharp・workerd の install script は走らせない。どれも同梱の
+# optional dependency にあるビルド済みバイナリを確かめるだけで、無くても動くため。
+allowBuilds:
+  esbuild: false
+  sharp: false
+  workerd: false
+
 # 全パッケージで同じバージョンを使う依存。各 package.json では "catalog:" と書く。
 catalog:
   typescript: ^7.0.2
   vitest: ^5.0.4
+
+minimumReleaseAgeExclude:
+  - '@cloudflare/vitest-plugin@1.4.3'

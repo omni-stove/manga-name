@@ -1,5 +1,6 @@
 export * from './fake-image-provider'
 export * from './fake-llm-provider'
+export * from './http-image-provider'
 export * from './placeholder'
 export * from './prompts'
 export * from './provider'

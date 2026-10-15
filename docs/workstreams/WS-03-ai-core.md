@@ -53,6 +53,6 @@ GET  /v1/health
 ## 受け入れ条件
 - [ ] `prompts.panelArt` のスナップショットテスト。フィクスチャ Panel 4 で note、camera、E の appearance、2 焦点、3 ベクトルが順に含まれる
 - [ ] `createFakeImageProvider` がフィクスチャ 6 コマの PNG を返し、decode できる
-- [ ] Workers ルートが Fake で end-to-end で動く（`@cloudflare/vitest-pool-workers`）
+- [ ] Workers ルートが Fake で end-to-end で動く（`@cloudflare/vitest-plugin`）
 - [ ] トークン無しは 401、不正応答は再試行後 502、11 回目は 429
 - [ ] 実プロバイダ 1 社でフィクスチャ Panel 4 からモノクロ線画が返る（目視。`docs/fixtures/art/real/` に残す）

@@ -485,7 +485,7 @@
       "group": "G2",
       "title": "Workers AI プロキシ",
       "detail": "Hono + wrangler、health、panel-art ルート（Fake）、共有トークン、D1 ai_usage、レート制限、createHttpImageProvider",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "04"
       ],
@@ -494,14 +494,16 @@
         "packages/ai"
       ],
       "verify": [
-        "`POST /v1/ai/panel-art` が Fake で end-to-end（vitest-pool-workers）",
+        "`POST /v1/ai/panel-art` が Fake で end-to-end（@cloudflare/vitest-plugin）",
         "トークン無しは 401、不正応答は再試行後 502、11 回目は 429",
         "ai_usage に行が入る",
         "createHttpImageProvider が multipart を組み立てるテスト"
       ],
       "spec": [
         "workstreams/WS-03-ai-core.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "19",
