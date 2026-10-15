@@ -1,4 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreBinaries": ["biome", "mise"]
+  "ignoreBinaries": ["biome", "mise"],
+  "workspaces": {
+    "packages/render": {
+      "entry": ["src/index.ts", "src/backend-node.ts"]
+    }
+  }
 }
