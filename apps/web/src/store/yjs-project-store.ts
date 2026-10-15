@@ -79,7 +79,15 @@ export function createYjsProjectStore(
     captureTimeout: 0,
   })
   undoManager.on('stack-item-added', () => {
-    if (undoManager.undoStack.length > historyLimit) undoManager.undoStack.shift()
+    if (undoManager.undoStack.length <= historyLimit) return
+    const dropped = undoManager.undoStack.shift()
+    if (!dropped) return
+    // shift だけでは StackItem が付けた keep が残り、削除済みの内容が GC されないため、clear() と同じく外す
+    doc.transact((tr) => {
+      Y.iterateDeletedStructs(tr, dropped.deletions, (struct) => {
+        if (struct instanceof Y.Item) struct.keep = false
+      })
+    }, untracked)
   })
 
   // 1 回の操作が複数のトランザクションになっても、購読者への通知と保存の予約を 1 回にまとめる

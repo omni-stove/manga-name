@@ -2,10 +2,7 @@ import { createEmptyProject, fixtures, type Patch, type Project } from '@manga/s
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { ProjectStoreOptions, WebProjectStore } from './project-store'
 
-type ProjectStoreFactory = (
-  initial: Project,
-  options: ProjectStoreOptions,
-) => WebProjectStore
+type ProjectStoreFactory = (initial: Project, options: ProjectStoreOptions) => WebProjectStore
 
 /**
  * ProjectStore の実装が満たすテスト。Immer 実装と Yjs 実装の両方から、各ファイルの in-source テストで呼ぶ。
