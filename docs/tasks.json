@@ -217,7 +217,7 @@
       "id": "06",
       "group": "G1",
       "title": "StorageAdapter、createMemoryStorage、createIndexedDbStorage、createStorage",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "03"
       ],
@@ -231,7 +231,9 @@
       "spec": [
         "03-data-model.md ストレージアダプタ",
         "workstreams/WS-06-app-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "07",
@@ -688,7 +690,7 @@
       "id": "27",
       "group": "G3",
       "title": "sweepPath、projectOntoSweep、inferReadingOrder",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "03"
       ],
@@ -703,7 +705,9 @@
       "spec": [
         "04-diagnosis-spec.md",
         "workstreams/WS-10-diagnosis.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "28",
