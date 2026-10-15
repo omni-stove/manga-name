@@ -880,7 +880,7 @@
       "group": "G4",
       "title": "projects CRUD と楽観ロック",
       "detail": "D1 projects / users、5MB 上限、parseProject 不通過は 400、X-Debug-User",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "18"
       ],
@@ -894,7 +894,9 @@
       ],
       "spec": [
         "workstreams/WS-13-workers-api.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "36",
