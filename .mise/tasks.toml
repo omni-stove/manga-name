@@ -68,4 +68,4 @@ arg "<cmd>" help="next | show | start | done | render"
 arg "[id]" help="task id, e.g. 12"
 flag "--decided" help="start a gated task whose question is decided in docs/06-open-questions.md"
 '''
-run = 'node scripts/tasks.mjs "$usage_cmd" ${usage_id:-} ${usage_decided:+--decided}'
+run = 'scripts/tasks.sh "$usage_cmd" ${usage_id:-} ${usage_decided:+--decided}'
