@@ -3,6 +3,9 @@ import type { ID, Panel, ReadingDirection } from '@manga/schema'
 /** 上端の差がこの値以下の Panel は同じ段とみなす */
 const ROW_TOLERANCE = 0.03
 
+/** 上端の差は 2 進小数で丸まる（0.13 - 0.1 > 0.03）ので、閾値ちょうどの差を仕様どおり同じ段に入れる余裕 */
+const ROW_EPSILON = 1e-9
+
 /**
  * Panel の配置から読み順を推定して id を返す。
  * 上端が近い（差 0.03 以下）Panel を同じ段とし、段を上から、段内は rtl なら右から左、ltr なら左から右に並べる。
@@ -16,7 +19,7 @@ export function inferReadingOrder(panels: readonly Panel[], direction: ReadingDi
   for (const panel of byTop) {
     const row = rows.at(-1)
     // 段の基準は段の先頭の上端に固定する。直前の Panel との差で判定すると段が連鎖して伸びる
-    if (row && panel.rect.y - rowTop <= ROW_TOLERANCE) {
+    if (row && panel.rect.y - rowTop <= ROW_TOLERANCE + ROW_EPSILON) {
       row.push(panel)
     } else {
       rows.push([panel])
@@ -59,6 +62,11 @@ if (import.meta.vitest) {
     expect(inferReadingOrder([panel('left', 0.05, 0.031), right], 'rtl')).toEqual(['right', 'left'])
     const separate = [panel('left', 0.05, 0), panel('right', 0.55, 0.031)]
     expect(inferReadingOrder(separate, 'rtl')).toEqual(['left', 'right'])
+  })
+
+  test('a difference of exactly 0.03 from a non-zero top shares a row despite rounding', () => {
+    const panels = [panel('left', 0.05, 0.1), panel('right', 0.55, 0.13)]
+    expect(inferReadingOrder(panels, 'rtl')).toEqual(['right', 'left'])
   })
 
   test('does not mutate frozen input', () => {

@@ -1,7 +1,7 @@
 import type { Panel, Point, ReadingDirection, Sweep } from '@manga/schema'
 
 /** `Panel.sweep` が無いときの視線経路 */
-const DEFAULT_SWEEP: Sweep = { kind: 'centre', y: 0.5 }
+const DEFAULT_SWEEP = { kind: 'centre', y: 0.5 } as const satisfies Sweep
 
 /** コマ内座標（0..1）をページ座標に変換する */
 const toPage = (panel: Panel, p: Point): Point => ({
@@ -77,12 +77,21 @@ if (import.meta.vitest) {
   const panel = (sweep?: Sweep): Panel =>
     ({ id: 'pn', rect: { x: 0.5, y: 0.2, w: 0.4, h: 0.4 }, sweep }) as Panel
 
+  // rect の原点と幅の和は 2 進小数で丸まる（0.2 + 0.1 ≠ 0.3）ので、点列は座標ごとに近似で比べる
+  const expectPath = (actual: Point[], expected: Point[]) => {
+    expect(actual).toHaveLength(expected.length)
+    actual.forEach((p, i) => {
+      expect(p.x).toBeCloseTo(expected[i]?.x ?? Number.NaN)
+      expect(p.y).toBeCloseTo(expected[i]?.y ?? Number.NaN)
+    })
+  }
+
   test('centre sweep runs entrance edge to exit edge in page coordinates', () => {
-    expect(sweepPath(panel(), 'rtl')).toEqual([
+    expectPath(sweepPath(panel(), 'rtl'), [
       { x: 0.9, y: 0.4 },
       { x: 0.5, y: 0.4 },
     ])
-    expect(sweepPath(panel({ kind: 'centre', y: 0.25 }), 'ltr')).toEqual([
+    expectPath(sweepPath(panel({ kind: 'centre', y: 0.25 }), 'ltr'), [
       { x: 0.5, y: 0.3 },
       { x: 0.9, y: 0.3 },
     ])
@@ -111,19 +120,17 @@ if (import.meta.vitest) {
       ],
     })
     expect(sweepPath(p, 'ltr')).toEqual(sweepPath(p, 'rtl'))
-    expect(sweepPath(p, 'rtl')).toEqual([
+    expectPath(sweepPath(p, 'rtl'), [
       { x: 0.5, y: 0.2 },
       { x: 0.9, y: 0.2 },
       { x: 0.9, y: 0.6 },
     ])
-    // 第 1 線分の中点: 経路の 1/4
     const first = projectOntoSweep(p, { x: 0.5, y: 0.2 }, 'rtl')
     expect(first.t).toBeCloseTo(0.25)
     expect(first.distance).toBeCloseTo(0.2)
-    // 第 2 線分の中点より内側: 経路の 3/4、距離は 0.4 * 0.5 / 0.4
-    const second = projectOntoSweep(p, { x: 0.5, y: 0.5 }, 'rtl')
+    const second = projectOntoSweep(p, { x: 0.75, y: 0.5 }, 'rtl')
     expect(second.t).toBeCloseTo(0.75)
-    expect(second.distance).toBeCloseTo(0.5)
+    expect(second.distance).toBeCloseTo(0.25)
   })
 
   test('degenerate sweeps do not produce NaN', () => {
