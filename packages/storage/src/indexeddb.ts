@@ -81,3 +81,23 @@ export function createIndexedDbStorage(name: string = DB_NAME): StorageAdapter {
     },
   }
 }
+
+if (import.meta.vitest) {
+  // fake-indexeddb の exports は ./auto に types を付けていないので、副作用 import の型解決は諦める
+  // @ts-expect-error TS7016
+  await import('fake-indexeddb/auto')
+  const { createEmptyProject } = await import('@manga/schema')
+  const { expect, test } = import.meta.vitest
+
+  test('indexeddb data survives a new adapter on the same database', async () => {
+    const name = `test-${crypto.randomUUID()}`
+    const p = { ...createEmptyProject('kept'), updatedAt: '2026-01-01T00:00:00.000Z' }
+    const png = new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' })
+    const first = createIndexedDbStorage(name)
+    await first.saveProject(p)
+    const ref = await first.putAsset(p.id, png)
+    const second = createIndexedDbStorage(name)
+    expect((await second.loadProject(p.id)).title).toBe('kept')
+    expect((await second.loadAsset(ref)).size).toBe(4)
+  })
+}
