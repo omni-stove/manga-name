@@ -78,7 +78,10 @@ interface HistoryEntry {
  * - Undo / Redo も変更として updatedAt を更新し、保存する。
  * - 変更は `debounceMs` の debounce で saveProject に流す。保存は直列に行い、常にその時点の最新を書く。
  */
-export function createProjectStore(initial: Project, options: ProjectStoreOptions): WebProjectStore {
+export function createProjectStore(
+  initial: Project,
+  options: ProjectStoreOptions,
+): WebProjectStore {
   const {
     saveProject,
     debounceMs = 500,
@@ -233,7 +236,7 @@ if (import.meta.vitest) {
       { op: 'replace', path: '/episodes/0/pages/0/panels/0/order', value: p2.order },
       { op: 'replace', path: '/episodes/0/pages/0/panels/1/order', value: p1.order },
       { op: 'add', path: '/characters/-', value: { id: 'c1', name: 'A', shortName: 'A' } },
-      { op: 'replace', path: '/characters/0/name', value: 'B' },
+      { op: 'replace', path: `/characters/${project.characters.length}/name`, value: 'B' },
     ])
     const page = store.get().episodes[0]?.pages[0]
     expect(page?.panels.map((p) => p.order).slice(0, 2)).toEqual([p2.order, p1.order])
