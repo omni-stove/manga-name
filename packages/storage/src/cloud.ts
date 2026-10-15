@@ -415,14 +415,15 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       clearTimeout(state?.timer)
       pushes.delete(id)
       await state?.running
-      await local.deleteProject(id)
       const link = await links.get(id)
+      // クラウドへの DELETE が失敗したときにローカルだけ消えると、一覧にクラウド側が戻ってくる
       const res = await request(`/${encodeURIComponent(link?.cloudId ?? id)}`, {
         method: 'DELETE',
       })
       if (res && !res.ok && res.status !== 404) {
         throw await unexpected(res, `DELETE project ${link?.cloudId ?? id}`)
       }
+      await local.deleteProject(id)
       await links.delete(id)
     },
     resolveAsset: (ref) => local.resolveAsset(ref),
