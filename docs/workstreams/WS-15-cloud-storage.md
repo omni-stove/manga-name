@@ -7,9 +7,11 @@ Phase 3 / 開発中の依存: DOC のみ / 統合時: WS-06, WS-13, WS-14 / パ�
 
 ## 公開 API
 ```ts
-export class CloudStorageAdapter implements StorageAdapter {
-  constructor(opts: { baseUrl: string; getToken(): Promise<string | null>; local: StorageAdapter });
-}
+export function createCloudStorage(opts: {
+  baseUrl: string;
+  getToken(): Promise<string | null>;
+  local: StorageAdapter;
+}): StorageAdapter;
 export type SyncState = 'synced' | 'pending' | 'offline' | 'conflict';
 export function useSyncState(): SyncState;   // apps/web 向け
 ```
@@ -22,7 +24,7 @@ export function useSyncState(): SyncState;   // apps/web 向け
 - オフライン検知は `navigator.onLine` と失敗リトライ（指数バックオフ、上限 5 分）。
 
 ## モック
-- `msw` で WS-13 のエンドポイントをモック。`local` は `MemoryStorageAdapter`。
+- `msw` で WS-13 のエンドポイントをモック。`local` は `createMemoryStorage`。
 
 ## 受け入れ条件
 - [ ] オフラインで編集、オンライン復帰で自動送信される

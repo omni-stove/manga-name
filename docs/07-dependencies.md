@@ -189,9 +189,9 @@ graph TD
 ```mermaid
 graph LR
   WS01 -- "dist/schema.json" --> WS03 & WS12
-  WS03 -- "FakeImageProvider + fixtures/art/*.png" --> WS02 & WS04 & WS07 & WS08
-  WS03 -- "FakeLlmProvider" --> WS12 & WS16
-  WS06 -- "MemoryStorageAdapter" --> WS07 & WS09 & WS15
+  WS03 -- "createFakeImageProvider + fixtures/art/*.png" --> WS02 & WS04 & WS07 & WS08
+  WS03 -- "createFakeLlmProvider" --> WS12 & WS16
+  WS06 -- "createMemoryStorage" --> WS07 & WS09 & WS15
   WS10 -- "sample-page-01.diagnosis.json" --> WS11 & WS16
   WS13 -- "wrangler dev + X-Debug-User" --> WS15 & WS19
 

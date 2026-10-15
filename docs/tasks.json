@@ -3,7 +3,8 @@
     "1 タスク = 1 セッション = 1 PR。範囲外のディレクトリは触らない",
     "実装が終わったらそのまま Done にする。テストや pnpm check は走らせない",
     "main は毎タスク後も `pnpm check` が通り、apps/web が起動する",
-    "仕様欄のブリーフと契約を読んでから着手する。ブリーフにある contract.ts、モック置換、Phase 末統合の記述は無視する"
+    "仕様欄のブリーフと契約を読んでから着手する。ブリーフにある contract.ts、モック置換、Phase 末統合の記述は無視する",
+    "class は書かない。プロバイダやアダプタは interface を満たすオブジェクトを返す関数（createXxx）にする"
   ],
   "gates": {
     "Q1": "06-open-questions.md #1 #2 画像生成プロバイダとフキダシ領域の扱い",
@@ -164,7 +165,7 @@
       "id": "04",
       "group": "G0",
       "title": "packages/ai",
-      "detail": "ImageProvider / LlmProvider interface、FakeImageProvider と fixtures/art、FakeLlmProvider、prompts.panelArt",
+      "detail": "ImageProvider / LlmProvider interface、createFakeImageProvider と fixtures/art、createFakeLlmProvider、prompts.panelArt",
       "status": "done",
       "deps": [
         "03"
@@ -175,7 +176,7 @@
       ],
       "verify": [
         "`prompts.panelArt` のスナップショット。フィクスチャ Panel 4 で note、camera、E の appearance、2 焦点、3 ベクトルが順に含まれる",
-        "`FakeImageProvider` がフィクスチャ 6 コマの PNG を返し decode できる",
+        "`createFakeImageProvider` がフィクスチャ 6 コマの PNG を返し decode できる",
         "`docs/fixtures/art/pn_1.png` 〜 `pn_6.png` を commit"
       ],
       "spec": [
@@ -213,7 +214,7 @@
     {
       "id": "06",
       "group": "G1",
-      "title": "StorageAdapter、MemoryStorageAdapter、IndexedDbStorageAdapter、createStorage",
+      "title": "StorageAdapter、createMemoryStorage、createIndexedDbStorage、createStorage",
       "status": "todo",
       "deps": [
         "03"
@@ -479,7 +480,7 @@
       "id": "18",
       "group": "G2",
       "title": "Workers AI プロキシ",
-      "detail": "Hono + wrangler、health、panel-art ルート（Fake）、共有トークン、D1 ai_usage、レート制限、HttpImageProvider",
+      "detail": "Hono + wrangler、health、panel-art ルート（Fake）、共有トークン、D1 ai_usage、レート制限、createHttpImageProvider",
       "status": "todo",
       "deps": [
         "04"
@@ -492,7 +493,7 @@
         "`POST /v1/ai/panel-art` が Fake で end-to-end（vitest-pool-workers）",
         "トークン無しは 401、不正応答は再試行後 502、11 回目は 429",
         "ai_usage に行が入る",
-        "HttpImageProvider が multipart を組み立てるテスト"
+        "createHttpImageProvider が multipart を組み立てるテスト"
       ],
       "spec": [
         "workstreams/WS-03-ai-core.md"
@@ -800,7 +801,7 @@
       "id": "32",
       "group": "G3",
       "title": "Workers propose-layout ルート",
-      "detail": "prompts.proposeLayout、ルート、応答検証、HttpLlmProvider",
+      "detail": "prompts.proposeLayout、ルート、応答検証、createHttpLlmProvider",
       "status": "todo",
       "deps": [
         "18"
@@ -974,7 +975,7 @@
     {
       "id": "40",
       "group": "G4",
-      "title": "CloudStorageAdapter",
+      "title": "createCloudStorage",
       "detail": "ローカル優先、2 秒 debounce、起動時比較、409 は別名保存",
       "status": "todo",
       "deps": [
@@ -1087,7 +1088,7 @@
     {
       "id": "45",
       "group": "G5",
-      "title": "Tauri 2 雛形、platform 判定、FileStorageAdapter",
+      "title": "Tauri 2 雛形、platform 判定、createFileStorage",
       "status": "todo",
       "deps": [
         "09"
@@ -1100,7 +1101,7 @@
       "verify": [
         "macOS で起動し、フィクスチャを開いて保存して再度開ける",
         "保存ファイルが `parseProject` を通る",
-        "FileStorageAdapter の put / resolve / load テスト（plugin-fs をモック）"
+        "createFileStorage の put / resolve / load テスト（plugin-fs をモック）"
       ],
       "spec": [
         "workstreams/WS-17-desktop-shell.md"

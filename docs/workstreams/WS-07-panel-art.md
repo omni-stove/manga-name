@@ -22,7 +22,7 @@ Phase 1 / 開発中の依存: DOC のみ / 統合時: WS-02, WS-03, WS-04, WS-06
 - 書き出し（Phase 1 の範囲）: 「このページを PNG で保存」。`renderPage` を Web Worker で実行し、ダウンロード。`notes: 'none'`、`panelNumbers: false` を既定にし、ダイアログで変えられる。
 
 ## モック
-- `FakeImageProvider`。応答に 500ms の遅延を入れて進行表示を確認する。
+- `createFakeImageProvider`。応答に 500ms の遅延を入れて進行表示を確認する。
 
 ## 受け入れ条件
 - [ ] Fake でコマ 1 つを生成し、キャンバスに出て、`arts` が 1 件増え、`artId` が指す
