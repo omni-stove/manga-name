@@ -1,7 +1,7 @@
 name: Issue Worker
 
 # An issue labeled bug, prototype or implementation is implemented by Claude, which pushes
-# a branch and opens a PR that references the issue. Set ANTHROPIC_API_KEY as a repo
+# a branch and opens a PR that references the issue. Set CLAUDE_CODE_OAUTH_TOKEN as a repo
 # secret. A PR opened with GITHUB_TOKEN does not trigger other workflows (CI, PR Review);
 # set AGENT_GITHUB_TOKEN (a PAT or GitHub App token with contents + pull-requests write)
 # when those should run on agent PRs.
@@ -44,7 +44,7 @@ jobs:
           git switch -c "$BRANCH"
       - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           claude_args: |
             --max-turns 150
