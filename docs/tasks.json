@@ -165,7 +165,7 @@
       "group": "G0",
       "title": "packages/ai",
       "detail": "ImageProvider / LlmProvider interface、FakeImageProvider と fixtures/art、FakeLlmProvider、prompts.panelArt",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "03"
       ],
@@ -181,7 +181,9 @@
       "spec": [
         "03-data-model.md AI プロバイダ",
         "workstreams/WS-03-ai-core.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "05",

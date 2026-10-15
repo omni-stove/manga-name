@@ -1,0 +1,20 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { fixtures } from '@manga/schema'
+import { expect, test } from 'vitest'
+import { placeholderPng, placeholderSize } from '../src/placeholder'
+
+// @types/node を入れずに済ませるため、生成を npm script ではなくテストにしている。
+// このファイルは tsconfig の include 外で、typecheck の対象にならない。
+test('emits docs/fixtures/art/<panelId>.png for the sample page', () => {
+  const dir = new URL('../../../docs/fixtures/art/', import.meta.url)
+  mkdirSync(dir, { recursive: true })
+  const { settings } = fixtures.samplePage01
+  const panels = fixtures.samplePage01.episodes[0]?.pages[0]?.panels ?? []
+  for (const panel of panels) {
+    writeFileSync(
+      new URL(`${panel.id}.png`, dir),
+      placeholderPng(panel.order, placeholderSize(panel, settings)),
+    )
+  }
+  expect(panels).toHaveLength(6)
+})

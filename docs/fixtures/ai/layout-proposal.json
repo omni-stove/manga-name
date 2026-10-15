@@ -1,0 +1,183 @@
+{
+  "$comment": "FakeLlmProvider.proposeLayout の固定応答。脚本の内容に関わらずこの 1 ページ案を返す。ID は仮で、arts は空。",
+  "pages": [
+    {
+      "id": "tmp_pg_1",
+      "side": "right",
+      "scribbles": [],
+      "panels": [
+        {
+          "id": "tmp_pn_1",
+          "order": 1,
+          "rect": { "x": 0.0, "y": 0.0, "w": 1.0, "h": 0.3 },
+          "bubbles": [
+            {
+              "id": "tmp_bb_1",
+              "order": 1,
+              "text": "……",
+              "shape": "narration",
+              "pos": { "x": 0.9, "y": 0.25 },
+              "size": { "w": 0.12, "h": 0.5 }
+            }
+          ],
+          "camera": "ロング",
+          "note": "結晶の森の全景。E は小さく、奥へ歩いていく。",
+          "arts": [],
+          "focusPoints": [
+            {
+              "id": "tmp_fp_1_forest",
+              "kind": "keyObject",
+              "label": "crystal forest",
+              "pos": { "x": 0.6, "y": 0.4 },
+              "weight": 0.5
+            },
+            {
+              "id": "tmp_fp_1_e",
+              "kind": "face",
+              "label": "E tiny, walking away",
+              "pos": { "x": 0.3, "y": 0.75 },
+              "weight": 0.2,
+              "characterId": "chr_e"
+            }
+          ],
+          "vectors": [
+            {
+              "id": "tmp_vc_1_a",
+              "kind": "motion",
+              "from": { "x": 0.4, "y": 0.75 },
+              "to": { "x": 0.31, "y": 0.75 },
+              "strength": "strong",
+              "targetFocusId": "tmp_fp_1_e"
+            }
+          ]
+        },
+        {
+          "id": "tmp_pn_2",
+          "order": 2,
+          "rect": { "x": 0.5, "y": 0.32, "w": 0.5, "h": 0.33 },
+          "bubbles": [
+            {
+              "id": "tmp_bb_2",
+              "order": 1,
+              "speakerId": "chr_e",
+              "text": "……ここか",
+              "shape": "normal",
+              "pos": { "x": 0.8, "y": 0.2 },
+              "size": { "w": 0.25, "h": 0.35 },
+              "tail": { "x": 0.6, "y": 0.4 }
+            }
+          ],
+          "camera": "バストアップ",
+          "note": "E が立ち止まり、足元を見る。",
+          "arts": [],
+          "focusPoints": [
+            {
+              "id": "tmp_fp_2_e",
+              "kind": "face",
+              "label": "E looking down",
+              "pos": { "x": 0.45, "y": 0.45 },
+              "weight": 0.3,
+              "characterId": "chr_e"
+            }
+          ],
+          "vectors": [
+            {
+              "id": "tmp_vc_2_a",
+              "kind": "gaze",
+              "from": { "x": 0.45, "y": 0.5 },
+              "to": { "x": 0.3, "y": 0.9 },
+              "strength": "weak",
+              "sourceFocusId": "tmp_fp_2_e"
+            }
+          ]
+        },
+        {
+          "id": "tmp_pn_3",
+          "order": 3,
+          "rect": { "x": 0.0, "y": 0.32, "w": 0.48, "h": 0.33 },
+          "bubbles": [],
+          "camera": "足元のアップ",
+          "note": "靴のすぐ先に、ガラスの地面を割って伸びる新芽。",
+          "arts": [],
+          "focusPoints": [
+            {
+              "id": "tmp_fp_3_sprout",
+              "kind": "keyObject",
+              "label": "sprout through glass",
+              "pos": { "x": 0.5, "y": 0.55 },
+              "weight": 0.4
+            }
+          ],
+          "vectors": [
+            {
+              "id": "tmp_vc_3_a",
+              "kind": "speed",
+              "from": { "x": 0.85, "y": 0.3 },
+              "to": { "x": 0.55, "y": 0.5 },
+              "strength": "weak",
+              "targetFocusId": "tmp_fp_3_sprout"
+            }
+          ]
+        },
+        {
+          "id": "tmp_pn_4",
+          "order": 4,
+          "rect": { "x": 0.0, "y": 0.67, "w": 1.0, "h": 0.33 },
+          "bubbles": [
+            {
+              "id": "tmp_bb_4",
+              "order": 1,
+              "speakerId": "chr_e",
+              "text": "芽が……",
+              "shape": "normal",
+              "pos": { "x": 0.85, "y": 0.3 },
+              "size": { "w": 0.2, "h": 0.45 },
+              "tail": { "x": 0.7, "y": 0.55 }
+            }
+          ],
+          "camera": "アオリ",
+          "note": "しゃがみ込んだ E の背後に、結晶の森が高くそびえる。",
+          "arts": [],
+          "focusPoints": [
+            {
+              "id": "tmp_fp_4_e",
+              "kind": "face",
+              "label": "E crouching",
+              "pos": { "x": 0.55, "y": 0.6 },
+              "weight": 0.5,
+              "characterId": "chr_e"
+            },
+            {
+              "id": "tmp_fp_4_forest",
+              "kind": "keyObject",
+              "label": "towering crystal forest",
+              "pos": { "x": 0.25, "y": 0.3 },
+              "weight": 0.3
+            }
+          ],
+          "vectors": [
+            {
+              "id": "tmp_vc_4_a",
+              "kind": "gaze",
+              "from": { "x": 0.8, "y": 0.35 },
+              "to": { "x": 0.58, "y": 0.58 },
+              "strength": "strong",
+              "sourceFocusId": "tmp_bb_4",
+              "targetFocusId": "tmp_fp_4_e"
+            },
+            {
+              "id": "tmp_vc_4_b",
+              "kind": "speed",
+              "from": { "x": 0.5, "y": 0.62 },
+              "to": { "x": 0.28, "y": 0.35 },
+              "strength": "weak",
+              "sourceFocusId": "tmp_fp_4_e",
+              "targetFocusId": "tmp_fp_4_forest"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "rationale": "導入の 1 ページ。1 コマ目で舞台を見せ、2 と 3 で足元へ視線を落とし、4 コマ目で新芽と森を同じ画面に置いて次ページへつなぐ。右綴じなので各段は右から左に読む。"
+}
