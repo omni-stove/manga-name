@@ -481,7 +481,7 @@
       "group": "G2",
       "title": "Workers AI プロキシ",
       "detail": "Hono + wrangler、health、panel-art ルート（Fake）、共有トークン、D1 ai_usage、レート制限、createHttpImageProvider",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "04"
       ],
@@ -497,7 +497,9 @@
       ],
       "spec": [
         "workstreams/WS-03-ai-core.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "19",
