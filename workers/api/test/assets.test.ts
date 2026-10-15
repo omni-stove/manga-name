@@ -130,9 +130,9 @@ describe('asset upload with a signed URL', () => {
     }
     expect((await upload(tamper('sig', '0'.repeat(64)), pngOfSize(1024))).status).toBe(403)
     expect((await upload(tamper('size', '2048'), pngOfSize(2048))).status).toBe(403)
-    expect(
-      (await upload(tamper('mime', 'image/jpeg'), pngOfSize(1024), 'image/jpeg')).status,
-    ).toBe(403)
+    expect((await upload(tamper('mime', 'image/jpeg'), pngOfSize(1024), 'image/jpeg')).status).toBe(
+      403,
+    )
     const other = new URL(url)
     other.pathname = other.pathname.replace(/[^/]+$/, crypto.randomUUID())
     expect((await upload(other.toString(), pngOfSize(1024))).status).toBe(403)

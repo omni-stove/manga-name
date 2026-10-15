@@ -61,10 +61,7 @@ export function createAssetRoutes(now: () => number) {
       size: parsed.data.size,
       expires: now() + UPLOAD_URL_TTL_MS,
     }
-    const url = new URL(
-      `/v1/uploads/${encodeURIComponent(projectId)}/${claims.assetId}`,
-      c.req.url,
-    )
+    const url = new URL(`/v1/uploads/${encodeURIComponent(projectId)}/${claims.assetId}`, c.req.url)
     url.search = new URLSearchParams({
       mime: claims.mime,
       size: String(claims.size),
