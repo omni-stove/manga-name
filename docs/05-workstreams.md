@@ -117,10 +117,10 @@ graph TD
 | 必要なもの | 代替 |
 |---|---|
 | `packages/schema` の型 | `03-data-model.md` の型を自パッケージ内 `src/contract.ts` に写して使う。統合時に import に置換 |
-| 生成画像 | `docs/fixtures/art/pn_1.png` 〜 `pn_6.png`（WS-03 が `FakeImageProvider` と一緒に commit する。灰色の矩形にコマ番号を描いただけの PNG で可） |
-| `ImageProvider` / `LlmProvider` | 固定レスポンスを返す `FakeImageProvider` / `FakeLlmProvider`（WS-03 がコントラクトに同梱。それまでは自前） |
+| 生成画像 | `docs/fixtures/art/pn_1.png` 〜 `pn_6.png`（WS-03 が `createFakeImageProvider` と一緒に commit する。灰色の矩形にコマ番号を描いただけの PNG で可） |
+| `ImageProvider` / `LlmProvider` | 固定レスポンスを返す `createFakeImageProvider` / `createFakeLlmProvider`（WS-03 がコントラクトに同梱。それまでは自前） |
 | `packages/diagnosis` の出力 | `docs/fixtures/sample-page-01.diagnosis.json`（WS-10 が最初に生成して commit する。それまでは `diagnosis: null`） |
-| `StorageAdapter` | `packages/storage` の `MemoryStorageAdapter`（WS-06 が最初に commit する。それまでは自前のインメモリ実装） |
+| `StorageAdapter` | `packages/storage` の `createMemoryStorage`（WS-06 が最初に commit する。それまでは自前のインメモリ実装） |
 | Workers API | `wrangler dev` のローカル実行、または `msw` でモック |
 
 ## 統合手順（Phase 末）

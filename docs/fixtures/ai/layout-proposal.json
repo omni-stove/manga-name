@@ -1,5 +1,5 @@
 {
-  "$comment": "FakeLlmProvider.proposeLayout の固定応答。脚本の内容に関わらずこの 1 ページ案を返す。ID は仮で、arts は空。",
+  "$comment": "createFakeLlmProvider().proposeLayout の固定応答。脚本の内容に関わらずこの 1 ページ案を返す。ID は仮で、arts は空。",
   "pages": [
     {
       "id": "tmp_pg_1",

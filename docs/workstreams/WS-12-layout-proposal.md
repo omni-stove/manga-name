@@ -26,7 +26,7 @@ POST /v1/ai/propose-layout    LayoutProposalRequest -> LayoutProposalResponse
 6. 却下時は何も残らない。
 
 ## モック
-- `FakeLlmProvider`。
+- `createFakeLlmProvider`。
 
 ## 受け入れ条件
 - [ ] Fake で end-to-end が動く

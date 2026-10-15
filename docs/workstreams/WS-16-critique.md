@@ -22,7 +22,7 @@ POST /v1/ai/critique          CritiqueRequest -> CritiqueResponse
 6. 適用したコマには「再生成」を促す表示を出す。
 
 ## モック
-- `FakeLlmProvider`。
+- `createFakeLlmProvider`。
 
 ## 受け入れ条件
 - [ ] Fake で end-to-end が動く

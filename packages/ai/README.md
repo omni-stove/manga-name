@@ -16,12 +16,12 @@ pnpm --filter @manga/ai typecheck
 | `ImageProvider`, `LlmProvider` | プロバイダの interface |
 | `PanelArtRequest`, `PanelArtResponse`, `LayoutProposalRequest`, `LayoutProposalResponse`, `CritiqueRequest`, `CritiqueResponse` | 入出力の型。応答の型は `@manga/schema` の再 export |
 | `prompts.panelArt(req)` | 画像生成プロンプト `{ prompt, negative }` |
-| `FakeImageProvider` | コマ番号を描いた灰色の矩形 PNG を返す |
-| `FakeLlmProvider`, `aiFixtures` | `docs/fixtures/ai/` の固定応答を返す |
+| `createFakeImageProvider` | コマ番号を描いた灰色の矩形 PNG を返す |
+| `createFakeLlmProvider`, `aiFixtures` | `docs/fixtures/ai/` の固定応答を返す |
 | `placeholderPng(order, size)`, `placeholderSize(panel, settings)` | 灰色の矩形 PNG の生成。他パッケージが未生成コマの代替に使える |
 | `findPanel(page, panelId)` | Panel の検索。無ければ throw |
 
-`HttpImageProvider` / `HttpLlmProvider` と `prompts.proposeLayout` / `prompts.critique` は Workers ルートのタスクで足す。
+`createHttpImageProvider` / `createHttpLlmProvider` と `prompts.proposeLayout` / `prompts.critique` は Workers ルートのタスクで足す。
 
 ## prompts.panelArt
 
@@ -41,16 +41,16 @@ WS-03 の順に要素を改行で連結し、空の要素は飛ばす。
 
 ## モック
 
-### FakeImageProvider
+### createFakeImageProvider
 
 ```ts
-const provider = new FakeImageProvider()
+const provider = createFakeImageProvider()
 const { image, prompt } = await provider.generatePanelArt(req)   // image は PNG の Blob、provider は 'fake'
 ```
 
 画像はコマの縦横比で長辺 512px の灰色の矩形。`placeholderPng` は同じ引数から常に同じバイト列を作るので、
 フィクスチャの 6 コマに対する出力は `docs/fixtures/art/pn_1.png` 〜 `pn_6.png` と一致する。
-別の画像を返したいときは `new FakeImageProvider({ pn_4: blob })` のように panelId ごとに渡す。
+別の画像を返したいときは `createFakeImageProvider({ pn_4: blob })` のように panelId ごとに渡す。
 
 `docs/fixtures/art/*.png` は生成物。`placeholderPng` を変えたら次で作り直す。
 
@@ -58,7 +58,7 @@ const { image, prompt } = await provider.generatePanelArt(req)   // image は PN
 pnpm exec vitest run packages/ai/scripts/emit-art.test.ts
 ```
 
-### FakeLlmProvider
+### createFakeLlmProvider
 
 `proposeLayout` は `docs/fixtures/ai/layout-proposal.json`、`critique` は `docs/fixtures/ai/critique.json` を入力に関わらず返す。
 どちらも読み込み時に `@manga/schema` で検証する。critique の Patch の path は Project を根にしたもので、

@@ -103,7 +103,7 @@ schema  <-  render, ai, editor-canvas, inspector, diagnosis, storage
 「生成」ボタン（コマ、ページ、エピソードのいずれか。コマ単位に分解して並列に呼ぶ）
   -> render.renderLayoutPng(page, panelId)   コマ枠とフキダシ領域を白抜きした配置図
   -> ai.prompts.panelArt(...)                note、camera、キャラ外見、焦点、誘導線、診断ヒント、スタイルから文章を組む
-  -> HttpImageProvider.generatePanelArt      Workers 経由で外部 API。参照画像、前回の絵、修正指示を添付
+  -> ai.createHttpImageProvider(opts).generatePanelArt   Workers 経由で外部 API。参照画像、前回の絵、修正指示を添付
   -> storage.putAsset(image)                 ref を得る
   -> applyPatch([ add Panel.arts[], replace Panel.artId ], { source: 'ai' })
 ```

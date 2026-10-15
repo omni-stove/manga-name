@@ -9,12 +9,11 @@ Phase 1 / 開発中の依存: DOC のみ / パッケージ: `packages/ai`, `work
 ```ts
 export interface ImageProvider { generatePanelArt }           // 03-data-model.md の通り
 export interface LlmProvider { proposeLayout, critique }
-export class FakeImageProvider implements ImageProvider {}    // docs/fixtures/art/<panelId>.png を返す。無ければ灰色矩形
-export class FakeLlmProvider implements LlmProvider {}        // docs/fixtures/ai/ の固定応答
-export class HttpImageProvider implements ImageProvider {     // Workers のプロキシを叩く
-  constructor(opts: { baseUrl: string; getToken(): Promise<string | null> });
-}
-export class HttpLlmProvider implements LlmProvider {}
+export function createFakeImageProvider(art?: Record<ID, Blob>): ImageProvider;   // docs/fixtures/art/<panelId>.png を返す。無ければ灰色矩形
+export function createFakeLlmProvider(): LlmProvider;                             // docs/fixtures/ai/ の固定応答
+export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvider; // Workers のプロキシを叩く
+export function createHttpLlmProvider(opts: HttpProviderOptions): LlmProvider;
+export interface HttpProviderOptions { baseUrl: string; getToken(): Promise<string | null> }
 export const prompts: {
   panelArt(req: Omit<PanelArtRequest, 'layoutPng' | 'referencePng' | 'characterRefs' | 'previous'> & { instruction?: string }): { prompt: string; negative: string };
   proposeLayout(req: LayoutProposalRequest): { system: string; user: string; schema: JsonSchema };
@@ -48,12 +47,12 @@ GET  /v1/health
 - 1 トークンあたり 10 req/min のレート制限。
 
 ## モック
-- `FakeImageProvider` の画像は `docs/fixtures/art/pn_1.png` 〜 `pn_6.png`。灰色の矩形にコマ番号と簡単な線を描いた 512px 程度の PNG。このブリーフの担当が最初に commit する。
-- `FakeLlmProvider` の応答は `docs/fixtures/ai/`。
+- `createFakeImageProvider` の画像は `docs/fixtures/art/pn_1.png` 〜 `pn_6.png`。灰色の矩形にコマ番号と簡単な線を描いた 512px 程度の PNG。このブリーフの担当が最初に commit する。
+- `createFakeLlmProvider` の応答は `docs/fixtures/ai/`。
 
 ## 受け入れ条件
 - [ ] `prompts.panelArt` のスナップショットテスト。フィクスチャ Panel 4 で note、camera、E の appearance、2 焦点、3 ベクトルが順に含まれる
-- [ ] `FakeImageProvider` がフィクスチャ 6 コマの PNG を返し、decode できる
+- [ ] `createFakeImageProvider` がフィクスチャ 6 コマの PNG を返し、decode できる
 - [ ] Workers ルートが Fake で end-to-end で動く（`@cloudflare/vitest-pool-workers`）
 - [ ] トークン無しは 401、不正応答は再試行後 502、11 回目は 429
 - [ ] 実プロバイダ 1 社でフィクスチャ Panel 4 からモノクロ線画が返る（目視。`docs/fixtures/art/real/` に残す）

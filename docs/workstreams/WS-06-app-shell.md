@@ -24,11 +24,11 @@ Web アプリの骨格。ルーティング、store、ストレージアダプ�
 ## packages/storage
 ```ts
 export interface StorageAdapter { ... }   // 03-data-model.md の通り
-export class MemoryStorageAdapter implements StorageAdapter {}
-export class IndexedDbStorageAdapter implements StorageAdapter {}   // idb を使用。アセットも Blob で保存
+export function createMemoryStorage(): StorageAdapter;
+export function createIndexedDbStorage(): StorageAdapter;   // idb を使用。アセットも Blob で保存
 export function createStorage(kind: 'memory' | 'indexeddb'): StorageAdapter;
 ```
-`MemoryStorageAdapter` は他 WS のモックに使われるので最初に commit する。
+`createMemoryStorage` は他 WS のモックに使われるので最初に commit する。
 
 ## 配線
 - `EditorCanvas` と各 Inspector の `onChange(patch)` を受け、path を Project root 基準に変換して `applyPatch`。

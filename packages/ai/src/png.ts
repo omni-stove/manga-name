@@ -1,7 +1,7 @@
 /**
  * 8 bit グレースケール PNG のエンコーダ。依存なしで、同じ入力から常に同じバイト列を作る。
  * zlib / CompressionStream を使わないのは、実行環境ごとに出力が変わると
- * commit したフィクスチャと FakeImageProvider の出力が一致しなくなるため。
+ * commit したフィクスチャと createFakeImageProvider の出力が一致しなくなるため。
  */
 
 const CRC_TABLE = new Uint32Array(256).map((_, n) => {
@@ -26,34 +26,38 @@ function adler32(bytes: Uint8Array): number {
   return ((b << 16) | a) >>> 0
 }
 
-class BitWriter {
-  private out: number[] = []
-  private acc = 0
-  private n = 0
+function createBitWriter() {
+  const out: number[] = []
+  let acc = 0
+  let n = 0
 
   /** value の下位 count ビットを LSB から順に書く */
-  bits(value: number, count: number) {
-    this.acc |= value << this.n
-    this.n += count
-    while (this.n >= 8) {
-      this.out.push(this.acc & 0xff)
-      this.acc >>>= 8
-      this.n -= 8
+  const bits = (value: number, count: number) => {
+    acc |= value << n
+    n += count
+    while (n >= 8) {
+      out.push(acc & 0xff)
+      acc >>>= 8
+      n -= 8
     }
   }
 
   /** ハフマン符号は MSB から順に並ぶので、ビット順を反転して書く */
-  code(value: number, count: number) {
+  const code = (value: number, count: number) => {
     let rev = 0
     for (let i = 0; i < count; i++) rev = (rev << 1) | ((value >> i) & 1)
-    this.bits(rev, count)
+    bits(rev, count)
   }
 
-  finish(): Uint8Array {
-    if (this.n > 0) this.out.push(this.acc & 0xff)
-    return Uint8Array.from(this.out)
+  const finish = (): Uint8Array => {
+    if (n > 0) out.push(acc & 0xff)
+    return Uint8Array.from(out)
   }
+
+  return { bits, code, finish }
 }
+
+type BitWriter = ReturnType<typeof createBitWriter>
 
 /** 固定ハフマン表のリテラル / 長さ符号（RFC 1951 3.2.6） */
 function literal(w: BitWriter, v: number) {
@@ -86,7 +90,7 @@ function match(w: BitWriter, length: number) {
  * 灰色の矩形のような画像にはこれで十分に効く。
  */
 function zlibDeflate(data: Uint8Array): Uint8Array {
-  const w = new BitWriter()
+  const w = createBitWriter()
   w.bits(1, 1)
   w.bits(1, 2)
   let i = 0
