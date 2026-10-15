@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!docs", "!**/dist", "!**/target", "!pnpm-lock.yaml"]
+    "includes": ["**", "!docs", "!**/dist", "!**/target", "!pnpm-lock.yaml", "!**/routeTree.gen.ts"]
   },
   "formatter": {
     "enabled": true,

@@ -236,7 +236,7 @@
       "group": "G1",
       "title": "apps/web 雛形",
       "detail": "Vite + React + TanStack Router、6 ルート、プレースホルダ画面",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "01"
       ],
@@ -250,7 +250,9 @@
       "spec": [
         "02-architecture.md",
         "workstreams/WS-06-app-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "08",
