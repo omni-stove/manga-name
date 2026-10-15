@@ -6,7 +6,7 @@
       "entry": ["src/index.ts", "src/backend-node.ts"]
     },
     "apps/web": {
-      "entry": ["src/store/project-store.ts"]
+      "entry": ["src/store/project-store.ts", "src/store/yjs-project-store.ts"]
     },
     "workers/api": {
       "ignoreDependencies": ["cloudflare"]

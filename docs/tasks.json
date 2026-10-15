@@ -1284,7 +1284,7 @@
       "group": "G6",
       "title": "Yjs マッピング",
       "detail": "Project と Y.Map / Y.Array、applyPatch の差し替え、UndoManager。ローカルのみ",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "08"
       ],
@@ -1298,7 +1298,9 @@
       ],
       "spec": [
         "workstreams/WS-19-collaboration.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "55",

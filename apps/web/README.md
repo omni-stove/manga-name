@@ -30,6 +30,13 @@ pnpm --filter @manga/web test
 - `user` と `ai` の変更は履歴に積み、Undo / Redo できる（既定 200 ステップ）。`remote` は履歴に積まない。
 - 変更は 500ms debounce で `saveProject` に流す。保存状態は `store.state` の `saveStatus` に出る。React からは `useStore(store.state, selector)` で読む。
 
+`src/store/yjs-project-store.ts` の `createYjsProjectStore(project, { saveProject, doc })` は同じ `ProjectStore` を Yjs で実装する（`docs/workstreams/WS-19-collaboration.md`）。
+
+- Project は Y.Doc の `project` に Y.Map / Y.Array として置く。変換は `src/store/yjs-mapping.ts`。
+- `applyPatch` は検証してから Yjs のトランザクションとして適用する。Undo / Redo は `Y.UndoManager` で、この store が入れた変更だけを戻す。
+- `doc` に他のクライアントの更新が届くと `project` が変わり、購読者に通知される。同期プロバイダはまだ無い。
+- 両実装は `src/store/project-store.suite.ts` の同じテストを通る。
+
 ## 仮データ
 
 ProjectStore と StorageAdapter が配線されるまで、各画面は `src/placeholder.ts` からフィクスチャ 1 件を読む。
