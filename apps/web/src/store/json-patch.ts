@@ -6,7 +6,7 @@ type Operation = Patch[number]
 const ARRAY_INDEX = /^(0|[1-9][0-9]*)$/
 
 /** RFC 6901 の JSON Pointer を参照トークンの列にする。ルート（`""`）は差し替えを許さないので throw する */
-export function parsePointer(pointer: string): string[] {
+function parsePointer(pointer: string): string[] {
   if (!pointer.startsWith('/')) {
     throw new Error(`JSON Pointer must start with "/": ${JSON.stringify(pointer)}`)
   }
