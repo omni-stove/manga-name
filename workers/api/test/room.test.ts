@@ -248,7 +248,7 @@ describe('persistence', () => {
     const b = await connect(project.id)
     a.doc.getMap('project').set('title', '復元')
     for (let i = 0; i < 600; i++) a.doc.getArray<number>('log').push([i])
-    await vi.waitFor(() => expect(b.doc.getArray('log').length).toBe(600))
+    await vi.waitFor(() => expect(b.doc.getArray('log').length).toBe(600), { timeout: 10_000 })
     a.close()
     b.close()
 

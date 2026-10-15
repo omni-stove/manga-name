@@ -115,7 +115,10 @@ function createRoom(ctx: DurableObjectState, env: Env) {
     doc.on('update', (update: Uint8Array, origin: unknown) => {
       storage.append(doc, update)
       dirty = true
-      broadcast(message(MESSAGE_SYNC, (e) => syncProtocol.writeUpdate(e, update)), origin)
+      broadcast(
+        message(MESSAGE_SYNC, (e) => syncProtocol.writeUpdate(e, update)),
+        origin,
+      )
     })
     return doc
   }
