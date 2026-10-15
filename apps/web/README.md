@@ -22,6 +22,14 @@ pnpm --filter @manga/web test
 `src/routes/p.$projectId.tsx` はプロジェクト配下のタブを持つレイアウトで、エディタだけは `_` 付きのファイル名でその外に置く。
 `src/routeTree.gen.ts` は `@tanstack/router-plugin` が `dev` と `build` で生成する。手で編集しない。
 
+## ProjectStore
+
+`src/store/project-store.ts` の `createProjectStore(project, { saveProject })` が `docs/03-data-model.md` の `ProjectStore` を Zustand + Immer で実装する。
+
+- 変更はすべて `applyPatch(patch, { source, label })` で入れる。結果が `ProjectSchema` を通らない patch は throw し、状態を変えない。
+- `user` と `ai` の変更は履歴に積み、Undo / Redo できる（既定 200 ステップ）。`remote` は履歴に積まない。
+- 変更は 500ms debounce で `saveProject` に流す。保存状態は `store.state` の `saveStatus` に出る。React からは `useStore(store.state, selector)` で読む。
+
 ## 仮データ
 
 ProjectStore と StorageAdapter が配線されるまで、各画面は `src/placeholder.ts` からフィクスチャ 1 件を読む。
