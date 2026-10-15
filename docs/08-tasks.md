@@ -41,12 +41,12 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 
 ## 進捗
 
-完了 0 / 着手中 2 / 未着手 57
+完了 2 / 着手中 0 / 未着手 57
 
 ### G0 基盤
 
-- [ ] 01 CI を green にする（着手 2026-10-15）
-- [ ] 02 契約の型を Zod に写し、参照整合を refine で検証する（着手 2026-10-15）
+- [x] 01 CI を green にする（完了 2026-10-15）
+- [x] 02 契約の型を Zod に写し、参照整合を refine で検証する（完了 2026-10-15）
 - [ ] 03 parseProject、migrate、createEmptyProject、createPage、createBubble、currentArt、fixtures、JSON Schema 出力
 - [ ] 04 packages/ai
 - [ ] 05 packages/render
@@ -312,8 +312,8 @@ graph LR
 
 | ID | 着手 | 完了 | タスク | 依存 | 範囲 | 完了条件 | 仕様 |
 |---|---|---|---|---|---|---|---|
-| 01 | [x] | [ ] | **CI を green にする** | なし | `.github`<br>`ルート` | - 初回 push 後 `gh run list --limit 1` が success<br>- `pnpm check` が通る | [workstreams/WS-00-repo-scaffold.md](workstreams/WS-00-repo-scaffold.md) |
-| 02 | [x] | [ ] | **契約の型を Zod に写し、参照整合を refine で検証する**<br>Project〜Stroke、PageDiagnosis / Issue / Patch、AI 応答スキーマ、newId | なし | `packages/schema` | - `docs/fixtures/sample-page-01.json` が `ProjectSchema.parse` を通る<br>- 参照整合違反 6 種（artId、parentId、Vector の焦点参照、speakerId / characterId、order 一意、0..1 範囲）を 1 ケースずつテストで検出する | [03-data-model.md](03-data-model.md)<br>[workstreams/WS-01-schema.md](workstreams/WS-01-schema.md) |
+| 01 | [x] | [x] | **CI を green にする** | なし | `.github`<br>`ルート` | - 初回 push 後 `gh run list --limit 1` が success<br>- `pnpm check` が通る | [workstreams/WS-00-repo-scaffold.md](workstreams/WS-00-repo-scaffold.md) |
+| 02 | [x] | [x] | **契約の型を Zod に写し、参照整合を refine で検証する**<br>Project〜Stroke、PageDiagnosis / Issue / Patch、AI 応答スキーマ、newId | なし | `packages/schema` | - `docs/fixtures/sample-page-01.json` が `ProjectSchema.parse` を通る<br>- 参照整合違反 6 種（artId、parentId、Vector の焦点参照、speakerId / characterId、order 一意、0..1 範囲）を 1 ケースずつテストで検出する | [03-data-model.md](03-data-model.md)<br>[workstreams/WS-01-schema.md](workstreams/WS-01-schema.md) |
 | 03 | [ ] | [ ] | **parseProject、migrate、createEmptyProject、createPage、createBubble、currentArt、fixtures、JSON Schema 出力** | 02 | `packages/schema` | - `createPage` の各テンプレートが OVERLAP のない矩形を作り、order が rtl 順<br>- `createEmptyProject` の settings が既定値（182x257、300dpi、既定 style）<br>- migrate v1 → v1 が no-op のテスト<br>- `dist/schema.json` が生成され、`pnpm --filter @manga/schema test` が通る | [03-data-model.md](03-data-model.md)<br>[workstreams/WS-01-schema.md](workstreams/WS-01-schema.md) |
 | 04 | [ ] | [ ] | **packages/ai**<br>ImageProvider / LlmProvider interface、FakeImageProvider と fixtures/art、FakeLlmProvider、prompts.panelArt | 03 | `packages/ai`<br>`docs/fixtures` | - `prompts.panelArt` のスナップショット。フィクスチャ Panel 4 で note、camera、E の appearance、2 焦点、3 ベクトルが順に含まれる<br>- `FakeImageProvider` がフィクスチャ 6 コマの PNG を返し decode できる<br>- `docs/fixtures/art/pn_1.png` 〜 `pn_6.png` を commit | [03-data-model.md AI プロバイダ](03-data-model.md)<br>[workstreams/WS-03-ai-core.md](workstreams/WS-03-ai-core.md) |
 | 05 | [ ] | [ ] | **packages/render**<br>renderPage（枠、絵の cover 配置、フキダシ形状、縦書き、未生成コマの note 印字）、renderLayoutPng、Noto Sans JP 同梱、OffscreenCanvas / @napi-rs/canvas | 04 | `packages/render` | - フィクスチャ（arts 空）の `renderPage` スナップショット。6 コマ枠、フキダシ 3、縦書きセリフ<br>- `arts` にフィクスチャ画像を入れたスナップショット<br>- 同じ入力で 2 回描いてバイト一致<br>- `layoutBubbleText` で 20 文字が 2 行以上に割れ、「ー」が回転する<br>- `renderLayoutPng` で Panel 6 のフキダシ領域が白、他が薄灰（画素サンプリング）<br>- 300dpi 1 ページが 500ms 以内（Node ベンチ） | [03-data-model.md レンダラ](03-data-model.md)<br>[workstreams/WS-02-render.md](workstreams/WS-02-render.md) |

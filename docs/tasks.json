@@ -99,7 +99,7 @@
       "id": "01",
       "group": "G0",
       "title": "CI を green にする",
-      "status": "in_progress",
+      "status": "done",
       "deps": [],
       "scope": [
         ".github",
@@ -112,14 +112,15 @@
       "spec": [
         "workstreams/WS-00-repo-scaffold.md"
       ],
-      "startedAt": "2026-10-15"
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "02",
       "group": "G0",
       "title": "契約の型を Zod に写し、参照整合を refine で検証する",
       "detail": "Project〜Stroke、PageDiagnosis / Issue / Patch、AI 応答スキーマ、newId",
-      "status": "in_progress",
+      "status": "done",
       "deps": [],
       "scope": [
         "packages/schema"
@@ -132,7 +133,8 @@
         "03-data-model.md",
         "workstreams/WS-01-schema.md"
       ],
-      "startedAt": "2026-10-15"
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "03",
