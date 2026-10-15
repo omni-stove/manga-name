@@ -41,11 +41,11 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 
 ## 進捗
 
-完了 0 / 着手中 1 / 未着手 58
+完了 0 / 着手中 2 / 未着手 57
 
 ### G0 基盤
 
-- [ ] 01 CI を green にする
+- [ ] 01 CI を green にする（着手 2026-10-15）
 - [ ] 02 契約の型を Zod に写し、参照整合を refine で検証する（着手 2026-10-15）
 - [ ] 03 parseProject、migrate、createEmptyProject、createPage、createBubble、currentArt、fixtures、JSON Schema 出力
 - [ ] 04 packages/ai
@@ -312,7 +312,7 @@ graph LR
 
 | ID | 着手 | 完了 | タスク | 依存 | 範囲 | 完了条件 | 仕様 |
 |---|---|---|---|---|---|---|---|
-| 01 | [ ] | [ ] | **CI を green にする** | なし | `.github`<br>`ルート` | - 初回 push 後 `gh run list --limit 1` が success<br>- `pnpm check` が通る | [workstreams/WS-00-repo-scaffold.md](workstreams/WS-00-repo-scaffold.md) |
+| 01 | [x] | [ ] | **CI を green にする** | なし | `.github`<br>`ルート` | - 初回 push 後 `gh run list --limit 1` が success<br>- `pnpm check` が通る | [workstreams/WS-00-repo-scaffold.md](workstreams/WS-00-repo-scaffold.md) |
 | 02 | [x] | [ ] | **契約の型を Zod に写し、参照整合を refine で検証する**<br>Project〜Stroke、PageDiagnosis / Issue / Patch、AI 応答スキーマ、newId | なし | `packages/schema` | - `docs/fixtures/sample-page-01.json` が `ProjectSchema.parse` を通る<br>- 参照整合違反 6 種（artId、parentId、Vector の焦点参照、speakerId / characterId、order 一意、0..1 範囲）を 1 ケースずつテストで検出する | [03-data-model.md](03-data-model.md)<br>[workstreams/WS-01-schema.md](workstreams/WS-01-schema.md) |
 | 03 | [ ] | [ ] | **parseProject、migrate、createEmptyProject、createPage、createBubble、currentArt、fixtures、JSON Schema 出力** | 02 | `packages/schema` | - `createPage` の各テンプレートが OVERLAP のない矩形を作り、order が rtl 順<br>- `createEmptyProject` の settings が既定値（182x257、300dpi、既定 style）<br>- migrate v1 → v1 が no-op のテスト<br>- `dist/schema.json` が生成され、`pnpm --filter @manga/schema test` が通る | [03-data-model.md](03-data-model.md)<br>[workstreams/WS-01-schema.md](workstreams/WS-01-schema.md) |
 | 04 | [ ] | [ ] | **packages/ai**<br>ImageProvider / LlmProvider interface、FakeImageProvider と fixtures/art、FakeLlmProvider、prompts.panelArt | 03 | `packages/ai`<br>`docs/fixtures` | - `prompts.panelArt` のスナップショット。フィクスチャ Panel 4 で note、camera、E の appearance、2 焦点、3 ベクトルが順に含まれる<br>- `FakeImageProvider` がフィクスチャ 6 コマの PNG を返し decode できる<br>- `docs/fixtures/art/pn_1.png` 〜 `pn_6.png` を commit | [03-data-model.md AI プロバイダ](03-data-model.md)<br>[workstreams/WS-03-ai-core.md](workstreams/WS-03-ai-core.md) |

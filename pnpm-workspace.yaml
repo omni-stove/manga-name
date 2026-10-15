@@ -7,4 +7,3 @@ packages:
 catalog:
   typescript: ^7.0.2
   vitest: ^5.0.4
-  zod: ^4.6.7
