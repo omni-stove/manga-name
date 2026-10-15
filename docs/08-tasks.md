@@ -42,7 +42,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 
 ## 進捗
 
-完了 5 / 着手中 0 / 未着手 54
+完了 6 / 着手中 0 / 未着手 53
 
 ### G0 基盤
 
@@ -81,7 +81,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 - [ ] 24 書き出し UI
 - [ ] 25 参考画像の読込と描画
 - [ ] 26 参考画像の生成への受け渡しとキャラ参照画像
-- [ ] 27 sweepPath、projectOntoSweep、inferReadingOrder
+- [x] 27 sweepPath、projectOntoSweep、inferReadingOrder（完了 2026-10-15）
 - [ ] 28 diagnosePage と panelHint
 - [ ] 29 focus ツールと vector ツール
 - [ ] 30 診断オーバーレイと Inspector
@@ -354,7 +354,7 @@ graph LR
 | 24 | [ ] | [ ] | **書き出し UI**<br>形式（PNG zip / PDF）、範囲、notes、panelNumbers、spread、dpi。Web Worker と進捗 | 23, 14, 22 | `apps/web`<br>`e2e` | - e2e シナリオ 4 が green<br>- 書き出し中に進捗が出て UI がブロックされない<br>- 未生成コマがあると警告が出るが止まらない | [workstreams/WS-08-export.md](workstreams/WS-08-export.md) |
 | 25 | [ ] | [ ] | **参考画像の読込と描画**<br>drop / picker / paste、PNG / JPEG / PDF、縮小、putAsset、reference Patch、最下層描画 | 15 | `packages/editor-canvas`<br>`packages/storage`<br>`apps/web` | - 3 形式の読込テスト<br>- 10MB 画像が長辺 2048 に縮小される<br>- canvas に `<image>` が最下層に opacity と visible 付きで出る<br>- `renderPage` の出力に出ない | [workstreams/WS-09-reference-image.md](workstreams/WS-09-reference-image.md) |
 | 26 | [ ] | [ ] | **参考画像の生成への受け渡しとキャラ参照画像**<br>PageInspector の参考画像 UI、コマごとの「参考画像を使う」、CharacterInspector の参照画像、generatePanel への配線 | 25, 13 | `packages/inspector`<br>`apps/web` | - 生成リクエストの `referencePng` がコマの rect でクロップされている（寸法）<br>- `characterRefs` に登場キャラの画像が入る<br>- 不透明度変更が即時反映、保存して再読込後も復元 | [workstreams/WS-09-reference-image.md](workstreams/WS-09-reference-image.md) |
-| 27 | [ ] | [ ] | **sweepPath、projectOntoSweep、inferReadingOrder** | 03 | `packages/diagnosis` | - centre と polyline の両方で射影テストがある<br>- ltr で t が反転する<br>- 段判定（上端差 0.03）のテスト | [04-diagnosis-spec.md](04-diagnosis-spec.md)<br>[workstreams/WS-10-diagnosis.md](workstreams/WS-10-diagnosis.md) |
+| 27 | [x] | [x] | **sweepPath、projectOntoSweep、inferReadingOrder** | 03 | `packages/diagnosis` | - centre と polyline の両方で射影テストがある<br>- ltr で t が反転する<br>- 段判定（上端差 0.03）のテスト | [04-diagnosis-spec.md](04-diagnosis-spec.md)<br>[workstreams/WS-10-diagnosis.md](workstreams/WS-10-diagnosis.md) |
 | 28 | [ ] | [ ] | **diagnosePage と panelHint**<br>Bubble の合成焦点、ベクトル集計、status 判定、Issue 生成、bubbleChain、summary、hint | 27 | `packages/diagnosis`<br>`docs/fixtures` | - `04-diagnosis-spec.md` の期待値表 12 焦点（合成焦点含む）を ±0.02 で再現する<br>- 変形テスト 2 つ（E crouched を y=0.95 で miss、Panel 2/3 の order 入替で READING_ORDER）<br>- Panel 4 の hint が label の順と「大きく」を含む<br>- `Object.freeze` した入力で動く<br>- 30 コマ 20 焦点で 5ms 以内のベンチ<br>- 出力を `docs/fixtures/sample-page-01.diagnosis.json` に commit し、スナップショットテストにする | [04-diagnosis-spec.md](04-diagnosis-spec.md)<br>[workstreams/WS-10-diagnosis.md](workstreams/WS-10-diagnosis.md) |
 | 29 | [ ] | [ ] | **focus ツールと vector ツール**<br>配置、ドラッグ、種別、矢印、ラベル | 15 | `packages/editor-canvas` | - focus / vector の各操作が 1 Patch で出る<br>- `targetFocusId` 自動設定が焦点とフキダシの両方で効く<br>- `layers.hints` を切ると描画されない | [workstreams/WS-11-hints-overlay.md](workstreams/WS-11-hints-overlay.md) |
 | 30 | [ ] | [ ] | **診断オーバーレイと Inspector**<br>sweep、bubble chain、焦点ラベルの診断、凡例と集計、FocusInspector、VectorInspector、IssueList、diagnosePage の useMemo 配線 | 28, 29, 12, 22 | `packages/editor-canvas`<br>`packages/inspector`<br>`apps/web`<br>`e2e` | - フィクスチャ + diagnosis で集計行 `reading order OK | focus points: 12 ok 12 miss 0` が出る<br>- Focus / Vector の各フォームが Patch を発火、IssueList クリックで選択が移る<br>- e2e シナリオ 5 が green | [workstreams/WS-11-hints-overlay.md](workstreams/WS-11-hints-overlay.md) |
