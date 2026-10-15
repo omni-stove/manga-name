@@ -47,14 +47,6 @@ jobs:
           done
           echo "consecutive agent-fix commits: $consecutive"
           if [ "$consecutive" -ge 3 ]; then echo "run=false" >> "$GITHUB_OUTPUT"; else echo "run=true" >> "$GITHUB_OUTPUT"; fi
-      - uses: omni-stove/.github/actions/setup-pnpm-node@main
-        if: steps.gate.outputs.run == 'true'
-        with:
-          node-version: "26"
-      - uses: biomejs/setup-biome@v2
-        if: steps.gate.outputs.run == 'true'
-        with:
-          version: 2.5.15
       - name: Git identity
         if: steps.gate.outputs.run == 'true'
         run: |
@@ -67,13 +59,11 @@ jobs:
           github_token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           claude_args: |
             --max-turns 100
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(biome:*),Bash(pnpm:*),Bash(gh run view:*),Bash(gh pr view:*)"
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh run view:*),Bash(gh pr view:*)"
             --system-prompt "Always write in Japanese."
           prompt: |
             CI run ${{ github.event.workflow_run.html_url }} failed on branch `${{ github.event.workflow_run.head_branch }}` of ${{ github.repository }}.
 
             Read the failed job logs with `gh run view ${{ github.event.workflow_run.id }} --log-failed`. Fix the root cause with the smallest change that holds, leaving a test's assertions and unrelated code as they are. Leave lockfiles and generated files to their generators. When the failure comes from outside this branch's changes or from the runner, change nothing and stop.
-
-            Reproduce with `biome ci .` and `pnpm typecheck` before and after the fix.
 
             Commit everything in one commit whose message starts with `[agent-fix] `, then `git push`.
