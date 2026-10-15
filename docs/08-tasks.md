@@ -42,7 +42,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 
 ## 進捗
 
-完了 11 / 着手中 0 / 未着手 48
+完了 12 / 着手中 0 / 未着手 47
 
 ### G0 基盤
 
@@ -118,7 +118,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 - [ ] 52 手描きメモ
 - [ ] 53 手描きのタッチと性能
 - [ ] 54 Yjs マッピング
-- [ ] 55 Durable Object 同期サーバ
+- [x] 55 Durable Object 同期サーバ（完了 2026-10-15）
 - [ ] 56 クライアント接続と presence
 - [ ] 57 権限と招待
 - [ ] 58 協業モード回帰
@@ -397,7 +397,7 @@ graph LR
 | 52 | [ ] | [ ] | **手描きメモ**<br>Pointer Events、間引き 0.002、polyline 即時描画、pointerup で Stroke Patch、消しゴム、3 色 | 15 | `packages/editor-canvas`<br>`apps/web` | - 1 ストローク 1 Patch<br>- Undo で直前のストロークが消える<br>- `renderPage` の出力に出ない | [workstreams/WS-20-scribble.md](workstreams/WS-20-scribble.md) |
 | 53 | [ ] | [ ] | **手描きのタッチと性能** | 52 | `packages/editor-canvas` | - 500 ストロークの render ベンチが 16ms 以内<br>- iPad Safari で 1 本指描画と 2 本指パンを目視 | [workstreams/WS-20-scribble.md](workstreams/WS-20-scribble.md) |
 | 54 | [ ] | [ ] | **Yjs マッピング**<br>Project と Y.Map / Y.Array、applyPatch の差し替え、UndoManager。ローカルのみ | 08 | `apps/web`<br>`packages/storage` | - 08 の store テストが Yjs 実装でも通る<br>- Undo が自分の変更だけを戻す | [workstreams/WS-19-collaboration.md](workstreams/WS-19-collaboration.md) |
-| 55 | [ ] | [ ] | **Durable Object 同期サーバ**<br>永続化、D1 スナップショット | 35 | `workers/api` | - 2 接続で更新が往復する統合テスト<br>- 再起動後に DO storage から復元 | [workstreams/WS-19-collaboration.md](workstreams/WS-19-collaboration.md) |
+| 55 | [x] | [x] | **Durable Object 同期サーバ**<br>永続化、D1 スナップショット | 35 | `workers/api` | - 2 接続で更新が往復する統合テスト<br>- 再起動後に DO storage から復元 | [workstreams/WS-19-collaboration.md](workstreams/WS-19-collaboration.md) |
 | 56 | [ ] | [ ] | **クライアント接続と presence** | 54, 55 | `apps/web`<br>`packages/storage` | - 他クライアントの選択がカーソル色で見える<br>- オフライン編集が復帰後にマージされる<br>- 生成画像が他クライアントに表示される | [workstreams/WS-19-collaboration.md](workstreams/WS-19-collaboration.md) |
 | 57 | [ ] | [ ] | **権限と招待** | 56, 38, Q11 | `workers/api`<br>`apps/web` | - viewer が書き込めない<br>- commenter は手描きメモだけ書ける<br>- 招待メールで editor が参加できる | [workstreams/WS-19-collaboration.md](workstreams/WS-19-collaboration.md) |
 | 58 | [ ] | [ ] | **協業モード回帰** | 56, 22 | `e2e` | - 同時ドラッグで両方の変更が残る<br>- e2e 1, 2, 3 が協業モードでも green | [workstreams/WS-19-collaboration.md](workstreams/WS-19-collaboration.md)<br>[workstreams/WS-21-e2e-hardening.md](workstreams/WS-21-e2e-hardening.md) |
