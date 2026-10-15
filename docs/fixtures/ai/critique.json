@@ -1,0 +1,43 @@
+{
+  "$comment": "FakeLlmProvider.critique の固定応答。docs/fixtures/sample-page-01.json の pg_1 に対する提案で、patch の path は Project を根にする。",
+  "summary": "視線はおおむね右上から左下へ流れています。Panel 4 の E が経路の下端ぎりぎりにあり、Panel 5 には誘導線がないため、目元の焦点が弱くなっています。",
+  "suggestions": [
+    {
+      "message": "Panel 4 の「E crouched, still」を少し上げて、視線経路の帯の中に入れる",
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/episodes/0/pages/0/panels/3/focusPoints/1/pos",
+          "value": { "x": 0.82, "y": 0.72 }
+        }
+      ]
+    },
+    {
+      "message": "Panel 5 の目元へ向かう弱い誘導線を足す",
+      "patch": [
+        {
+          "op": "add",
+          "path": "/episodes/0/pages/0/panels/4/vectors/-",
+          "value": {
+            "id": "vc_5_a",
+            "kind": "speed",
+            "from": { "x": 0.9, "y": 0.35 },
+            "to": { "x": 0.68, "y": 0.47 },
+            "strength": "weak",
+            "targetFocusId": "fp_5_e"
+          }
+        }
+      ]
+    },
+    {
+      "message": "Panel 6 のフキダシを新芽に近づけて、しっぽの向きと視線を揃える",
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/episodes/0/pages/0/panels/5/bubbles/0/pos",
+          "value": { "x": 0.8, "y": 0.3 }
+        }
+      ]
+    }
+  ]
+}
