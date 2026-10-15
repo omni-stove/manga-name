@@ -19,11 +19,7 @@ export const isUserId = (value: string) => USER_ID.test(value)
  * 超えていなければ null。
  * 判定と加算を 1 文の UPSERT にしているのは、同時に届いた要求が同じ数を読んで両方通らないようにするため。
  */
-async function hitRateLimit(
-  db: D1Database,
-  userId: string,
-  now: number,
-): Promise<number | null> {
+async function hitRateLimit(db: D1Database, userId: string, now: number): Promise<number | null> {
   const windowStart = now - (now % RATE_LIMIT_WINDOW_MS)
   const [, hit] = await db.batch<{ count: number }>([
     db
