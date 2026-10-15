@@ -42,7 +42,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 
 ## 進捗
 
-完了 11 / 着手中 0 / 未着手 48
+完了 12 / 着手中 0 / 未着手 47
 
 ### G0 基盤
 
@@ -97,7 +97,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 - [ ] 37 staging deploy
 - [ ] 38 認証ミドルウェア
 - [ ] 39 Web ログインと共有トークン廃止
-- [ ] 40 createCloudStorage
+- [x] 40 createCloudStorage（完了 2026-10-15）
 - [ ] 41 アセット同期と同期状態
 - [ ] 42 クラウド統合
 - [ ] 43 AI に相談
@@ -372,7 +372,7 @@ graph LR
 | 37 | [ ] | [ ] | **staging deploy** | 36 | `workers/api`<br>`.github` | - `wrangler deploy` が staging に通り health が 200 | [workstreams/WS-13-workers-api.md](workstreams/WS-13-workers-api.md) |
 | 38 | [ ] | [ ] | **認証ミドルウェア** | 35, Q3 | `workers/api` | - Bearer 検証のテスト<br>- `/v1/ai/*` も認証を通る<br>- X-Debug-User が dev 以外で無効 | [workstreams/WS-14-auth.md](workstreams/WS-14-auth.md) |
 | 39 | [ ] | [ ] | **Web ログインと共有トークン廃止**<br>useAuth、ログインフロー、リフレッシュ、ローカル降格、サインアウト | 38, 09 | `apps/web` | - ログイン後 `GET /v1/projects` と `POST /v1/ai/panel-art` が 200<br>- 失効時に自動リフレッシュ、失敗時はローカルモードでデータが残る<br>- サインアウトでトークンが消える<br>- 共有アクセストークンの設定項目が消えている | [workstreams/WS-14-auth.md](workstreams/WS-14-auth.md) |
-| 40 | [ ] | [ ] | **createCloudStorage**<br>ローカル優先、2 秒 debounce、起動時比較、409 は別名保存 | 06, 35 | `packages/storage` | - msw で save / load / 409 のテスト<br>- 409 で両方のデータが残る | [workstreams/WS-15-cloud-storage.md](workstreams/WS-15-cloud-storage.md) |
+| 40 | [x] | [x] | **createCloudStorage**<br>ローカル優先、2 秒 debounce、起動時比較、409 は別名保存 | 06, 35 | `packages/storage` | - msw で save / load / 409 のテスト<br>- 409 で両方のデータが残る | [workstreams/WS-15-cloud-storage.md](workstreams/WS-15-cloud-storage.md) |
 | 41 | [ ] | [ ] | **アセット同期と同期状態**<br>upload と ref 書換、採用中優先、オフライン検知、リトライ、useSyncState | 40, 36, 26 | `packages/storage`<br>`apps/web` | - オフラインで編集しオンライン復帰で送信されるテスト<br>- 採用中の生成画像が履歴より先にアップロードされる<br>- 同期状態がツールバーに出る | [workstreams/WS-15-cloud-storage.md](workstreams/WS-15-cloud-storage.md) |
 | 42 | [ ] | [ ] | **クラウド統合**<br>実 API + 認証 | 41, 39, 37, 22 | `apps/web`<br>`e2e` | - 2 ブラウザで片方の保存と生成画像がもう片方のリロードで見える<br>- e2e シナリオ 7 が green | [workstreams/WS-15-cloud-storage.md](workstreams/WS-15-cloud-storage.md) |
 | 43 | [ ] | [ ] | **AI に相談**<br>critique ルート、prompts.critique、相談ボタン、suggestion カード、ghostPage、適用、再生成の促し | 32, 30 | `workers/api`<br>`packages/ai`<br>`packages/editor-canvas`<br>`apps/web` | - Fake で end-to-end<br>- rect を触る Patch を拒否するテスト<br>- 適用を Undo で戻せる | [workstreams/WS-16-critique.md](workstreams/WS-16-critique.md) |
