@@ -17,6 +17,7 @@ jobs:
       pull-requests: write
       issues: write
       id-token: write
+      actions: read
     with:
       node-version: "26"
       # Biome is the standalone binary from its GitHub release, not the mise tool.
@@ -26,4 +27,7 @@ jobs:
       run-test: true
       run-review: true
       review-provider: "claude"
+      run-fix: true
+      fix-provider: "claude"
+      regen-command: 'pnpm install --lockfile-only --no-frozen-lockfile'
     secrets: inherit
