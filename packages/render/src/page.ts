@@ -118,21 +118,37 @@ if (import.meta.vitest) {
 
   const bytes = async (blob: Blob) => Buffer.from(await blob.arrayBuffer())
 
-  // toMatchFileSnapshot は文字列しか raw で保存しないので、PNG は自前で比較する。
+  const pixels = async (png: Blob) => {
+    const backend = await getBackend()
+    const image = await backend.decodeImage(png)
+    const { width, height } = image as { width: number; height: number }
+    const probe = backend.createSurface(width, height)
+    probe.ctx.drawImage(image, 0, 0)
+    return { width, height, data: probe.ctx.getImageData(0, 0, width, height).data }
+  }
+
+  // toMatchFileSnapshot は文字列しか raw で保存せず、PNG のバイト列は OS ごとの圧縮と
+  // 文字のラスタライズの丸め（チャンネル差 1）で変わるので、デコードした画素を許容差つきで比べる。
   // 無ければ書いて通す（CI では失敗）。更新はファイルを消して再実行する
+  const PIXEL_TOLERANCE = 2
   const matchPngSnapshot = async (name: string, png: Blob) => {
     const { writeFile } = await import('node:fs/promises')
     const file = new URL(`./__snapshots__/${name}.png`, import.meta.url)
-    const received = await bytes(png)
     const expected = await readFile(file).catch(() => undefined)
     if (expected === undefined) {
       if (process.env.CI) throw new Error(`snapshot ${name}.png is missing`)
-      await writeFile(file, received)
+      await writeFile(file, await bytes(png))
       return
     }
-    if (!expected.equals(received)) {
-      throw new Error(`snapshot ${name}.png differs. Delete the file and rerun to update it`)
+    const received = await pixels(png)
+    const stored = await pixels(new Blob([new Uint8Array(expected)]))
+    expect([received.width, received.height]).toEqual([stored.width, stored.height])
+    let worst = 0
+    for (let i = 0; i < received.data.length; i++) {
+      worst = Math.max(worst, Math.abs((received.data[i] ?? 0) - (stored.data[i] ?? 0)))
     }
+    const hint = `snapshot ${name}.png differs. Delete the file and rerun to update it`
+    expect(worst, hint).toBeLessThanOrEqual(PIXEL_TOLERANCE)
   }
 
   const SNAPSHOT_WIDTH = 728

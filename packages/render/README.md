@@ -44,4 +44,5 @@ pnpm --filter @manga/render typecheck
 ## テスト
 
 in-source テストは `@napi-rs/canvas` で描く。スナップショット PNG は `src/__snapshots__/` に置き、
-無ければ最初の `pnpm test` が書く（CI では失敗する）。描画を変えたら `pnpm test -- -u` で更新する。
+無ければ最初の `pnpm test` が書く（CI では失敗する）。PNG のバイト列は OS ごとに変わるので、
+デコードした画素をチャンネル差 2 まで許して比べる。描画を変えたらファイルを消して再実行する。

@@ -78,7 +78,6 @@ export function layoutBubbleText(
   const paragraphs = toParagraphs(text)
   const min = Math.max(1, Math.floor(fontPx))
   const max = Math.floor(Math.min(size.h, size.w))
-  // 行数ごとに、収まる最大の文字サイズ
   const byLineCount = new Map<number, { lines: string[][]; fontPx: number }>()
   for (let px = max; px >= min; px--) {
     const lines = breakLines(paragraphs, Math.floor(size.h / px))

@@ -186,7 +186,6 @@ export function drawBubble(ctx: Ctx, shape: Shape, g: Geometry, lineWidth: numbe
   const { a, b, tip } = tailTriangle(g, g.tail)
   const box = bounds(g, lineWidth * 4)
 
-  // 本体の輪郭は、しっぽの三角の内側を除いて描く
   ctx.save()
   ctx.beginPath()
   ctx.rect(box.x, box.y, box.w, box.h)
@@ -200,7 +199,6 @@ export function drawBubble(ctx: Ctx, shape: Shape, g: Geometry, lineWidth: numbe
   ctx.stroke()
   ctx.restore()
 
-  // しっぽの 2 辺は、本体の内側を除いて描く
   ctx.save()
   ctx.beginPath()
   ctx.rect(box.x, box.y, box.w, box.h)
