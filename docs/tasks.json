@@ -191,7 +191,7 @@
       "group": "G0",
       "title": "packages/render",
       "detail": "renderPage（枠、絵の cover 配置、フキダシ形状、縦書き、未生成コマの note 印字）、renderLayoutPng、Noto Sans JP 同梱、OffscreenCanvas / @napi-rs/canvas",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "04"
       ],
@@ -209,13 +209,15 @@
       "spec": [
         "03-data-model.md レンダラ",
         "workstreams/WS-02-render.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "06",
       "group": "G1",
       "title": "StorageAdapter、createMemoryStorage、createIndexedDbStorage、createStorage",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "03"
       ],
@@ -229,7 +231,9 @@
       "spec": [
         "03-data-model.md ストレージアダプタ",
         "workstreams/WS-06-app-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "07",

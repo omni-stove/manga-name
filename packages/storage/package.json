@@ -1,0 +1,22 @@
+{
+  "name": "@manga/storage",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config ../../vitest.config.ts"
+  },
+  "dependencies": {
+    "@manga/schema": "workspace:*",
+    "idb": "^8.0.3"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

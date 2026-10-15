@@ -50,11 +50,11 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 - [x] 02 契約の型を Zod に写し、参照整合を refine で検証する（完了 2026-10-15）
 - [x] 03 parseProject、migrate、createEmptyProject、createPage、createBubble、currentArt、fixtures、JSON Schema 出力（完了 2026-10-15）
 - [x] 04 packages/ai（完了 2026-10-15）
-- [ ] 05 packages/render
+- [x] 05 packages/render（完了 2026-10-15）
 
 ### G1 最小縦スライス
 
-- [ ] 06 StorageAdapter、createMemoryStorage、createIndexedDbStorage、createStorage
+- [x] 06 StorageAdapter、createMemoryStorage、createIndexedDbStorage、createStorage（完了 2026-10-15）
 - [x] 07 apps/web 雛形（完了 2026-10-15）
 - [ ] 08 ProjectStore
 - [ ] 09 プロジェクト一覧、ページ一覧、キャラクター、設定
@@ -317,13 +317,13 @@ graph LR
 | 02 | [x] | [x] | **契約の型を Zod に写し、参照整合を refine で検証する**<br>Project〜Stroke、PageDiagnosis / Issue / Patch、AI 応答スキーマ、newId | なし | `packages/schema` | - `docs/fixtures/sample-page-01.json` が `ProjectSchema.parse` を通る<br>- 参照整合違反 6 種（artId、parentId、Vector の焦点参照、speakerId / characterId、order 一意、0..1 範囲）を 1 ケースずつテストで検出する | [03-data-model.md](03-data-model.md)<br>[workstreams/WS-01-schema.md](workstreams/WS-01-schema.md) |
 | 03 | [x] | [x] | **parseProject、migrate、createEmptyProject、createPage、createBubble、currentArt、fixtures、JSON Schema 出力** | 02 | `packages/schema` | - `createPage` の各テンプレートが OVERLAP のない矩形を作り、order が rtl 順<br>- `createEmptyProject` の settings が既定値（182x257、300dpi、既定 style）<br>- migrate v1 → v1 が no-op のテスト<br>- `dist/schema.json` が生成され、`pnpm --filter @manga/schema test` が通る | [03-data-model.md](03-data-model.md)<br>[workstreams/WS-01-schema.md](workstreams/WS-01-schema.md) |
 | 04 | [x] | [x] | **packages/ai**<br>ImageProvider / LlmProvider interface、createFakeImageProvider と fixtures/art、createFakeLlmProvider、prompts.panelArt | 03 | `packages/ai`<br>`docs/fixtures` | - `prompts.panelArt` のスナップショット。フィクスチャ Panel 4 で note、camera、E の appearance、2 焦点、3 ベクトルが順に含まれる<br>- `createFakeImageProvider` がフィクスチャ 6 コマの PNG を返し decode できる<br>- `docs/fixtures/art/pn_1.png` 〜 `pn_6.png` を commit | [03-data-model.md AI プロバイダ](03-data-model.md)<br>[workstreams/WS-03-ai-core.md](workstreams/WS-03-ai-core.md) |
-| 05 | [ ] | [ ] | **packages/render**<br>renderPage（枠、絵の cover 配置、フキダシ形状、縦書き、未生成コマの note 印字）、renderLayoutPng、Noto Sans JP 同梱、OffscreenCanvas / @napi-rs/canvas | 04 | `packages/render` | - フィクスチャ（arts 空）の `renderPage` スナップショット。6 コマ枠、フキダシ 3、縦書きセリフ<br>- `arts` にフィクスチャ画像を入れたスナップショット<br>- 同じ入力で 2 回描いてバイト一致<br>- `layoutBubbleText` で 20 文字が 2 行以上に割れ、「ー」が回転する<br>- `renderLayoutPng` で Panel 6 のフキダシ領域が白、他が薄灰（画素サンプリング）<br>- 300dpi 1 ページが 500ms 以内（Node ベンチ） | [03-data-model.md レンダラ](03-data-model.md)<br>[workstreams/WS-02-render.md](workstreams/WS-02-render.md) |
+| 05 | [x] | [x] | **packages/render**<br>renderPage（枠、絵の cover 配置、フキダシ形状、縦書き、未生成コマの note 印字）、renderLayoutPng、Noto Sans JP 同梱、OffscreenCanvas / @napi-rs/canvas | 04 | `packages/render` | - フィクスチャ（arts 空）の `renderPage` スナップショット。6 コマ枠、フキダシ 3、縦書きセリフ<br>- `arts` にフィクスチャ画像を入れたスナップショット<br>- 同じ入力で 2 回描いてバイト一致<br>- `layoutBubbleText` で 20 文字が 2 行以上に割れ、「ー」が回転する<br>- `renderLayoutPng` で Panel 6 のフキダシ領域が白、他が薄灰（画素サンプリング）<br>- 300dpi 1 ページが 500ms 以内（Node ベンチ） | [03-data-model.md レンダラ](03-data-model.md)<br>[workstreams/WS-02-render.md](workstreams/WS-02-render.md) |
 
 ### G1 最小縦スライス（直列）
 
 | ID | 着手 | 完了 | タスク | 依存 | 範囲 | 完了条件 | 仕様 |
 |---|---|---|---|---|---|---|---|
-| 06 | [ ] | [ ] | **StorageAdapter、createMemoryStorage、createIndexedDbStorage、createStorage** | 03 | `packages/storage` | - Memory と IndexedDB（fake-indexeddb）が同じテストスイートを通る<br>- save / load / delete / putAsset / resolveAsset / loadAsset の往復テスト | [03-data-model.md ストレージアダプタ](03-data-model.md)<br>[workstreams/WS-06-app-shell.md](workstreams/WS-06-app-shell.md) |
+| 06 | [x] | [x] | **StorageAdapter、createMemoryStorage、createIndexedDbStorage、createStorage** | 03 | `packages/storage` | - Memory と IndexedDB（fake-indexeddb）が同じテストスイートを通る<br>- save / load / delete / putAsset / resolveAsset / loadAsset の往復テスト | [03-data-model.md ストレージアダプタ](03-data-model.md)<br>[workstreams/WS-06-app-shell.md](workstreams/WS-06-app-shell.md) |
 | 07 | [x] | [x] | **apps/web 雛形**<br>Vite + React + TanStack Router、6 ルート、プレースホルダ画面 | 01 | `apps/web` | - `pnpm --filter @manga/web dev` で 6 ルートが開く<br>- 各ルートの render テスト | [02-architecture.md](02-architecture.md)<br>[workstreams/WS-06-app-shell.md](workstreams/WS-06-app-shell.md) |
 | 08 | [ ] | [ ] | **ProjectStore**<br>Zustand + Immer、applyPatch、履歴、Undo / Redo、500ms debounce 保存 | 07, 03, 06 | `apps/web` | - Undo / Redo が 100 ステップ以上効くテスト<br>- `source: 'remote'` の patch が履歴に乗らない<br>- 連続変更で saveProject が 500ms 後に 1 回だけ呼ばれる | [03-data-model.md パッチ形式](03-data-model.md)<br>[workstreams/WS-06-app-shell.md](workstreams/WS-06-app-shell.md) |
 | 09 | [ ] | [ ] | **プロジェクト一覧、ページ一覧、キャラクター、設定**<br>作成、削除、ページ追加（テンプレート）、並べ替え、キャラクター追加、settings 編集、IndexedDB 復元、JSON export / import | 08 | `apps/web` | - リロード後に IndexedDB から復元されるテスト<br>- export が `parseProject` を通り、フィクスチャを import できる<br>- ページ一覧に生成状況（未生成 / 一部 / 全部）が出る | [workstreams/WS-06-app-shell.md](workstreams/WS-06-app-shell.md) |
