@@ -263,7 +263,7 @@
       "group": "G1",
       "title": "ProjectStore",
       "detail": "Zustand + Immer、applyPatch、履歴、Undo / Redo、500ms debounce 保存",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "07",
         "03",
@@ -280,7 +280,9 @@
       "spec": [
         "03-data-model.md パッチ形式",
         "workstreams/WS-06-app-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "09",
