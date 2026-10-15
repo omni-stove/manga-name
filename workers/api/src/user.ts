@@ -19,7 +19,7 @@ export const isUserId = (value: string) => USER_ID.test(value)
  * 超えていなければ null。
  * 判定と加算を 1 文の UPSERT にしているのは、同時に届いた要求が同じ数を読んで両方通らないようにするため。
  */
-export async function hitRateLimit(
+async function hitRateLimit(
   db: D1Database,
   userId: string,
   now: number,

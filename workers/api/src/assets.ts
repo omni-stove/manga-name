@@ -21,7 +21,7 @@ export const MAX_ASSET_BYTES = 20 * 1024 * 1024
 export const UPLOAD_URL_TTL_MS = 15 * 60_000
 
 /** GET でそのまま返すので、ブラウザがスクリプトとして解釈しうる型は受けない */
-export const ASSET_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const
+const ASSET_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const
 
 const UploadUrlSchema = z.object({
   mime: z.enum(ASSET_MIME_TYPES),

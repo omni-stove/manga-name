@@ -94,7 +94,8 @@ describe('asset upload with a signed URL', () => {
     const bytes = new Uint8Array(await got.arrayBuffer())
     expect(bytes.byteLength).toBe(png.byteLength)
     expect(isDecodablePng(bytes)).toBe(true)
-    expect(bytes).toEqual(png)
+    const digest = async (b: Uint8Array) => new Uint8Array(await crypto.subtle.digest('SHA-256', b))
+    expect(await digest(bytes)).toEqual(await digest(png))
     expect((await env.ASSETS.head(`${projectId}/${assetId}`))?.size).toBe(png.byteLength)
   })
 
