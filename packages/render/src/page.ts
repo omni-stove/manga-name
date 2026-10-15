@@ -1,4 +1,4 @@
-import type { Page, Panel } from '@manga/schema'
+import { currentArt, type Page, type Panel } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
 import { bubbleGeometry, drawBubble, textBox } from './bubble'
 import { type PxRect, pagePixelSize, rectToPx } from './geometry'
@@ -18,9 +18,9 @@ function byOrder<T extends { order: number }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.order - b.order)
 }
 
-/** 採用中の生成画像を読んでデコードする。artId が無ければ undefined */
+/** 採用中の生成画像を読んでデコードする。無ければ undefined */
 async function loadArt(panel: Panel, ctx: RenderContext): Promise<CanvasImageSource | undefined> {
-  const art = panel.arts.find((a) => a.id === panel.artId)
+  const art = currentArt(panel)
   if (!art) return undefined
   const backend = await getBackend()
   return backend.decodeImage(await ctx.loadAsset(art.ref))
