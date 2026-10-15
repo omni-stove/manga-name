@@ -5,7 +5,7 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /** JSON 値を Yjs の値にする。オブジェクトは Y.Map、配列は Y.Array、それ以外はそのまま。値が undefined のキーは落とす */
-export function toY(value: unknown): unknown {
+function toY(value: unknown): unknown {
   if (Array.isArray(value)) {
     const array = new Y.Array<unknown>()
     if (value.length > 0) array.insert(0, value.map(toY))
@@ -20,7 +20,7 @@ export function toY(value: unknown): unknown {
 }
 
 /** Yjs の値を JSON 値にする */
-export function fromY(value: unknown): unknown {
+function fromY(value: unknown): unknown {
   return value instanceof Y.AbstractType ? value.toJSON() : value
 }
 
@@ -34,17 +34,16 @@ export function writeYMap(root: Y.Map<unknown>, value: Record<string, unknown>):
  * 配列要素の replace は削除と挿入にする。同じプリミティブ値への replace は書かない。
  */
 export function applyPatchToY(root: Y.Map<unknown>, patch: ImmerPatch): void {
-  const fail = (reason: string): never => {
-    throw new Error(`Cannot ${patch.op} /${patch.path.join('/')} on Y.Doc: ${reason}`)
-  }
+  const fail = (reason: string) =>
+    new Error(`Cannot ${patch.op} /${patch.path.join('/')} on Y.Doc: ${reason}`)
   let parent: unknown = root
   for (const key of patch.path.slice(0, -1)) {
     if (parent instanceof Y.Map) parent = parent.get(String(key))
     else if (parent instanceof Y.Array) parent = parent.get(Number(key))
-    else return fail('parent is not a Y.Map or Y.Array')
+    else throw fail('parent is not a Y.Map or Y.Array')
   }
   const last = patch.path.at(-1)
-  if (last === undefined) return fail('the root cannot be replaced')
+  if (last === undefined) throw fail('the root cannot be replaced')
 
   if (parent instanceof Y.Map) {
     const key = String(last)
@@ -58,7 +57,7 @@ export function applyPatchToY(root: Y.Map<unknown>, patch: ImmerPatch): void {
     if (patch.op !== 'add') parent.delete(index, 1)
     if (patch.op !== 'remove') parent.insert(index, [toY(patch.value)])
   } else {
-    fail('parent is not a Y.Map or Y.Array')
+    throw fail('parent is not a Y.Map or Y.Array')
   }
 }
 

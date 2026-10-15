@@ -2,7 +2,7 @@ import type { Project } from '@manga/schema'
 import type { StoreApi } from 'zustand/vanilla'
 import type { ProjectStoreState } from './project-store'
 
-export interface SaveScheduler {
+interface SaveScheduler {
   /** 変更があったことを伝える。最後の呼び出しから `debounceMs` 後に保存する */
   schedule(): void
   /** debounce を待たずに未保存の変更を保存する。保存が終わると resolve する。失敗しても reject しない */

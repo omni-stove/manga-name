@@ -2,7 +2,7 @@ import { createEmptyProject, fixtures, type Patch, type Project } from '@manga/s
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { ProjectStoreOptions, WebProjectStore } from './project-store'
 
-export type ProjectStoreFactory = (
+type ProjectStoreFactory = (
   initial: Project,
   options: ProjectStoreOptions,
 ) => WebProjectStore

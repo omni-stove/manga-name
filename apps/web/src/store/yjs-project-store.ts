@@ -121,7 +121,7 @@ export function createYjsProjectStore(
   }
   root.observeDeep(onEvents)
 
-  // updatedAt を Undo の対象から外すため、追跡しない origin で別のトランザクションにする
+  // Undo / Redo が戻した updatedAt を現在時刻で上書きする。追跡しない origin にして Undo の履歴に積まない
   const stamp = (updatedAt: string) =>
     doc.transact(() => root.set('updatedAt', updatedAt), untracked)
 
@@ -149,13 +149,14 @@ export function createYjsProjectStore(
       if (!result.success) throw result.error
 
       batch(() => {
+        // 他のクライアントへ届く更新を 1 回にするため、updatedAt も同じトランザクションで書く。Undo / Redo の後には stamp で書き直す
         doc.transact(
           () => {
             for (const p of resolved) applyPatchToY(root, p)
+            if (!remote) root.set('updatedAt', updatedAt)
           },
           remote ? untracked : local,
         )
-        if (!remote) stamp(updatedAt)
       })
     },
     undo() {
@@ -282,7 +283,12 @@ if (import.meta.vitest) {
       Y.applyUpdate(b.doc, Y.encodeStateAsUpdate(a.doc))
       Y.applyUpdate(a.doc, Y.encodeStateAsUpdate(b.doc))
 
-      expect(a.get().characters.map((c) => c.id).sort()).toEqual(['c1', 'c2'])
+      expect(
+        a
+          .get()
+          .characters.map((c) => c.id)
+          .sort(),
+      ).toEqual(['c1', 'c2'])
       expect(a.get()).toMatchObject({ title: 'from a', settings: { dpi: 600 } })
       expect(b.get()).toEqual(a.get())
     })
