@@ -23,7 +23,6 @@ jobs:
       typecheck-command: 'pnpm typecheck'
       test-command: 'pnpm test && pnpm dlx bats@1 tests'
       run-test: true
-      # Review and the agent-fix loop live in pr-review.yml; a second review here would
-      # post duplicate findings and race it on fix pushes.
-      run-review: false
+      run-review: true
+      review-provider: "claude"
     secrets: inherit
