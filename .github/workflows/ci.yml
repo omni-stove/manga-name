@@ -21,8 +21,16 @@ jobs:
       node-version: "26"
       lint-command: 'pnpm dlx @biomejs/biome@2 check . && pnpm --silent knip'
       typecheck-command: 'pnpm typecheck'
-      test-command: 'pnpm test && pnpm dlx bats@1 tests'
+      # tests/tasks.bats drives make, which forwards to mise run, so the test job needs
+      # mise and the tools in mise.toml, not just pnpm and Node.js.
+      test-jobs: |
+        [
+          { "name": "test",
+            "setup": "curl -fsSL https://mise.run | sh && echo \"$HOME/.local/bin\" >> \"$GITHUB_PATH\"",
+            "command": "mise trust -q && mise install && mise run test" }
+        ]
       run-test: true
-      run-review: true
-      review-provider: "claude"
+      # Review and the agent-fix loop live in pr-review.yml; a second review here would
+      # post duplicate findings and race it on fix pushes.
+      run-review: false
     secrets: inherit

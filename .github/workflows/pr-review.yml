@@ -3,9 +3,11 @@ name: PR Review
 # Claude reviews every non-draft PR and leaves must-fix findings as inline comments plus a
 # summary comment ending in `Verdict: changes requested` or `Verdict: LGTM`. When threads
 # are left unresolved, a second job fixes them on the PR branch, pushes once with an
-# `[agent-fix]` commit, and replies to each thread. Three consecutive `[agent-fix]`
-# commits stop the fix job. Set CLAUDE_CODE_OAUTH_TOKEN as a repo secret. Pushes made with
-# GITHUB_TOKEN do not re-trigger this workflow; set AGENT_GITHUB_TOKEN for a full loop.
+# `[agent-fix]` commit, and replies to each thread. That push re-triggers this workflow as
+# github-actions[bot], which claude-code-action rejects unless allowed_bots names it. Three
+# consecutive `[agent-fix]` commits stop the fix job. Set CLAUDE_CODE_OAUTH_TOKEN as a repo
+# secret. Pushes made with GITHUB_TOKEN do not re-trigger this workflow; set
+# AGENT_GITHUB_TOKEN for a full loop.
 
 on:
   pull_request:
@@ -33,6 +35,7 @@ jobs:
           fetch-depth: 0
       - uses: anthropics/claude-code-action@v1
         with:
+          allowed_bots: github-actions
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           claude_args: |
@@ -97,6 +100,7 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         if: steps.gate.outputs.run == 'true'
         with:
+          allowed_bots: github-actions
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           claude_args: |
