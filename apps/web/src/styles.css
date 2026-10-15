@@ -90,6 +90,67 @@ a {
   margin: 0;
 }
 
+.fields input,
+.fields select,
+.fields textarea {
+  font: inherit;
+}
+
+.error {
+  color: #c62828;
+  white-space: pre-line;
+}
+
+.card-actions,
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.save-status {
+  opacity: 0.7;
+}
+
+.save-status.error {
+  opacity: 1;
+}
+
+.art-status[data-status="全部"] {
+  font-weight: 700;
+}
+
+.page-thumbnail {
+  width: 100%;
+  height: auto;
+}
+
+.page-thumbnail-paper {
+  fill: Canvas;
+  stroke: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.page-thumbnail-panel {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.page-thumbnail-panel[data-art="true"] {
+  fill: color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.drop-zone {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px dashed color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 0.5rem;
+}
+
+.drop-zone[data-dragging="true"] {
+  border-style: solid;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
 .editor {
   display: flex;
   flex-direction: column;

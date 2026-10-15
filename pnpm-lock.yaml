@@ -190,6 +190,9 @@ importers:
       '@manga/schema':
         specifier: workspace:*
         version: link:../../packages/schema
+      '@manga/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@tanstack/react-router':
         specifier: ^1.170.44
         version: 1.170.44(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -218,6 +221,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.1.2
         version: 6.1.2(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
