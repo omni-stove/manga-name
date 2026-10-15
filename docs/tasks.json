@@ -688,7 +688,7 @@
       "id": "27",
       "group": "G3",
       "title": "sweepPath、projectOntoSweep、inferReadingOrder",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "03"
       ],
@@ -703,7 +703,9 @@
       "spec": [
         "04-diagnosis-spec.md",
         "workstreams/WS-10-diagnosis.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "28",
