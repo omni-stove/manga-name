@@ -53,10 +53,7 @@ function PageList() {
         {project.episodes.length > 1 && (
           <label>
             追加先{' '}
-            <select
-              value={targetEpisode?.id}
-              onChange={(e) => setEpisodeId(e.currentTarget.value)}
-            >
+            <select value={targetEpisode?.id} onChange={(e) => setEpisodeId(e.currentTarget.value)}>
               {project.episodes.map((episode) => (
                 <option key={episode.id} value={episode.id}>
                   {episode.title}

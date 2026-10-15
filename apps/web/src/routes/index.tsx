@@ -4,7 +4,11 @@ import { parseProjectFile } from '../project-file'
 import { errorMessage } from '../route-error'
 
 export const Route = createFileRoute('/')({
-  loader: ({ context }) => context.library.list(),
+  loader: async ({ context }) => {
+    // debounce 待ちの変更を storage に反映してから読まないと、一覧に古いタイトルと並び順が出る
+    await context.library.flushAll()
+    return context.library.list()
+  },
   component: ProjectList,
 })
 
@@ -64,6 +68,7 @@ function ProjectList() {
       </form>
       <div
         className="drop-zone"
+        role="group"
         data-dragging={dragging}
         onDragOver={(e) => {
           e.preventDefault()

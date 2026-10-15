@@ -23,10 +23,7 @@ interface IssueLike {
 }
 
 const hasIssues = (error: unknown): error is { issues: IssueLike[] } =>
-  typeof error === 'object' &&
-  error !== null &&
-  'issues' in error &&
-  Array.isArray(error.issues)
+  typeof error === 'object' && error !== null && 'issues' in error && Array.isArray(error.issues)
 
 /**
  * 画面に出すエラー文。ZodError は JSON の塊を message に持つので、issue ごとに「パス: 理由」の行にする。

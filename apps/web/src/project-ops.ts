@@ -31,7 +31,7 @@ export function findPage(project: Project, pageId: ID): PageLocation | undefined
   return undefined
 }
 
-type ArtStatus ='未生成' | '一部' | '全部'
+type ArtStatus = '未生成' | '一部' | '全部'
 
 /** ページ内のコマのうち、現在の絵が選ばれているものの割合で 3 段階に分ける。コマが無いページは未生成 */
 export function artStatus(page: Page): ArtStatus {
