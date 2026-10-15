@@ -4,7 +4,7 @@ name: PR Review
 # summary comment ending in `Verdict: changes requested` or `Verdict: LGTM`. When threads
 # are left unresolved, a second job fixes them on the PR branch, pushes once with an
 # `[agent-fix]` commit, and replies to each thread. Three consecutive `[agent-fix]`
-# commits stop the fix job. Set ANTHROPIC_API_KEY as a repo secret. Pushes made with
+# commits stop the fix job. Set CLAUDE_CODE_OAUTH_TOKEN as a repo secret. Pushes made with
 # GITHUB_TOKEN do not re-trigger this workflow; set AGENT_GITHUB_TOKEN for a full loop.
 
 on:
@@ -33,7 +33,7 @@ jobs:
           fetch-depth: 0
       - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           claude_args: |
             --max-turns 80
@@ -97,7 +97,7 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         if: steps.gate.outputs.run == 'true'
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           claude_args: |
             --max-turns 100
