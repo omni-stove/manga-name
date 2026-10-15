@@ -2,7 +2,7 @@ name: Issue Worker
 
 # An issue labeled bug, prototype or implementation is implemented by Claude, which pushes
 # a branch and opens a PR that references the issue. Set CLAUDE_CODE_OAUTH_TOKEN as a repo
-# secret. A PR opened with GITHUB_TOKEN does not trigger other workflows (CI, PR Review);
+# secret. A PR opened with GITHUB_TOKEN does not trigger other workflows (CI);
 # set AGENT_GITHUB_TOKEN (a PAT or GitHub App token with contents + pull-requests write)
 # when those should run on agent PRs.
 
@@ -33,10 +33,6 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
-      - uses: jdx/mise-action@v2
-        with:
-          cache: true
-      - run: mise run install
       - name: Git identity
         run: |
           git config user.name "claude[bot]"
@@ -48,7 +44,7 @@ jobs:
           github_token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           claude_args: |
             --max-turns 150
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh issue view:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(make:*),Bash(mise run:*)"
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh issue view:*),Bash(gh pr create:*),Bash(gh pr view:*)"
             --system-prompt "Always write in Japanese."
           prompt: |
             ${{ github.event.label.name == 'bug' && 'Fix the bug reported in' || github.event.label.name == 'prototype' && 'Build a prototype that demonstrates the concept in' || 'Implement, at production quality with real data access, error handling and tests where they apply,' }} issue #${{ github.event.issue.number }} "${{ github.event.issue.title }}":
@@ -57,7 +53,6 @@ jobs:
 
             ${{ github.event.label.name == 'prototype' && 'Mock data in place of real DB/API integration is fine.' || 'Review the prototype PR first if the issue references one.' }}
             Follow the patterns the existing code establishes. Leave lockfiles and generated files to their generators.
-            Run `make lint` and `make test` and fix what fails in your own change.
 
             You are on branch `${{ env.BRANCH }}`. Commit your change with a message that says what it does, push with `git push -u origin ${{ env.BRANCH }}`, then open the PR:
             `gh pr create --base ${{ github.event.repository.default_branch }} --head ${{ env.BRANCH }} --label ${{ github.event.label.name }}${{ github.event.label.name == 'prototype' && ' --draft' || '' }} --title "<what the change does>" --body "<body>"`

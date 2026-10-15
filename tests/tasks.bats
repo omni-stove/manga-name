@@ -26,6 +26,7 @@ setup() {
 }
 
 @test "make forwards a task and its args to mise run" {
+  command -v mise >/dev/null || skip "mise is not installed"
   run make tasks show 01
   [ "$status" -eq 0 ]
   # mise はコマンドの echo 行を先に出すので、先頭行ではなく行単位で探す

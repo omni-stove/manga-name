@@ -2,6 +2,7 @@
   "name": "manga",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@12.4.2",
   "engines": {
     "node": ">=26"
   },
