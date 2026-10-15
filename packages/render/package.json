@@ -1,0 +1,22 @@
+{
+  "name": "@manga/render",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config ../../vitest.config.ts"
+  },
+  "dependencies": {
+    "@manga/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^1.0.11",
+    "@types/node": "^26.6.5",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
