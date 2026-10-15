@@ -1,10 +1,10 @@
 import type { FocusDiagnosis, Panel, Point } from '@manga/schema'
 
 /** フキダシを焦点とみなすときの weight（04 の 0 節） */
-export const BUBBLE_WEIGHT = 0.4
+const BUBBLE_WEIGHT = 0.4
 
 /** 合成焦点の label（04 の 10 節）。セリフ本文はヒントや Issue に出さない */
-export const BUBBLE_LABEL = 'フキダシ'
+const BUBBLE_LABEL = 'フキダシ'
 
 /** FocusPoint とフキダシの合成焦点を同じ形で扱うための焦点 */
 export type Focus = {

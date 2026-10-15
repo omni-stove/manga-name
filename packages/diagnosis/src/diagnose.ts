@@ -187,7 +187,8 @@ export function bubbleChain(page: Page): Point[] {
 /**
  * ページを診断する（`docs/04-diagnosis-spec.md`）。Bubble を合成焦点に加えてから、
  * 読み順、焦点の t・距離・誘導線・ステータス、フキダシ順、bubble chain、Issue、集計、ヒントを返す。
- * panels と issues は Panel.order 順。純粋関数で、入力は変更しない。
+ * panels は Panel.order 順。issues はページ単位の Issue（READING_ORDER、OVERLAP）の後に
+ * Panel.order 順の Panel ごとの Issue が続く。純粋関数で、入力は変更しない。
  */
 export function diagnosePage(page: Page, settings: ProjectSettings): PageDiagnosis {
   const config = resolveConfig(settings)
