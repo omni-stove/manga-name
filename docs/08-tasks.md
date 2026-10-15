@@ -54,7 +54,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 
 ### G1 最小縦スライス
 
-- [ ] 06 StorageAdapter、createMemoryStorage、createIndexedDbStorage、createStorage
+- [x] 06 StorageAdapter、createMemoryStorage、createIndexedDbStorage、createStorage（完了 2026-10-15）
 - [x] 07 apps/web 雛形（完了 2026-10-15）
 - [ ] 08 ProjectStore
 - [ ] 09 プロジェクト一覧、ページ一覧、キャラクター、設定
@@ -323,7 +323,7 @@ graph LR
 
 | ID | 着手 | 完了 | タスク | 依存 | 範囲 | 完了条件 | 仕様 |
 |---|---|---|---|---|---|---|---|
-| 06 | [ ] | [ ] | **StorageAdapter、createMemoryStorage、createIndexedDbStorage、createStorage** | 03 | `packages/storage` | - Memory と IndexedDB（fake-indexeddb）が同じテストスイートを通る<br>- save / load / delete / putAsset / resolveAsset / loadAsset の往復テスト | [03-data-model.md ストレージアダプタ](03-data-model.md)<br>[workstreams/WS-06-app-shell.md](workstreams/WS-06-app-shell.md) |
+| 06 | [x] | [x] | **StorageAdapter、createMemoryStorage、createIndexedDbStorage、createStorage** | 03 | `packages/storage` | - Memory と IndexedDB（fake-indexeddb）が同じテストスイートを通る<br>- save / load / delete / putAsset / resolveAsset / loadAsset の往復テスト | [03-data-model.md ストレージアダプタ](03-data-model.md)<br>[workstreams/WS-06-app-shell.md](workstreams/WS-06-app-shell.md) |
 | 07 | [x] | [x] | **apps/web 雛形**<br>Vite + React + TanStack Router、6 ルート、プレースホルダ画面 | 01 | `apps/web` | - `pnpm --filter @manga/web dev` で 6 ルートが開く<br>- 各ルートの render テスト | [02-architecture.md](02-architecture.md)<br>[workstreams/WS-06-app-shell.md](workstreams/WS-06-app-shell.md) |
 | 08 | [ ] | [ ] | **ProjectStore**<br>Zustand + Immer、applyPatch、履歴、Undo / Redo、500ms debounce 保存 | 07, 03, 06 | `apps/web` | - Undo / Redo が 100 ステップ以上効くテスト<br>- `source: 'remote'` の patch が履歴に乗らない<br>- 連続変更で saveProject が 500ms 後に 1 回だけ呼ばれる | [03-data-model.md パッチ形式](03-data-model.md)<br>[workstreams/WS-06-app-shell.md](workstreams/WS-06-app-shell.md) |
 | 09 | [ ] | [ ] | **プロジェクト一覧、ページ一覧、キャラクター、設定**<br>作成、削除、ページ追加（テンプレート）、並べ替え、キャラクター追加、settings 編集、IndexedDB 復元、JSON export / import | 08 | `apps/web` | - リロード後に IndexedDB から復元されるテスト<br>- export が `parseProject` を通り、フィクスチャを import できる<br>- ページ一覧に生成状況（未生成 / 一部 / 全部）が出る | [workstreams/WS-06-app-shell.md](workstreams/WS-06-app-shell.md) |
