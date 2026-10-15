@@ -140,7 +140,7 @@
       "id": "03",
       "group": "G0",
       "title": "parseProject、migrate、createEmptyProject、createPage、createBubble、currentArt、fixtures、JSON Schema 出力",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "02"
       ],
@@ -156,7 +156,9 @@
       "spec": [
         "03-data-model.md",
         "workstreams/WS-01-schema.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "04",
