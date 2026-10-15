@@ -4,6 +4,7 @@ pnpm = "12"
 biome = "2"
 rust = "1"
 bats = "1"
+jq = "1"
 
 [task_config]
 includes = [".mise/tasks.toml"]

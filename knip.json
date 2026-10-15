@@ -1,9 +1,4 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreBinaries": ["biome", "mise"],
-  "workspaces": {
-    ".": {
-      "entry": ["scripts/*.mjs"]
-    }
-  }
+  "ignoreBinaries": ["biome", "mise"]
 }

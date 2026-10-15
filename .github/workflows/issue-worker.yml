@@ -44,7 +44,7 @@ jobs:
           github_token: ${{ secrets.AGENT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           claude_args: |
             --max-turns 150
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh issue view:*),Bash(gh pr create:*),Bash(gh pr view:*)"
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh issue view:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(scripts/tasks.sh:*),Bash(.agents/skills/next-task/scripts/next.sh),Bash(.agents/skills/next-task/scripts/start.sh:*),Bash(.agents/skills/next-task/scripts/finish.sh:*)"
             --system-prompt "Always write in Japanese."
           prompt: |
             ${{ github.event.label.name == 'bug' && 'Fix the bug reported in' || github.event.label.name == 'prototype' && 'Build a prototype that demonstrates the concept in' || 'Implement, at production quality with real data access, error handling and tests where they apply,' }} issue #${{ github.event.issue.number }} "${{ github.event.issue.title }}":
