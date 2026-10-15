@@ -1,0 +1,137 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.brand {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-main {
+  flex: 1;
+  padding: 1rem;
+}
+
+.placeholder {
+  opacity: 0.6;
+}
+
+.project-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 1rem;
+}
+
+.tabs a[data-status="active"] {
+  font-weight: 700;
+}
+
+.cards {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+.cards li,
+.cards li > a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cards li {
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 0.5rem;
+}
+
+.cards li > a {
+  text-decoration: none;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+}
+
+.fields dd {
+  margin: 0;
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 5rem);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: 0.5rem;
+}
+
+.toolbar-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.editor-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 24rem;
+  gap: 1rem;
+  min-height: 0;
+}
+
+.canvas-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 0.5rem;
+}
+
+.inspector-placeholder {
+  overflow: auto;
+  border-left: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  padding-left: 1rem;
+}
+
+.inspector-placeholder pre {
+  font-size: 0.75rem;
+}
