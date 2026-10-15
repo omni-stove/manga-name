@@ -99,7 +99,7 @@
       "id": "01",
       "group": "G0",
       "title": "CI を green にする",
-      "status": "todo",
+      "status": "in_progress",
       "deps": [],
       "scope": [
         ".github",
@@ -111,7 +111,8 @@
       ],
       "spec": [
         "workstreams/WS-00-repo-scaffold.md"
-      ]
+      ],
+      "startedAt": "2026-10-15"
     },
     {
       "id": "02",

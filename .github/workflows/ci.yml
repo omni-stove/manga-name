@@ -19,4 +19,5 @@ jobs:
           cache: true
       - run: mise run install
       - run: make lint
+      - run: make typecheck
       - run: make test
