@@ -4,6 +4,9 @@
   "workspaces": {
     "packages/render": {
       "entry": ["src/index.ts", "src/backend-node.ts"]
+    },
+    "workers/api": {
+      "ignoreDependencies": ["cloudflare"]
     }
   }
 }

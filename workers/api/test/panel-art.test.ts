@@ -1,6 +1,6 @@
+import { env } from 'cloudflare:workers'
 import { createFakeImageProvider, type ImageProvider } from '@manga/ai'
 import { fixtures } from '@manga/schema'
-import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createApp } from '../src/app'
 import { isDecodablePng } from '../src/png'
@@ -116,6 +116,24 @@ describe('POST /v1/ai/panel-art', () => {
     const res = await post(app)
     expect(res.status).toBe(429)
     expect(res.headers.get('retry-after')).toBe('60')
+    expect((await usageRows()).results).toHaveLength(10)
+  })
+
+  test('concurrent requests over the limit never reach the provider', async () => {
+    const fake = createFakeImageProvider()
+    let calls = 0
+    const counting: ImageProvider = {
+      async generatePanelArt(req) {
+        calls++
+        return fake.generatePanelArt(req)
+      },
+    }
+    const app = createApp({ imageProvider: () => counting })
+    const responses = await Promise.all(Array.from({ length: 15 }, () => post(app)))
+    const statuses = responses.map((res) => res.status)
+    expect(statuses.filter((s) => s === 200)).toHaveLength(10)
+    expect(statuses.filter((s) => s === 429)).toHaveLength(5)
+    expect(calls).toBe(10)
     expect((await usageRows()).results).toHaveLength(10)
   })
 })

@@ -42,7 +42,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 
 ## 進捗
 
-完了 6 / 着手中 0 / 未着手 53
+完了 7 / 着手中 0 / 未着手 52
 
 ### G0 基盤
 
@@ -340,7 +340,7 @@ graph LR
 | 15 | [ ] | [ ] | **編集パイプライン**<br>ツールバー（tool、layers、Undo / Redo、保存状態）、選択、ハイライト、Delete、キーボード移動 | 14 | `packages/editor-canvas`<br>`apps/web` | - canvas の Patch path がページ root 基準であるテスト<br>- Delete → Undo で要素が戻る<br>- 選択がキャンバスとインスペクタで同期する | [workstreams/WS-04-editor-canvas.md](workstreams/WS-04-editor-canvas.md)<br>[workstreams/WS-06-app-shell.md](workstreams/WS-06-app-shell.md) |
 | 16 | [ ] | [ ] | **panel ツール**<br>作成、リサイズ、スナップ、分割、結合 | 15 | `packages/editor-canvas` | - 各操作が 1 Patch で出るテスト<br>- 分割後に order が rtl で振り直される<br>- スナップ 0.01 のテスト | [workstreams/WS-04-editor-canvas.md](workstreams/WS-04-editor-canvas.md) |
 | 17 | [ ] | [ ] | **bubble ツール**<br>クリック作成、移動、リサイズ、しっぽ、縦書き省略 | 15 | `packages/editor-canvas` | - 作成、移動、リサイズ、しっぽが各 1 Patch<br>- ドラッグ中は Patch を出さず pointerup で 1 回<br>- セリフが収まらないとき省略記号になる | [workstreams/WS-04-editor-canvas.md](workstreams/WS-04-editor-canvas.md) |
-| 18 | [x] | [x] | **Workers AI プロキシ**<br>Hono + wrangler、health、panel-art ルート（Fake）、共有トークン、D1 ai_usage、レート制限、createHttpImageProvider | 04 | `workers/api`<br>`packages/ai` | - `POST /v1/ai/panel-art` が Fake で end-to-end（vitest-pool-workers）<br>- トークン無しは 401、不正応答は再試行後 502、11 回目は 429<br>- ai_usage に行が入る<br>- createHttpImageProvider が multipart を組み立てるテスト | [workstreams/WS-03-ai-core.md](workstreams/WS-03-ai-core.md) |
+| 18 | [x] | [x] | **Workers AI プロキシ**<br>Hono + wrangler、health、panel-art ルート（Fake）、共有トークン、D1 ai_usage、レート制限、createHttpImageProvider | 04 | `workers/api`<br>`packages/ai` | - `POST /v1/ai/panel-art` が Fake で end-to-end（@cloudflare/vitest-plugin）<br>- トークン無しは 401、不正応答は再試行後 502、11 回目は 429<br>- ai_usage に行が入る<br>- createHttpImageProvider が multipart を組み立てるテスト | [workstreams/WS-03-ai-core.md](workstreams/WS-03-ai-core.md) |
 | 19 | [ ] | [ ] | **実画像プロバイダ接続** | 18, Q1 | `workers/api`<br>`docs/fixtures` | - フィクスチャ Panel 4 からモノクロ線画が返る（目視。`docs/fixtures/art/real/` に残す）<br>- apps/web の設定でプロキシ URL とトークンを入れると実生成できる | [workstreams/WS-03-ai-core.md](workstreams/WS-03-ai-core.md)<br>[06-open-questions.md #1 #2](06-open-questions.md) |
 | 20 | [ ] | [ ] | **一括生成とキャンセル**<br>ページ単位とエピソード単位、並列 3、AbortController | 13 | `apps/web` | - ページ一括で 6 コマが並列 3 で生成される<br>- 途中キャンセルで残りが止まり、届いた応答が捨てられる<br>- 未生成コマだけを対象にする既定と「生成済みも含める」 | [workstreams/WS-07-panel-art.md](workstreams/WS-07-panel-art.md) |
 | 21 | [ ] | [ ] | **描画性能**<br>memo、ドラッグ中の再描画範囲、画像のキャッシュ | 16, 17 | `packages/editor-canvas` | - 30 コマ 20 フキダシでドラッグ中 16ms / frame 以内。計測をテストに残す | [workstreams/WS-04-editor-canvas.md](workstreams/WS-04-editor-canvas.md) |

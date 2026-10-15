@@ -79,6 +79,9 @@ if (import.meta.vitest) {
 
   afterEach(() => vi.unstubAllGlobals())
 
+  // FormData.get の戻り型は DOM lib と workers-types で違い、どちらでも通る形にするため
+  const fileText = (entry: unknown) => (entry as File).text()
+
   test('generatePanelArt posts a multipart request with the bearer token', async () => {
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
       const form = init.body as FormData
@@ -88,8 +91,8 @@ if (import.meta.vitest) {
       const json = JSON.parse(form.get('json') as string)
       expect(json.panelId).toBe(panel.id)
       expect(json.previous).toEqual({ instruction: 'darker' })
-      expect(await (form.get('layout') as File).text()).toBe('l')
-      expect(await (form.get('previous') as File).text()).toBe('p')
+      expect(await fileText(form.get('layout'))).toBe('l')
+      expect(await fileText(form.get('previous'))).toBe('p')
       expect((init.headers as Record<string, string>).authorization).toBe('Bearer tok')
       return new Response(new Uint8Array([1, 2, 3]), {
         headers: { [PROVIDER_HEADER]: 'real', [PROMPT_HEADER]: encodeURIComponent('絵') },

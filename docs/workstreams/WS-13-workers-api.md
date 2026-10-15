@@ -35,7 +35,7 @@ GET    /v1/usage                            当月の生成回数と上限
 - `fixtures/sample-page-01.json` を PUT / GET するスモークテスト。
 
 ## 受け入れ条件
-- [ ] 全エンドポイントの統合テスト（`vitest` + `@cloudflare/vitest-pool-workers`）
+- [ ] 全エンドポイントの統合テスト（`vitest` + `@cloudflare/vitest-plugin`）
 - [ ] 楽観ロック競合で 409
 - [ ] 署名 URL で 10MB の PNG をアップロードして GET できる
 - [ ] 月間上限に達した生成が 402 で止まる
