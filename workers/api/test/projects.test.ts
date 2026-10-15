@@ -181,7 +181,15 @@ describe('PUT /v1/projects/:id', () => {
       (await call(path, { method: 'PUT', body: JSON.stringify({ schemaVersion: 1 }), headers }))
         .status,
     ).toBe(400)
-    expect((await put({ ...project, id: 'other' }, etag)).status).toBe(400)
+    expect(
+      (
+        await call(path, {
+          method: 'PUT',
+          body: JSON.stringify({ ...project, id: 'other' }),
+          headers,
+        })
+      ).status,
+    ).toBe(400)
   })
 
   test('404 for another user’s project', async () => {

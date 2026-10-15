@@ -2,7 +2,13 @@ import { createEmptyProject, type Project, parseProject } from '@manga/schema'
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import type { Env } from './env'
-import { deleteProject, insertProject, listProjects, readProject, saveProject } from './project-store'
+import {
+  deleteProject,
+  insertProject,
+  listProjects,
+  readProject,
+  saveProject,
+} from './project-store'
 
 /** 1 Project JSON の上限（バイト） */
 export const MAX_PROJECT_BYTES = 5 * 1024 * 1024
@@ -34,8 +40,26 @@ async function readJson(
   const tooLarge = { ok: false, status: 413, error: 'project exceeds 5MB' } as const
   // Content-Length で先に断るのは、上限を大きく超える本文をメモリに読み込まないため
   if (Number(c.req.header('content-length')) > MAX_PROJECT_BYTES) return tooLarge
-  const body = await c.req.arrayBuffer()
-  if (body.byteLength > MAX_PROJECT_BYTES) return tooLarge
+  // Content-Length の無い chunked 本文でも上限を超えた時点で読むのをやめるため、ストリームで読む
+  const chunks: Uint8Array[] = []
+  let total = 0
+  const reader = c.req.raw.body?.getReader()
+  while (reader) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > MAX_PROJECT_BYTES) {
+      await reader.cancel()
+      return tooLarge
+    }
+    chunks.push(value)
+  }
+  const body = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
   try {
     return { ok: true, value: JSON.parse(new TextDecoder().decode(body)) }
   } catch {
