@@ -1,5 +1,5 @@
 .status {
-  font-size: 0.8125rem;
+  font-size: var(--text-s);
   color: var(--text-muted);
 }
 

@@ -1,8 +1,8 @@
 .inline {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
+  gap: var(--space-8);
+  font-size: var(--text-s);
   color: var(--text-muted);
 }
 
@@ -12,12 +12,12 @@
 }
 
 .episode {
-  margin: 1.5rem 0 2rem;
+  margin: var(--space-24) 0 var(--space-32);
 }
 
 .episodeTitle {
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
+  margin: 0 0 var(--space-8);
+  font-size: var(--text-l);
 }
 
 /* 右綴じの本は 1 ページ目を右に置き、作品と同じ向きに並べる */
@@ -39,5 +39,5 @@
 
 .status[data-status="全部"] {
   color: var(--text);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }

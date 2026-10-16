@@ -1,16 +1,16 @@
 .diagnosis {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 0.375rem 0.75rem;
-  margin: 0.625rem 0;
-  padding: 0.625rem 0.75rem;
+  gap: var(--space-6) var(--space-12);
+  margin: var(--space-10) 0;
+  padding: var(--space-10) var(--space-12);
   border-radius: var(--radius-m);
   background: var(--surface-sunken);
 }
 
 .diagnosis dt {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   color: var(--text-muted);
 }
 
@@ -20,12 +20,12 @@
 
 .diagnosis [data-ok="false"] {
   color: var(--alert);
-  font-weight: 600;
+  font-weight: var(--weight-medium);
 }
 
 .issues {
   margin: 0;
-  padding-left: 1rem;
+  padding-left: var(--space-16);
 }
 
 .issue[data-severity="warning"],

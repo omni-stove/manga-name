@@ -1,6 +1,6 @@
 .dialog {
   width: min(28rem, calc(100vw - 2rem));
-  padding: 1.25rem;
+  padding: var(--space-20);
   border: 1px solid var(--border);
   border-radius: var(--radius-l);
   background: var(--surface-raised);
@@ -13,13 +13,13 @@
 }
 
 .title {
-  font-size: 1.0625rem;
-  margin: 0 0 1rem;
+  font-size: var(--text-xl);
+  margin: 0 0 var(--space-16);
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 1.25rem;
+  gap: var(--space-8);
+  margin-top: var(--space-20);
 }

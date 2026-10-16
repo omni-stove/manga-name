@@ -1,28 +1,28 @@
 .list {
   position: fixed;
-  right: 1rem;
-  bottom: 1rem;
+  right: var(--space-16);
+  bottom: var(--space-16);
   z-index: 10;
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-8);
   max-width: min(24rem, calc(100vw - 2rem));
 }
 
 .toast {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-12);
   align-items: flex-start;
-  padding: 0.75rem 0.75rem 0.75rem 1rem;
+  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-16);
   border: 1px solid var(--border);
   border-left: 0.25rem solid var(--text-muted);
   border-radius: var(--radius-m);
   background: var(--surface-raised);
   color: var(--text);
   box-shadow: var(--shadow);
-  font-size: 0.875rem;
+  font-size: var(--text-m);
   white-space: pre-line;
 }
 
@@ -32,5 +32,5 @@
 
 .message {
   flex: 1;
-  padding-top: 0.125rem;
+  padding-top: var(--space-2);
 }

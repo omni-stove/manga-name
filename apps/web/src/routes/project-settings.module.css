@@ -1,13 +1,13 @@
 .form {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 0.75rem 1.25rem;
+  gap: var(--space-12) var(--space-20);
   align-items: center;
   max-width: 40rem;
 }
 
 .form > label {
-  font-size: 0.8125rem;
+  font-size: var(--text-s);
   color: var(--text-muted);
 }
 
@@ -19,7 +19,7 @@
 .size {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-8);
   color: var(--text-muted);
 }
 

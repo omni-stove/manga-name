@@ -8,16 +8,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 2.75rem;
-  padding: 0 1rem;
+  height: var(--header-height);
+  padding: 0 var(--space-16);
   border-bottom: 1px solid var(--border);
   background: var(--surface-chrome);
-  font-size: 0.875rem;
+  font-size: var(--text-m);
 }
 
 .brand {
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-label);
   text-decoration: none;
 }
 
@@ -34,5 +34,5 @@
 .main {
   flex: 1;
   min-height: 0;
-  padding: 1rem;
+  padding: var(--space-16);
 }
