@@ -1460,7 +1460,7 @@
       "id": "59",
       "group": "G6",
       "title": "Lighthouse とバンドル監視",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "22"
       ],
@@ -1474,7 +1474,9 @@
       ],
       "spec": [
         "workstreams/WS-21-e2e-hardening.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "60",

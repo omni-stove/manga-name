@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "size": "vite build && node scripts/bundle-size.ts",
+    "lighthouse": "vite build && node scripts/lighthouse.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --config ../../vitest.config.ts"
   },
@@ -35,6 +37,8 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "fake-indexeddb": "^6.2.5",
+    "lighthouse": "^13.5.0",
+    "puppeteer-core": "^25.14.0",
     "typescript": "catalog:",
     "vite": "^8.3.4",
     "vitest": "catalog:"
