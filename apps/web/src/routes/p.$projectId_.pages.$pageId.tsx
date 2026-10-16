@@ -26,9 +26,11 @@ import {
 import type { ProjectLibrary } from '../project-library'
 import { findPage, pagePatch } from '../project-ops'
 import { errorMessage } from '../route-error'
+import { SaveStatusIndicator } from '../save-status'
 import { toasts } from '../toasts'
 import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
+import { useUndoShortcuts } from '../use-undo-shortcuts'
 
 export const Route = createFileRoute('/p/$projectId_/pages/$pageId')({
   loader: async ({ context, params }) => {
@@ -75,6 +77,14 @@ type Exporting = 'closed' | 'dialog' | 'busy'
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString('ja-JP')
 
+/** 選択が指す要素がまだページにあるか。Delete や Undo で消えた要素の選択は無いものとして扱う */
+function hasElement(page: Page, selection: Selection): boolean {
+  if (selection === null) return false
+  if (selection.kind === 'panel') return findPanel(page, selection.id) !== undefined
+  if (selection.kind === 'bubble') return findBubble(page, selection.id) !== undefined
+  return false
+}
+
 function Editor() {
   const { projectId, pageId } = Route.useParams()
   const { store } = Route.useLoaderData()
@@ -87,12 +97,14 @@ function Editor() {
   const resolveAsset = useAssetResolver(library.resolveAsset)
   const [tool, setTool] = useState<Tool>('select')
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
-  const [selection, setSelection] = useState<Selection>(null)
+  const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
+  useUndoShortcuts(store)
   const found = findPage(project, pageId)
   // 開いている間に Undo や別タブの操作でページが消えることがある
   if (!found) return <PageNotFound />
   const { page, pageIndex } = found
+  const selection = hasElement(page, selected) ? selected : null
   // 結果は generation がトーストと Patch で出すので、ここでは待たない
   const generate: Generate = (panelId, instruction) =>
     void generation.generate({ store, projectId, pageId, panelId, instruction })
@@ -149,6 +161,7 @@ function Editor() {
           ))}
         </fieldset>
         <span className="toolbar-actions">
+          <SaveStatusIndicator store={store} />
           <button type="button" disabled={!canUndo} onClick={() => store.undo()}>
             Undo
           </button>
@@ -190,6 +203,10 @@ function Editor() {
         </div>
         <aside className="inspector">
           <h2>インスペクタ</h2>
+          <details open>
+            <summary>要素（{page.panels.length}）</summary>
+            <ElementOutline page={page} selection={selection} onSelect={setSelection} />
+          </details>
           <SelectionInspector
             page={page}
             pageId={pageId}
@@ -242,6 +259,57 @@ function Editor() {
         </aside>
       </div>
     </section>
+  )
+}
+
+/** ページのコマとフキダシを読み順に並べたリスト。押すとキャンバスと同じ選択になる */
+function ElementOutline({
+  page,
+  selection,
+  onSelect,
+}: {
+  page: Page
+  selection: Selection
+  onSelect(sel: Selection): void
+}) {
+  const isSelected = (kind: 'panel' | 'bubble', id: ID) =>
+    selection?.kind === kind && selection.id === id
+  if (page.panels.length === 0) return <p className="placeholder">コマがありません</p>
+  return (
+    <ul className="outline">
+      {[...page.panels]
+        .sort((a, b) => a.order - b.order)
+        .map((panel) => (
+          <li key={panel.id}>
+            <button
+              type="button"
+              aria-current={isSelected('panel', panel.id) || undefined}
+              onClick={() => onSelect({ kind: 'panel', id: panel.id })}
+            >
+              コマ {panel.order}
+              {panel.camera && ` [${panel.camera}]`}
+            </button>
+            {panel.bubbles.length > 0 && (
+              <ul>
+                {[...panel.bubbles]
+                  .sort((a, b) => a.order - b.order)
+                  .map((bubble) => (
+                    <li key={bubble.id}>
+                      <button
+                        type="button"
+                        className="in-ellipsis"
+                        aria-current={isSelected('bubble', bubble.id) || undefined}
+                        onClick={() => onSelect({ kind: 'bubble', id: bubble.id })}
+                      >
+                        フキダシ {bubble.order} {bubble.text || '（空）'}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </li>
+        ))}
+    </ul>
   )
 }
 

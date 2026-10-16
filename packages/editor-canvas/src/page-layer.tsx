@@ -1,6 +1,7 @@
 import { type Bubble, currentArt, type ID, type Page, type Panel } from '@manga/schema'
 import { memo } from 'react'
 import { type Box, bodyPath, bubbleGeometry, tailPath, textBox } from './bubble-shape'
+import { panelBox } from './hit-test'
 import type { Selection } from './types'
 import type { AssetState } from './use-asset-urls'
 import { COLUMN_PITCH, layoutVertical } from './vertical-text'
@@ -49,12 +50,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
           <PanelView
             key={panel.id}
             panel={panel}
-            rect={{
-              x: panel.rect.x * width,
-              y: panel.rect.y * height,
-              w: panel.rect.w * width,
-              h: panel.rect.h * height,
-            }}
+            rect={panelBox(panel, width, height)}
             artRef={props.showArt ? ref : undefined}
             asset={props.showArt && ref !== undefined ? props.assets.get(ref) : undefined}
             generating={props.generating.has(panel.id)}
@@ -68,12 +64,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
       {[...page.panels]
         .sort((a, b) => a.order - b.order)
         .map((panel) => {
-          const rect = {
-            x: panel.rect.x * width,
-            y: panel.rect.y * height,
-            w: panel.rect.w * width,
-            h: panel.rect.h * height,
-          }
+          const rect = panelBox(panel, width, height)
           return [...panel.bubbles]
             .sort((a, b) => a.order - b.order)
             .map((bubble) => (
@@ -87,12 +78,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
         })}
       {/* スピナーと生成ボタンはエディタだけの UI なので、フキダシに隠れないよう最後に描く */}
       {page.panels.map((panel) => {
-        const rect = {
-          x: panel.rect.x * width,
-          y: panel.rect.y * height,
-          w: panel.rect.w * width,
-          h: panel.rect.h * height,
-        }
+        const rect = panelBox(panel, width, height)
         const generating = props.generating.has(panel.id)
         const { onGenerate } = props
         return (

@@ -2,7 +2,7 @@ import { fixtures, type ID, type Page, type Patch } from '@manga/schema'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { EditorCanvas } from '../editor-canvas'
-import type { Layers, Selection } from '../types'
+import type { Layers, Selection, Tool } from '../types'
 
 const project = fixtures.samplePage01
 const samplePage = project.episodes[0]?.pages[0] as Page
@@ -59,6 +59,7 @@ function applyPatch(page: Page, patch: Patch): Page {
 function Playground() {
   const [page, setPage] = useState(samplePage)
   const [selection, setSelection] = useState<Selection>(null)
+  const [tool, setTool] = useState<Tool>('select')
   const [generating, setGenerating] = useState<Set<ID>>(() => new Set())
   const [layers, setLayers] = useState<Layers>({
     reference: true,
@@ -92,7 +93,18 @@ function Playground() {
           />
           art
         </label>
-        <span>ホイールでズーム、Space + ドラッグでパン。「生成」でスピナーを切り替える</span>
+        <select value={tool} onChange={(e) => setTool(e.target.value as Tool)}>
+          {(['select', 'panel', 'bubble'] as const).map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <span>
+          ホイールでズーム、Space + ドラッグでパン。クリックで選択、Delete で削除、矢印キーで移動。
+          「生成」でスピナーを切り替える
+        </span>
+        <span>選択: {selection ? `${selection.kind} ${selection.id}` : 'なし'}</span>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
         <EditorCanvas
@@ -101,7 +113,7 @@ function Playground() {
           characters={project.characters}
           diagnosis={null}
           selection={selection}
-          tool="select"
+          tool={tool}
           layers={layers}
           generating={generating}
           onChange={(patch) => {
