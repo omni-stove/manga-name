@@ -716,7 +716,7 @@
       "group": "G3",
       "title": "diagnosePage と panelHint",
       "detail": "Bubble の合成焦点、ベクトル集計、status 判定、Issue 生成、bubbleChain、summary、hint",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "27"
       ],
@@ -735,7 +735,9 @@
       "spec": [
         "04-diagnosis-spec.md",
         "workstreams/WS-10-diagnosis.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "29",
@@ -882,7 +884,7 @@
       "group": "G4",
       "title": "projects CRUD と楽観ロック",
       "detail": "D1 projects / users、5MB 上限、parseProject 不通過は 400、X-Debug-User",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "18"
       ],
@@ -896,7 +898,9 @@
       ],
       "spec": [
         "workstreams/WS-13-workers-api.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "36",
@@ -1286,7 +1290,7 @@
       "group": "G6",
       "title": "Yjs マッピング",
       "detail": "Project と Y.Map / Y.Array、applyPatch の差し替え、UndoManager。ローカルのみ",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "08"
       ],
@@ -1300,7 +1304,9 @@
       ],
       "spec": [
         "workstreams/WS-19-collaboration.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "55",

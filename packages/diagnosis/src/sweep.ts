@@ -1,13 +1,8 @@
 import type { Panel, Point, ReadingDirection, Sweep } from '@manga/schema'
+import { toPage } from './geometry'
 
 /** `Panel.sweep` が無いときの視線経路 */
 const DEFAULT_SWEEP = { kind: 'centre', y: 0.5 } as const satisfies Sweep
-
-/** コマ内座標（0..1）をページ座標に変換する */
-const toPage = (panel: Panel, p: Point): Point => ({
-  x: panel.rect.x + p.x * panel.rect.w,
-  y: panel.rect.y + p.y * panel.rect.h,
-})
 
 /**
  * コマの視線経路をページ座標の点列で返す。入口が先頭、出口が末尾。

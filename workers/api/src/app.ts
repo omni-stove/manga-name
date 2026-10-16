@@ -15,6 +15,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { Env } from './env'
 import { isDecodablePng } from './png'
+import { createProjectsApp } from './projects'
 import { reserveUsage, settleUsage, sha256Hex } from './usage'
 
 /** 応答が不正なときの再試行を含めた、プロバイダを呼ぶ最大回数 */
@@ -79,7 +80,7 @@ async function retryUntilValid<T>(
 
 const isFile = (v: unknown): v is File => typeof v !== 'string' && v !== null && v !== undefined
 
-/** Workers のプロキシ。`GET /v1/health`、`POST /v1/ai/panel-art`、`POST /v1/ai/propose-layout` */
+/** Workers の API。`GET /v1/health`、`POST /v1/ai/panel-art`、`POST /v1/ai/propose-layout`、`/v1/projects` の CRUD */
 export function createApp(options: AppOptions = {}) {
   const createImage = options.imageProvider ?? (() => createFakeImageProvider())
   const createLlm = options.llmProvider ?? (() => createFakeLlmProvider())
@@ -93,6 +94,8 @@ export function createApp(options: AppOptions = {}) {
     reserveUsage(env.DB, { tokenHash, kind, now: Date.now() })
 
   app.get('/v1/health', (c) => c.json({ ok: true }))
+
+  app.route('/v1/projects', createProjectsApp())
 
   app.use('/v1/ai/*', async (c, next) => {
     const tokenHash = await authenticate(c.req.header('authorization'), c.env.APP_ACCESS_TOKEN)
