@@ -90,11 +90,6 @@
   font-weight: var(--weight-bold);
 }
 
-.note {
-  margin: var(--space-6) 0 0;
-  font-size: var(--text-xs);
-}
-
 .outline {
   list-style: none;
   margin: var(--space-8) 0 0;

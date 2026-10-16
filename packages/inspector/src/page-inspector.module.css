@@ -32,3 +32,8 @@
 .issue[data-severity="error"] {
   color: var(--alert);
 }
+
+.opacity {
+  width: 100%;
+  accent-color: var(--text);
+}

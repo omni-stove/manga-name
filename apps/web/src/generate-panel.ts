@@ -10,11 +10,13 @@ import {
   type Patch,
   type Project,
   type ProjectSettings,
+  type ReferenceImage,
 } from '@manga/schema'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { findPanel, panelPatch } from './inspector-ops'
 import type { ProjectLibrary } from './project-library'
 import { findPage } from './project-ops'
+import { cropReference } from './reference-image'
 import { errorMessage } from './route-error'
 import type { ProjectStore } from './store/project-store'
 import { toasts } from './toasts'
@@ -34,6 +36,16 @@ export function generatingPanels(state: GeneratingState, projectId: ID): Set<ID>
   return new Set(
     [...state.panels].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length)),
   )
+}
+
+/** 参考画像を使わないコマ。キーは generatingKey と同じ形 */
+interface ReferenceOptOutState {
+  panels: Set<string>
+}
+
+/** コマの生成に参考画像を渡すか。既定は渡す */
+export function usesReference(state: ReferenceOptOutState, projectId: ID, panelId: ID): boolean {
+  return !state.panels.has(generatingKey(projectId, panelId))
 }
 
 /** 一括生成の範囲が走っているか。`scope` は `generateAll` に渡したもの */
@@ -74,6 +86,9 @@ type BatchOutcome = 'busy' | Record<GenerateOutcome, number>
 
 export interface PanelGeneration {
   readonly generating: StoreApi<GeneratingState>
+  /** コマごとの「参考画像を使う」のオフ。データモデルに項目が無いので、開いている間だけ持つ */
+  readonly referenceOptOut: StoreApi<ReferenceOptOutState>
+  setUseReference(projectId: ID, panelId: ID, use: boolean): void
   generate(req: GenerateRequest): Promise<GenerateOutcome>
   /** 範囲のコマを同時 `batchConcurrency` 本で生成する。失敗はまとめて 1 回通知する */
   generateAll(req: BatchRequest): Promise<BatchOutcome>
@@ -91,6 +106,8 @@ export interface PanelGenerationDeps {
   layoutLongSide?: number
   /** 一括生成の同時実行数。既定 3 */
   batchConcurrency?: number
+  /** 参考画像からコマの範囲を切り抜く。既定は canvas で描く `cropReference` */
+  cropReference?: typeof cropReference
 }
 
 /** コマに登場するキャラ。フキダシの speakerId と焦点の characterId を登場順に、重複なく集める */
@@ -153,7 +170,7 @@ function addArtPatch(project: Project, pageId: ID, panelId: ID, art: PanelArt): 
 
 /**
  * 02-architecture.md のデータフロー「生成」を 1 コマ分まとめる。
- * 配置図 → 登場キャラの参照画像 → 前回の絵（修正指示つきのとき）→ ImageProvider → putAsset → applyPatch(ai)。
+ * 配置図 → 参考画像の切り抜き → 登場キャラの参照画像 → 前回の絵（修正指示つきのとき）→ ImageProvider → putAsset → applyPatch(ai)。
  * 生成は store の外で進め、結果だけを Patch で入れるので Undo で生成前に戻せる。アセットは残る。
  * 進行中のコマは `generating` に持ち、画面を離れても生き続ける。同じコマの二重起動は `busy` で断る
  */
@@ -165,11 +182,13 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     now = () => new Date().toISOString(),
     layoutLongSide = 1024,
     batchConcurrency = 3,
+    cropReference: crop = cropReference,
   } = deps
   const generating = createStore<GeneratingState>()(() => ({
     panels: new Set(),
     batches: new Set(),
   }))
+  const referenceOptOut = createStore<ReferenceOptOutState>()(() => ({ panels: new Set() }))
   const batchControllers = new Map<string, AbortController>()
 
   const toggle = (field: keyof GeneratingState, key: string, on: boolean) =>
@@ -186,6 +205,17 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
         .filter((c): c is Character & { referenceRef: string } => c.referenceRef !== undefined)
         .map(async (c) => ({ characterId: c.id, image: await library.loadAsset(c.referenceRef) })),
     )
+
+  const loadReference = async (
+    reference: ReferenceImage | undefined,
+    projectId: ID,
+    panel: Panel,
+    settings: ProjectSettings,
+  ) => {
+    if (!reference || !usesReference(referenceOptOut.getState(), projectId, panel.id))
+      return undefined
+    return crop(await library.loadAsset(reference.ref), settings.pageSize, panel.rect)
+  }
 
   const loadPrevious = async (panel: Panel, instruction: string) => {
     const current = currentArt(panel)
@@ -218,6 +248,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       width: layoutWidth(panel, settings, layoutLongSide),
       pageSize: settings.pageSize,
     })
+    const referencePng = await loadReference(page.reference, projectId, panel, settings)
     const characterRefs = await loadCharacterRefs(panel, characters)
     const previous = instruction === undefined ? undefined : await loadPrevious(panel, instruction)
     const req: PanelArtRequest = {
@@ -225,6 +256,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       page,
       panelId,
       layoutPng,
+      ...(referencePng && { referencePng }),
       ...(characterRefs.length > 0 && { characterRefs }),
       ...(previous && { previous: { art: previous.art, instruction: previous.instruction } }),
     }
@@ -277,6 +309,15 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
 
   return {
     generating,
+    referenceOptOut,
+    setUseReference(projectId, panelId, use) {
+      referenceOptOut.setState((s) => {
+        const panels = new Set(s.panels)
+        if (use) panels.delete(generatingKey(projectId, panelId))
+        else panels.add(generatingKey(projectId, panelId))
+        return { panels }
+      })
+    },
     async generate(req) {
       const { outcome, error } = await attempt(req)
       if (outcome === 'failed') notify(`コマの生成に失敗しました: ${errorMessage(error)}`)

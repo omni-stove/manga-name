@@ -698,7 +698,7 @@
       "group": "G3",
       "title": "参考画像の生成への受け渡しとキャラ参照画像",
       "detail": "PageInspector の参考画像 UI、コマごとの「参考画像を使う」、CharacterInspector の参照画像、generatePanel への配線",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "25",
         "13"
@@ -714,7 +714,9 @@
       ],
       "spec": [
         "workstreams/WS-09-reference-image.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "27",

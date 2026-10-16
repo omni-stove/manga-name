@@ -91,6 +91,7 @@ function Playground() {
             page={page}
             onChange={onChange}
             onGenerateAll={() => console.log('onGenerateAll')}
+            onPickReference={() => console.log('onPickReference')}
           />
         )}
         {view.kind === 'character' && character && (
