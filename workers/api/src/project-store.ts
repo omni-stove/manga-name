@@ -1,4 +1,5 @@
 import type { Project } from '@manga/schema'
+import type { ProjectRole } from './access'
 
 /** 1 チャンクの UTF-16 コード単位数。UTF-8 で最大 1.5MB になり、D1 の 1 行 2MB に収まる */
 const CHUNK_UNITS = 500_000
@@ -10,6 +11,7 @@ interface ProjectSummary {
   id: string
   title: string
   updatedAt: string
+  role: ProjectRole
 }
 
 type SaveResult =
@@ -56,22 +58,25 @@ function insertChunks(db: D1Database, projectId: string, rev: string, doc: strin
   )
 }
 
-/** owner のプロジェクトを新しい順に返す */
-export async function listProjects(db: D1Database, ownerId: string): Promise<ProjectSummary[]> {
+/** user が owner か参加者のプロジェクトを、user のロール付きで新しい順に返す */
+export async function listProjects(db: D1Database, userId: string): Promise<ProjectSummary[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, title, updated_at AS updatedAt FROM projects
-       WHERE owner_id = ?1 ORDER BY updated_at DESC`,
+      `SELECT p.id AS id, p.title AS title, p.updated_at AS updatedAt,
+              CASE WHEN p.owner_id = ?1 THEN 'owner' ELSE m.role END AS role
+       FROM projects p
+       LEFT JOIN project_members m ON m.project_id = p.id AND m.user_id = ?1
+       WHERE p.owner_id = ?1 OR m.user_id IS NOT NULL
+       ORDER BY p.updated_at DESC`,
     )
-    .bind(ownerId)
+    .bind(userId)
     .all<ProjectSummary>()
   return results
 }
 
-/** owner のプロジェクトの保存済み JSON 文字列と updated_at。無ければ null */
+/** プロジェクトの保存済み JSON 文字列と updated_at。無ければ null。ロールは呼び出し側が確かめる */
 export async function readProject(
   db: D1Database,
-  ownerId: string,
   id: string,
 ): Promise<{ doc: string; updatedAt: string } | null> {
   // 1 文で読むのは、読んでいる途中に別の保存が rev を差し替えても版が混ざらないようにするため
@@ -79,10 +84,10 @@ export async function readProject(
     .prepare(
       `SELECT p.updated_at AS updatedAt, c.data AS data FROM projects p
        JOIN project_doc_chunks c ON c.project_id = p.id AND c.rev = p.rev
-       WHERE p.id = ?1 AND p.owner_id = ?2
+       WHERE p.id = ?1
        ORDER BY c.seq`,
     )
-    .bind(id, ownerId)
+    .bind(id)
     .all<{ updatedAt: string; data: string }>()
   const first = results[0]
   if (!first) return null
@@ -114,11 +119,10 @@ export async function insertProject(
 /**
  * updated_at が expected のときだけ project で置き換える（楽観ロック）。
  * 保存する本文の updatedAt はサーバが決めた新しい updated_at に書き換える。
- * 一致しなければ現在の updated_at を conflict で返し、owner のものが無ければ not-found。
+ * 一致しなければ現在の updated_at を conflict で返し、プロジェクトが無ければ not-found。ロールは呼び出し側が確かめる。
  */
 export async function saveProject(
   db: D1Database,
-  ownerId: string,
   project: Project,
   expected: string,
   now: number,
@@ -130,10 +134,10 @@ export async function saveProject(
   const [update] = await db.batch([
     db
       .prepare(
-        `UPDATE projects SET title = ?4, updated_at = ?5, rev = ?6
-         WHERE id = ?1 AND owner_id = ?2 AND updated_at = ?3`,
+        `UPDATE projects SET title = ?3, updated_at = ?4, rev = ?5
+         WHERE id = ?1 AND updated_at = ?2`,
       )
-      .bind(project.id, ownerId, expected, titleColumn(project.title), updatedAt, rev),
+      .bind(project.id, expected, titleColumn(project.title), updatedAt, rev),
     ...insertChunks(db, project.id, rev, doc),
     db
       .prepare(
@@ -145,46 +149,31 @@ export async function saveProject(
   if (update?.meta.changes === 1) return { status: 'saved', updatedAt }
 
   const current = await db
-    .prepare('SELECT updated_at AS updatedAt FROM projects WHERE id = ?1 AND owner_id = ?2')
-    .bind(project.id, ownerId)
+    .prepare('SELECT updated_at AS updatedAt FROM projects WHERE id = ?1')
+    .bind(project.id)
     .first<{ updatedAt: string }>()
   return current ? { status: 'conflict', updatedAt: current.updatedAt } : { status: 'not-found' }
 }
 
-/** owner のプロジェクトを本文と Yjs スナップショットとアセットの行ごと消す。消したら true。R2 の本体は呼び出し側が消す */
+/** owner のプロジェクトを本文、Yjs スナップショット、アセット、参加者、招待の行ごと消す。消したら true。R2 の本体は呼び出し側が消す */
 export async function deleteProject(db: D1Database, ownerId: string, id: string) {
   // 外部キーの CASCADE が無効な環境でも本文を残さないよう、本文から明示的に消す
-  const [, , , removed] = await db.batch([
+  const owned = (table: string) =>
     db
       .prepare(
-        `DELETE FROM project_doc_chunks
+        `DELETE FROM ${table}
          WHERE project_id = (SELECT id FROM projects WHERE id = ?1 AND owner_id = ?2)`,
       )
-      .bind(id, ownerId),
-    db
-      .prepare(
-        `DELETE FROM project_ydoc_chunks
-         WHERE project_id = (SELECT id FROM projects WHERE id = ?1 AND owner_id = ?2)`,
-      )
-      .bind(id, ownerId),
-    db
-      .prepare(
-        `DELETE FROM assets
-         WHERE project_id = (SELECT id FROM projects WHERE id = ?1 AND owner_id = ?2)`,
-      )
-      .bind(id, ownerId),
+      .bind(id, ownerId)
+  const [, , , , , removed] = await db.batch([
+    owned('project_doc_chunks'),
+    owned('project_ydoc_chunks'),
+    owned('assets'),
+    owned('project_members'),
+    owned('project_invites'),
     db.prepare('DELETE FROM projects WHERE id = ?1 AND owner_id = ?2').bind(id, ownerId),
   ])
   return removed?.meta.changes === 1
-}
-
-/** owner のプロジェクトがあれば true */
-export async function projectExists(db: D1Database, ownerId: string, id: string) {
-  const row = await db
-    .prepare('SELECT 1 AS found FROM projects WHERE id = ?1 AND owner_id = ?2')
-    .bind(id, ownerId)
-    .first<{ found: number }>()
-  return row !== null
 }
 
 /** Yjs の状態を 1 行に入れる最大バイト数。D1 の 1 行 2MB に収める */

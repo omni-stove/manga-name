@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as PProjectIdRouteImport } from './routes/p.$projectId'
 import { Route as PProjectIdIndexRouteImport } from './routes/p.$projectId.index'
 import { Route as PProjectIdCharactersRouteImport } from './routes/p.$projectId.characters'
@@ -25,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PProjectIdRoute = PProjectIdRouteImport.update({
@@ -56,6 +62,7 @@ const PProjectIdPagesPageIdRoute = PProjectIdPagesPageIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/p/$projectId': typeof PProjectIdRouteWithChildren
   '/p/$projectId/characters': typeof PProjectIdCharactersRoute
   '/p/$projectId/settings': typeof PProjectIdSettingsRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/p/$projectId/characters': typeof PProjectIdCharactersRoute
   '/p/$projectId/settings': typeof PProjectIdSettingsRoute
   '/p/$projectId': typeof PProjectIdIndexRoute
@@ -74,6 +82,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/p/$projectId': typeof PProjectIdRouteWithChildren
   '/p/$projectId/characters': typeof PProjectIdCharactersRoute
   '/p/$projectId/settings': typeof PProjectIdSettingsRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/settings'
+    | '/invite/$token'
     | '/p/$projectId'
     | '/p/$projectId/characters'
     | '/p/$projectId/settings'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/settings'
+    | '/invite/$token'
     | '/p/$projectId/characters'
     | '/p/$projectId/settings'
     | '/p/$projectId'
@@ -102,6 +113,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/settings'
+    | '/invite/$token'
     | '/p/$projectId'
     | '/p/$projectId/characters'
     | '/p/$projectId/settings'
@@ -112,6 +124,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SettingsRoute: typeof SettingsRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   PProjectIdRoute: typeof PProjectIdRouteWithChildren
   PProjectIdPagesPageIdRoute: typeof PProjectIdPagesPageIdRoute
 }
@@ -130,6 +143,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/p/$projectId': {
@@ -189,6 +209,7 @@ const PProjectIdRouteWithChildren = PProjectIdRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SettingsRoute: SettingsRoute,
+  InviteTokenRoute: InviteTokenRoute,
   PProjectIdRoute: PProjectIdRouteWithChildren,
   PProjectIdPagesPageIdRoute: PProjectIdPagesPageIdRoute,
 }

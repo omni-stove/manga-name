@@ -41,6 +41,8 @@ export function PanelInspector({
   onGenerate,
   useReference,
   onUseReferenceChange,
+  useHint = true,
+  onUseHintChange,
   resolveAsset,
 }: PanelInspectorProps) {
   const cameraListId = useId()
@@ -84,12 +86,9 @@ export function PanelInspector({
         delayMs={DEBOUNCE_MS}
         onCommit={(v) => onChange(optionalString('/note', panel.note, v))}
       />
-      {diagnosis && (
-        <p className={styles.hint} data-bubble-order-ok={diagnosis.bubbleOrderOk}>
-          {diagnosis.hint}
-          {!diagnosis.bubbleOrderOk && (
-            <small className={styles.hintWarning}>フキダシの順が読み順と合っていません</small>
-          )}
+      {diagnosis && !diagnosis.bubbleOrderOk && (
+        <p className={styles.hint} data-bubble-order-ok={false}>
+          <small className={styles.hintWarning}>フキダシの順が読み順と合っていません</small>
         </p>
       )}
 
@@ -149,6 +148,18 @@ export function PanelInspector({
       )}
 
       <h4 className={section.heading}>生成</h4>
+      {diagnosis && (
+        <>
+          <p className={styles.hint} data-hint data-used={useHint}>
+            {diagnosis.hint || <span className={section.muted}>ヒントはありません</span>}
+          </p>
+          <Checkbox
+            label="ヒントを使う"
+            checked={useHint}
+            onChange={(e) => onUseHintChange?.(e.target.checked)}
+          />
+        </>
+      )}
       {useReference !== undefined && (
         <Checkbox
           label="参考画像を使う"

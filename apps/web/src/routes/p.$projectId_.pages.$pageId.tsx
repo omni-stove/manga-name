@@ -1,3 +1,4 @@
+import { diagnosePage } from '@manga/diagnosis'
 import {
   EditorCanvas,
   type Layers,
@@ -8,14 +9,29 @@ import {
 import {
   BubbleInspector,
   CharacterInspector,
+  FOCUS_KINDS,
+  FocusInspector,
+  IssueList,
   PageInspector,
   PanelInspector,
   ProjectSettingsInspector,
+  VectorInspector,
 } from '@manga/inspector'
-import type { Character, Episode, ID, Page, Panel, Patch, Project } from '@manga/schema'
+import type {
+  Character,
+  Episode,
+  FocusKind,
+  ID,
+  Issue,
+  Page,
+  PageDiagnosis,
+  Panel,
+  Patch,
+  Project,
+} from '@manga/schema'
 import { Button, Checkbox, SegmentedControl, ToolGroup } from '@manga/ui'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { CollaborationBar, PeerBadge, peerColor, usePeers } from '../collaboration-view'
@@ -23,15 +39,19 @@ import common from '../common.module.css'
 import { ExportDialog, type ExportSettings } from '../export-dialog'
 import { exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
-import { generatingPanels, usesReference } from '../generate-panel'
+import { generatingPanels, usesHint, usesReference } from '../generate-panel'
 import {
   bubblePatch,
   characterPatch,
   findBubble,
+  findFocus,
   findPanel,
+  findVector,
+  focusPatch,
   panelPatch,
   removeArtPatch,
   settingsInspectorPatch,
+  vectorPatch,
 } from '../inspector-ops'
 import type { ProjectLibrary } from '../project-library'
 import { findPage, pagePatch } from '../project-ops'
@@ -39,6 +59,7 @@ import { firstFile, referencePatch, toReferenceImage } from '../reference-image'
 import { errorMessage } from '../route-error'
 import { saveFile } from '../save-file'
 import { SaveStatusIndicator } from '../save-status'
+import { ROLE_LABELS } from '../sharing'
 import type { Peer } from '../store/presence'
 import { toasts } from '../toasts'
 import { useAssetResolver } from '../use-asset-resolver'
@@ -95,6 +116,11 @@ interface ReferenceToggle {
   uses(panelId: ID): boolean | undefined
   set(panelId: ID, use: boolean): void
 }
+/** コマの「ヒントを使う」 */
+interface HintToggle {
+  uses(panelId: ID): boolean
+  set(panelId: ID, use: boolean): void
+}
 
 const REFERENCE_ACCEPT = 'image/png,image/jpeg,application/pdf'
 /** 書き出しダイアログが開いているか。`{ done, total }` は書き出し中で、描き終えたページ数と対象のページ数 */
@@ -109,7 +135,21 @@ function hasElement(page: Page, selection: Selection): boolean {
   if (selection === null) return false
   if (selection.kind === 'panel') return findPanel(page, selection.id) !== undefined
   if (selection.kind === 'bubble') return findBubble(page, selection.id) !== undefined
-  return false
+  if (selection.kind === 'focus') return findFocus(page, selection.id) !== undefined
+  return findVector(page, selection.id) !== undefined
+}
+
+/** Issue が指す要素。焦点の id はフキダシの合成焦点ならフキダシを指す */
+function issueTarget(page: Page, issue: Issue): Selection {
+  const id = issue.focusPointId
+  if (id !== undefined) {
+    if (findFocus(page, id)) return { kind: 'focus', id }
+    if (findBubble(page, id)) return { kind: 'bubble', id }
+  }
+  if (issue.panelId !== undefined && findPanel(page, issue.panelId)) {
+    return { kind: 'panel', id: issue.panelId }
+  }
+  return null
 }
 
 function Editor() {
@@ -121,11 +161,19 @@ function Editor() {
   const generatingState = useStore(generation.generating)
   const generating = generatingPanels(generatingState, projectId)
   const referenceOptOut = useStore(generation.referenceOptOut)
+  const hintOptOut = useStore(generation.hintOptOut)
   const { apply, error } = useApplyPatch(store)
   const resolveAsset = useAssetResolver(library.resolveAsset)
   const peers = usePeers(collab)
+  const role = library.role(projectId) ?? 'owner'
+  const canEdit = role === 'owner' || role === 'editor'
+  // commenter は手描きメモだけ書けるので、選択と手描き以外のツールを出さない
+  const tools = canEdit
+    ? TOOLS
+    : TOOLS.filter((t) => t.value === 'select' || (role === 'commenter' && t.value === 'scribble'))
   const [tool, setTool] = useState<Tool>('select')
   const [scribbleTool, setScribbleTool] = useState<ScribbleTool>('ink')
+  const [focusKind, setFocusKind] = useState<FocusKind>('face')
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
@@ -155,6 +203,11 @@ function Editor() {
   const found = findPage(project, pageId)
   // presence は早期 return より前に送るので、page を待たずに今ある要素の選択だけを選ぶ
   const selectedId = found && hasElement(found.page, selected) ? selected?.id : undefined
+  const foundPage = found?.page
+  const diagnosis = useMemo(
+    () => (foundPage ? diagnosePage(foundPage, project.settings) : null),
+    [foundPage, project.settings],
+  )
 
   useEffect(() => {
     collab?.presence.setLocation({ pageId, selection: selectedId ? [selectedId] : [] })
@@ -173,6 +226,10 @@ function Editor() {
     uses: (panelId) =>
       page.reference ? usesReference(referenceOptOut, projectId, panelId) : undefined,
     set: (panelId, use) => generation.setUseReference(projectId, panelId, use),
+  }
+  const hintToggle: HintToggle = {
+    uses: (panelId) => usesHint(hintOptOut, projectId, panelId),
+    set: (panelId, use) => generation.setUseHint(projectId, panelId, use),
   }
   // ダイアログは先に閉じ、描いている間も編集できるようにする。終わればダウンロードか保存先の選択が始まる
   const exportPages = async ({ format, from, to, dpi, ...opts }: ExportSettings) => {
@@ -209,10 +266,11 @@ function Editor() {
         </Link>
         <span className={styles.pageNumber}>{pageIndex + 1} ページ</span>
         <CollaborationBar collab={collab} project={project} />
+        {!canEdit && <span className={common.placeholder}>{ROLE_LABELS[role]}</span>}
         <SegmentedControl
           label="ツール"
           value={tool}
-          options={TOOLS}
+          options={tools}
           onChange={(t) => setTool(t)}
         />
         {tool === 'scribble' && (
@@ -221,6 +279,14 @@ function Editor() {
             value={scribbleTool}
             options={SCRIBBLE_TOOLS}
             onChange={(t) => setScribbleTool(t)}
+          />
+        )}
+        {tool === 'focus' && (
+          <SegmentedControl
+            label="焦点の種別"
+            value={focusKind}
+            options={FOCUS_KINDS}
+            onChange={(k) => setFocusKind(k)}
           />
         )}
         <ToolGroup label="レイヤー">
@@ -282,10 +348,11 @@ function Editor() {
             page={page}
             settings={project.settings}
             characters={project.characters}
-            diagnosis={null}
+            diagnosis={diagnosis}
             selection={selection}
             tool={tool}
             scribbleTool={scribbleTool}
+            focusKind={focusKind}
             layers={layers}
             generating={generating}
             onChange={(patch) => apply('キャンバスの編集', (p) => pagePatch(p, pageId, patch))}
@@ -305,61 +372,78 @@ function Editor() {
               onSelect={setSelection}
             />
           </details>
-          <SelectionInspector
-            page={page}
-            pageId={pageId}
-            characters={project.characters}
-            selection={selection}
-            generating={generating}
-            apply={apply}
-            generate={generate}
-            referenceToggle={referenceToggle}
-            resolveAsset={resolveAsset}
-          />
-          <details open={selection === null}>
-            <summary>ページ</summary>
-            <PageInspector
+          <fieldset disabled={!canEdit} className={styles.inspectorFields}>
+            <SelectionInspector
               page={page}
-              generating={
-                pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
-              }
-              onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
-              onGenerateAll={pageBatch.start}
-              onPickReference={referencePicker.open}
+              pageId={pageId}
+              characters={project.characters}
+              diagnosis={diagnosis}
+              selection={selection}
+              generating={generating}
+              apply={apply}
+              generate={generate}
+              referenceToggle={referenceToggle}
+              hintToggle={hintToggle}
+              resolveAsset={resolveAsset}
             />
-            {referencePicker.input}
-            <BatchOptions batch={pageBatch} />
-          </details>
-          <details>
-            <summary>キャラクター（{project.characters.length}）</summary>
-            {project.characters.length === 0 && (
-              <p className={common.placeholder}>
-                <Link to="/p/$projectId/characters" params={{ projectId }}>
-                  キャラクター一覧
-                </Link>
-                で追加できます
-              </p>
-            )}
-            {project.characters.map((character) => (
-              <CharacterPane
-                key={character.id}
-                character={character}
-                projectId={projectId}
-                library={library}
-                apply={apply}
-                resolveAsset={resolveAsset}
+            <details open={selection === null}>
+              <summary>ページ</summary>
+              <PageInspector
+                page={page}
+                diagnosis={diagnosis ?? undefined}
+                generating={
+                  pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
+                }
+                onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
+                onGenerateAll={pageBatch.start}
+                onPickReference={referencePicker.open}
               />
-            ))}
-          </details>
-          <details>
-            <summary>プロジェクト設定</summary>
-            <ProjectSettingsInspector
-              settings={project.settings}
-              onChange={(patch) =>
-                apply('プロジェクト設定を変更', () => settingsInspectorPatch(patch))
-              }
-            />
-          </details>
+              {referencePicker.input}
+              <BatchOptions batch={pageBatch} />
+            </details>
+            <details>
+              <summary>キャラクター（{project.characters.length}）</summary>
+              {project.characters.length === 0 && (
+                <p className={common.placeholder}>
+                  <Link to="/p/$projectId/characters" params={{ projectId }}>
+                    キャラクター一覧
+                  </Link>
+                  で追加できます
+                </p>
+              )}
+              {project.characters.map((character) => (
+                <CharacterPane
+                  key={character.id}
+                  character={character}
+                  projectId={projectId}
+                  library={library}
+                  apply={apply}
+                  resolveAsset={resolveAsset}
+                />
+              ))}
+            </details>
+            <details>
+              <summary>プロジェクト設定</summary>
+              <ProjectSettingsInspector
+                settings={project.settings}
+                onChange={(patch) =>
+                  apply('プロジェクト設定を変更', () => settingsInspectorPatch(patch))
+                }
+              />
+            </details>
+          </fieldset>
+          {diagnosis && (
+            <details open data-section="issues">
+              <summary>診断の問題（{diagnosis.issues.length}）</summary>
+              <IssueList
+                issues={diagnosis.issues}
+                onFocus={(issue) => {
+                  const target = issueTarget(page, issue)
+                  if (target) setSelection(target)
+                }}
+              />
+            </details>
+          )}
         </aside>
       </div>
     </section>
@@ -441,26 +525,32 @@ function SelectionInspector({
   page,
   pageId,
   characters,
+  diagnosis,
   selection,
   generating,
   apply,
   generate,
   referenceToggle,
+  hintToggle,
   resolveAsset,
 }: {
   page: Page
   pageId: ID
   characters: Character[]
+  diagnosis: PageDiagnosis | null
   selection: Selection
   generating: Set<ID>
   apply: Apply
   generate: Generate
   referenceToggle: ReferenceToggle
+  hintToggle: HintToggle
   resolveAsset(ref: string): Promise<string>
 }) {
   if (selection === null) {
     return (
-      <p className={common.placeholder}>キャンバスでコマかフキダシを選ぶと、ここで編集できます</p>
+      <p className={common.placeholder}>
+        キャンバスでコマ、フキダシ、焦点、ベクトルを選ぶと、ここで編集できます
+      </p>
     )
   }
   if (selection.kind === 'panel') {
@@ -472,6 +562,7 @@ function SelectionInspector({
           key={selection.id}
           panel={found.panel}
           characters={characters}
+          diagnosis={diagnosis?.panels.find((d) => d.panelId === selection.id)}
           generating={generating.has(selection.id)}
           onChange={(patch) =>
             apply('コマを編集', (p) => panelPatch(p, pageId, selection.id, patch))
@@ -479,6 +570,8 @@ function SelectionInspector({
           onGenerate={(instruction) => generate(selection.id, instruction)}
           useReference={referenceToggle.uses(selection.id)}
           onUseReferenceChange={(use) => referenceToggle.set(selection.id, use)}
+          useHint={hintToggle.uses(selection.id)}
+          onUseHintChange={(use) => hintToggle.set(selection.id, use)}
           resolveAsset={resolveAsset}
         />
         <ArtRemoval panel={found.panel} pageId={pageId} apply={apply} />
@@ -499,8 +592,39 @@ function SelectionInspector({
       />
     )
   }
-  // 焦点とベクトルのフォームは Phase 2（タスク 30）
-  return <p className={common.placeholder}>この要素の編集は未対応です</p>
+  if (selection.kind === 'focus') {
+    const found = findFocus(page, selection.id)
+    if (!found) return <p className={common.placeholder}>選んだ焦点はもうありません</p>
+    return (
+      <FocusInspector
+        key={selection.id}
+        focus={found.focus}
+        characters={characters}
+        diagnosis={diagnosis?.panels
+          .find((d) => d.panelId === found.panel.id)
+          ?.focus.find((f) => f.focusPointId === selection.id)}
+        onChange={(patch) => apply('焦点を編集', (p) => focusPatch(p, pageId, selection.id, patch))}
+      />
+    )
+  }
+  const found = findVector(page, selection.id)
+  if (!found) return <p className={common.placeholder}>選んだベクトルはもうありません</p>
+  return (
+    <VectorInspector
+      key={selection.id}
+      vector={found.vector}
+      targets={[
+        ...found.panel.focusPoints.map((f) => ({ value: f.id, label: `焦点 ${f.label || f.id}` })),
+        ...found.panel.bubbles.map((b) => ({
+          value: b.id,
+          label: `フキダシ ${b.order} ${b.text.split('\n')[0] ?? ''}`.trim(),
+        })),
+      ]}
+      onChange={(patch) =>
+        apply('ベクトルを編集', (p) => vectorPatch(p, pageId, selection.id, patch))
+      }
+    />
+  )
 }
 
 /** 履歴の削除。採用中の絵は消せないので、それ以外だけ並べる。アセットは残し、Undo で戻せる */

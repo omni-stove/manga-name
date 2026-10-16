@@ -12,6 +12,10 @@
   background: var(--alert-tint);
 }
 
+.hint[data-used="false"] {
+  opacity: 0.55;
+}
+
 .hintWarning {
   display: block;
   margin-top: var(--space-4);

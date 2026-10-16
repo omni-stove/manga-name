@@ -801,7 +801,7 @@
       "group": "G3",
       "title": "診断オーバーレイと Inspector",
       "detail": "sweep、bubble chain、焦点ラベルの診断、凡例と集計、FocusInspector、VectorInspector、IssueList、diagnosePage の useMemo 配線",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "28",
         "29",
@@ -821,7 +821,9 @@
       ],
       "spec": [
         "workstreams/WS-11-hints-overlay.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "31",
@@ -1416,7 +1418,7 @@
       "id": "57",
       "group": "G6",
       "title": "権限と招待",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "56",
         "38"
@@ -1431,11 +1433,13 @@
       "verify": [
         "viewer が書き込めない",
         "commenter は手描きメモだけ書ける",
-        "招待メールで editor が参加できる"
+        "招待リンクで editor が参加でき、招待先と違うメールアドレスでは受け取れない"
       ],
       "spec": [
         "workstreams/WS-19-collaboration.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "58",

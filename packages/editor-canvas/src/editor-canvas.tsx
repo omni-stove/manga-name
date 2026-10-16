@@ -2,6 +2,7 @@ import { currentArt, type ID, type Page, type Stroke } from '@manga/schema'
 import { memo, useCallback, useId, useLayoutEffect, useMemo, useRef } from 'react'
 import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { BubbleToolLayer } from './bubble-tool-layer'
+import { DiagnosisLayer } from './diagnosis-layer'
 import { findFocus, findVector, focusRadius, toPagePoint } from './hint-ops'
 import { HintsLayer } from './hints-layer'
 import { panelBox } from './hit-test'
@@ -47,7 +48,8 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * 参考画像はページの白地の上、コマの下に描く。焦点とベクトルはフキダシの上に描き、
  * `layers.hints` を切ると描画も選択も操作もしない。
  * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
- * 診断のレイヤーは枠だけ置き、中身は後のタスクで足す。
+ * `diagnosis` があり `layers.diagnosis` が立っていれば、視線経路、bubble chain、焦点ごとの診断ラベル、
+ * ページ下の集計行と凡例を重ねる。そのとき焦点の素のラベルは診断ラベルに譲る。
  * 作業用の色は `@manga/ui/tokens.css` の変数を参照するので、使う側でそれを読み込んでおく
  */
 export function EditorCanvas(props: EditorCanvasProps) {
@@ -116,6 +118,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
     onChange: props.onChange,
   })
   const scribbleSelected = props.tool === 'scribble'
+  const diagnosis = layers.diagnosis ? props.diagnosis : null
   const scribbling = scribbleSelected && layers.scribble
   const pointer = scribbling
     ? scribble.handlers
@@ -269,9 +272,12 @@ export function EditorCanvas(props: EditorCanvasProps) {
           height={pageH}
           selection={props.selection}
           draft={hintTool.draft}
+          labels={diagnosis === null}
         />
       )}
-      {layers.diagnosis && props.diagnosis !== null && <g data-layer="diagnosis" />}
+      {diagnosis !== null && (
+        <DiagnosisLayer page={page} diagnosis={diagnosis} width={pageW} height={pageH} />
+      )}
       <Highlight page={page} width={pageW} height={pageH} target={hovered} />
       <PanelToolLayer
         selected={panelTool.selected}

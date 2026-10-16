@@ -27,7 +27,7 @@ export interface EditorCanvasProps {
   page: Page
   settings: ProjectSettings
   characters: Character[]
-  /** Phase 2 の診断オーバーレイ用。null で動く */
+  /** 視線誘導診断。null なら診断のレイヤーを描かない */
   diagnosis: PageDiagnosis | null
   selection: Selection
   tool: Tool

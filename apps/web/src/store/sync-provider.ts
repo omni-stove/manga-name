@@ -12,6 +12,8 @@ const MESSAGE_QUERY_AWARENESS = 3
 
 /** プロジェクトが削除されてサーバが接続を閉じたときのコード。workers/api の CLOSE_PROJECT_DELETED */
 const CLOSE_PROJECT_DELETED = 4404
+/** ロールで許されない変更を送って閉じられたときのコード。workers/api の CLOSE_FORBIDDEN。つなぎ直しても同じ変更を送るだけになる */
+const CLOSE_FORBIDDEN = 4403
 
 const OPEN = 1
 
@@ -19,7 +21,7 @@ const OPEN = 1
  * - `connecting`: 接続を試みている。失敗すると間をおいて再試行する
  * - `connected`: つながっている。`synced` になるまではサーバの状態を受け取っている途中
  * - `offline`: ブラウザがオフラインか、接続先がまだ無い。復帰したらつなぎ直す
- * - `closed`: プロジェクトが削除されたか destroy した。以降つながない
+ * - `closed`: プロジェクトが削除されたか、ロールで許されない変更を送ったか、destroy した。以降つながない
  */
 export type SyncStatus = 'connecting' | 'connected' | 'offline' | 'closed'
 
@@ -207,7 +209,7 @@ export function createSyncProvider(options: SyncProviderOptions): SyncProvider {
       if (socket !== ws) return
       socket = undefined
       forgetPeers()
-      if (event.code === CLOSE_PROJECT_DELETED) {
+      if (event.code === CLOSE_PROJECT_DELETED || event.code === CLOSE_FORBIDDEN) {
         destroyed = true
         state.setState({ status: 'closed', synced: false })
         return
