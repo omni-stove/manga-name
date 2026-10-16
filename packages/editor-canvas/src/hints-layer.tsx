@@ -1,16 +1,17 @@
 import type { FocusKind, FocusPoint, ID, Page, Panel, Point, Vector } from '@manga/schema'
 import { memo } from 'react'
 import { focusRadius, shiftLinked, toPagePoint } from './hint-ops'
-import { FONT_FAMILY, SELECTED } from './page-layer'
+import { FONT_FAMILY, GUIDE } from './page-layer'
 import type { Selection } from './types'
 import type { HintDraft } from './use-hint-tool'
 
+// var() は CSS の値なので、色は表示属性ではなく style で渡す
 const FOCUS_COLORS: Record<FocusKind, string> = {
-  face: '#2563eb',
-  keyObject: '#f97316',
-  sfx: '#9333ea',
+  face: 'var(--hint-face)',
+  keyObject: 'var(--hint-object)',
+  sfx: 'var(--hint-sfx)',
 }
-const VECTOR_COLOR = '#16a34a'
+const VECTOR_COLOR = 'var(--hint-vector)'
 
 const DOT_RADIUS = 0.8
 const LABEL_SIZE = 2.4
@@ -112,19 +113,23 @@ function FocusView({
           cx={center.x}
           cy={center.y}
           r={r}
-          fill={color}
+          style={{ fill: color, stroke: selected ? GUIDE : color }}
           fillOpacity={0.12}
-          stroke={selected ? SELECTED : color}
           strokeWidth={selected ? 2.5 : 1.5}
           vectorEffect="non-scaling-stroke"
         />
       )}
-      <circle cx={center.x} cy={center.y} r={DOT_RADIUS} fill={selected ? SELECTED : color} />
+      <circle
+        cx={center.x}
+        cy={center.y}
+        r={DOT_RADIUS}
+        style={{ fill: selected ? GUIDE : color }}
+      />
       {focus.label !== '' && (
         <text
           x={center.x + DOT_RADIUS}
           y={center.y + DOT_RADIUS}
-          fill={color}
+          style={{ fill: color }}
           stroke="#fff"
           strokeWidth={0.6}
           paintOrder="stroke"
@@ -164,7 +169,7 @@ function VectorView({
           y1={from.y}
           x2={to.x}
           y2={to.y}
-          stroke={SELECTED}
+          style={{ stroke: GUIDE }}
           strokeOpacity={0.35}
           strokeWidth={width + 5}
           strokeLinecap="round"
@@ -215,12 +220,12 @@ function Arrow({
         y1={from.y}
         x2={bx}
         y2={by}
-        stroke={VECTOR_COLOR}
+        style={{ stroke: VECTOR_COLOR }}
         strokeWidth={width}
         strokeDasharray={dashed ? '4 2' : undefined}
         vectorEffect="non-scaling-stroke"
       />
-      <polygon points={points} fill={VECTOR_COLOR} />
+      <polygon points={points} style={{ fill: VECTOR_COLOR }} />
     </g>
   )
 }

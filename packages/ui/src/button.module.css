@@ -1,0 +1,74 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  min-height: var(--control-m);
+  padding: 0 var(--space-14);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: var(--text-m);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 120ms,
+    border-color 120ms;
+}
+
+.button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-raised), var(--text) 6%);
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.primary {
+  border-color: transparent;
+  background: var(--text);
+  color: var(--text-inverse);
+}
+
+.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text), var(--surface-chrome) 18%);
+}
+
+.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.danger {
+  border-color: transparent;
+  background: var(--alert);
+  color: var(--on-alert);
+}
+
+.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--alert), #000 12%);
+}
+
+.small {
+  min-height: var(--control-s);
+  padding: 0 var(--space-8);
+  font-size: var(--text-s);
+}
+
+.icon {
+  padding: 0;
+  aspect-ratio: 1;
+}
+
+/* 指で押す環境では小さいボタンも当たり判定を広げる */
+@media (pointer: coarse) {
+  .button {
+    min-height: var(--hit);
+  }
+}

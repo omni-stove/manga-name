@@ -1,8 +1,11 @@
 import type { ProjectSettings } from '@manga/schema'
+import { Button, Input, Select, TextArea } from '@manga/ui'
 import { createFileRoute, getRouteApi } from '@tanstack/react-router'
 import { useId } from 'react'
+import common from '../common.module.css'
 import { settingsPatch } from '../project-ops'
 import { useApplyPatch, useProject } from '../use-project'
+import styles from './project-settings.module.css'
 
 export const Route = createFileRoute('/p/$projectId/settings')({ component: ProjectSettingsPage })
 
@@ -25,7 +28,7 @@ function ProjectSettingsPage() {
       <form
         // Undo や他の画面での変更の後に、入力欄を保存済みの値へ戻すため、内容が変わったら作り直す
         key={JSON.stringify([project.title, project.settings])}
-        className="fields"
+        className={styles.form}
         onSubmit={(e) => {
           e.preventDefault()
           const data = new FormData(e.currentTarget)
@@ -47,17 +50,17 @@ function ProjectSettingsPage() {
         }}
       >
         <label htmlFor={field('title')}>タイトル</label>
-        <input id={field('title')} name="title" defaultValue={project.title} />
+        <Input id={field('title')} name="title" defaultValue={project.title} />
 
         <label htmlFor={field('direction')}>読む方向</label>
-        <select id={field('direction')} name="direction" defaultValue={direction}>
+        <Select id={field('direction')} name="direction" defaultValue={direction}>
           <option value="rtl">右から左（rtl）</option>
           <option value="ltr">左から右（ltr）</option>
-        </select>
+        </Select>
 
         <label htmlFor={field('w')}>判型（mm）</label>
-        <span>
-          <input
+        <span className={styles.size}>
+          <Input
             id={field('w')}
             name="w"
             type="number"
@@ -66,9 +69,9 @@ function ProjectSettingsPage() {
             required
             aria-label="幅"
             defaultValue={pageSize.w}
-          />{' '}
-          x{' '}
-          <input
+          />
+          ×
+          <Input
             name="h"
             type="number"
             min="1"
@@ -80,7 +83,7 @@ function ProjectSettingsPage() {
         </span>
 
         <label htmlFor={field('dpi')}>dpi</label>
-        <input
+        <Input
           id={field('dpi')}
           name="dpi"
           type="number"
@@ -91,21 +94,22 @@ function ProjectSettingsPage() {
         />
 
         <label htmlFor={field('prompt')}>スタイル</label>
-        <textarea id={field('prompt')} name="prompt" rows={3} defaultValue={style.prompt} />
+        <TextArea id={field('prompt')} name="prompt" rows={3} defaultValue={style.prompt} />
 
         <label htmlFor={field('negative')}>除外するもの</label>
-        <textarea
+        <TextArea
           id={field('negative')}
           name="negative"
           rows={2}
           defaultValue={style.negative ?? ''}
         />
 
-        <span />
-        <button type="submit">保存</button>
+        <Button type="submit" variant="primary">
+          保存
+        </Button>
       </form>
       {error && (
-        <p className="error" role="alert">
+        <p className={common.error} role="alert">
           {error}
         </p>
       )}

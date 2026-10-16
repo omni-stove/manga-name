@@ -13,11 +13,13 @@ import {
   ProjectSettingsInspector,
 } from '@manga/inspector'
 import type { Character, ID, Page, Panel, Patch, Project } from '@manga/schema'
+import { Button, Checkbox, SegmentedControl, ToolGroup } from '@manga/ui'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { CollaborationBar, PeerBadge, peerColor, usePeers } from '../collaboration-view'
+import common from '../common.module.css'
 import { ExportDialog, type ExportOptions } from '../export-dialog'
 import { downloadBlob, exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
@@ -41,6 +43,7 @@ import { toasts } from '../toasts'
 import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
 import { useUndoShortcuts } from '../use-undo-shortcuts'
+import styles from './editor.module.css'
 
 export const Route = createFileRoute('/p/$projectId_/pages/$pageId')({
   loader: async ({ context, params }) => {
@@ -171,73 +174,53 @@ function Editor() {
     }
   }
   return (
-    <section className="editor">
-      <header className="toolbar">
-        <Link to="/p/$projectId" params={{ projectId }}>
+    <section className={styles.editor}>
+      <header className={styles.toolbar}>
+        <Link to="/p/$projectId" params={{ projectId }} className={styles.back}>
           ← {project.title || '無題'}
         </Link>
-        <span>{pageIndex + 1} ページ</span>
+        <span className={styles.pageNumber}>{pageIndex + 1} ページ</span>
         <CollaborationBar collab={collab} project={project} />
-        <fieldset className="tool-group">
-          <legend>ツール</legend>
-          {TOOLS.map((t) => (
-            <label key={t.value}>
-              <input
-                type="radio"
-                name="tool"
-                value={t.value}
-                checked={tool === t.value}
-                onChange={() => setTool(t.value)}
-              />
-              {t.label}
-            </label>
-          ))}
-        </fieldset>
+        <SegmentedControl
+          label="ツール"
+          value={tool}
+          options={TOOLS}
+          onChange={(t) => setTool(t)}
+        />
         {tool === 'scribble' && (
-          <fieldset className="tool-group">
-            <legend>ペン</legend>
-            {SCRIBBLE_TOOLS.map((t) => (
-              <label key={t.value}>
-                <input
-                  type="radio"
-                  name="scribble-tool"
-                  value={t.value}
-                  checked={scribbleTool === t.value}
-                  onChange={() => setScribbleTool(t.value)}
-                />
-                {t.label}
-              </label>
-            ))}
-          </fieldset>
+          <SegmentedControl
+            label="ペン"
+            value={scribbleTool}
+            options={SCRIBBLE_TOOLS}
+            onChange={(t) => setScribbleTool(t)}
+          />
         )}
-        <fieldset className="tool-group">
-          <legend>レイヤー</legend>
+        <ToolGroup label="レイヤー">
           {LAYERS.map((l) => (
-            <label key={l.key}>
-              <input
-                type="checkbox"
-                checked={layers[l.key]}
-                onChange={(e) => setLayers({ ...layers, [l.key]: e.target.checked })}
-              />
-              {l.label}
-            </label>
+            <Checkbox
+              key={l.key}
+              label={l.label}
+              checked={layers[l.key]}
+              onChange={(e) => setLayers({ ...layers, [l.key]: e.target.checked })}
+            />
           ))}
-        </fieldset>
-        <span className="toolbar-actions">
+        </ToolGroup>
+        <span className={styles.actions}>
           <SaveStatusIndicator store={store} />
-          <button type="button" disabled={!canUndo} onClick={() => store.undo()}>
+          <Button size="small" variant="ghost" disabled={!canUndo} onClick={() => store.undo()}>
             Undo
-          </button>
-          <button type="button" disabled={!canRedo} onClick={() => store.redo()}>
+          </Button>
+          <Button size="small" variant="ghost" disabled={!canRedo} onClick={() => store.redo()}>
             Redo
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            size="small"
+            variant="primary"
             disabled={exporting === 'busy'}
             onClick={() => setExporting('dialog')}
           >
             {exporting === 'busy' ? '書き出し中…' : '書き出し'}
-          </button>
+          </Button>
         </span>
       </header>
       {exporting === 'dialog' && (
@@ -246,10 +229,10 @@ function Editor() {
           onExport={(opts) => void exportPng(opts)}
         />
       )}
-      {error && <p className="error">{error}</p>}
-      <div className="editor-body">
+      {error && <p className={`${common.error} ${styles.error}`}>{error}</p>}
+      <div className={styles.body}>
         <div
-          className="canvas"
+          className={styles.canvas}
           role="application"
           aria-label="キャンバス"
           onDragOver={(e) => {
@@ -278,8 +261,8 @@ function Editor() {
             resolveAsset={resolveAsset}
           />
         </div>
-        <aside className="inspector">
-          <h2>インスペクタ</h2>
+        <aside className={styles.inspector}>
+          <h2 className={styles.inspectorTitle}>インスペクタ</h2>
           <details open>
             <summary>要素（{page.panels.length}）</summary>
             <ElementOutline
@@ -315,7 +298,7 @@ function Editor() {
           <details>
             <summary>キャラクター（{project.characters.length}）</summary>
             {project.characters.length === 0 && (
-              <p className="placeholder">
+              <p className={common.placeholder}>
                 <Link to="/p/$projectId/characters" params={{ projectId }}>
                   キャラクター一覧
                 </Link>
@@ -369,9 +352,9 @@ function ElementOutline({
   })
   const badges = (by: Peer[]) =>
     by.map((peer) => <PeerBadge key={peer.clientId} name={peer.name} color={peer.color} />)
-  if (page.panels.length === 0) return <p className="placeholder">コマがありません</p>
+  if (page.panels.length === 0) return <p className={common.placeholder}>コマがありません</p>
   return (
-    <ul className="outline">
+    <ul className={styles.outline}>
       {[...page.panels]
         .sort((a, b) => a.order - b.order)
         .map((panel) => {
@@ -398,7 +381,7 @@ function ElementOutline({
                         <li key={bubble.id}>
                           <button
                             type="button"
-                            className="in-ellipsis"
+                            className={styles.ellipsis}
                             aria-current={isSelected('bubble', bubble.id) || undefined}
                             {...peerProps(byBubble)}
                             onClick={() => onSelect({ kind: 'bubble', id: bubble.id })}
@@ -439,11 +422,13 @@ function SelectionInspector({
   resolveAsset(ref: string): Promise<string>
 }) {
   if (selection === null) {
-    return <p className="placeholder">キャンバスでコマかフキダシを選ぶと、ここで編集できます</p>
+    return (
+      <p className={common.placeholder}>キャンバスでコマかフキダシを選ぶと、ここで編集できます</p>
+    )
   }
   if (selection.kind === 'panel') {
     const found = findPanel(page, selection.id)
-    if (!found) return <p className="placeholder">選んだコマはもうありません</p>
+    if (!found) return <p className={common.placeholder}>選んだコマはもうありません</p>
     return (
       <>
         <PanelInspector
@@ -463,7 +448,7 @@ function SelectionInspector({
   }
   if (selection.kind === 'bubble') {
     const found = findBubble(page, selection.id)
-    if (!found) return <p className="placeholder">選んだフキダシはもうありません</p>
+    if (!found) return <p className={common.placeholder}>選んだフキダシはもうありません</p>
     return (
       <BubbleInspector
         key={selection.id}
@@ -476,7 +461,7 @@ function SelectionInspector({
     )
   }
   // 焦点とベクトルのフォームは Phase 2（タスク 30）
-  return <p className="placeholder">この要素の編集は未対応です</p>
+  return <p className={common.placeholder}>この要素の編集は未対応です</p>
 }
 
 /** 履歴の削除。採用中の絵は消せないので、それ以外だけ並べる。アセットは残し、Undo で戻せる */
@@ -484,21 +469,22 @@ function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply:
   const removable = panel.arts.filter((art) => art.id !== panel.artId).reverse()
   if (removable.length === 0) return null
   return (
-    <details className="inspector-section" data-inspector="art-removal">
+    <details className={styles.section} data-inspector="art-removal">
       <summary>履歴の削除（{removable.length}）</summary>
-      <ul className="in-art-remove">
+      <ul className={styles.artRemove}>
         {removable.map((art) => (
           <li key={art.id} data-art-id={art.id}>
-            <span className="in-ellipsis">
+            <span className={styles.ellipsis}>
               <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
               {art.instruction && ` ${art.instruction}`}
             </span>
-            <button
-              type="button"
+            <Button
+              size="small"
+              variant="ghost"
               onClick={() => apply('絵を削除', (p) => removeArtPatch(p, pageId, panel.id, art.id))}
             >
               削除
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -510,11 +496,11 @@ function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply:
 function ReferencePicker({ onPick }: { onPick(file: File): void }) {
   const fileInput = useRef<HTMLInputElement>(null)
   return (
-    <div className="inspector-section" data-inspector="reference-picker">
-      <button type="button" onClick={() => fileInput.current?.click()}>
+    <div className={styles.section} data-inspector="reference-picker">
+      <Button size="small" onClick={() => fileInput.current?.click()}>
         参考画像を読み込む
-      </button>
-      <p className="placeholder">
+      </Button>
+      <p className={`${common.placeholder} ${styles.note}`}>
         PNG、JPEG、PDF。キャンバスへのドロップと貼り付けでも読み込めます
       </p>
       <input
@@ -586,7 +572,7 @@ function CharacterPane({
         resolveAsset={resolveAsset}
       />
       {pickError && (
-        <p className="error" role="alert">
+        <p className={common.error} role="alert">
           {pickError}
         </p>
       )}

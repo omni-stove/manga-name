@@ -1,0 +1,150 @@
+.hint {
+  margin: var(--space-10) 0;
+  padding: var(--space-8) var(--space-12);
+  border-left: 3px solid var(--guide);
+  border-radius: var(--radius-s);
+  background: var(--guide-tint);
+  line-height: var(--leading-relaxed);
+}
+
+.hint[data-bubble-order-ok="false"] {
+  border-left-color: var(--alert);
+  background: var(--alert-tint);
+}
+
+.hintWarning {
+  display: block;
+  margin-top: var(--space-4);
+  color: var(--alert);
+  font-weight: var(--weight-medium);
+}
+
+.bubbles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.bubble {
+  display: flex;
+  gap: var(--space-8);
+  align-items: center;
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-8);
+  border-radius: var(--radius-s);
+}
+
+.bubble:hover {
+  background: var(--surface-hover);
+}
+
+.order {
+  min-width: 1.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.speaker {
+  margin-right: var(--space-6);
+  font-weight: var(--weight-bold);
+}
+
+.arts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-8);
+}
+
+.art {
+  display: flex;
+  gap: var(--space-12);
+  padding: var(--space-8);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+
+.art[data-current] {
+  border-color: var(--guide);
+  background: var(--guide-tint);
+}
+
+/* 生成した絵は紙の上のものなので、テーマに関わらず白地に置く */
+.thumb {
+  flex: none;
+  width: 6rem;
+  height: 6rem;
+  padding: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius-s);
+  background: var(--paper);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.thumb img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.meta {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.metaHead {
+  display: flex;
+  gap: var(--space-8);
+  align-items: center;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.badge {
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-s);
+  background: var(--guide);
+  color: var(--on-guide);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+}
+
+.instruction {
+  margin: 0;
+  line-height: var(--leading-relaxed);
+}
+
+.prompt summary {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.prompt pre {
+  margin: var(--space-4) 0 0;
+  padding: var(--space-8);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

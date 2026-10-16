@@ -15,8 +15,9 @@ import type { AssetState } from './use-asset-urls'
 import { COLUMN_PITCH, layoutVertical } from './vertical-text'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
-export const SELECTED = '#2563eb'
-const NOTE_COLOR = '#888'
+/** 選択やコマ番号など、出力に出ない作業用の色。値は @manga/ui の tokens.css が持つ */
+export const GUIDE = 'var(--guide)'
+const NOTE_COLOR = 'var(--note)'
 const NUMBER_RADIUS = 3.2
 
 interface PageLayerProps {
@@ -51,7 +52,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
         width={width}
         height={height}
         fill="#fff"
-        stroke="#d4d4d4"
+        style={{ stroke: 'var(--paper-edge)' }}
         strokeWidth={1}
         vectorEffect="non-scaling-stroke"
       />
@@ -172,7 +173,9 @@ const PanelView = memo(function PanelView({
         width={rect.w}
         height={rect.h}
         fill="none"
-        stroke={selected ? SELECTED : '#000'}
+        stroke="#000"
+        style={selected ? { stroke: GUIDE } : undefined}
+        data-selected={selected || undefined}
         strokeWidth={selected ? 2 : 1}
         vectorEffect="non-scaling-stroke"
       />
@@ -265,7 +268,7 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
           overflowWrap: 'anywhere',
         }}
       >
-        {error && <div style={{ color: '#dc2626' }}>画像を読み込めません</div>}
+        {error && <div style={{ color: 'var(--alert)' }}>画像を読み込めません</div>}
         {panel.camera && <div>[{panel.camera}]</div>}
         {panel.note && <div>{panel.note}</div>}
       </div>
@@ -273,18 +276,18 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
   )
 }
 
-/** 右上の赤丸の番号 */
+/** 右上の丸の番号。出力のコマ番号とは別の、作業用の印 */
 function PanelNumber({ order, rect }: { order: number; rect: Box }) {
   const r = NUMBER_RADIUS
   const cx = rect.x + rect.w - r - 1
   const cy = rect.y + r + 1
   return (
     <g data-panel-number={order}>
-      <circle cx={cx} cy={cy} r={r} fill="#dc2626" />
+      <circle cx={cx} cy={cy} r={r} style={{ fill: GUIDE }} />
       <text
         x={cx}
         y={cy}
-        fill="#fff"
+        style={{ fill: 'var(--on-guide)' }}
         fontFamily={FONT_FAMILY}
         fontSize={r * 1.1}
         fontWeight="bold"
@@ -310,14 +313,14 @@ function GeneratingOverlay({ rect }: { rect: Box }) {
         cy={cy}
         r={r}
         fill="none"
-        stroke="#d4d4d4"
+        style={{ stroke: 'var(--guide-soft)' }}
         strokeWidth={3}
         vectorEffect="non-scaling-stroke"
       />
       <path
         d={`M${cx} ${cy - r}A${r} ${r} 0 0 1 ${cx + r} ${cy}`}
         fill="none"
-        stroke={SELECTED}
+        style={{ stroke: GUIDE }}
         strokeWidth={3}
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
@@ -357,11 +360,11 @@ function GenerateButton({ rect, onClick }: { rect: Box; onClick(): void }) {
         onClick()
       }}
     >
-      <rect x={x} y={y} width={w} height={h} rx={1} fill={SELECTED} />
+      <rect x={x} y={y} width={w} height={h} rx={1} style={{ fill: GUIDE }} />
       <text
         x={x + w / 2}
         y={y + h / 2}
-        fill="#fff"
+        style={{ fill: 'var(--on-guide)' }}
         fontFamily={FONT_FAMILY}
         fontSize={2.6}
         textAnchor="middle"
@@ -420,7 +423,7 @@ const BubbleView = memo(function BubbleView({
         <path
           d={body}
           fill="none"
-          stroke={SELECTED}
+          style={{ stroke: GUIDE }}
           strokeWidth={2}
           strokeDasharray="4 2"
           vectorEffect="non-scaling-stroke"
@@ -446,7 +449,7 @@ const BubbleView = memo(function BubbleView({
       <text
         x={g.cx + g.rx}
         y={g.cy - g.ry}
-        fill="#666"
+        style={{ fill: GUIDE }}
         fontFamily={FONT_FAMILY}
         fontSize={2.2}
         textAnchor="middle"

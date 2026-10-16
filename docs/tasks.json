@@ -1463,6 +1463,32 @@
       "spec": [
         "workstreams/WS-21-e2e-hardening.md"
       ]
+    },
+    {
+      "id": "60",
+      "group": "G2",
+      "title": "UI 部品とテーマ",
+      "detail": "packages/ui（トークン、ライト / ダーク、ストアを持たない部品）、apps/web と inspector の CSS Modules 化、canvas の作業色のトークン化",
+      "status": "done",
+      "deps": [
+        "15"
+      ],
+      "scope": [
+        "packages/ui",
+        "packages/inspector",
+        "packages/editor-canvas",
+        "apps/web"
+      ],
+      "verify": [
+        "色は tokens.css の役割変数だけを参照し、紙と墨はテーマで変わらない",
+        "アプリ設定でシステム / ライト / ダークを切り替え、再読込後も保たれる",
+        "@manga/ui はストアとスキーマに依存しない"
+      ],
+      "spec": [
+        "02-architecture.md"
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     }
   ]
 }

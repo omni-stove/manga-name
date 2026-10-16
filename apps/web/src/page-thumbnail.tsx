@@ -1,5 +1,6 @@
 import { currentArt, type Page, type Panel, type ProjectSettings } from '@manga/schema'
 import { useEffect, useState } from 'react'
+import styles from './page-thumbnail.module.css'
 
 type ResolveAsset = (ref: string) => Promise<string>
 
@@ -54,7 +55,7 @@ function PanelArt({
     width: panel.rect.w * w,
     height: panel.rect.h * h,
   }
-  if (url === undefined) return <rect {...box} className="page-thumbnail-art" />
+  if (url === undefined) return <rect {...box} className={styles.art} />
   // 入れ子の svg ははみ出しを切るので、slice で埋めた絵がコマ枠の外に出ない
   return (
     <svg {...box} role="img" aria-label="コマの絵">
@@ -75,8 +76,8 @@ export function PageThumbnail({
 }) {
   const { w, h } = pageSize
   return (
-    <svg className="page-thumbnail" viewBox={`0 0 ${w} ${h}`} role="img" aria-label="コマ割り">
-      <rect width={w} height={h} className="page-thumbnail-paper" />
+    <svg className={styles.thumbnail} viewBox={`0 0 ${w} ${h}`} role="img" aria-label="コマ割り">
+      <rect width={w} height={h} className={styles.paper} />
       {page.panels.map((panel) =>
         panel.artId === undefined ? null : (
           <PanelArt key={panel.id} panel={panel} w={w} h={h} resolveAsset={resolveAsset} />
@@ -89,7 +90,7 @@ export function PageThumbnail({
           y={panel.rect.y * h}
           width={panel.rect.w * w}
           height={panel.rect.h * h}
-          className="page-thumbnail-panel"
+          className={styles.panel}
         />
       ))}
     </svg>

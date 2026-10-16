@@ -1,6 +1,6 @@
 import type { BubbleHandle } from './bubble-ops'
 import { bodyPath, bubbleGeometry, tailPath } from './bubble-shape'
-import { SELECTED } from './page-layer'
+import { GUIDE } from './page-layer'
 import { type BubbleDraft, bubbleHandles } from './use-bubble-tool'
 
 const CURSORS: Record<BubbleHandle, string> = {
@@ -11,7 +11,8 @@ const CURSORS: Record<BubbleHandle, string> = {
 }
 
 const line = {
-  stroke: SELECTED,
+  style: { fill: GUIDE, stroke: GUIDE },
+  fillOpacity: 0.08,
   strokeWidth: 1.5,
   vectorEffect: 'non-scaling-stroke',
   pointerEvents: 'none',
@@ -36,16 +37,8 @@ export function BubbleToolLayer({
     const tail = tailPath(draft.bubble.shape, g)
     return (
       <g data-layer="bubble-tool" data-draft={draft.bubble.id}>
-        {tail !== null && (
-          <path d={tail} fill={SELECTED} fillOpacity={0.08} strokeDasharray="4 2" {...line} />
-        )}
-        <path
-          d={bodyPath(draft.bubble.shape, g)}
-          fill={SELECTED}
-          fillOpacity={0.08}
-          strokeDasharray="4 2"
-          {...line}
-        />
+        {tail !== null && <path d={tail} strokeDasharray="4 2" {...line} />}
+        <path d={bodyPath(draft.bubble.shape, g)} strokeDasharray="4 2" {...line} />
       </g>
     )
   }
@@ -62,7 +55,7 @@ export function BubbleToolLayer({
         fill="none"
         strokeWidth={1}
         strokeDasharray="2 2"
-        stroke={SELECTED}
+        style={{ stroke: GUIDE }}
         vectorEffect="non-scaling-stroke"
         pointerEvents="none"
       />
@@ -75,10 +68,9 @@ export function BubbleToolLayer({
           width={handleSize}
           height={handleSize}
           fill="#fff"
-          stroke={SELECTED}
           strokeWidth={1}
           vectorEffect="non-scaling-stroke"
-          style={{ cursor: CURSORS[c.handle] }}
+          style={{ stroke: GUIDE, cursor: CURSORS[c.handle] }}
         />
       ))}
       <circle
@@ -86,12 +78,11 @@ export function BubbleToolLayer({
         cx={tail.x}
         cy={tail.y}
         r={handleSize / 2}
-        fill={tail.set ? SELECTED : '#fff'}
-        stroke={SELECTED}
+        fill="#fff"
         strokeWidth={1}
         strokeDasharray={tail.set ? undefined : '2 1'}
         vectorEffect="non-scaling-stroke"
-        style={{ cursor: 'move' }}
+        style={{ fill: tail.set ? GUIDE : undefined, stroke: GUIDE, cursor: 'move' }}
       >
         <title>{tail.set ? 'しっぽの先端' : 'ドラッグでしっぽを付ける'}</title>
       </circle>

@@ -1,3 +1,4 @@
+import { ToastList } from '@manga/ui'
 import { useStore } from 'zustand'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 
@@ -43,19 +44,7 @@ export const toasts = createToastStore()
 
 export function Toasts({ store = toasts }: { store?: ToastStore }) {
   const { toasts: items } = useStore(store.state)
-  if (items.length === 0) return null
-  return (
-    <ol className="toasts" aria-live="assertive">
-      {items.map((toast) => (
-        <li key={toast.id} className="toast" data-kind={toast.kind} role="alert">
-          <span>{toast.message}</span>
-          <button type="button" aria-label="閉じる" onClick={() => store.dismiss(toast.id)}>
-            ×
-          </button>
-        </li>
-      ))}
-    </ol>
-  )
+  return <ToastList items={items} onDismiss={store.dismiss} />
 }
 
 if (import.meta.vitest) {

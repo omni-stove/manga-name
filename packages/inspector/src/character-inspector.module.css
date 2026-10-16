@@ -1,0 +1,7 @@
+.reference {
+  max-width: 6rem;
+  max-height: 6rem;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius-s);
+  background: var(--paper);
+}

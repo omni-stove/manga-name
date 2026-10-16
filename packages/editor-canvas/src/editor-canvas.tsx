@@ -23,7 +23,7 @@ const STYLE = `
 .ec-overlay:hover .ec-generate, .ec-generate:focus-visible { opacity: 1; pointer-events: auto; }
 `
 
-const HOVER = '#93c5fd'
+const HOVER = 'var(--guide-soft)'
 
 const SCRIBBLE_COLORS: Record<Stroke['color'], string> = {
   ink: '#1f2937',
@@ -35,7 +35,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
 
 /**
  * 1 ページを SVG で描くキャンバス。ユーザー単位はページの mm（`settings.pageSize`）で、
- * ズームとパンは viewBox で表す。ページの外側は灰色。
+ * ズームとパンは viewBox で表す。ページの外側は作業台の色（`--surface-desk`）。
  * クリックで選択、ホバーで強調、Delete で削除、矢印キーで 0.01 刻みの移動。
  * `panel` ツールではドラッグでコマを作り、選択中のコマをハンドルでリサイズ、ボタンで分割、
  * Shift + クリックで結合する。端は他のコマとページの端に 0.01 以内で吸い付く。
@@ -47,7 +47,8 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * 参考画像はページの白地の上、コマの下に描く。焦点とベクトルはフキダシの上に描き、
  * `layers.hints` を切ると描画も選択も操作もしない。
  * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
- * 診断のレイヤーは枠だけ置き、中身は後のタスクで足す
+ * 診断のレイヤーは枠だけ置き、中身は後のタスクで足す。
+ * 作業用の色は `@manga/ui/tokens.css` の変数を参照するので、使う側でそれを読み込んでおく
  */
 export function EditorCanvas(props: EditorCanvasProps) {
   const { page, settings, layers } = props
@@ -174,7 +175,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
       data-zoom={zoomOf(view, base).toFixed(3)}
       style={{
         display: 'block',
-        background: '#e5e5e5',
+        background: 'var(--surface-desk)',
         touchAction: 'none',
         userSelect: 'none',
         outline: 'none',
@@ -323,9 +324,10 @@ function Highlight({
   target: Selection
 }) {
   if (target === null) return null
+  // var() は CSS の値なので、表示属性ではなく style で渡す
   const stroke = {
     fill: 'none',
-    stroke: HOVER,
+    style: { stroke: HOVER },
     strokeWidth: 2,
     vectorEffect: 'non-scaling-stroke',
     pointerEvents: 'none',

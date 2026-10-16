@@ -57,8 +57,10 @@ const setValue = (input: HTMLInputElement | HTMLTextAreaElement, value: string) 
 }
 
 const inputLabelled = (container: HTMLElement, label: string) => {
-  const span = [...container.querySelectorAll('.in-label')].find((el) => el.textContent === label)
-  return must(must(span).parentElement?.querySelector('input, textarea')) as
+  const field = [...container.querySelectorAll('label')].find(
+    (el) => el.firstElementChild?.textContent === label,
+  )
+  return must(must(field).querySelector('input, textarea')) as
     | HTMLInputElement
     | HTMLTextAreaElement
 }

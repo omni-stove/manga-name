@@ -1,6 +1,8 @@
 import { fixtures, type Page, type Patch } from '@manga/schema'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import '@manga/ui/tokens.css'
+import '@manga/ui/base.css'
 import { BubbleInspector } from '../bubble-inspector'
 import { CharacterInspector } from '../character-inspector'
 import { PageInspector } from '../page-inspector'
@@ -45,7 +47,7 @@ function Playground() {
   return (
     <div className="playground">
       <div>
-        <p className="in-group">
+        <p className="nav">
           {panels.map((p) => (
             <button key={p.id} type="button" onClick={() => setView({ kind: 'panel', id: p.id })}>
               コマ {p.order}

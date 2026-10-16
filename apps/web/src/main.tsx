@@ -1,4 +1,5 @@
 import { createStorage, defaultStorageKind } from '@manga/storage'
+import { applyThemePreference, readThemePreference } from '@manga/ui'
 import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -6,7 +7,11 @@ import { createPanelGeneration } from './generate-panel'
 import { createImageProvider } from './image-provider'
 import { createProjectLibrary } from './project-library'
 import { createAppRouter } from './router'
-import './styles.css'
+import '@manga/ui/tokens.css'
+import '@manga/ui/base.css'
+
+// 初回描画の前に当て、OS と違うテーマを選んだ人の画面がちらつかないようにする
+applyThemePreference(readThemePreference())
 
 const container = document.getElementById('root')
 if (!container) throw new Error('#root がない')

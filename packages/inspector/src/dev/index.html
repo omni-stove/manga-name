@@ -5,75 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>inspector playground</title>
     <style>
-      html,
-      body {
-        margin: 0;
-        font-family: system-ui, sans-serif;
-        color-scheme: light dark;
-      }
       .playground {
         display: grid;
         grid-template-columns: 24rem 1fr;
         gap: 1rem;
         padding: 1rem;
       }
-      .in-field {
-        display: grid;
-        gap: 0.125rem;
-        margin: 0.5rem 0;
-      }
-      .in-label {
-        font-size: 0.75rem;
-        opacity: 0.7;
-      }
-      .in-group {
+      .nav {
         display: flex;
         gap: 0.5rem;
-        align-items: center;
         flex-wrap: wrap;
-      }
-      .in-list,
-      .in-arts {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-      }
-      .in-list li {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-      }
-      .in-ellipsis {
-        flex: 1;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .in-arts li {
-        display: flex;
-        gap: 0.5rem;
-        padding: 0.25rem;
-      }
-      .in-arts li[data-current] {
-        outline: 2px solid highlight;
-      }
-      .in-thumb {
-        padding: 0;
-        width: 6rem;
-        height: 6rem;
-      }
-      .in-thumb img,
-      .in-reference {
-        max-width: 6rem;
-        max-height: 6rem;
-      }
-      .in-muted {
-        opacity: 0.6;
-      }
-      pre {
-        white-space: pre-wrap;
-        font-size: 0.75rem;
       }
     </style>
   </head>

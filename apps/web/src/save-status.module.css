@@ -1,0 +1,8 @@
+.status {
+  font-size: var(--text-s);
+  color: var(--text-muted);
+}
+
+.status[data-status="error"] {
+  color: var(--alert);
+}

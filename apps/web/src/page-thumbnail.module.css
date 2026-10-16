@@ -1,0 +1,22 @@
+/* 紙は成果物の見え方なので、テーマに関係なく白地に墨で描く */
+
+.thumbnail {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.paper {
+  fill: var(--paper);
+  stroke: var(--paper-edge);
+}
+
+.panel {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+
+.art {
+  fill: color-mix(in srgb, var(--ink) 25%, transparent);
+}

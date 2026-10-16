@@ -2,6 +2,7 @@ import type { Project } from '@manga/schema'
 import { type CSSProperties, useSyncExternalStore } from 'react'
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
+import styles from './collaboration-view.module.css'
 import type { Collaboration } from './project-library'
 import { findPage } from './project-ops'
 import type { Peer } from './store/presence'
@@ -30,7 +31,7 @@ export const peerColor = (color: string) => ({ '--peer-color': color }) as CSSPr
 /** カーソル色の印と名前 */
 export function PeerBadge({ name, color, title }: { name: string; color: string; title?: string }) {
   return (
-    <span className="peer" style={peerColor(color)} title={title}>
+    <span className={styles.peer} style={peerColor(color)} title={title}>
       {name}
     </span>
   )
@@ -52,11 +53,11 @@ export function CollaborationBar({
     return found ? `${found.pageIndex + 1} ページを編集中` : undefined
   }
   return (
-    <span className="collab-bar">
-      <span className="sync-status" data-status={status}>
+    <span className={styles.bar}>
+      <span className={styles.syncStatus} data-status={status}>
         {status === 'connected' && !synced ? '同期中…' : SYNC_STATUS[status]}
       </span>
-      <ul className="peers" aria-label="開いている人">
+      <ul className={styles.peers} aria-label="開いている人">
         <li>
           <PeerBadge name="自分" color={collab.presence.color} />
         </li>

@@ -1,7 +1,10 @@
+import { Button, Input } from '@manga/ui'
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { type DragEvent, useState } from 'react'
+import common from '../common.module.css'
 import { parseProjectFile } from '../project-file'
 import { errorMessage } from '../route-error'
+import styles from './projects.module.css'
 
 export const Route = createFileRoute('/')({
   loader: async ({ context }) => {
@@ -51,7 +54,7 @@ function ProjectList() {
     <section>
       <h1>プロジェクト一覧</h1>
       <form
-        className="toolbar"
+        className={styles.create}
         onSubmit={(e) => {
           e.preventDefault()
           const title = String(new FormData(e.currentTarget).get('title') ?? '').trim()
@@ -61,13 +64,13 @@ function ProjectList() {
           })
         }}
       >
-        <input name="title" placeholder="タイトル" aria-label="タイトル" />
-        <button type="submit" disabled={busy}>
+        <Input name="title" placeholder="タイトル" aria-label="タイトル" />
+        <Button type="submit" variant="primary" disabled={busy}>
           新規作成
-        </button>
+        </Button>
       </form>
       <fieldset
-        className="drop-zone"
+        className={styles.dropZone}
         data-dragging={dragging}
         onDragOver={(e) => {
           e.preventDefault()
@@ -93,21 +96,26 @@ function ProjectList() {
         </label>
       </fieldset>
       {error && (
-        <p className="error" role="alert">
+        <p className={common.error} role="alert">
           {error}
         </p>
       )}
-      {projects.length === 0 && <p>まだプロジェクトがありません。</p>}
-      <ul className="cards">
+      {projects.length === 0 && (
+        <p className={common.placeholder}>まだプロジェクトがありません。</p>
+      )}
+      <ul className={common.cards}>
         {projects.map((project) => (
-          <li key={project.id}>
-            <Link to="/p/$projectId" params={{ projectId: project.id }}>
+          <li key={project.id} className={common.card}>
+            <Link to="/p/$projectId" params={{ projectId: project.id }} className={common.cardLink}>
               <strong>{project.title || '無題'}</strong>
-              <small>更新 {new Date(project.updatedAt).toLocaleString()}</small>
+              <small className={styles.updated}>
+                更新 {new Date(project.updatedAt).toLocaleString()}
+              </small>
             </Link>
-            <span className="card-actions">
-              <button
-                type="button"
+            <span className={common.cardActions}>
+              <Button
+                size="small"
+                variant="ghost"
                 disabled={busy}
                 onClick={() => {
                   if (!window.confirm(`「${project.title}」を削除しますか？元に戻せません。`)) {
@@ -120,7 +128,7 @@ function ProjectList() {
                 }}
               >
                 削除
-              </button>
+              </Button>
             </span>
           </li>
         ))}
