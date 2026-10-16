@@ -909,7 +909,7 @@
       "group": "G4",
       "title": "assets、usage、レート制限、CORS",
       "detail": "R2 署名 URL、GET、DELETE、20MB 上限、60 req/min、`GET /v1/usage`、月間上限",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "35"
       ],
@@ -923,7 +923,9 @@
       ],
       "spec": [
         "workstreams/WS-13-workers-api.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "37",

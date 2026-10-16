@@ -11,12 +11,23 @@ import {
   PanelArtRequestSchema,
   ProjectBaseSchema,
 } from '@manga/schema'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
+import { cors } from 'hono/cors'
 import { z } from 'zod'
+import { createUploadApp } from './assets'
 import type { Env } from './env'
 import { isDecodablePng } from './png'
 import { createProjectsApp } from './projects'
-import { reserveUsage, settleUsage, sha256Hex } from './usage'
+import {
+  countMonthlyGenerations,
+  monthRange,
+  parseMonthlyLimit,
+  reserveUsage,
+  settleUsage,
+  sha256Hex,
+  type UsageSubject,
+} from './usage'
+import { DEBUG_USER_HEADER, isUserId, requireUser, type UserEnv } from './user'
 
 /** 応答が不正なときの再試行を含めた、プロバイダを呼ぶ最大回数 */
 const MAX_ATTEMPTS = 2
@@ -25,6 +36,42 @@ const MAX_ATTEMPTS = 2
 const MAX_SCRIPT_LENGTH = 20_000
 /** ページ数の目安の上限 */
 const MAX_PAGE_COUNT = 64
+
+/** Tauri アプリの WebView のオリジン */
+const TAURI_ORIGIN = 'tauri://localhost'
+
+/** WEB_ORIGINS と TAURI_ORIGIN */
+function allowedOrigins(webOrigins: string | undefined) {
+  const origins = (webOrigins ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter((o) => o !== '')
+  return [...origins, TAURI_ORIGIN]
+}
+
+/** `GET /v1/usage`。当月の生成回数と上限 */
+function createUsageApp(now: () => number) {
+  const app = new Hono<UserEnv>()
+  app.use('*', requireUser(now))
+  app.get('/', async (c) => {
+    const at = now()
+    const limit = parseMonthlyLimit(c.env.MONTHLY_GENERATION_LIMIT)
+    const generations = await countMonthlyGenerations(
+      c.env.DB,
+      { column: 'user_id', value: c.get('userId') },
+      at,
+    )
+    const { start, end } = monthRange(at)
+    return c.json({
+      month: new Date(start).toISOString().slice(0, 7),
+      generations,
+      limit,
+      remaining: Math.max(0, limit - generations),
+      resetsAt: new Date(end).toISOString(),
+    })
+  })
+  return app
+}
 
 /** multipart の json 部。PanelArtRequest から Blob を除き、previous は修正指示だけにしたもの */
 const PanelArtJsonSchema = PanelArtRequestSchema.omit({
@@ -46,6 +93,14 @@ export interface AppOptions {
   imageProvider?: (env: Env) => ImageProvider
   /** LLM プロバイダ。env を受け取る理由は imageProvider と同じ。既定は Fake */
   llmProvider?: (env: Env) => LlmProvider
+  /** 現在時刻（Unix ミリ秒）。レート制限の窓や月の境目をテストで固定するために差し替える */
+  now?: () => number
+}
+
+/** `/v1/ai/*` の認証ミドルウェアが入れる変数 */
+type AiEnv = {
+  Bindings: Env
+  Variables: { tokenHash: string; usageSubject: UsageSubject; usageUserId: string | null }
 }
 
 /** Authorization: Bearer が APP_ACCESS_TOKEN と一致すればそのトークンを返す */
@@ -80,27 +135,79 @@ async function retryUntilValid<T>(
 
 const isFile = (v: unknown): v is File => typeof v !== 'string' && v !== null && v !== undefined
 
-/** Workers の API。`GET /v1/health`、`POST /v1/ai/panel-art`、`POST /v1/ai/propose-layout`、`/v1/projects` の CRUD */
+/**
+ * Workers の API。`GET /v1/health`、`POST /v1/ai/panel-art`、`POST /v1/ai/propose-layout`、
+ * `/v1/projects` の CRUD とアセット、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
+ * CORS は WEB_ORIGINS と tauri://localhost だけに許す。
+ */
 export function createApp(options: AppOptions = {}) {
   const createImage = options.imageProvider ?? (() => createFakeImageProvider())
   const createLlm = options.llmProvider ?? (() => createFakeLlmProvider())
-  const app = new Hono<{ Bindings: Env; Variables: { tokenHash: string } }>()
+  const now = options.now ?? Date.now
+  const app = new Hono<AiEnv>()
+
+  app.use(
+    '*',
+    cors({
+      origin: (origin, c) => (allowedOrigins(c.env.WEB_ORIGINS).includes(origin) ? origin : null),
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['authorization', 'content-type', 'if-match', DEBUG_USER_HEADER],
+      exposeHeaders: ['etag', 'location', 'retry-after', PROVIDER_HEADER, PROMPT_HEADER],
+      maxAge: 600,
+    }),
+  )
 
   /**
-   * ai_usage に 1 行予約し、その id を返す。上限に達していれば null。
+   * ai_usage に 1 行予約し、その id を返す。月間上限なら 402、トークンの分あたり上限なら 429 の応答を返す。
    * プロバイダを呼ぶ前に呼ぶ。呼び終えてから数えると、並行する要求がすべて判定を通ってしまう
    */
-  const reserve = (env: Env, tokenHash: string, kind: string) =>
-    reserveUsage(env.DB, { tokenHash, kind, now: Date.now() })
+  const reserve = async (c: Context<AiEnv>, kind: string): Promise<number | Response> => {
+    const at = now()
+    const monthlyLimit = parseMonthlyLimit(c.env.MONTHLY_GENERATION_LIMIT)
+    const reservation = await reserveUsage(c.env.DB, {
+      tokenHash: c.get('tokenHash'),
+      userId: c.get('usageUserId'),
+      subject: c.get('usageSubject'),
+      kind,
+      now: at,
+      monthlyLimit,
+    })
+    if (reservation.status === 'monthly-limit') {
+      return c.json(
+        {
+          error: 'monthly generation limit reached',
+          limit: monthlyLimit,
+          resetsAt: new Date(monthRange(at).end).toISOString(),
+        },
+        402,
+      )
+    }
+    if (reservation.status === 'rate-limited') {
+      return c.json({ error: 'rate limit exceeded' }, 429, { 'retry-after': '60' })
+    }
+    return reservation.id
+  }
 
   app.get('/v1/health', (c) => c.json({ ok: true }))
 
-  app.route('/v1/projects', createProjectsApp())
+  app.route('/v1/projects', createProjectsApp(now))
+  app.route('/v1/uploads', createUploadApp(now))
+  app.route('/v1/usage', createUsageApp(now))
 
   app.use('/v1/ai/*', async (c, next) => {
     const tokenHash = await authenticate(c.req.header('authorization'), c.env.APP_ACCESS_TOKEN)
     if (tokenHash === null) return c.json({ error: 'unauthorized' }, 401)
+    // X-Debug-User を必須にしないのは、共有トークンだけで呼ぶ既存のクライアントを WS-14 統合まで通すため
+    const userId = c.req.header(DEBUG_USER_HEADER)
+    if (userId !== undefined && !isUserId(userId)) return c.json({ error: 'unauthorized' }, 401)
     c.set('tokenHash', tokenHash)
+    c.set('usageUserId', userId ?? null)
+    c.set(
+      'usageSubject',
+      userId === undefined
+        ? { column: 'token_hash', value: tokenHash }
+        : { column: 'user_id', value: userId },
+    )
     await next()
   })
 
@@ -130,10 +237,8 @@ export function createApp(options: AppOptions = {}) {
         ? [{ characterId: key.slice('character_'.length), image: value }]
         : [],
     )
-    const usageId = await reserve(c.env, c.get('tokenHash'), 'panel-art')
-    if (usageId === null) {
-      return c.json({ error: 'rate limit exceeded' }, 429, { 'retry-after': '60' })
-    }
+    const usageId = await reserve(c, 'panel-art')
+    if (usageId instanceof Response) return usageId
     const provider = createImage(c.env)
 
     const { value, attempts } = await retryUntilValid(async () => {
@@ -168,10 +273,8 @@ export function createApp(options: AppOptions = {}) {
     const parsed = LayoutProposalRequestSchema.safeParse(body)
     if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
 
-    const usageId = await reserve(c.env, c.get('tokenHash'), 'propose-layout')
-    if (usageId === null) {
-      return c.json({ error: 'rate limit exceeded' }, 429, { 'retry-after': '60' })
-    }
+    const usageId = await reserve(c, 'propose-layout')
+    if (usageId instanceof Response) return usageId
     const provider = createLlm(c.env)
 
     const { value, attempts } = await retryUntilValid(async () => {
