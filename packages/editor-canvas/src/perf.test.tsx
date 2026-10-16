@@ -101,6 +101,14 @@ function timed(target: EventTarget, e: Event): number {
   return performance.now() - start
 }
 
+/**
+ * 所要時間が 1 フレームに収まることを確かめる。PERF=1（mise run perf）のときだけ測る。
+ * 共有ランナーの CPU で所要時間がぶれ、コードと無関係に落ちるため。描き直す要素の数は常に確かめる
+ */
+function expectWithinFrame(ms: number): void {
+  if (process.env.PERF) expect(ms).toBeLessThan(FRAME_MS)
+}
+
 const percentile = (xs: number[], p: number) => {
   const sorted = [...xs].sort((a, b) => a - b)
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ?? 0
@@ -188,7 +196,7 @@ test(`dragging a bubble on ${ROWS * COLUMNS} panels and ${BUBBLES} bubbles stays
   console.info(
     `drag: ${MOVES} moves, median ${median.toFixed(2)}ms, p95 ${p95.toFixed(2)}ms, max ${Math.max(...frames).toFixed(2)}ms`,
   )
-  expect(p95).toBeLessThan(FRAME_MS)
+  expectWithinFrame(p95)
 
   // pointerup の Patch を親が適用したあとの 1 回の描画も 1 フレームに収め、動かしたフキダシだけを描き直す
   await act(async () => root.render(<EditorCanvas {...props} onGenerate={() => {}} />))
@@ -214,7 +222,7 @@ test(`dragging a bubble on ${ROWS * COLUMNS} panels and ${BUBBLES} bubbles stays
   await Promise.resolve()
   after.disconnect()
   console.info(`commit after drag: ${commitMs.toFixed(2)}ms`)
-  expect(commitMs).toBeLessThan(FRAME_MS)
+  expectWithinFrame(commitMs)
   expect([...touched].map((el) => el.getAttribute('data-bubble-id'))).toEqual(['bb_8'])
 })
 
@@ -302,7 +310,7 @@ test(`drawing on a page with ${STROKES} strokes stays within ${FRAME_MS}ms per f
   console.info(
     `scribble: ${MOVES} moves on ${STROKES} strokes, median ${median.toFixed(2)}ms, p95 ${p95.toFixed(2)}ms, max ${Math.max(...frames).toFixed(2)}ms`,
   )
-  expect(p95).toBeLessThan(FRAME_MS)
+  expectWithinFrame(p95)
 
   timed(svg, pointer('pointerup', 1, clientAt(0.7, 0.5)))
   expect(added).toBeDefined()
@@ -322,7 +330,7 @@ test(`drawing on a page with ${STROKES} strokes stays within ${FRAME_MS}ms per f
   await Promise.resolve()
   commitObserver.disconnect()
   console.info(`commit after stroke: ${commitMs.toFixed(2)}ms`)
-  expect(commitMs).toBeLessThan(FRAME_MS)
+  expectWithinFrame(commitMs)
   expect(after.flatMap((r) => [...r.addedNodes, ...r.removedNodes])).toEqual([
     layer.querySelector(`[data-stroke-id="${added?.id}"]`),
   ])

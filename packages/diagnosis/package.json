@@ -14,6 +14,7 @@
     "@manga/schema": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
