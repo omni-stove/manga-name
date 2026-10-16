@@ -16,7 +16,7 @@
 | 5 | [05-workstreams.md](05-workstreams.md) | 全 Phase のワークストリーム一覧、依存関係、並列進行ルール |
 | 6 | [06-open-questions.md](06-open-questions.md) | 未決事項と決定済み事項 |
 | 7 | [07-dependencies.md](07-dependencies.md) | 依存関係図。パッケージ、着手時、統合時、モック供給 |
-| 8 | [08-tasks.md](08-tasks.md) | AI エージェントに 1 つずつ渡す単位のタスク一覧。依存、範囲、完了条件、節目。機械可読版は [tasks.json](tasks.json) |
+| 8 | [08-tasks.md](08-tasks.md) | AI エージェントに 1 つずつ渡す単位のタスク一覧。依存、範囲、完了条件、節目。正と着手・完了の状態は [tasks.json](tasks.json) |
 | - | [workstreams/](workstreams/) | ワークストリームごとの個別ブリーフ。1 ファイル 1 担当で着手できる |
 | - | [fixtures/sample-page-01.json](fixtures/sample-page-01.json) | 6 コマ 1 ページのサンプル。全パッケージの共通入力 |
 
