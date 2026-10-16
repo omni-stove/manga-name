@@ -23,7 +23,7 @@ export interface CloudLink {
 }
 
 const hasUnsentBody = (link: CloudLink | undefined) =>
-  !!link?.sentAssets && Object.keys(link.assets ?? {}).length > Object.keys(link.sentAssets).length
+  Object.keys(link?.assets ?? {}).length > Object.keys(link?.sentAssets ?? {}).length
 
 /** ローカルの id ごとの CloudLink の置き場。リロードをまたいで残る必要がある */
 export interface CloudLinkStore {
@@ -361,7 +361,10 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
   /** クラウドの版をローカルの id で保存し、同期済みとして記録する */
   async function adopt(localId: ID, cloudId: ID, remote: { project: Project; etag: string }) {
     const prev = await links.get(localId)
-    const assets = prev?.cloudId === cloudId ? prev.assets : undefined
+    const same = prev?.cloudId === cloudId
+    const assets = same ? prev.assets : undefined
+    // 取り込んでも、どの ref を書き換えた本文まで PUT 済みかは変わらない
+    const sentAssets = same ? prev.sentAssets : undefined
     // 手元から送ったアセットは手元の ref に戻し、クラウドから読み直さずに済ませる
     const back = new Map(Object.entries(assets ?? {}).map(([localRef, r2]) => [r2, localRef]))
     const project = { ...mapAssetRefs(remote.project, (ref) => back.get(ref) ?? ref), id: localId }
@@ -371,6 +374,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       etag: remote.etag,
       syncedUpdatedAt: project.updatedAt,
       ...(assets && { assets }),
+      ...(sentAssets && { sentAssets }),
     })
     return project
   }
