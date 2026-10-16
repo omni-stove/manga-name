@@ -1,7 +1,7 @@
 import { Button } from '@manga/ui'
 import { createRootRouteWithContext, Link, Outlet } from '@tanstack/react-router'
 import type { RouterContext } from '../router'
-import { toasts, Toasts } from '../toasts'
+import { Toasts, toasts } from '../toasts'
 import { useAuth } from '../use-auth'
 import styles from './root.module.css'
 
