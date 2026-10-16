@@ -26,6 +26,8 @@ interface HintsLayerProps {
   height: number
   selection: Selection
   draft: HintDraft | null
+  /** 焦点の右下にラベルを出すか。診断のラベルを重ねるときは切る */
+  labels: boolean
 }
 
 /**
@@ -35,7 +37,7 @@ interface HintsLayerProps {
  * ポインタイベントは受けない
  */
 export const HintsLayer = memo(function HintsLayer(props: HintsLayerProps) {
-  const { page, width, height, selection, draft } = props
+  const { page, width, height, selection, draft, labels } = props
   const selectedId =
     selection?.kind === 'focus' || selection?.kind === 'vector' ? selection.id : undefined
   return (
@@ -63,6 +65,7 @@ export const HintsLayer = memo(function HintsLayer(props: HintsLayerProps) {
                 focus={f}
                 center={toPage(moving?.id === f.id ? moving.pos : f.pos)}
                 selected={f.id === selectedId}
+                label={labels}
               />
             ))}
             {draft?.kind === 'vector' && draft.panelId === panel.id && (
@@ -99,10 +102,12 @@ function FocusView({
   focus,
   center,
   selected,
+  label,
 }: {
   focus: FocusPoint
   center: { x: number; y: number }
   selected: boolean
+  label: boolean
 }) {
   const color = FOCUS_COLORS[focus.kind]
   const r = focusRadius(focus.weight)
@@ -125,7 +130,7 @@ function FocusView({
         r={DOT_RADIUS}
         style={{ fill: selected ? GUIDE : color }}
       />
-      {focus.label !== '' && (
+      {label && focus.label !== '' && (
         <text
           x={center.x + DOT_RADIUS}
           y={center.y + DOT_RADIUS}

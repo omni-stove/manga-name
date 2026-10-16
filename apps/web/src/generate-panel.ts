@@ -1,10 +1,12 @@
 import type { ImageProvider, PanelArtRequest } from '@manga/ai'
+import { diagnosePage, panelHint } from '@manga/diagnosis'
 import { renderLayoutPng } from '@manga/render'
 import {
   type Character,
   currentArt,
   type ID,
   newId,
+  type Page,
   type Panel,
   type PanelArt,
   type Patch,
@@ -38,15 +40,18 @@ export function generatingPanels(state: GeneratingState, projectId: ID): Set<ID>
   )
 }
 
-/** 参考画像を使わないコマ。キーは generatingKey と同じ形 */
-interface ReferenceOptOutState {
+/** 参考画像やヒントを使わないコマ。キーは generatingKey と同じ形 */
+interface OptOutState {
   panels: Set<string>
 }
 
 /** コマの生成に参考画像を渡すか。既定は渡す */
-export function usesReference(state: ReferenceOptOutState, projectId: ID, panelId: ID): boolean {
+export function usesReference(state: OptOutState, projectId: ID, panelId: ID): boolean {
   return !state.panels.has(generatingKey(projectId, panelId))
 }
+
+/** コマの生成に診断のヒントを渡すか。既定は渡す */
+export const usesHint = usesReference
 
 /** 一括生成の範囲が走っているか。`scope` は `generateAll` に渡したもの */
 export function batchRunning(state: GeneratingState, projectId: ID, scope: string): boolean {
@@ -87,8 +92,11 @@ type BatchOutcome = 'busy' | Record<GenerateOutcome, number>
 export interface PanelGeneration {
   readonly generating: StoreApi<GeneratingState>
   /** コマごとの「参考画像を使う」のオフ。データモデルに項目が無いので、開いている間だけ持つ */
-  readonly referenceOptOut: StoreApi<ReferenceOptOutState>
+  readonly referenceOptOut: StoreApi<OptOutState>
   setUseReference(projectId: ID, panelId: ID, use: boolean): void
+  /** コマごとの「ヒントを使う」のオフ。referenceOptOut と同じく開いている間だけ持つ */
+  readonly hintOptOut: StoreApi<OptOutState>
+  setUseHint(projectId: ID, panelId: ID, use: boolean): void
   generate(req: GenerateRequest): Promise<GenerateOutcome>
   /** 範囲のコマを同時 `batchConcurrency` 本で生成する。失敗はまとめて 1 回通知する */
   generateAll(req: BatchRequest): Promise<BatchOutcome>
@@ -124,6 +132,13 @@ function layoutWidth(panel: Panel, settings: ProjectSettings, longSide: number):
   const { pageSize } = settings
   const aspect = (panel.rect.h * pageSize.h) / (panel.rect.w * pageSize.w)
   return Math.round(aspect > 1 ? longSide / aspect : longSide)
+}
+
+/** 診断の panelHint。ヒントが空なら undefined */
+function hintFor(page: Page, panel: Panel, settings: ProjectSettings): string | undefined {
+  const diagnosis = diagnosePage(page, settings).panels.find((d) => d.panelId === panel.id)
+  const hint = diagnosis ? panelHint(panel, diagnosis) : ''
+  return hint === '' ? undefined : hint
 }
 
 /** ImageProvider は signal を受け取らないので、中止されたら応答を待たずに捨てる */
@@ -170,7 +185,7 @@ function addArtPatch(project: Project, pageId: ID, panelId: ID, art: PanelArt): 
 
 /**
  * 02-architecture.md のデータフロー「生成」を 1 コマ分まとめる。
- * 配置図 → 参考画像の切り抜き → 登場キャラの参照画像 → 前回の絵（修正指示つきのとき）→ ImageProvider → putAsset → applyPatch(ai)。
+ * 配置図 → 参考画像の切り抜き → 登場キャラの参照画像 → 前回の絵（修正指示つきのとき）→ 診断のヒント → ImageProvider → putAsset → applyPatch(ai)。
  * 生成は store の外で進め、結果だけを Patch で入れるので Undo で生成前に戻せる。アセットは残る。
  * 進行中のコマは `generating` に持ち、画面を離れても生き続ける。同じコマの二重起動は `busy` で断る
  */
@@ -188,7 +203,15 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     panels: new Set(),
     batches: new Set(),
   }))
-  const referenceOptOut = createStore<ReferenceOptOutState>()(() => ({ panels: new Set() }))
+  const referenceOptOut = createStore<OptOutState>()(() => ({ panels: new Set() }))
+  const hintOptOut = createStore<OptOutState>()(() => ({ panels: new Set() }))
+  const setOptOut = (store: StoreApi<OptOutState>, projectId: ID, panelId: ID, use: boolean) =>
+    store.setState((s) => {
+      const panels = new Set(s.panels)
+      if (use) panels.delete(generatingKey(projectId, panelId))
+      else panels.add(generatingKey(projectId, panelId))
+      return { panels }
+    })
   const batchControllers = new Map<string, AbortController>()
 
   const toggle = (field: keyof GeneratingState, key: string, on: boolean) =>
@@ -251,6 +274,9 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     const referencePng = await loadReference(page.reference, projectId, panel, settings)
     const characterRefs = await loadCharacterRefs(panel, characters)
     const previous = instruction === undefined ? undefined : await loadPrevious(panel, instruction)
+    const hint = usesHint(hintOptOut.getState(), projectId, panelId)
+      ? hintFor(page, panel, settings)
+      : undefined
     const req: PanelArtRequest = {
       project: { settings, characters },
       page,
@@ -259,6 +285,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       ...(referencePng && { referencePng }),
       ...(characterRefs.length > 0 && { characterRefs }),
       ...(previous && { previous: { art: previous.art, instruction: previous.instruction } }),
+      ...(hint && { hint }),
     }
     const res = await abortable(() => imageProvider.generatePanelArt(req), signal)
     signal?.throwIfAborted()
@@ -311,12 +338,11 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     generating,
     referenceOptOut,
     setUseReference(projectId, panelId, use) {
-      referenceOptOut.setState((s) => {
-        const panels = new Set(s.panels)
-        if (use) panels.delete(generatingKey(projectId, panelId))
-        else panels.add(generatingKey(projectId, panelId))
-        return { panels }
-      })
+      setOptOut(referenceOptOut, projectId, panelId, use)
+    },
+    hintOptOut,
+    setUseHint(projectId, panelId, use) {
+      setOptOut(hintOptOut, projectId, panelId, use)
     },
     async generate(req) {
       const { outcome, error } = await attempt(req)

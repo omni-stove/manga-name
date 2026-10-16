@@ -1,4 +1,4 @@
-import type { Bubble, ID, Page, Panel, Patch, Project } from '@manga/schema'
+import type { Bubble, FocusPoint, ID, Page, Panel, Patch, Project, Vector } from '@manga/schema'
 import { findPage } from './project-ops'
 
 /**
@@ -47,6 +47,30 @@ export function findBubble(
   return undefined
 }
 
+export function findFocus(
+  page: Page,
+  focusId: ID,
+): { panelIndex: number; panel: Panel; focusIndex: number; focus: FocusPoint } | undefined {
+  for (const [panelIndex, panel] of page.panels.entries()) {
+    const focusIndex = panel.focusPoints.findIndex((f) => f.id === focusId)
+    const focus = panel.focusPoints[focusIndex]
+    if (focus) return { panelIndex, panel, focusIndex, focus }
+  }
+  return undefined
+}
+
+export function findVector(
+  page: Page,
+  vectorId: ID,
+): { panelIndex: number; panel: Panel; vectorIndex: number; vector: Vector } | undefined {
+  for (const [panelIndex, panel] of page.panels.entries()) {
+    const vectorIndex = panel.vectors.findIndex((v) => v.id === vectorId)
+    const vector = panel.vectors[vectorIndex]
+    if (vector) return { panelIndex, panel, vectorIndex, vector }
+  }
+  return undefined
+}
+
 const pagePrefix = (project: Project, pageId: ID) => {
   const found = findPage(project, pageId)
   if (!found) throw new Error(`page ${pageId} is not in project ${project.id}`)
@@ -75,6 +99,22 @@ export function bubblePatch(project: Project, pageId: ID, bubbleId: ID, patch: P
     ...prefixed(`${base}/${found.bubbleIndex}`, patch),
     ...orderSwaps(base, found.panel.bubbles, found.bubbleIndex, patch),
   ]
+}
+
+/** FocusPoint root の Patch を Project root に。無い焦点なら throw */
+export function focusPatch(project: Project, pageId: ID, focusId: ID, patch: Patch): Patch {
+  const { page, prefix } = pagePrefix(project, pageId)
+  const found = findFocus(page, focusId)
+  if (!found) throw new Error(`focus ${focusId} is not in page ${pageId}`)
+  return prefixed(`${prefix}/panels/${found.panelIndex}/focusPoints/${found.focusIndex}`, patch)
+}
+
+/** Vector root の Patch を Project root に。無いベクトルなら throw */
+export function vectorPatch(project: Project, pageId: ID, vectorId: ID, patch: Patch): Patch {
+  const { page, prefix } = pagePrefix(project, pageId)
+  const found = findVector(page, vectorId)
+  if (!found) throw new Error(`vector ${vectorId} is not in page ${pageId}`)
+  return prefixed(`${prefix}/panels/${found.panelIndex}/vectors/${found.vectorIndex}`, patch)
 }
 
 /**
