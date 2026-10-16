@@ -55,6 +55,9 @@ const LINKS_KEY = 'manga.cloud-links'
 /** 競合したクラウド版を別名で残すときのタイトル */
 export const conflictCopyTitle = (title: string) => `${title}（クラウド版）`
 
+/** POST は trim 後 1〜200 文字のタイトルだけを受け付ける。本文は直後の PUT で上書きされるので、初期値だけ収める */
+const postTitle = (title: string) => title.trim().slice(0, 200) || '無題'
+
 /** メモリだけに CloudLink を持つ。リロードで消える */
 export function createMemoryLinkStore(): CloudLinkStore {
   const map = new Map<ID, CloudLink>()
@@ -195,7 +198,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     const res = await request('', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title: postTitle(title) }),
     })
     if (res === null) return null
     if (!res.ok) throw await unexpected(res, 'POST project')
