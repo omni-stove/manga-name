@@ -96,7 +96,10 @@ export function createFileStorage(options: FileStorageOptions = {}): StorageAdap
       )
       return summaries.filter((s) => s !== undefined).sort(byUpdatedAtDesc)
     },
+    canStoreId: isSafeName,
     async hasProject(id) {
+      // ファイル名にできない id は保存されえないので、throw せず「無い」とする
+      if (!isSafeName(id)) return false
       const { fs, baseDir } = await ready()
       return fs.exists(projectFile(id), { baseDir })
     },
@@ -152,10 +155,12 @@ export function createFileStorage(options: FileStorageOptions = {}): StorageAdap
 
 /** id をファイル名に使う。`dir` の外を指しうる id は throw する */
 function safeName(id: string): string {
-  if (id === '' || id === '.' || id === '..' || /[\\/:*?"<>|\p{Cc}]/u.test(id)) {
-    throw new Error(`Invalid project id for a file name: ${id}`)
-  }
+  if (!isSafeName(id)) throw new Error(`Invalid project id for a file name: ${id}`)
   return id
+}
+
+function isSafeName(id: string): boolean {
+  return !(id === '' || id === '.' || id === '..' || /[\\/:*?"<>|\p{Cc}]/u.test(id))
 }
 
 /** `file:<relative path>` から相対パスを取り出す。`dir` の外を指す ref と他の形式は throw する */

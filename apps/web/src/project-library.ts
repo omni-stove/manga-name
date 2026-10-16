@@ -80,7 +80,10 @@ export function createProjectLibrary(
     async import(project) {
       const imported = {
         ...project,
-        id: (await exists(project.id)) ? newId() : project.id,
+        id:
+          (storage.canStoreId?.(project.id) ?? true) && !(await exists(project.id))
+            ? project.id
+            : newId(),
         updatedAt: now(),
       }
       await storage.saveProject(imported)
