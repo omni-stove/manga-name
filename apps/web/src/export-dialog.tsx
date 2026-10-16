@@ -14,7 +14,7 @@ const NOTES: readonly { value: ExportOptions['notes']; label: string }[] = [
 
 /**
  * 「このページを PNG で保存」のモーダル。開いている間だけマウントする。
- * 保存で `onExport` を呼ぶ。閉じる操作（キャンセル、Esc、背景）は `onCancel`
+ * 保存で `onExport` を呼ぶ。閉じる操作（キャンセル、Esc）は `onCancel`
  */
 export function ExportDialog({
   onCancel,
