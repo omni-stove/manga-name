@@ -460,7 +460,8 @@ if (import.meta.vitest) {
     expect(bubbleChain(page)).toEqual([])
   })
 
-  test('30 panels with 20 foci each diagnose within 5ms', () => {
+  // 共有ランナーの CPU で所要時間がぶれ、コードと無関係に落ちるので、PERF=1（mise run perf）のときだけ測る
+  test.runIf(process.env.PERF)('30 panels with 20 foci each diagnose within 5ms', () => {
     const template = findPanel(samplePage(), 'pn_1')
     const panels: Panel[] = Array.from({ length: 30 }, (_, i) => {
       const col = i % 5
