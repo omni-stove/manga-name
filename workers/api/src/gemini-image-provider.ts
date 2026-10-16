@@ -112,8 +112,9 @@ export function createGeminiImageProvider(opts: GeminiImageProviderOptions): Ima
       })
       if (!res.ok) throw new Error(`gemini responded ${res.status}: ${await res.text()}`)
       const body: GenerateContentResponse = await res.json()
-      const inline = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)
-        ?.inlineData
+      const inline = body.candidates?.[0]?.content?.parts?.find(
+        (p) => p.inlineData?.data,
+      )?.inlineData
       if (!inline?.data) {
         return { image: new Blob([], { type: 'image/png' }), provider: GEMINI_IMAGE_MODEL, prompt }
       }
