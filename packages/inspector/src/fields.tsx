@@ -4,7 +4,7 @@ import { useDraft } from './use-draft'
 /** text / note / appearance の複数行欄が Patch を出すまでの待ち */
 export const DEBOUNCE_MS = 300
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     // biome-ignore lint/a11y/noLabelWithoutControl: コントロールは children として渡され、label の内側に入る
     <label className="in-field">
@@ -80,19 +80,29 @@ interface NumberFieldProps {
   step?: number | 'any'
   /** スキーマの検証。通らない値は commit しない */
   isValid(value: number): boolean
+  /** 途中の値で Patch を出したくない欄（読み順の入れ替え）は blur か Enter で commit する */
+  commitOnBlur?: boolean
   onCommit(value: number): void
 }
 
-/** 数値欄。入力のたびに commit する。数にならない値や `isValid` を通らない値は `aria-invalid` */
-export function NumberField({ label, value, min, step, isValid, onCommit }: NumberFieldProps) {
+/** 数値欄。既定では入力のたびに commit する。数にならない値や `isValid` を通らない値は `aria-invalid` */
+export function NumberField({
+  label,
+  value,
+  min,
+  step,
+  isValid,
+  commitOnBlur = false,
+  onCommit,
+}: NumberFieldProps) {
   const parse = (text: string) => (text.trim() === '' ? Number.NaN : Number(text))
-  const { draft, set } = useDraft(
+  const { draft, set, flush } = useDraft(
     String(value),
     (text) => {
       const n = parse(text)
       if (Number.isFinite(n) && isValid(n)) onCommit(n)
     },
-    0,
+    commitOnBlur ? null : 0,
   )
   const n = parse(draft)
   const invalid = !Number.isFinite(n) || !isValid(n)
@@ -105,6 +115,10 @@ export function NumberField({ label, value, min, step, isValid, onCommit }: Numb
         step={step}
         aria-invalid={invalid || undefined}
         onChange={(e) => set(e.target.value)}
+        onBlur={flush}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') flush()
+        }}
       />
     </Field>
   )

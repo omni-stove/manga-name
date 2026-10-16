@@ -44,6 +44,7 @@ export function BubbleInspector({ bubble, characters, onChange }: BubbleInspecto
         min={1}
         step={1}
         isValid={isOrder}
+        commitOnBlur
         onCommit={(n) => onChange(replace('/order', n))}
       />
     </div>

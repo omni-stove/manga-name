@@ -58,6 +58,7 @@ export function PanelInspector({
         min={1}
         step={1}
         isValid={isOrder}
+        commitOnBlur
         onCommit={(n) => onChange(replace('/order', n))}
       />
       <TextField
