@@ -118,6 +118,17 @@ if (import.meta.vitest) {
     }
   })
 
+  test('the reference image is neither bundled nor drawn', async () => {
+    const page: Page = {
+      ...pageWithArts,
+      reference: { ref: 'blob:reference', opacity: 1, visible: true },
+    }
+    const job = await collectExportJob(page, ctx, opts)
+    expect(Object.keys(job.assets)).toHaveLength(pageWithArts.panels.length)
+    const expected = await bytes(await renderPage(pageWithArts, ctx, opts))
+    expect((await bytes(await runExportJob(job))).equals(expected)).toBe(true)
+  })
+
   test('runExportJob fails when an art is missing from the job', async () => {
     const job = await collectExportJob(pageWithArts, ctx, opts)
     await expect(runExportJob({ ...job, assets: {} })).rejects.toThrow(/not bundled/)
