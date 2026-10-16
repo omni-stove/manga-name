@@ -27,8 +27,8 @@ const PT_PER_MM = 72 / 25.4
 /** 指示メモページの寸法。ページ幅に対する比率 */
 const SHEET_FONT = 0.025
 const SHEET_PAD = 0.08
-// 先行ジョブ（描画、デコード、RGB 変換、deflate）の同時数。
-// 増やすと、デコード中の 300dpi の RGBA サーフェスと deflate 済みの XObject を抱えるメモリだけが増える
+// 先行ジョブ（描画、RGB 変換、deflate）の同時数。
+// 増やすと、描画済みの 300dpi のサーフェス、getImageData の RGBA 複製、RGB バッファ、deflate 済みの XObject を抱えるメモリだけが増える
 const RENDER_AHEAD = 3
 
 interface Numbered {
@@ -74,7 +74,7 @@ export async function exportPdf(
     const index = targets.indexOf(t)
     for (const ahead of targets.slice(index, index + RENDER_AHEAD + 1)) {
       if (renders.has(ahead)) continue
-      // 展開と圧縮も先行側で済ませ、メインの待ちを PDF への配置だけにする
+      // RGB 変換と圧縮も先行側で済ませ、メインの待ちを PDF への配置だけにする
       const job = Promise.all([
         drawPage(ahead.page, ctx, renderOpts).then((surface) => embedOpaque(doc, surface)),
         (opts.notes === 'sheet'
@@ -101,7 +101,7 @@ export async function exportPdf(
       images.push({ image, leftHalf: onLeftHalf(t.number, project.settings.direction) })
       opts.onProgress?.(++done, targets.length)
     }
-    // notes: 'margin' の余白で PNG が pageSize より横に長くなるので、幅は画像から決める
+    // notes: 'margin' の余白で画像が pageSize より横に長くなるので、幅は画像から決める
     const halfWidth = Math.max(
       ...images.map(({ image }) => (image.width / image.height) * pageHeight),
     )
