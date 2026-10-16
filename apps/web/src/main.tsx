@@ -68,6 +68,15 @@ const library = createProjectLibrary(storage, {
 const imageProvider = createImageProvider({ baseUrl, getToken: auth.getToken })
 const generation = createPanelGeneration({ library, imageProvider })
 const router = createAppRouter({ library, imageProvider, generation, sharing })
+// 一覧に並ぶクラウドだけのプロジェクトとロールはユーザーで変わるので、ログインとサインアウトで loader を読み直す
+// トークンの取り直しでも通知が来るが、同じユーザーなら読み直さない
+let userId = auth.getUser()?.id
+auth.subscribe(() => {
+  const next = auth.getUser()?.id
+  if (next === userId) return
+  userId = next
+  void router.invalidate()
+})
 
 if (platform === 'desktop') {
   import('./desktop/shell')
@@ -76,8 +85,9 @@ if (platform === 'desktop') {
 }
 
 // debounce 待ちの変更をタブを閉じる・隠す時点で書く。pagehide だけでは書き込みが終わる前にページが破棄されうる
+// 隠したタブは閉じられたり別の端末に持ち替えられたりするので、クラウドへも 2 秒の debounce を待たずに送る
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') void library.flushAll()
+  if (document.visibilityState === 'hidden') void library.flushAll().then(() => cloud?.flush())
 })
 window.addEventListener('pagehide', () => void library.flushAll())
 
