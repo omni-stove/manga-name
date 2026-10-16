@@ -10,6 +10,7 @@ import type { Character, ID, Page, Panel, Patch, Project } from '@manga/schema'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { useStore } from 'zustand'
+import { generatingPanels } from '../generate-panel'
 import {
   bubblePatch,
   characterPatch,
@@ -19,7 +20,6 @@ import {
   removeArtPatch,
   settingsInspectorPatch,
 } from '../inspector-ops'
-import { generatingPanels } from '../generate-panel'
 import type { ProjectLibrary } from '../project-library'
 import { findPage, pagePatch } from '../project-ops'
 import { errorMessage } from '../route-error'
