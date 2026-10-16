@@ -94,7 +94,7 @@ function Playground() {
           art
         </label>
         <select value={tool} onChange={(e) => setTool(e.target.value as Tool)}>
-          {(['select', 'panel', 'bubble'] as const).map((t) => (
+          {(['select', 'panel', 'bubble', 'scribble'] as const).map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
