@@ -19,6 +19,7 @@ import {
   removeArtPatch,
   settingsInspectorPatch,
 } from '../inspector-ops'
+import { generatingPanels } from '../generate-panel'
 import type { ProjectLibrary } from '../project-library'
 import { findPage, pagePatch } from '../project-ops'
 import { errorMessage } from '../route-error'
@@ -74,7 +75,8 @@ function Editor() {
   const { library, generation } = Route.useRouteContext()
   const project = useProject(store)
   const { canUndo, canRedo } = useStore(store.state)
-  const { panels: generating } = useStore(generation.generating)
+  const generatingState = useStore(generation.generating)
+  const generating = generatingPanels(generatingState, projectId)
   const { apply, error } = useApplyPatch(store)
   const resolveAsset = useAssetResolver(library.resolveAsset)
   const [tool, setTool] = useState<Tool>('select')

@@ -108,6 +108,8 @@ export function createProjectLibrary(
       // 先に書き切らないと、debounce 中の保存が削除の後に走ってプロジェクトが復活する
       await store?.flush()
       await storage.deleteProject(id)
+      // 待つ間に open(id) が呼ばれると、まだ消えていないプロジェクトの store が opened に入る
+      opened.delete(id)
     },
     async flushAll() {
       const stores = await Promise.all([...opened.values()].map((s) => s.catch(() => undefined)))

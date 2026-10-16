@@ -20,8 +20,18 @@ import type { ProjectStore } from './store/project-store'
 import { toasts } from './toasts'
 
 interface GeneratingState {
-  /** 生成中のコマの id。EditorCanvas と Inspector にそのまま渡す */
-  panels: Set<ID>
+  /** 生成中のコマ。import で同じ JSON を読むとコマの id が重なるので、projectId とのキーで持つ。`generatingPanels` で取り出す */
+  panels: Set<string>
+}
+
+const generatingKey = (projectId: ID, panelId: ID) => `${projectId}/${panelId}`
+
+/** プロジェクト 1 つ分の生成中のコマの id。EditorCanvas と Inspector にそのまま渡す */
+export function generatingPanels(state: GeneratingState, projectId: ID): Set<ID> {
+  const prefix = `${projectId}/`
+  return new Set(
+    [...state.panels].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length)),
+  )
 }
 
 interface GenerateRequest {
@@ -96,11 +106,11 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
   } = deps
   const generating = createStore<GeneratingState>()(() => ({ panels: new Set() }))
 
-  const setGenerating = (panelId: ID, on: boolean) =>
+  const setGenerating = (key: string, on: boolean) =>
     generating.setState((s) => {
       const panels = new Set(s.panels)
-      if (on) panels.add(panelId)
-      else panels.delete(panelId)
+      if (on) panels.add(key)
+      else panels.delete(key)
       return { panels }
     })
 
@@ -166,8 +176,9 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
   return {
     generating,
     async generate(req) {
-      if (generating.getState().panels.has(req.panelId)) return 'busy'
-      setGenerating(req.panelId, true)
+      const key = generatingKey(req.projectId, req.panelId)
+      if (generating.getState().panels.has(key)) return 'busy'
+      setGenerating(key, true)
       try {
         await run(req)
         return 'done'
@@ -175,7 +186,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
         notify(`コマの生成に失敗しました: ${errorMessage(e)}`)
         return 'failed'
       } finally {
-        setGenerating(req.panelId, false)
+        setGenerating(key, false)
       }
     },
   }
@@ -228,9 +239,9 @@ if (import.meta.vitest) {
     test('adds one art, adopts it, and stores the image as an asset', async () => {
       const { generate, generation, panelNow, library, notify } = setup()
       const pending = generate()
-      expect(generation.generating.getState().panels.has(panelId)).toBe(true)
+      expect(generatingPanels(generation.generating.getState(), sample.id).has(panelId)).toBe(true)
       expect(await pending).toBe('done')
-      expect(generation.generating.getState().panels.has(panelId)).toBe(false)
+      expect(generatingPanels(generation.generating.getState(), sample.id).has(panelId)).toBe(false)
       const after = panelNow()
       expect(after.arts).toHaveLength(1)
       const art = after.arts[0]
