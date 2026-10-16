@@ -102,6 +102,7 @@ function Playground() {
         </select>
         <span>
           ホイールでズーム、Space + ドラッグでパン。クリックで選択、Delete で削除、矢印キーで移動。
+          panel ツールはドラッグで作成、ハンドルでリサイズ、ボタンで分割、Shift + クリックで結合。
           「生成」でスピナーを切り替える
         </span>
         <span>選択: {selection ? `${selection.kind} ${selection.id}` : 'なし'}</span>

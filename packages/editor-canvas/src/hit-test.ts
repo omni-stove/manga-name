@@ -41,10 +41,20 @@ export function hitTest(page: Page, width: number, height: number, p: PagePoint)
       if (inside) return { kind: 'bubble', id: bubble.id }
     }
   }
-  for (const panel of panels) {
-    if (inBox(p, panelBox(panel, width, height))) return { kind: 'panel', id: panel.id }
-  }
-  return null
+  const panel = panelAt(page, width, height, p)
+  return panel === undefined ? null : { kind: 'panel', id: panel.id }
+}
+
+/** フキダシを見ずに、ページ座標の点にあるコマ。重なっていれば order の大きいもの */
+export function panelAt(
+  page: Page,
+  width: number,
+  height: number,
+  p: PagePoint,
+): Panel | undefined {
+  return [...page.panels]
+    .sort((a, b) => b.order - a.order)
+    .find((panel) => inBox(p, panelBox(panel, width, height)))
 }
 
 if (import.meta.vitest) {

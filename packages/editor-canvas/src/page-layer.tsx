@@ -13,8 +13,8 @@ import type { Selection } from './types'
 import type { AssetState } from './use-asset-urls'
 import { COLUMN_PITCH, layoutVertical } from './vertical-text'
 
-const FONT_FAMILY = '"Noto Sans JP", sans-serif'
-const SELECTED = '#2563eb'
+export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
+export const SELECTED = '#2563eb'
 const NOTE_COLOR = '#888'
 const NUMBER_RADIUS = 3.2
 

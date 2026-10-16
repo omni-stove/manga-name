@@ -19,7 +19,7 @@ function isEditable(target: EventTarget | null): boolean {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
-function capture(el: Element, pointerId: number): void {
+export function capture(el: Element, pointerId: number): void {
   try {
     el.setPointerCapture(pointerId)
   } catch {

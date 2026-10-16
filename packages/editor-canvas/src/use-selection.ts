@@ -24,7 +24,7 @@ interface Options {
 }
 
 /** 押した位置から動いてもクリックとみなす画面 px */
-const CLICK_SLOP = 4
+export const CLICK_SLOP = 4
 
 const ARROWS: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
