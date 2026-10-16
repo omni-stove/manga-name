@@ -51,7 +51,9 @@ export function usesReference(state: OptOutState, projectId: ID, panelId: ID): b
 }
 
 /** コマの生成に診断のヒントを渡すか。既定は渡す */
-export const usesHint = usesReference
+export function usesHint(state: OptOutState, projectId: ID, panelId: ID): boolean {
+  return usesReference(state, projectId, panelId)
+}
 
 /** 一括生成の範囲が走っているか。`scope` は `generateAll` に渡したもの */
 export function batchRunning(state: GeneratingState, projectId: ID, scope: string): boolean {

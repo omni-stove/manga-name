@@ -12,7 +12,7 @@ const SEVERITY_LABELS: Record<Issue['severity'], string> = {
 }
 
 /** severity の重い順。同じ重さなら診断が出した順を保つ */
-export const sortIssues = (issues: readonly Issue[]): Issue[] =>
+const sortIssues = (issues: readonly Issue[]): Issue[] =>
   issues.toSorted((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
 
 /** 診断の Issue の一覧。指す要素（焦点、フキダシ、コマ）がある Issue は押すと `onFocus` を呼ぶ */

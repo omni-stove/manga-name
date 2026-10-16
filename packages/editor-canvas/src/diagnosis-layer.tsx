@@ -1,11 +1,4 @@
-import type {
-  FocusDiagnosis,
-  FocusStatus,
-  ID,
-  Page,
-  PageDiagnosis,
-  Point,
-} from '@manga/schema'
+import type { FocusDiagnosis, FocusStatus, ID, Page, PageDiagnosis, Point } from '@manga/schema'
 import { memo } from 'react'
 import { toPagePoint } from './hint-ops'
 import { panelBox } from './hit-test'
@@ -33,7 +26,7 @@ const LEGEND_SWATCH = 6
 const BUBBLE_LABEL = 'フキダシ'
 
 /** 集計行。例 `reading order OK | focus points: 12 ok 12 miss 0`。weak は 1 件以上のときだけ出す */
-export function summaryLine(diagnosis: PageDiagnosis): string {
+function summaryLine(diagnosis: PageDiagnosis): string {
   const { total, ok, weak, miss } = diagnosis.summary
   const order = diagnosis.readingOrderOk ? 'OK' : 'NG'
   const weakPart = weak > 0 ? ` weak ${weak}` : ''
@@ -41,7 +34,7 @@ export function summaryLine(diagnosis: PageDiagnosis): string {
 }
 
 /** 焦点ラベルの診断。`<label> <S>S/<W>W t<t> <status>` */
-export function focusLabel(label: string, focus: FocusDiagnosis): string {
+function focusLabel(label: string, focus: FocusDiagnosis): string {
   const head = label === '' ? '' : `${label} `
   return `${head}${focus.strong}S/${focus.weak}W t${focus.t.toFixed(2)} ${focus.status}`
 }

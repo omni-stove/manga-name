@@ -1,3 +1,4 @@
+import { diagnosePage } from '@manga/diagnosis'
 import {
   EditorCanvas,
   type Layers,
@@ -5,7 +6,6 @@ import {
   type Selection,
   type Tool,
 } from '@manga/editor-canvas'
-import { diagnosePage } from '@manga/diagnosis'
 import {
   BubbleInspector,
   CharacterInspector,
@@ -600,9 +600,7 @@ function SelectionInspector({
         diagnosis={diagnosis?.panels
           .find((d) => d.panelId === found.panel.id)
           ?.focus.find((f) => f.focusPointId === selection.id)}
-        onChange={(patch) =>
-          apply('焦点を編集', (p) => focusPatch(p, pageId, selection.id, patch))
-        }
+        onChange={(patch) => apply('焦点を編集', (p) => focusPatch(p, pageId, selection.id, patch))}
       />
     )
   }
