@@ -18,7 +18,13 @@ export interface CloudLink {
    * アプリの ProjectStore が手元の ref を持ち続けるので、ローカルを書き換えても次の保存で戻される
    */
   assets?: Record<string, string>
+  /** 最後に PUT した本文に入っていた `assets`。`assets` が増えていれば、書き換えた本文が未送信 */
+  sentAssets?: Record<string, string>
 }
+
+const hasUnsentBody = (link: CloudLink | undefined) =>
+  !!link?.sentAssets &&
+  Object.keys(link.assets ?? {}).length > Object.keys(link.sentAssets).length
 
 /** ローカルの id ごとの CloudLink の置き場。リロードをまたいで残る必要がある */
 export interface CloudLinkStore {
@@ -497,10 +503,14 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       return 'done'
     }
     let link = await links.get(localId)
-    if (link?.syncedUpdatedAt === project.updatedAt && !hasUnsentAssets(project, localId, link))
+    if (
+      link?.syncedUpdatedAt === project.updatedAt &&
+      !hasUnsentBody(link) &&
+      !hasUnsentAssets(project, localId, link)
+    )
       return 'done'
     attempt.sending = true
-    let refs = assetRefsByPriority(project)
+    const refs = assetRefsByPriority(project)
 
     let laterSent = false
     /** PUT が通った後に履歴を送る。送れた分があればもう一度 PUT するので undefined を返す */
@@ -509,11 +519,6 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       laterSent = true
       const later = await uploadRefs(localId, link, refs.later, attempt)
       link = later.link
-      if (later.uploaded > 0) {
-        // ref を書き換えた本文がまだ PUT されていないので、次の送信で送り直させる
-        link = { ...link, syncedUpdatedAt: null }
-        await links.set(localId, link)
-      }
       if (later.outcome === 'retry') return 'retry'
       return later.uploaded === 0 ? 'done' : undefined
     }
@@ -528,7 +533,11 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       const first = await uploadRefs(localId, link, refs.first, attempt)
       link = first.link
       if (first.outcome === 'retry') return 'retry'
-      if (link.syncedUpdatedAt === project.updatedAt && first.uploaded === 0) {
+      if (
+        link.syncedUpdatedAt === project.updatedAt &&
+        first.uploaded === 0 &&
+        !hasUnsentBody(link)
+      ) {
         // 前回と同じ本文を PUT すると etag だけが進み、送信待ちの他の端末の PUT が 409 になって複製が作られる
         const outcome = await sendLater()
         if (outcome) return outcome
@@ -545,7 +554,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
         const resBody = (await res.json()) as { updatedAt?: string }
         const etag = parseEtag(res.headers.get('etag')) ?? resBody.updatedAt
         if (!etag) throw new Error('PUT project returned no updatedAt')
-        link = { ...link, etag, syncedUpdatedAt: project.updatedAt }
+        link = { ...link, etag, syncedUpdatedAt: project.updatedAt, sentAssets: link.assets ?? {} }
         await links.set(localId, link)
         const outcome = await sendLater()
         if (outcome) return outcome
@@ -566,19 +575,20 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
           continue
         }
         if (sameContent(remote.project, body)) {
-          link = { ...link, etag: remote.etag, syncedUpdatedAt: project.updatedAt }
+          link = {
+            ...link,
+            etag: remote.etag,
+            syncedUpdatedAt: project.updatedAt,
+            sentAssets: link.assets ?? {},
+          }
           await links.set(localId, link)
           const outcome = await sendLater()
           if (outcome) return outcome
           continue
         }
-        if (link.syncedUpdatedAt === project.updatedAt) {
-          // 手元は前回の同期から変わっていないので競合ではない。クラウドの版を取り込み、残りのアセットを送る
-          project = await adopt(localId, link.cloudId, remote)
-          refs = assetRefsByPriority(project)
-          link = await links.get(localId)
-          continue
-        }
+        // 手元は前回の同期から変わっていないので競合ではない。ただし開いている ProjectStore は
+        // 古い版を持つため、ここで取り込むと次の保存でクラウドの変更を消す。取り込みは次の loadProject に任せる
+        if (link.syncedUpdatedAt === project.updatedAt) return 'done'
         await keepCloudCopy(remote.project)
         link = { ...link, etag: remote.etag }
         await links.set(localId, link)
