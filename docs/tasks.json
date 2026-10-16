@@ -482,7 +482,7 @@
       "group": "G2",
       "title": "bubble ツール",
       "detail": "クリック作成、移動、リサイズ、しっぽ、縦書き省略",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -496,7 +496,9 @@
       ],
       "spec": [
         "workstreams/WS-04-editor-canvas.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "18",
