@@ -135,7 +135,17 @@ export function createProjectLibrary(
     })
     const persisted = persistDoc(doc, collab.ydocs, id, debounceMs ?? 500)
     try {
-      if (!saved) await provider.whenSynced(collab.firstSyncTimeoutMs ?? 5000)
+      if (!saved) {
+        // 接続先が無い・オフラインのときはサーバに混ぜる相手の Y.Doc が無いので、タイムアウトまで待たない
+        let stopWaiting = () => {}
+        const offline = new Promise<void>((resolve) => {
+          const isOffline = (s: { status: string }) => s.status === 'offline'
+          if (isOffline(provider.state.getState())) return resolve()
+          stopWaiting = provider.state.subscribe((s) => isOffline(s) && resolve())
+        })
+        await Promise.race([provider.whenSynced(collab.firstSyncTimeoutMs ?? 5000), offline])
+        stopWaiting()
+      }
       const store = createYjsProjectStore(project, {
         doc,
         // サーバの Y.Doc を作ったクライアントの id が入っていることがあるので、手元の id で保存する
@@ -229,11 +239,12 @@ export function createProjectLibrary(
       const pending = opened.get(id)
       // flush を待つ間に isOpen が true を返すと、生成の書き込みが flush の後に保存されて復活する
       opened.delete(id)
+      // open の完了を待ってから読まないと、最初の同期の途中で消したときに session が登録されたまま残る
+      const store = await pending?.catch(() => undefined)
       const session = sessions.get(id)
       sessions.delete(id)
       // 先に切らないと、flush を待つ間に届いた他のクライアントの更新が新しい debounce を張り、削除の後に保存が走ってプロジェクトが復活する
       session?.close()
-      const store = await pending?.catch(() => undefined)
       // 先に書き切らないと、debounce 中の保存が削除の後に走ってプロジェクトが復活する
       await store?.flush()
       await session?.flush()
