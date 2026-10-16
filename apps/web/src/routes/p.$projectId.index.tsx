@@ -2,7 +2,6 @@ import type { Episode, PageTemplate } from '@manga/schema'
 import { Button, Select } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { PeerBadge, usePeers } from '../collaboration-view'
 import collabStyles from '../collaboration-view.module.css'
@@ -31,7 +30,6 @@ function PageList() {
   const { store, collab } = projectRoute.useLoaderData()
   const { library, llmProvider } = Route.useRouteContext()
   const project = useProject(store)
-  const { canUndo, canRedo } = useStore(store.state)
   const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
   const [template, setTemplate] = useState<PageTemplate>('3rows')
@@ -84,14 +82,6 @@ function PageList() {
         </Button>
         <Button onClick={() => apply('エピソードを追加', addEpisodePatch)}>エピソードを追加</Button>
         <Button onClick={() => setDrafting(true)}>脚本から下書き</Button>
-        <span className={common.actions}>
-          <Button size="small" variant="ghost" disabled={!canUndo} onClick={() => store.undo()}>
-            Undo
-          </Button>
-          <Button size="small" variant="ghost" disabled={!canRedo} onClick={() => store.redo()}>
-            Redo
-          </Button>
-        </span>
       </form>
       {drafting && (
         <ScriptDraftDialog

@@ -193,9 +193,7 @@ export function ScriptDraftDialog({
             <p>{phase.rationale}</p>
           </aside>
         </div>
-        {phase.pages.length === 0 && (
-          <p className={common.placeholder}>提案にページがありません</p>
-        )}
+        {phase.pages.length === 0 && <p className={common.placeholder}>提案にページがありません</p>}
         {failed > 0 && (
           <p className={common.placeholder}>
             {failed} ページはキャラクターや参照が合わないため追加できません
