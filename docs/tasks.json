@@ -664,7 +664,7 @@
       "group": "G3",
       "title": "参考画像の読込と描画",
       "detail": "drop / picker / paste、PNG / JPEG / PDF、縮小、putAsset、reference Patch、最下層描画",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -681,7 +681,9 @@
       ],
       "spec": [
         "workstreams/WS-09-reference-image.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "26",

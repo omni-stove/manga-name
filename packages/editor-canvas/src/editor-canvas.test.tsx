@@ -141,6 +141,50 @@ describe('art', () => {
   })
 })
 
+describe('reference image', () => {
+  const referenceUrl = 'blob:reference'
+  const withReference = (reference: Page['reference']): Partial<EditorCanvasProps> => ({
+    page: { ...pageWithArts, reference },
+    resolveAsset: (ref) => (ref === 'blob:ref' ? Promise.resolve(referenceUrl) : resolveFixture(ref)),
+  })
+
+  test('is drawn below every panel, fitted to the page, with opacity and visibility', async () => {
+    const svg = await render(withReference({ ref: 'blob:ref', opacity: 0.3, visible: true }))
+    const images = [...svg.querySelectorAll('image')]
+    expect(images).toHaveLength(7)
+    const first = must(images[0])
+    expect(first.getAttribute('href')).toBe(referenceUrl)
+    expect(first.closest('[data-layer="reference"]')).not.toBeNull()
+    expect(first.getAttribute('x')).toBe('0')
+    expect(first.getAttribute('y')).toBe('0')
+    expect(first.getAttribute('width')).toBe(String(project.settings.pageSize.w))
+    expect(first.getAttribute('height')).toBe(String(project.settings.pageSize.h))
+    expect(first.getAttribute('preserveAspectRatio')).toBe('xMidYMid meet')
+    expect(first.getAttribute('opacity')).toBe('0.3')
+    expect(first.getAttribute('visibility')).toBe('visible')
+    const layer = must(svg.querySelector('[data-layer="reference"]'))
+    const firstPanel = must(svg.querySelector('[data-panel-id]'))
+    expect(layer.compareDocumentPosition(firstPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  test('visible = false keeps the image hidden', async () => {
+    const svg = await render(withReference({ ref: 'blob:ref', opacity: 0.5, visible: false }))
+    const image = must(svg.querySelector('[data-layer="reference"] image'))
+    expect(image.getAttribute('visibility')).toBe('hidden')
+  })
+
+  test('layers.reference = false hides it without resolving it', async () => {
+    const resolveAsset = vi.fn(resolveFixture)
+    const svg = await render({
+      page: { ...samplePage, reference: { ref: 'blob:ref', opacity: 0.5, visible: true } },
+      resolveAsset,
+      layers: { ...defaults.layers, reference: false },
+    })
+    expect(svg.querySelector('[data-layer="reference"]')).toBeNull()
+    expect(resolveAsset).not.toHaveBeenCalled()
+  })
+})
+
 test('panels in generating get a spinner', async () => {
   const svg = await render({ generating: new Set(['pn_2', 'pn_5']) })
   expect(svg.querySelectorAll('[data-spinner]')).toHaveLength(2)

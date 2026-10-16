@@ -8,7 +8,7 @@ import {
 } from '@manga/inspector'
 import type { Character, ID, Page, Panel, Patch, Project } from '@manga/schema'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { ExportDialog, type ExportOptions } from '../export-dialog'
@@ -26,6 +26,7 @@ import {
 } from '../inspector-ops'
 import type { ProjectLibrary } from '../project-library'
 import { findPage, pagePatch } from '../project-ops'
+import { firstFile, referencePatch, toReferenceImage } from '../reference-image'
 import { errorMessage } from '../route-error'
 import { SaveStatusIndicator } from '../save-status'
 import { toasts } from '../toasts'
@@ -98,6 +99,20 @@ function Editor() {
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
   useUndoShortcuts(store)
+  const importReference = (file: Blob) => {
+    toReferenceImage(file)
+      .then((blob) => library.putAsset(projectId, blob, `reference-${pageId}`))
+      .then(
+        (ref) =>
+          apply('参考画像を読み込み', (p) => {
+            const current = findPage(p, pageId)
+            if (!current) throw new Error('ページがもうありません')
+            return pagePatch(p, pageId, referencePatch(current.page, ref))
+          }),
+        (err) => toasts.push(`参考画像を読み込めません: ${errorMessage(err)}`),
+      )
+  }
+  useReferencePaste(importReference)
   const pageBatch = useBatchGeneration({
     generation,
     store,
@@ -190,7 +205,18 @@ function Editor() {
       )}
       {error && <p className="error">{error}</p>}
       <div className="editor-body">
-        <div className="canvas">
+        <div
+          className="canvas"
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+          }}
+          onDrop={(e) => {
+            const file = firstFile(e.dataTransfer)
+            if (!file) return
+            e.preventDefault()
+            importReference(file)
+          }}
+        >
           <EditorCanvas
             page={page}
             settings={project.settings}
@@ -233,6 +259,7 @@ function Editor() {
               onGenerateAll={pageBatch.start}
             />
             <BatchOptions batch={pageBatch} />
+            <ReferencePicker onPick={importReference} />
           </details>
           <details>
             <summary>キャラクター（{project.characters.length}）</summary>
@@ -407,6 +434,57 @@ function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply:
       </ul>
     </details>
   )
+}
+
+/** 参考画像を選ぶファイルダイアログ。不透明度などの操作は PageInspector に置く（タスク 26） */
+function ReferencePicker({ onPick }: { onPick(file: File): void }) {
+  const fileInput = useRef<HTMLInputElement>(null)
+  return (
+    <div className="inspector-section" data-inspector="reference-picker">
+      <button type="button" onClick={() => fileInput.current?.click()}>
+        参考画像を読み込む
+      </button>
+      <p className="placeholder">PNG、JPEG、PDF。キャンバスへのドロップと貼り付けでも読み込めます</p>
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/png,image/jpeg,application/pdf"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          // 同じファイルを選び直しても change が出るように空にする
+          e.target.value = ''
+          if (file) onPick(file)
+        }}
+      />
+    </div>
+  )
+}
+
+/**
+ * クリップボードのファイルを onFile に渡す。文字入力欄への貼り付けとファイルを含まない貼り付けには触らない
+ */
+function useReferencePaste(onFile: (file: File) => void) {
+  const latest = useRef(onFile)
+  latest.current = onFile
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const target = e.target
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return
+      }
+      const file = firstFile(e.clipboardData)
+      if (!file) return
+      e.preventDefault()
+      latest.current(file)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [])
 }
 
 /** CharacterInspector に、参照画像を選ぶファイルダイアログと putAsset を付ける */
