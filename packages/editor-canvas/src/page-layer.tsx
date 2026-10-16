@@ -61,7 +61,6 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
             selection={props.selection}
             clipId={`${props.idPrefix}-clip-${i}`}
             onArtError={props.onArtError}
-            onGenerate={props.onGenerate}
           />
         )
       })}
@@ -86,6 +85,27 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
               />
             ))
         })}
+      {/* スピナーと生成ボタンはエディタだけの UI なので、フキダシに隠れないよう最後に描く */}
+      {page.panels.map((panel) => {
+        const rect = {
+          x: panel.rect.x * width,
+          y: panel.rect.y * height,
+          w: panel.rect.w * width,
+          h: panel.rect.h * height,
+        }
+        const generating = props.generating.has(panel.id)
+        const { onGenerate } = props
+        return (
+          <g key={panel.id} className="ec-overlay" data-overlay-panel-id={panel.id}>
+            {/* フキダシの上でも .ec-overlay:hover を効かせるための当たり判定 */}
+            <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} fill="transparent" />
+            {generating && <GeneratingOverlay rect={rect} />}
+            {onGenerate && !generating && (
+              <GenerateButton rect={rect} onClick={() => onGenerate(panel.id)} />
+            )}
+          </g>
+        )
+      })}
     </g>
   )
 })
@@ -99,7 +119,6 @@ function PanelView({
   selection,
   clipId,
   onArtError,
-  onGenerate,
 }: {
   panel: Panel
   rect: Box
@@ -109,7 +128,6 @@ function PanelView({
   selection: Selection
   clipId: string
   onArtError(ref: string): void
-  onGenerate?(panelId: ID): void
 }) {
   const selected = selection?.kind === 'panel' && selection.id === panel.id
   const url = asset && 'url' in asset ? asset.url : undefined
@@ -150,11 +168,7 @@ function PanelView({
         strokeWidth={selected ? 2 : 1}
         vectorEffect="non-scaling-stroke"
       />
-      {generating && <GeneratingOverlay rect={rect} />}
       <PanelNumber order={panel.order} rect={rect} />
-      {onGenerate && !generating && (
-        <GenerateButton rect={rect} onClick={() => onGenerate(panel.id)} />
-      )}
     </g>
   )
 }

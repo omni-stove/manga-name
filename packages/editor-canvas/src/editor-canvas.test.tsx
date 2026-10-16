@@ -144,16 +144,16 @@ describe('art', () => {
 test('panels in generating get a spinner', async () => {
   const svg = await render({ generating: new Set(['pn_2', 'pn_5']) })
   expect(svg.querySelectorAll('[data-spinner]')).toHaveLength(2)
-  expect(svg.querySelector('[data-panel-id="pn_2"] [data-spinner]')).not.toBeNull()
-  expect(svg.querySelector('[data-panel-id="pn_5"] [data-spinner]')).not.toBeNull()
-  expect(svg.querySelector('[data-panel-id="pn_1"] [data-spinner]')).toBeNull()
+  expect(svg.querySelector('[data-overlay-panel-id="pn_2"] [data-spinner]')).not.toBeNull()
+  expect(svg.querySelector('[data-overlay-panel-id="pn_5"] [data-spinner]')).not.toBeNull()
+  expect(svg.querySelector('[data-overlay-panel-id="pn_1"] [data-spinner]')).toBeNull()
 })
 
 test('the generate button calls onGenerate and is hidden while generating', async () => {
   const onGenerate = vi.fn()
   const svg = await render({ onGenerate, generating: new Set(['pn_1']) })
-  expect(svg.querySelector('[data-panel-id="pn_1"] .ec-generate')).toBeNull()
-  const button = must(svg.querySelector('[data-panel-id="pn_4"] .ec-generate'))
+  expect(svg.querySelector('[data-overlay-panel-id="pn_1"] .ec-generate')).toBeNull()
+  const button = must(svg.querySelector('[data-overlay-panel-id="pn_4"] .ec-generate'))
   act(() => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
