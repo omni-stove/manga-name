@@ -618,7 +618,7 @@
       "group": "G3",
       "title": "exportPdf",
       "detail": "pdf-lib、renderPage の PNG 埋め込み、spread、notes sheet、pages",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "05"
       ],
@@ -633,7 +633,9 @@
       ],
       "spec": [
         "workstreams/WS-08-export.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "24",
