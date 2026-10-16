@@ -8,11 +8,11 @@ export interface AiProxySettings {
   token: string
 }
 
-export const AI_PROXY_BASE_URL_KEY = 'manga.aiProxy.baseUrl'
-export const AI_PROXY_TOKEN_KEY = 'manga.aiProxy.token'
+const AI_PROXY_BASE_URL_KEY = 'manga.aiProxy.baseUrl'
+const AI_PROXY_TOKEN_KEY = 'manga.aiProxy.token'
 
 /** localStorage のアプリ設定から AI プロキシの設定を読む。localStorage が無い環境では未設定 */
-export function readAiProxySettings(
+function readAiProxySettings(
   storage: Pick<Storage, 'getItem'> | null = localStorageOrNull(),
 ): AiProxySettings {
   return {
