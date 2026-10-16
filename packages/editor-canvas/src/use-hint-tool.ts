@@ -112,7 +112,13 @@ export function useHintTool(opts: Options) {
       }
       if (!panelAt(opts.page, opts.width, opts.height, at)) return
       capture(e.currentTarget, e.pointerId)
-      gesture.current = { kind: 'vector', pointerId: e.pointerId, from: at, client, dragging: false }
+      gesture.current = {
+        kind: 'vector',
+        pointerId: e.pointerId,
+        from: at,
+        client,
+        dragging: false,
+      }
     },
     onPointerMove(e: ReactPointerEvent<SVGSVGElement>) {
       const g = gesture.current
