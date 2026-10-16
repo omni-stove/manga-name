@@ -6,6 +6,7 @@ import {
   useState,
 } from 'react'
 import { NUDGE_SHIFT_FACTOR, NUDGE_STEP, nudgePatch, removePatch } from './edit-ops'
+import { hintAt, hintTolerance } from './hint-ops'
 import { hitTest } from './hit-test'
 import type { Selection } from './types'
 import { type ClientBox, clientToPage, type View } from './view'
@@ -18,6 +19,8 @@ interface Options {
   view: View
   /** パンやピンチの最中。ホバーもクリックも拾わない */
   panning: boolean
+  /** 焦点とベクトルを拾うか。ヒントのレイヤーが見えているときだけ true */
+  hints: boolean
   selection: Selection
   onChange(patch: Patch): void
   onSelect(sel: Selection): void
@@ -42,7 +45,8 @@ function boxOf(el: Element): ClientBox {
 }
 
 /**
- * クリックで選択、ホバーで強調、Delete / Backspace で削除、矢印キーで移動（Shift で 10 倍）、
+ * クリックで選択、ホバーで強調（`hints` のときは焦点とベクトルをフキダシより先に拾う）、
+ * Delete / Backspace で削除、矢印キーで移動（Shift で 10 倍）、
  * Escape で選択解除。クリックは pointerdown から動かずに pointerup したときだけで、
  * ズームやパンに使われた pointerdown（preventDefault 済み）は無視する。
  * キーはキャンバス自身にフォーカスがあるときだけ受ける
@@ -53,7 +57,11 @@ export function useSelection(opts: Options) {
 
   const hitAt = (e: ReactPointerEvent<SVGSVGElement>): Selection => {
     const p = clientToPage(opts.view, boxOf(e.currentTarget), { x: e.clientX, y: e.clientY })
-    return p === null ? null : hitTest(opts.page, opts.width, opts.height, p)
+    if (p === null) return null
+    const hint = opts.hints
+      ? hintAt(opts.page, opts.width, opts.height, p, hintTolerance(opts.view))
+      : null
+    return hint ?? hitTest(opts.page, opts.width, opts.height, p)
   }
   const hover = (next: Selection) => {
     if (!sameSelection(next, hovered)) setHovered(next)
@@ -100,6 +108,8 @@ export function useSelection(opts: Options) {
         if (opts.selection !== null) opts.onSelect(null)
         return
       }
+      const hintSelected = opts.selection?.kind === 'focus' || opts.selection?.kind === 'vector'
+      if (hintSelected && !opts.hints) return
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const patch = removePatch(opts.page, opts.selection)
         if (patch.length === 0) return
