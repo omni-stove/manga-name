@@ -1,0 +1,354 @@
+import {
+  type Character,
+  createPage,
+  type Episode,
+  type ID,
+  newId,
+  type Page,
+  type PageTemplate,
+  type Patch,
+  type Project,
+  type ProjectSettings,
+} from '@manga/schema'
+
+/**
+ * ページ一覧・キャラクター・設定の画面が使う操作。どれも Project を変えず、
+ * ProjectStore.applyPatch に渡す JSON Patch を返す。
+ */
+
+interface PageLocation {
+  episodeIndex: number
+  pageIndex: number
+  page: Page
+}
+
+export function findPage(project: Project, pageId: ID): PageLocation | undefined {
+  for (const [episodeIndex, episode] of project.episodes.entries()) {
+    const pageIndex = episode.pages.findIndex((p) => p.id === pageId)
+    const page = episode.pages[pageIndex]
+    if (page) return { episodeIndex, pageIndex, page }
+  }
+  return undefined
+}
+
+type ArtStatus = '未生成' | '一部' | '全部'
+
+/** ページ内のコマのうち、現在の絵が選ばれているものの割合で 3 段階に分ける。コマが無いページは未生成 */
+export function artStatus(page: Page): ArtStatus {
+  const done = page.panels.filter((panel) => panel.artId !== undefined).length
+  if (done === 0) return '未生成'
+  if (done === page.panels.length) return '全部'
+  return '一部'
+}
+
+export const PAGE_TEMPLATES: readonly { value: PageTemplate; label: string }[] = [
+  { value: '2rows', label: '2 段' },
+  { value: '3rows', label: '3 段' },
+  { value: '4rows', label: '4 段' },
+  { value: 'blank', label: '白紙' },
+]
+
+const newEpisode = (project: Project, pages: Page[] = []): Episode => ({
+  id: newId(),
+  title: `第${project.episodes.length + 1}話`,
+  pages,
+})
+
+export function addEpisodePatch(project: Project): Patch {
+  return [{ op: 'add', path: '/episodes/-', value: newEpisode(project) }]
+}
+
+/**
+ * テンプレートからページを作り、エピソードの末尾に足す。
+ * `episodeId` を省くと最後のエピソードに足し、エピソードが無ければ 1 話目を作ってそこに入れる。
+ */
+export function addPagePatch(
+  project: Project,
+  template: PageTemplate,
+  episodeId?: ID,
+): { patch: Patch; page: Page } {
+  const page = createPage(template, project.settings.direction)
+  if (project.episodes.length === 0) {
+    return {
+      patch: [{ op: 'add', path: '/episodes/-', value: newEpisode(project, [page]) }],
+      page,
+    }
+  }
+  const index =
+    episodeId === undefined
+      ? project.episodes.length - 1
+      : project.episodes.findIndex((e) => e.id === episodeId)
+  if (index < 0) throw new Error(`エピソードが見つかりません: ${episodeId}`)
+  return { patch: [{ op: 'add', path: `/episodes/${index}/pages/-`, value: page }], page }
+}
+
+export function removePagePatch(project: Project, pageId: ID): Patch {
+  const found = findPage(project, pageId)
+  if (!found) return []
+  return [{ op: 'remove', path: `/episodes/${found.episodeIndex}/pages/${found.pageIndex}` }]
+}
+
+/** エピソード内でページを `delta` だけ動かす。端を越える移動は空の patch */
+export function movePagePatch(project: Project, pageId: ID, delta: number): Patch {
+  const found = findPage(project, pageId)
+  if (!found) return []
+  const pages = project.episodes[found.episodeIndex]?.pages ?? []
+  const to = found.pageIndex + delta
+  if (delta === 0 || to < 0 || to >= pages.length) return []
+  const base = `/episodes/${found.episodeIndex}/pages`
+  // PatchSchema に move が無いので remove と add で動かす。add の添字は remove 後の配列で解決される
+  return [
+    { op: 'remove', path: `${base}/${found.pageIndex}` },
+    { op: 'add', path: `${base}/${to}`, value: found.page },
+  ]
+}
+
+export type CharacterFields = Pick<Character, 'name' | 'shortName'> &
+  Partial<Pick<Character, 'appearance' | 'note'>>
+
+const OPTIONAL_FIELDS = ['appearance', 'note'] as const
+
+/** 前後の空白を落とし、空の任意項目は持たない形にする */
+function normalize(fields: CharacterFields): CharacterFields {
+  const result: CharacterFields = { name: fields.name.trim(), shortName: fields.shortName.trim() }
+  for (const key of OPTIONAL_FIELDS) {
+    const value = fields[key]?.trim()
+    if (value) result[key] = value
+  }
+  return result
+}
+
+function validate(fields: CharacterFields): void {
+  if (!fields.name) throw new Error('名前を入れてください')
+  if (!fields.shortName) throw new Error('略称を入れてください')
+}
+
+export function addCharacterPatch(fields: CharacterFields): { patch: Patch; character: Character } {
+  const character = { id: newId(), ...normalize(fields) }
+  validate(character)
+  return { patch: [{ op: 'add', path: '/characters/-', value: character }], character }
+}
+
+/** 変わった項目だけを書き換える。空にした任意項目は消す */
+export function updateCharacterPatch(project: Project, id: ID, fields: CharacterFields): Patch {
+  const index = project.characters.findIndex((c) => c.id === id)
+  const current = project.characters[index]
+  if (!current) throw new Error(`キャラクターが見つかりません: ${id}`)
+  const next = normalize(fields)
+  validate(next)
+  const base = `/characters/${index}`
+  const patch: Patch = []
+  for (const key of ['name', 'shortName'] as const) {
+    if (next[key] !== current[key]) {
+      patch.push({ op: 'replace', path: `${base}/${key}`, value: next[key] })
+    }
+  }
+  for (const key of OPTIONAL_FIELDS) {
+    const value = next[key]
+    if (value === current[key]) continue
+    patch.push(
+      value === undefined
+        ? { op: 'remove', path: `${base}/${key}` }
+        : { op: 'add', path: `${base}/${key}`, value },
+    )
+  }
+  return patch
+}
+
+/** セリフの話者かフォーカスポイントとして参照しているコマの数 */
+export function characterUsage(project: Project, id: ID): number {
+  let count = 0
+  for (const episode of project.episodes) {
+    for (const page of episode.pages) {
+      for (const panel of page.panels) {
+        if (
+          panel.bubbles.some((b) => b.speakerId === id) ||
+          panel.focusPoints.some((f) => f.characterId === id)
+        ) {
+          count++
+        }
+      }
+    }
+  }
+  return count
+}
+
+/** 参照が残るキャラクターは消すとスキーマを通らなくなるので、理由を添えて throw する */
+export function removeCharacterPatch(project: Project, id: ID): Patch {
+  const index = project.characters.findIndex((c) => c.id === id)
+  if (index < 0) return []
+  const usage = characterUsage(project, id)
+  if (usage > 0) throw new Error(`${usage} コマで使われているため削除できません`)
+  return [{ op: 'remove', path: `/characters/${index}` }]
+}
+
+const SETTINGS_FIELDS = ['direction', 'pageSize', 'dpi', 'style'] as const
+
+/** 設定画面で編集する項目のうち、変わったものだけを置き換える */
+export function settingsPatch(
+  current: ProjectSettings,
+  next: Pick<ProjectSettings, (typeof SETTINGS_FIELDS)[number]>,
+): Patch {
+  return SETTINGS_FIELDS.filter(
+    (key) => JSON.stringify(current[key]) !== JSON.stringify(next[key]),
+  ).map((key) => ({ op: 'replace' as const, path: `/settings/${key}`, value: next[key] }))
+}
+
+if (import.meta.vitest) {
+  const { describe, expect, test } = import.meta.vitest
+  const { createEmptyProject, fixtures, ProjectSchema } = await import('@manga/schema')
+  const { createProjectStore } = await import('./store/project-store')
+
+  const storeOf = (project: Project) => createProjectStore(project, { saveProject: async () => {} })
+  const sample = fixtures.samplePage01
+  const firstPage = () => {
+    const page = sample.episodes[0]?.pages[0]
+    if (!page) throw new Error('fixture に page がない')
+    return page
+  }
+
+  test('artStatus', () => {
+    const page = firstPage()
+    expect(artStatus(page)).toBe('未生成')
+    expect(artStatus({ ...page, panels: [] })).toBe('未生成')
+    const [first, ...rest] = page.panels
+    if (!first) throw new Error('fixture に panel がない')
+    const art = {
+      id: 'art_1',
+      ref: 'blob:x',
+      provider: 'fake',
+      prompt: '',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+    expect(
+      artStatus({ ...page, panels: [{ ...first, arts: [art], artId: art.id }, ...rest] }),
+    ).toBe('一部')
+    expect(
+      artStatus({
+        ...page,
+        panels: page.panels.map((p) => ({ ...p, arts: [art], artId: art.id })),
+      }),
+    ).toBe('全部')
+  })
+
+  describe('pages', () => {
+    test('addPage creates the first episode of an empty project', () => {
+      const store = storeOf(createEmptyProject('t'))
+      const { patch, page } = addPagePatch(store.get(), '3rows')
+      store.applyPatch(patch)
+      expect(store.get().episodes).toEqual([
+        { id: expect.any(String), title: '第1話', pages: [page] },
+      ])
+      expect(page.panels).toHaveLength(6)
+    })
+
+    test('addPage appends to the given or last episode', () => {
+      const store = storeOf(sample)
+      store.applyPatch(addEpisodePatch(store.get()))
+      const [first, second] = store.get().episodes
+      if (!first || !second) throw new Error('episode が 2 つない')
+      store.applyPatch(addPagePatch(store.get(), 'blank').patch)
+      store.applyPatch(addPagePatch(store.get(), '2rows', first.id).patch)
+      const [a, b] = store.get().episodes
+      expect(a?.pages.map((p) => p.panels.length)).toEqual([6, 4])
+      expect(b?.pages.map((p) => p.panels.length)).toEqual([0])
+      expect(b?.title).toBe('第2話')
+      expect(() => addPagePatch(store.get(), 'blank', 'nope')).toThrow()
+    })
+
+    test('movePage reorders within the episode and ignores moves past the ends', () => {
+      const store = storeOf(sample)
+      store.applyPatch(addPagePatch(store.get(), 'blank').patch)
+      store.applyPatch(addPagePatch(store.get(), '2rows').patch)
+      const ids = () => store.get().episodes[0]?.pages.map((p) => p.id) ?? []
+      const [p1, p2, p3] = ids()
+      if (!p1 || !p2 || !p3) throw new Error('page が 3 つない')
+
+      store.applyPatch(movePagePatch(store.get(), p1, 1))
+      expect(ids()).toEqual([p2, p1, p3])
+      store.applyPatch(movePagePatch(store.get(), p3, -2))
+      expect(ids()).toEqual([p3, p2, p1])
+      expect(movePagePatch(store.get(), p3, -1)).toEqual([])
+      expect(movePagePatch(store.get(), p1, 1)).toEqual([])
+      expect(movePagePatch(store.get(), 'nope', 1)).toEqual([])
+      store.undo()
+      expect(ids()).toEqual([p2, p1, p3])
+    })
+
+    test('removePage', () => {
+      const store = storeOf(sample)
+      store.applyPatch(removePagePatch(store.get(), firstPage().id))
+      expect(store.get().episodes[0]?.pages).toEqual([])
+      expect(removePagePatch(store.get(), firstPage().id)).toEqual([])
+    })
+  })
+
+  describe('characters', () => {
+    test('add trims and drops empty optional fields', () => {
+      const store = storeOf(createEmptyProject('t'))
+      const { patch, character } = addCharacterPatch({
+        name: ' 山田 ',
+        shortName: '山',
+        appearance: ' ',
+        note: '主人公',
+      })
+      store.applyPatch(patch)
+      expect(store.get().characters).toEqual([
+        { id: character.id, name: '山田', shortName: '山', note: '主人公' },
+      ])
+      expect(() => addCharacterPatch({ name: '', shortName: 'x' })).toThrow('名前')
+      expect(() => addCharacterPatch({ name: 'x', shortName: ' ' })).toThrow('略称')
+    })
+
+    test('update changes only what changed and removes cleared fields', () => {
+      const store = storeOf(createEmptyProject('t'))
+      const { patch, character } = addCharacterPatch({ name: 'A', shortName: 'A', note: 'n' })
+      store.applyPatch(patch)
+      const update = updateCharacterPatch(store.get(), character.id, {
+        name: 'A',
+        shortName: 'B',
+        appearance: '眼鏡',
+        note: '',
+      })
+      expect(update.map((op) => op.op)).toEqual(['replace', 'add', 'remove'])
+      store.applyPatch(update)
+      expect(store.get().characters[0]).toEqual({
+        id: character.id,
+        name: 'A',
+        shortName: 'B',
+        appearance: '眼鏡',
+      })
+      const saved = store.get().characters[0]
+      if (!saved) throw new Error('character が無い')
+      expect(updateCharacterPatch(store.get(), character.id, saved)).toEqual([])
+    })
+
+    test('remove refuses a character that is still referenced', () => {
+      const used = sample.characters.find((c) => characterUsage(sample, c.id) > 0)
+      if (!used) throw new Error('fixture に参照されているキャラクターがない')
+      expect(() => removeCharacterPatch(sample, used.id)).toThrow('削除できません')
+
+      const store = storeOf(createEmptyProject('t'))
+      const { patch, character } = addCharacterPatch({ name: 'A', shortName: 'A' })
+      store.applyPatch(patch)
+      store.applyPatch(removeCharacterPatch(store.get(), character.id))
+      expect(store.get().characters).toEqual([])
+    })
+  })
+
+  test('settingsPatch replaces only changed fields and the result is valid', () => {
+    const project = createEmptyProject('t')
+    const { settings } = project
+    expect(settingsPatch(settings, settings)).toEqual([])
+    const patch = settingsPatch(settings, {
+      ...settings,
+      direction: 'ltr',
+      pageSize: { ...settings.pageSize, w: 210 },
+    })
+    expect(patch.map((op) => op.path)).toEqual(['/settings/direction', '/settings/pageSize'])
+    const store = storeOf(project)
+    store.applyPatch(patch)
+    expect(ProjectSchema.safeParse(store.get()).success).toBe(true)
+    expect(store.get().settings.pageSize.w).toBe(210)
+  })
+}

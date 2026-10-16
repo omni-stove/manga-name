@@ -1,0 +1,4 @@
+/target/
+# tauri build が生成する。icons は package.json の icons スクリプトが app-icon.svg から作る
+/gen/schemas/
+/icons/

@@ -3,7 +3,8 @@ import { fixtures, type Project } from '@manga/schema'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createApp } from '../src/app'
 import { splitDoc } from '../src/project-store'
-import { DEBUG_USER_HEADER, MAX_PROJECT_BYTES } from '../src/projects'
+import { MAX_PROJECT_BYTES } from '../src/projects'
+import { DEBUG_USER_HEADER } from '../src/user'
 
 const app = createApp()
 
@@ -51,6 +52,8 @@ const chunkCount = async () =>
 
 beforeEach(async () => {
   await env.DB.batch([
+    env.DB.prepare('DELETE FROM rate_limits'),
+    env.DB.prepare('DELETE FROM assets'),
     env.DB.prepare('DELETE FROM project_doc_chunks'),
     env.DB.prepare('DELETE FROM projects'),
     env.DB.prepare('DELETE FROM users'),

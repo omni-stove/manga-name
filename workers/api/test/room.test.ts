@@ -9,9 +9,9 @@ import * as syncProtocol from 'y-protocols/sync'
 import * as Y from 'yjs'
 import { createApp } from '../src/app'
 import { readYDocSnapshot } from '../src/project-store'
-import { DEBUG_USER_HEADER } from '../src/projects'
 import { CLOSE_PROJECT_DELETED, restoreDoc } from '../src/room'
 import { createRoomStorage } from '../src/room-storage'
+import { DEBUG_USER_HEADER } from '../src/user'
 
 const app = createApp()
 
@@ -145,6 +145,8 @@ const room = (id: string) => env.PROJECT_ROOMS.get(env.PROJECT_ROOMS.idFromName(
 
 beforeEach(async () => {
   await env.DB.batch([
+    env.DB.prepare('DELETE FROM rate_limits'),
+    env.DB.prepare('DELETE FROM assets'),
     env.DB.prepare('DELETE FROM project_ydoc_chunks'),
     env.DB.prepare('DELETE FROM project_doc_chunks'),
     env.DB.prepare('DELETE FROM projects'),

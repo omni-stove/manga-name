@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@manga/schema": "workspace:*",
+    "@tauri-apps/plugin-fs": "^2.4.2",
     "idb": "^8.0.3"
   },
   "devDependencies": {
     "fake-indexeddb": "^6.2.5",
+    "msw": "^2.12.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

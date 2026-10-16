@@ -1,5 +1,6 @@
 #!/bin/sh
-# docs/tasks.json の状態を進め、docs/08-tasks.md を生成する。
+# docs/tasks.json の状態を進め、タスクの定義だけを docs/08-tasks.md に写す。
+# 状態（着手・完了）は tasks.json にしか持たず、md には出さない。二重管理を防ぐため。
 # 使い方: scripts/tasks.sh <next|show|start|done|render> [id] [--decided]
 # node に依存しないのは、issue worker の CI でも同じコマンドが動くようにするため。
 set -eu
@@ -28,12 +29,11 @@ label() {
   jq -r --arg id "$1" '.tasks[] | select(.id == $id) | "\(.id) \(.title)"' "$json"
 }
 
-# $1 のフィルタで $json を書き換え、docs/08-tasks.md を生成し直す。
+# $1 のフィルタで $json を書き換える。md は状態を持たないので生成し直さない。
 save() {
   tmp=$(mktemp)
   jq --indent 2 --arg id "$id" --arg today "$(date -u +%F)" "$1" "$json" >"$tmp"
   mv "$tmp" "$json"
-  render
 }
 
 next() {
@@ -111,19 +111,18 @@ done_() {
   echo "完了: $(label "$id")"
 }
 
-# docs/tasks.json から docs/08-tasks.md を書き出す。
+# docs/tasks.json のタスク定義を docs/08-tasks.md に書き出す。状態は含めない。
 render() {
   out=$(jq -r '
     . as $d
-    | ($d.tasks | map({ key: .id, value: . }) | from_entries) as $by
     | def name: "\(.id) \(.title)";
-      def box: if . then "[x]" else "[ ]" end;
-      def count($s): [$d.tasks[] | select(.status == $s)] | length;
       def link: if test("^[^ ]+\\.md") then (capture("^(?<f>[^ ]+\\.md)(?<r>.*)$") | "[\(.f)\(.r)](\(.f))") else . end;
       def in_group($g): $d.tasks[] | select(.group == $g.id);
       "# 08. タスク",
       "",
       "AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。正は `tasks.json` で、この文書は `make tasks render` で生成する。手で編集しない。",
+      "",
+      "着手・完了の状態は `tasks.json` にだけ持ち、この文書には書かない。進捗は `make tasks next` で見る。",
       "",
       "## 原則",
       "",
@@ -148,22 +147,14 @@ render() {
       "| `make tasks show <id>` | 依存、範囲、完了条件、仕様を表示する |",
       "| `make tasks start <id>` | 着手にする。依存が未完了なら拒否 |",
       "| `make tasks done <id>` | 完了にする。検証はしない |",
+      "| `make tasks render` | タスクの定義を変えたあと、この文書を生成し直す |",
       "",
       "タスク総数 \($d.tasks | length)。G0 と G1 は直列で、ここがクリティカルパス。G2 以降は依存が揃った順に並列に出せる。",
       "",
       "| 節目 | 条件 | 到達したら |",
       "|---|---|---|",
-      ($d.milestones[] | "| \(all(.after[]; $by[.].status == "done") | box) \(.id) | \(.after | join(", ")) が Done | \(.title) |"),
+      ($d.milestones[] | "| \(.id) | \(.after | join(", ")) が Done | \(.title) |"),
       "",
-      "## 進捗",
-      "",
-      "完了 \(count("done")) / 着手中 \(count("in_progress")) / 未着手 \(count("todo"))",
-      "",
-      ($d.groups[] | . as $g
-        | "### \($g.id) \($g.title)",
-          "",
-          (in_group($g) | "- \(.status == "done" | box) \(name)\(if .status == "in_progress" then "（着手 \(.startedAt)）" elif .status == "done" then "（完了 \(.doneAt)）" else "" end)"),
-          ""),
       "## 依存図",
       "",
       "実線はタスク間の依存。菱形は未決事項。",
@@ -184,10 +175,10 @@ render() {
       ($d.groups[] | . as $g
         | "### \($g.id) \($g.title)（\(if $g.mode == "serial" then "直列" else "依存が揃った順に並列" end)）",
           "",
-          "| ID | 着手 | 完了 | タスク | 依存 | 範囲 | 完了条件 | 仕様 |",
-          "|---|---|---|---|---|---|---|---|",
+          "| ID | タスク | 依存 | 範囲 | 完了条件 | 仕様 |",
+          "|---|---|---|---|---|---|",
           (in_group($g)
-            | "| \(.id) | \(.status != "todo" | box) | \(.status == "done" | box) | \(if .detail then "**\(.title)**<br>\(.detail)" else "**\(.title)**" end) | \((.deps + (.gates // [])) | join(", ") | if . == "" then "なし" else . end) | \(.scope | map("`\(.)`") | join("<br>")) | \(.verify | map("- \(.)") | join("<br>")) | \(.spec | map(link) | join("<br>")) |"),
+            | "| \(.id) | \(if .detail then "**\(.title)**<br>\(.detail)" else "**\(.title)**" end) | \((.deps + (.gates // [])) | join(", ") | if . == "" then "なし" else . end) | \(.scope | map("`\(.)`") | join("<br>")) | \(.verify | map("- \(.)") | join("<br>")) | \(.spec | map(link) | join("<br>")) |"),
           "")
   ' "$json")
   printf '%s\n' "$out" >"$md"

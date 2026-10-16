@@ -19,7 +19,7 @@ const MESSAGE_QUERY_AWARENESS = 3
 const MAX_MESSAGE_BYTES = 5 * 1024 * 1024
 
 /** D1 にまだ書いていない最初の更新から、D1 にスナップショットを書くまでの間隔 */
-export const SNAPSHOT_INTERVAL_MS = 30_000
+const SNAPSHOT_INTERVAL_MS = 30_000
 
 /** 1 接続が名乗れる Awareness の clientID の数。attachment の 2KB に収めるため */
 const MAX_CLIENTS_PER_SOCKET = 16
@@ -180,7 +180,10 @@ function createRoom(ctx: DurableObjectState, env: Env) {
       server.serializeAttachment({ projectId, clients: {} } satisfies Attachment)
       server.send(message(MESSAGE_SYNC, (e) => syncProtocol.writeSyncStep1(e, doc)))
       // 既存の接続に Awareness を送り直させ、新しい接続にも誰がいるかを伝える
-      broadcast(message(MESSAGE_QUERY_AWARENESS, () => {}), server)
+      broadcast(
+        message(MESSAGE_QUERY_AWARENESS, () => {}),
+        server,
+      )
       return new Response(null, { status: 101, webSocket: client })
     },
 

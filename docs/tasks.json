@@ -289,7 +289,7 @@
       "group": "G1",
       "title": "プロジェクト一覧、ページ一覧、キャラクター、設定",
       "detail": "作成、削除、ページ追加（テンプレート）、並べ替え、キャラクター追加、settings 編集、IndexedDB 復元、JSON export / import",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "08"
       ],
@@ -303,7 +303,9 @@
       ],
       "spec": [
         "workstreams/WS-06-app-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "10",
@@ -716,7 +718,7 @@
       "group": "G3",
       "title": "diagnosePage と panelHint",
       "detail": "Bubble の合成焦点、ベクトル集計、status 判定、Issue 生成、bubbleChain、summary、hint",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "27"
       ],
@@ -735,7 +737,9 @@
       "spec": [
         "04-diagnosis-spec.md",
         "workstreams/WS-10-diagnosis.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "29",
@@ -812,7 +816,7 @@
       "group": "G3",
       "title": "Workers propose-layout ルート",
       "detail": "prompts.proposeLayout、ルート、応答検証、createHttpLlmProvider",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "18"
       ],
@@ -827,7 +831,9 @@
       ],
       "spec": [
         "workstreams/WS-12-layout-proposal.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "33",
@@ -903,7 +909,7 @@
       "group": "G4",
       "title": "assets、usage、レート制限、CORS",
       "detail": "R2 署名 URL、GET、DELETE、20MB 上限、60 req/min、`GET /v1/usage`、月間上限",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "35"
       ],
@@ -917,7 +923,9 @@
       ],
       "spec": [
         "workstreams/WS-13-workers-api.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "37",
@@ -989,7 +997,7 @@
       "group": "G4",
       "title": "createCloudStorage",
       "detail": "ローカル優先、2 秒 debounce、起動時比較、409 は別名保存",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "06",
         "35"
@@ -1003,7 +1011,9 @@
       ],
       "spec": [
         "workstreams/WS-15-cloud-storage.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "41",
@@ -1101,7 +1111,7 @@
       "id": "45",
       "group": "G5",
       "title": "Tauri 2 雛形、platform 判定、createFileStorage",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "09"
       ],
@@ -1117,7 +1127,9 @@
       ],
       "spec": [
         "workstreams/WS-17-desktop-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "46",
@@ -1286,7 +1298,7 @@
       "group": "G6",
       "title": "Yjs マッピング",
       "detail": "Project と Y.Map / Y.Array、applyPatch の差し替え、UndoManager。ローカルのみ",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "08"
       ],
@@ -1300,7 +1312,9 @@
       ],
       "spec": [
         "workstreams/WS-19-collaboration.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "55",

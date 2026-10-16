@@ -10,6 +10,13 @@ export interface ProjectSummary {
 export interface StorageAdapter {
   /** 保存済みプロジェクトの概要。updatedAt の新しい順 */
   listProjects(): Promise<ProjectSummary[]>
+  /**
+   * 保存されているかどうか。読めない内容でも保存されていれば true。
+   * 実装しないアダプタでは listProjects に出るかどうかで判定する
+   */
+  hasProject?(id: ID): Promise<boolean>
+  /** この id で保存できるか。実装しないアダプタはどの id でも保存できる */
+  canStoreId?(id: ID): boolean
   /** 無ければ throw する。保存内容は parseProject を通して返す */
   loadProject(id: ID): Promise<Project>
   saveProject(p: Project): Promise<void>

@@ -151,10 +151,10 @@ export async function saveProject(
   return current ? { status: 'conflict', updatedAt: current.updatedAt } : { status: 'not-found' }
 }
 
-/** owner のプロジェクトを本文ごと消す。消したら true */
+/** owner のプロジェクトを本文と Yjs スナップショットとアセットの行ごと消す。消したら true。R2 の本体は呼び出し側が消す */
 export async function deleteProject(db: D1Database, ownerId: string, id: string) {
   // 外部キーの CASCADE が無効な環境でも本文を残さないよう、本文から明示的に消す
-  const [, , removed] = await db.batch([
+  const [, , , removed] = await db.batch([
     db
       .prepare(
         `DELETE FROM project_doc_chunks
@@ -164,6 +164,12 @@ export async function deleteProject(db: D1Database, ownerId: string, id: string)
     db
       .prepare(
         `DELETE FROM project_ydoc_chunks
+         WHERE project_id = (SELECT id FROM projects WHERE id = ?1 AND owner_id = ?2)`,
+      )
+      .bind(id, ownerId),
+    db
+      .prepare(
+        `DELETE FROM assets
          WHERE project_id = (SELECT id FROM projects WHERE id = ?1 AND owner_id = ?2)`,
       )
       .bind(id, ownerId),

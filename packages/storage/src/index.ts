@@ -1,4 +1,7 @@
 export * from './adapter'
+export * from './cloud'
 export * from './create'
+export * from './file'
 export * from './indexeddb'
 export * from './memory'
+export * from './platform'

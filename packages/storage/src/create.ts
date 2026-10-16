@@ -1,16 +1,19 @@
 import type { StorageAdapter } from './adapter'
+import { createFileStorage } from './file'
 import { createIndexedDbStorage } from './indexeddb'
 import { createMemoryStorage } from './memory'
 
-export type StorageKind = 'memory' | 'indexeddb'
+export type StorageKind = 'memory' | 'indexeddb' | 'file'
 
-/** アプリ設定の種別から StorageAdapter を作る。 */
+/** アプリ設定の種別から StorageAdapter を作る。`file` は Tauri の中でだけ動く */
 export function createStorage(kind: StorageKind): StorageAdapter {
   switch (kind) {
     case 'memory':
       return createMemoryStorage()
     case 'indexeddb':
       return createIndexedDbStorage()
+    case 'file':
+      return createFileStorage()
   }
 }
 

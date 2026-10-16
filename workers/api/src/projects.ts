@@ -1,7 +1,9 @@
 import { createEmptyProject, type Project, parseProject } from '@manga/schema'
-import { type Context, Hono } from 'hono'
+import { Hono } from 'hono'
 import { z } from 'zod'
-import type { Env } from './env'
+import { deleteAssetObjects } from './asset-store'
+import { createAssetRoutes } from './assets'
+import { readJson } from './body'
 import {
   deleteProject,
   insertProject,
@@ -11,17 +13,12 @@ import {
   saveProject,
 } from './project-store'
 import { PROJECT_ID_HEADER } from './room'
+import { requireUser, type UserEnv } from './user'
 
 /** 1 Project JSON の上限（バイト） */
 export const MAX_PROJECT_BYTES = 5 * 1024 * 1024
 
-export const DEBUG_USER_HEADER = 'x-debug-user'
-
-const USER_ID = /^[\w.@+-]{1,128}$/
-
 const CreateProjectSchema = z.object({ title: z.string().trim().min(1).max(200) })
-
-type ProjectsEnv = { Bindings: Env; Variables: { userId: string } }
 
 const etag = (updatedAt: string) => `"${updatedAt}"`
 
@@ -35,70 +32,32 @@ function describeError(e: unknown) {
   return e instanceof Error ? e.message : 'invalid request body'
 }
 
-/** 本文を MAX_PROJECT_BYTES まで読んで JSON として解釈する */
-async function readJson(
-  c: Context<ProjectsEnv>,
-): Promise<{ ok: true; value: unknown } | { ok: false; status: 400 | 413; error: string }> {
-  const tooLarge = { ok: false, status: 413, error: 'project exceeds 5MB' } as const
-  // Content-Length で先に断るのは、上限を大きく超える本文をメモリに読み込まないため
-  if (Number(c.req.header('content-length')) > MAX_PROJECT_BYTES) return tooLarge
-  // Content-Length の無い chunked 本文でも上限を超えた時点で読むのをやめるため、ストリームで読む
-  const chunks: Uint8Array[] = []
-  let total = 0
-  const reader = c.req.raw.body?.getReader()
-  while (reader) {
-    const { done, value } = await reader.read()
-    if (done) break
-    total += value.byteLength
-    if (total > MAX_PROJECT_BYTES) {
-      await reader.cancel()
-      return tooLarge
-    }
-    chunks.push(value)
-  }
-  const body = new Uint8Array(total)
-  let offset = 0
-  for (const chunk of chunks) {
-    body.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  try {
-    return { ok: true, value: JSON.parse(new TextDecoder().decode(body)) }
-  } catch {
-    return { ok: false, status: 400, error: 'body is not valid JSON' }
-  }
-}
+const readProjectJson = (request: Request) =>
+  readJson(request, MAX_PROJECT_BYTES, 'project exceeds 5MB')
 
 /**
  * `/v1/projects` 以下。X-Debug-User ヘッダのユーザーを owner とし、他人のプロジェクトは 404 にする。
  * GET / PUT は ETag に updated_at を載せ、PUT は If-Match が一致しないと 409。
  * `GET /:id/sync` は WebSocket を ProjectRoom（y-websocket プロトコル）につなぐ。
+ * `/:id/assets` 以下も同じ認証とレート制限の下に置く。now は現在時刻（Unix ミリ秒）。
  */
-export function createProjectsApp() {
-  const app = new Hono<ProjectsEnv>()
+export function createProjectsApp(now: () => number = Date.now) {
+  const app = new Hono<UserEnv>()
 
-  // WS-14 の認証ミドルウェアが userId を入れるまでの代替
-  app.use('*', async (c, next) => {
-    const userId = c.req.header(DEBUG_USER_HEADER)
-    if (userId === undefined || !USER_ID.test(userId)) {
-      return c.json({ error: 'unauthorized' }, 401)
-    }
-    c.set('userId', userId)
-    await next()
-  })
+  app.use('*', requireUser(now))
 
   app.get('/', async (c) => {
     return c.json({ projects: await listProjects(c.env.DB, c.get('userId')) })
   })
 
   app.post('/', async (c) => {
-    const body = await readJson(c)
+    const body = await readProjectJson(c.req.raw)
     if (!body.ok) return c.json({ error: body.error }, body.status)
     const parsed = CreateProjectSchema.safeParse(body.value)
     if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
 
     const project = createEmptyProject(parsed.data.title)
-    await insertProject(c.env.DB, c.get('userId'), project, Date.now())
+    await insertProject(c.env.DB, c.get('userId'), project, now())
     return c.json(project, 201, {
       etag: etag(project.updatedAt),
       location: `/v1/projects/${project.id}`,
@@ -121,7 +80,7 @@ export function createProjectsApp() {
     const expected = parseIfMatch(ifMatch)
     if (expected === null) return c.json({ error: 'If-Match must be a strong ETag' }, 400)
 
-    const body = await readJson(c)
+    const body = await readProjectJson(c.req.raw)
     if (!body.ok) return c.json({ error: body.error }, body.status)
     let project: Project
     try {
@@ -131,7 +90,7 @@ export function createProjectsApp() {
     }
     if (project.id !== id) return c.json({ error: 'project id does not match the URL' }, 400)
 
-    const result = await saveProject(c.env.DB, c.get('userId'), project, expected, Date.now())
+    const result = await saveProject(c.env.DB, c.get('userId'), project, expected, now())
     switch (result.status) {
       case 'saved':
         return c.json({ updatedAt: result.updatedAt }, 200, { etag: etag(result.updatedAt) })
@@ -171,8 +130,11 @@ export function createProjectsApp() {
       // そこで D1 に無いのを見て DO storage を消す
       console.error('failed to purge the sync room', id, e)
     }
+    await deleteAssetObjects(c.env.ASSETS, id)
     return c.body(null, 204)
   })
+
+  app.route('/', createAssetRoutes(now))
 
   return app
 }
