@@ -59,8 +59,8 @@ function isApplied(page: Page, patch: Patch): boolean {
   return patch.every((op) => {
     const vector = VECTOR_PATH.exec(op.path)
     if (vector && op.op === 'add') {
-      const id = (op.value as { id?: unknown } | undefined)?.id
-      return page.panels[Number(vector[1])]?.vectors.some((v) => v.id === id) ?? false
+      const value = JSON.stringify(op.value)
+      return page.panels[Number(vector[1])]?.vectors.some((v) => JSON.stringify(v) === value) ?? false
     }
     const pos = POS_PATH.exec(op.path)
     if (!pos || op.op !== 'replace') return false
