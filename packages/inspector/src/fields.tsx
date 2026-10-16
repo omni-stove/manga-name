@@ -6,6 +6,7 @@ export const DEBOUNCE_MS = 300
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
+    // biome-ignore lint/a11y/noLabelWithoutControl: コントロールは children として渡され、label の内側に入る
     <label className="in-field">
       <span className="in-label">{label}</span>
       {children}

@@ -222,6 +222,7 @@ function SelectionInspector({
     if (!found) return <p className="placeholder">選んだコマはもうありません</p>
     return (
       <PanelInspector
+        key={selection.id}
         panel={found.panel}
         characters={characters}
         onChange={(patch) => apply('コマを編集', (p) => panelPatch(p, pageId, selection.id, patch))}
@@ -235,6 +236,7 @@ function SelectionInspector({
     if (!found) return <p className="placeholder">選んだフキダシはもうありません</p>
     return (
       <BubbleInspector
+        key={selection.id}
         bubble={found.bubble}
         characters={characters}
         onChange={(patch) =>

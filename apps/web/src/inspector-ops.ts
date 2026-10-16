@@ -110,11 +110,11 @@ if (import.meta.vitest) {
       const panel = panelOf(2)
       const patch = panelPatch(sample, pageId, panel.id, [
         { op: 'add', path: '/note', value: 'n' },
-        { op: 'replace', path: '/camera', value: 'アオリ' },
+        { op: 'add', path: '/camera', value: 'アオリ' },
       ])
       expect(patch).toEqual([
         { op: 'add', path: '/episodes/0/pages/0/panels/2/note', value: 'n' },
-        { op: 'replace', path: '/episodes/0/pages/0/panels/2/camera', value: 'アオリ' },
+        { op: 'add', path: '/episodes/0/pages/0/panels/2/camera', value: 'アオリ' },
       ])
       const store = storeOf()
       store.applyPatch(patch)

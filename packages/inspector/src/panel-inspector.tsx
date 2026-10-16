@@ -177,7 +177,10 @@ export function PanelInspector({
               art={art}
               url={urls.get(art.ref)}
               current={art.id === panel.artId}
-              onSelect={() => onChange(selectArtPatch(panel.artId, art.id))}
+              onSelect={() => {
+                const patch = selectArtPatch(panel.artId, art.id)
+                if (patch.length > 0) onChange(patch)
+              }}
             />
           ))}
         </ol>
