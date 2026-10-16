@@ -95,7 +95,7 @@ interface PixelRect {
  * ページ全体に中央フィットした参考画像の上で、コマの `rect` が占める範囲を画像の px で返す。
  * 画像とページの縦横比が違えば、範囲は画像の外にはみ出す
  */
-export function referenceCrop(
+function referenceCrop(
   image: { width: number; height: number },
   pageSize: ProjectSettings['pageSize'],
   rect: Rect,
