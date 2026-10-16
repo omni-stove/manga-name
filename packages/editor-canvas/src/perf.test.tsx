@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { type Bubble, fixtures, type Page, type Panel } from '@manga/schema'
+import { type Bubble, fixtures, type Page, type Panel, type Stroke } from '@manga/schema'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, test } from 'vitest'
@@ -216,4 +216,115 @@ test(`dragging a bubble on ${ROWS * COLUMNS} panels and ${BUBBLES} bubbles stays
   console.info(`commit after drag: ${commitMs.toFixed(2)}ms`)
   expect(commitMs).toBeLessThan(FRAME_MS)
   expect([...touched].map((el) => el.getAttribute('data-bubble-id'))).toEqual(['bb_8'])
+})
+
+const STROKES = 500
+const STROKE_POINTS = 40
+
+/** 1 ページに 500 本。1 本は 40 点の波線で、ページ全体に散らす */
+function scribbledPage(): Page {
+  const scribbles: Stroke[] = []
+  for (let i = 0; i < STROKES; i++) {
+    const x0 = (i % 20) / 20
+    const y0 = Math.floor(i / 20) / 25
+    scribbles.push({
+      id: `st_${i + 1}`,
+      points: Array.from({ length: STROKE_POINTS }, (_, j) => ({
+        x: x0 + (0.04 * j) / STROKE_POINTS,
+        y: y0 + 0.01 * Math.sin(j / 3),
+      })),
+      width: 0.002,
+      color: (['ink', 'red', 'blue'] as const)[i % 3] ?? 'ink',
+    })
+  }
+  return { ...bigPage(), scribbles }
+}
+
+test(`drawing on a page with ${STROKES} strokes stays within ${FRAME_MS}ms per frame`, async () => {
+  const page = scribbledPage()
+  let added: Stroke | undefined
+  const props: EditorCanvasProps = {
+    page,
+    settings: project.settings,
+    characters: project.characters,
+    diagnosis: null,
+    selection: null,
+    tool: 'scribble',
+    scribbleTool: 'red',
+    layers: { reference: true, art: true, scribble: true, hints: true, diagnosis: true },
+    generating: new Set(),
+    onChange: (patch) => {
+      const op = patch[0]
+      if (op?.op === 'add') added = op.value as Stroke
+    },
+    onSelect: () => {},
+    onGenerate: () => {},
+    resolveAsset,
+  }
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  unmount = () => act(() => root.unmount())
+  await act(async () => root.render(<EditorCanvas {...props} />))
+  const svg = container.querySelector('svg') as SVGSVGElement
+  svg.getBoundingClientRect = () => {
+    const width = base.w * 2
+    const height = base.h * 2
+    return { left: 0, top: 0, x: 0, y: 0, width, height, right: width, bottom: height } as DOMRect
+  }
+  const layer = svg.querySelector('[data-layer="scribble"]') as Element
+  expect(layer.querySelectorAll('[data-stroke-id]')).toHaveLength(STROKES)
+
+  const mutations: MutationRecord[] = []
+  const observer = new MutationObserver((records) =>
+    mutations.push(
+      ...records.filter(
+        (r) => !(r.target instanceof Element && r.target.hasAttribute('data-live-stroke')),
+      ),
+    ),
+  )
+  observer.observe(svg, { subtree: true, childList: true, attributes: true, characterData: true })
+
+  const frames: number[] = []
+  timed(svg, pointer('pointerdown', 1, clientAt(0.1, 0.5)))
+  for (let i = 1; i <= MOVES; i++) {
+    frames.push(timed(svg, pointer('pointermove', 1, clientAt(0.1 + (0.6 * i) / MOVES, 0.5))))
+  }
+  await Promise.resolve()
+  observer.disconnect()
+  const live = layer.querySelector('[data-live-stroke]') as SVGPolylineElement
+  expect(live.getAttribute('points')?.split(' ').length).toBeGreaterThan(1)
+  // 描いている間は描画中の線の points だけを書き換え、React は何も描き直さない
+  expect(mutations).toHaveLength(0)
+
+  const p95 = percentile(frames, 0.95)
+  const median = percentile(frames, 0.5)
+  console.info(
+    `scribble: ${MOVES} moves on ${STROKES} strokes, median ${median.toFixed(2)}ms, p95 ${p95.toFixed(2)}ms, max ${Math.max(...frames).toFixed(2)}ms`,
+  )
+  expect(p95).toBeLessThan(FRAME_MS)
+
+  timed(svg, pointer('pointerup', 1, clientAt(0.7, 0.5)))
+  expect(added).toBeDefined()
+  // pointerup の Patch を親が適用したあとの 1 回の描画も 1 フレームに収め、足した線だけを描く
+  const next: Page = { ...page, scribbles: [...page.scribbles, added as Stroke] }
+  const after: MutationRecord[] = []
+  const commitObserver = new MutationObserver((records) => after.push(...records))
+  commitObserver.observe(layer, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    characterData: true,
+  })
+  const start = performance.now()
+  act(() => root.render(<EditorCanvas {...props} page={next} />))
+  const commitMs = performance.now() - start
+  await Promise.resolve()
+  commitObserver.disconnect()
+  console.info(`commit after stroke: ${commitMs.toFixed(2)}ms`)
+  expect(commitMs).toBeLessThan(FRAME_MS)
+  expect(after.flatMap((r) => [...r.addedNodes, ...r.removedNodes])).toEqual([
+    layer.querySelector(`[data-stroke-id="${added?.id}"]`),
+  ])
+  expect(after.filter((r) => r.type !== 'childList')).toHaveLength(0)
 })

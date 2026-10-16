@@ -1322,7 +1322,7 @@
       "id": "53",
       "group": "G6",
       "title": "手描きのタッチと性能",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "52"
       ],
@@ -1335,7 +1335,9 @@
       ],
       "spec": [
         "workstreams/WS-20-scribble.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "54",

@@ -178,6 +178,9 @@ export function EditorCanvas(props: EditorCanvasProps) {
         background: 'var(--surface-desk)',
         touchAction: 'none',
         userSelect: 'none',
+        // iPad Safari は接頭辞付きしか効かず、1 本指の長押しで選択や吹き出しメニューが出て描画が止まる
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
         outline: 'none',
         cursor,
       }}
@@ -298,8 +301,22 @@ const Scribbles = memo(function Scribbles({
   height: number
 }) {
   return scribbles.map((stroke) => (
+    <StrokeLine key={stroke.id} stroke={stroke} width={width} height={height} />
+  ))
+})
+
+// 1 本足すたびに 500 本の points 文字列を作り直すと 1 フレームに収まらないので、Patch で変わらなかった線は描き直さない
+const StrokeLine = memo(function StrokeLine({
+  stroke,
+  width,
+  height,
+}: {
+  stroke: Stroke
+  width: number
+  height: number
+}) {
+  return (
     <polyline
-      key={stroke.id}
       data-stroke-id={stroke.id}
       points={polylinePoints(stroke.points, width, height)}
       fill="none"
@@ -308,7 +325,7 @@ const Scribbles = memo(function Scribbles({
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-  ))
+  )
 })
 
 /** ホバー中の要素の輪郭。選択中の要素には出さない */
