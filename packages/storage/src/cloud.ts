@@ -39,6 +39,11 @@ export interface CloudStorageOptions {
 }
 
 export interface CloudStorage extends StorageAdapter {
+  /**
+   * ローカルの id のプロジェクトの共同編集（`GET /v1/projects/:id/sync`）の WebSocket URL。
+   * まだクラウドに作られていないか、未ログインなら null
+   */
+  syncUrl(localId: ID): Promise<string | null>
   /** debounce 待ちの送信を今すぐ行い、送信中のものも含めて終わるまで待つ */
   flush(): Promise<void>
   /** タイマーとイベントリスナを外す。以降の送信は行わない */
@@ -51,6 +56,22 @@ const MAX_RETRY_MS = 5 * 60 * 1000
 /** 1 回の送信で PUT をやり直す上限。409 のたびにクラウド版を別名で残すので、無制限だと複製が増え続ける */
 const MAX_PUTS_PER_PUSH = 4
 const LINKS_KEY = 'manga.cloud-links'
+/** workers/api が受けるアセットの型。他の型はアップロードせずローカルに置く */
+const UPLOADABLE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
+/** メモリに持つクラウドのアセットの数。1 ページ分の生成画像と履歴が収まる程度 */
+const MAX_CACHED_ASSETS = 100
+const R2_PREFIX = 'r2:'
+
+/** クラウドに置いたアセットの ref。workers/api の R2 のキーと同じく `<クラウドのプロジェクト id>/<アセット id>` */
+export const toCloudAssetRef = (cloudId: ID, assetId: string) => `${R2_PREFIX}${cloudId}/${assetId}`
+
+/** `r2:<クラウドのプロジェクト id>/<アセット id>` を分解する。形式が違えば undefined */
+export function parseCloudAssetRef(ref: string): { cloudId: ID; assetId: string } | undefined {
+  if (!ref.startsWith(R2_PREFIX)) return undefined
+  const [cloudId, assetId, ...rest] = ref.slice(R2_PREFIX.length).split('/')
+  if (!cloudId || !assetId || rest.length > 0) return undefined
+  return { cloudId, assetId }
+}
 
 /** 競合したクラウド版を別名で残すときのタイトル */
 export const conflictCopyTitle = (title: string) => `${title}（クラウド版）`
@@ -149,6 +170,9 @@ const sameContent = (a: Project, b: Project) =>
 
 const isNetworkError = (e: unknown) => e instanceof TypeError
 
+/** 時間をおけば通りうる応答 */
+const isTransient = (res: Response) => res.status === 429 || res.status >= 500
+
 /**
  * ローカル優先でクラウドに同期する StorageAdapter（docs/workstreams/WS-15-cloud-storage.md）。
  * - saveProject は local に書いて返し、クラウドへは debounceMs 後にバックグラウンドで PUT する。
@@ -156,7 +180,10 @@ const isNetworkError = (e: unknown) => e instanceof TypeError
  * - loadProject はクラウドの版と比べ、変更があった側を採用する。両方に変更があれば競合として扱う。
  * - PUT が 409 のときはクラウド版を「（クラウド版）」付きの別プロジェクトとしてローカルに保存して
  *   クラウドにも新規で送り、手元の版でクラウドを上書きする。どちらの版も両方に残る。
- * - アセットは local に委ねる。
+ * - putAsset はプロジェクトがクラウドにあり送れる画像なら署名 URL でアップロードし、
+ *   他の端末からも読める `r2:<クラウドのプロジェクト id>/<アセット id>` を返す。
+ *   送れないとき（未ログイン、オフライン、未送信のプロジェクト、失敗）は local に置いて `blob:` を返す。
+ * - `r2:` の ref はクラウドから読み、メモリに MAX_CACHED_ASSETS 件まで持つ。他の ref は local に委ねる。
  */
 export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
   const { local, getToken } = opts
@@ -167,6 +194,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
   // 呼ぶたびに globalThis.fetch を引くのは、作成後に差し替えられた fetch（msw など）も通すため
   const doFetch: typeof fetch = opts.fetch ?? ((input, init) => globalThis.fetch(input, init))
   const pushes = new Map<ID, PushState>()
+  const assetCache = new Map<string, Blob>()
   let disposed = false
 
   const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false
@@ -289,7 +317,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
         await links.set(localId, link)
         continue
       }
-      if (res.status === 429 || res.status >= 500) return 'retry'
+      if (isTransient(res)) return 'retry'
       onError(await unexpected(res, `PUT project ${link.cloudId}`))
       return 'failed'
     }
@@ -365,6 +393,69 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     }
   }
   if (typeof window !== 'undefined') window.addEventListener('online', onOnline)
+
+  function cacheAsset(ref: string, blob: Blob) {
+    assetCache.delete(ref)
+    assetCache.set(ref, blob)
+    // Map は挿入順を保つので、先頭が最も長く使われていない
+    for (const oldest of assetCache.keys()) {
+      if (assetCache.size <= MAX_CACHED_ASSETS) break
+      assetCache.delete(oldest)
+    }
+  }
+
+  /** アップロードできたら `r2:` の ref、ローカルに置くべきときは null */
+  async function uploadAsset(localId: ID, blob: Blob): Promise<string | null> {
+    if (isOffline() || !UPLOADABLE_MIME_TYPES.has(blob.type)) return null
+    const link = await links.get(localId)
+    if (!link) return null
+    try {
+      const res = await request(`/${encodeURIComponent(link.cloudId)}/assets/upload-url`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mime: blob.type, size: blob.size }),
+      })
+      if (res === null || isTransient(res)) return null
+      if (!res.ok) throw await unexpected(res, 'POST upload-url')
+      const { assetId, url } = (await res.json()) as { assetId: string; url: string }
+      // 署名 URL が認可を兼ねるので Authorization は付けない
+      const put = await doFetch(url, {
+        method: 'PUT',
+        headers: { 'content-type': blob.type },
+        body: blob,
+      })
+      if (isTransient(put)) return null
+      if (!put.ok) throw await unexpected(put, `PUT asset ${assetId}`)
+      const ref = toCloudAssetRef(link.cloudId, assetId)
+      cacheAsset(ref, blob)
+      return ref
+    } catch (e) {
+      if (!isNetworkError(e)) onError(e)
+      return null
+    }
+  }
+
+  async function loadCloudAsset(ref: string, cloudId: ID, assetId: string): Promise<Blob> {
+    const cached = assetCache.get(ref)
+    if (cached) {
+      cacheAsset(ref, cached)
+      return cached
+    }
+    const res = await request(
+      `/${encodeURIComponent(cloudId)}/assets/${encodeURIComponent(assetId)}`,
+    )
+    if (res === null) throw new Error(`Asset ${ref} needs a token`)
+    if (res.status === 404) throw new Error(`Asset not found: ${ref}`)
+    if (!res.ok) throw await unexpected(res, `GET asset ${ref}`)
+    const blob = await res.blob()
+    cacheAsset(ref, blob)
+    return blob
+  }
+
+  const loadAsset = (ref: string) => {
+    const cloud = parseCloudAssetRef(ref)
+    return cloud ? loadCloudAsset(ref, cloud.cloudId, cloud.assetId) : local.loadAsset(ref)
+  }
 
   async function loadLinked(id: ID): Promise<Project> {
     const localProject = await local.loadProject(id).catch(() => undefined)
@@ -473,10 +564,27 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       }
       await local.deleteProject(id)
       await links.delete(id)
+      if (cloudId !== undefined) {
+        for (const ref of assetCache.keys()) {
+          if (parseCloudAssetRef(ref)?.cloudId === cloudId) assetCache.delete(ref)
+        }
+      }
     },
-    resolveAsset: (ref) => local.resolveAsset(ref),
-    loadAsset: (ref) => local.loadAsset(ref),
-    putAsset: (projectId, blob, hint) => local.putAsset(projectId, blob, hint),
+    async resolveAsset(ref) {
+      if (!parseCloudAssetRef(ref)) return local.resolveAsset(ref)
+      return URL.createObjectURL(await loadAsset(ref))
+    },
+    loadAsset,
+    async putAsset(projectId, blob, hint) {
+      return (await uploadAsset(projectId, blob)) ?? local.putAsset(projectId, blob, hint)
+    },
+    async syncUrl(localId) {
+      const link = await links.get(localId)
+      if (!link || (await getToken()) === null) return null
+      const url = new URL(`${baseUrl}/v1/projects/${encodeURIComponent(link.cloudId)}/sync`)
+      url.protocol = url.protocol === 'http:' ? 'ws:' : 'wss:'
+      return url.toString()
+    },
     async flush() {
       // 送信が別のプロジェクトの送信（競合時の複製）を予約するので、予約が尽きるまで繰り返す
       // 再試行待ちになったものは 2 周目以降は待たず、バックオフに任せる
@@ -509,6 +617,7 @@ if (import.meta.vitest) {
   /** workers/api の /v1/projects を真似る。updated_at はサーバの時計で進み、PUT は If-Match が違うと 409 */
   const createFakeApi = () => {
     const rows = new Map<ID, Project>()
+    const assets = new Map<string, Blob>()
     const requests: string[] = []
     let clock = Date.now()
     const tick = () => {
@@ -559,8 +668,29 @@ if (import.meta.vitest) {
         if (!accept(request)) return unauthorized()
         return rows.delete(String(params.id)) ? new HttpResponse(null, { status: 204 }) : notFound()
       }),
+      http.post(`${BASE}/v1/projects/:id/assets/upload-url`, async ({ request, params }) => {
+        if (!accept(request)) return unauthorized()
+        if (!rows.has(String(params.id))) return notFound()
+        const { mime } = (await request.json()) as { mime: string }
+        const assetId = crypto.randomUUID()
+        return HttpResponse.json({
+          assetId,
+          url: `${BASE}/v1/uploads/${params.id}/${assetId}?mime=${encodeURIComponent(mime)}&sig=s`,
+        })
+      }),
+      http.put(`${BASE}/v1/uploads/:id/:assetId`, async ({ request, params }) => {
+        requests.push(`${request.method} ${new URL(request.url).pathname}`)
+        if (request.headers.has('authorization')) return unauthorized()
+        assets.set(`${params.id}/${params.assetId}`, await request.blob())
+        return HttpResponse.json({ assetId: params.assetId }, { status: 201 })
+      }),
+      http.get(`${BASE}/v1/projects/:id/assets/:assetId`, ({ request, params }) => {
+        if (!accept(request)) return unauthorized()
+        const blob = assets.get(`${params.id}/${params.assetId}`)
+        return blob ? new HttpResponse(blob, { headers: { 'content-type': blob.type } }) : notFound()
+      }),
     ]
-    return { rows, requests, handlers }
+    return { rows, assets, requests, handlers }
   }
 
   const server = setupServer()
@@ -820,6 +950,104 @@ if (import.meta.vitest) {
       expect(await local.loadProject(p.id)).toEqual(p)
       expect(api.rows.has(cloudId)).toBe(true)
       expect(await links.get(p.id)).toBeDefined()
+    })
+  })
+
+  describe('createCloudStorage assets', () => {
+    const png = () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' })
+    const bytes = async (blob: Blob) => [...new Uint8Array(await blob.arrayBuffer())]
+
+    const synced = async () => {
+      const api = useApi()
+      const a = createDevice()
+      const p = createEmptyProject('A')
+      await a.storage.saveProject(p)
+      await a.storage.flush()
+      return { api, a, p, cloudId: await cloudIdOf(a.links, p.id) }
+    }
+
+    test('putAsset uploads to the cloud and another device can load it', async () => {
+      const { api, a, p, cloudId } = await synced()
+      const ref = await a.storage.putAsset(p.id, png(), 'panel')
+      expect(parseCloudAssetRef(ref)).toEqual({ cloudId, assetId: expect.any(String) })
+      expect(api.assets.size).toBe(1)
+      expect(a.errors).toEqual([])
+
+      const b = createDevice()
+      expect(await bytes(await b.storage.loadAsset(ref))).toEqual([137, 80, 78, 71])
+      const url = await b.storage.resolveAsset(ref)
+      expect(url).toMatch(/^blob:/)
+      URL.revokeObjectURL(url)
+    })
+
+    test('a loaded cloud asset is served from memory afterwards', async () => {
+      const { api, a, p } = await synced()
+      const ref = await a.storage.putAsset(p.id, png())
+      const b = createDevice()
+      await b.storage.loadAsset(ref)
+      const before = api.requests.length
+      await b.storage.loadAsset(ref)
+      expect(api.requests).toHaveLength(before)
+    })
+
+    test('putAsset keeps the asset locally when it cannot be uploaded', async () => {
+      const api = useApi()
+      const { storage, local, errors } = createDevice()
+      const p = createEmptyProject('A')
+      await storage.saveProject(p)
+      // まだクラウドに作られていない
+      const unsynced = await storage.putAsset(p.id, png())
+      expect(unsynced).toMatch(/^blob:/)
+      expect(await bytes(await local.loadAsset(unsynced))).toEqual([137, 80, 78, 71])
+
+      await storage.flush()
+      // workers/api が受けない型
+      const svg = await storage.putAsset(p.id, new Blob(['<svg/>'], { type: 'image/svg+xml' }))
+      expect(svg).toMatch(/^blob:/)
+      // 一時的な失敗は報告せず、ローカルに置く
+      server.use(
+        http.post(`${BASE}/v1/projects/:id/assets/upload-url`, () => HttpResponse.error(), {
+          once: true,
+        }),
+      )
+      expect(await storage.putAsset(p.id, png())).toMatch(/^blob:/)
+      expect(api.assets.size).toBe(0)
+      expect(errors).toEqual([])
+    })
+
+    test('loading a missing cloud asset rejects', async () => {
+      const { a, cloudId } = await synced()
+      await expect(a.storage.loadAsset(toCloudAssetRef(cloudId, 'nope'))).rejects.toThrow(
+        /not found/,
+      )
+    })
+
+    test('parseCloudAssetRef accepts only r2:<project>/<asset>', () => {
+      expect(parseCloudAssetRef(toCloudAssetRef('p', 'a'))).toEqual({ cloudId: 'p', assetId: 'a' })
+      for (const ref of ['blob:x', 'r2:', 'r2:p', 'r2:p/', 'r2:/a', 'r2:p/a/b']) {
+        expect(parseCloudAssetRef(ref)).toBeUndefined()
+      }
+    })
+  })
+
+  describe('createCloudStorage syncUrl', () => {
+    test('points at the sync route of the cloud project over WebSocket', async () => {
+      useApi()
+      const { storage, links } = createDevice()
+      const p = createEmptyProject('A')
+      await storage.saveProject(p)
+      expect(await storage.syncUrl(p.id)).toBeNull()
+      await storage.flush()
+      const cloudId = await cloudIdOf(links, p.id)
+      expect(await storage.syncUrl(p.id)).toBe(`wss://api.test/v1/projects/${cloudId}/sync`)
+    })
+
+    test('is null while signed out', async () => {
+      useApi()
+      const links = createMemoryLinkStore()
+      await links.set('p', { cloudId: 'c', etag: 'e', syncedUpdatedAt: null })
+      const { storage } = createDevice({ links, getToken: async () => null })
+      expect(await storage.syncUrl('p')).toBeNull()
     })
   })
 }

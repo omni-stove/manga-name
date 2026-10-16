@@ -34,8 +34,19 @@ pnpm --filter @manga/web test
 
 - Project は Y.Doc の `project` に Y.Map / Y.Array として置く。変換は `src/store/yjs-mapping.ts`。
 - `applyPatch` は検証してから Yjs のトランザクションとして適用する。Undo / Redo は `Y.UndoManager` で、この store が入れた変更だけを戻す。
-- `doc` に他のクライアントの更新が届くと `project` が変わり、購読者に通知される。同期プロバイダはまだ無い。
+- `doc` に他のクライアントの更新が届くと `project` が変わり、購読者に通知される。
 - 両実装は `src/store/project-store.suite.ts` の同じテストを通る。
+
+## 共同編集
+
+`createProjectLibrary(storage, { collaboration })` に `collaboration` を渡すと、プロジェクトを Yjs の ProjectStore で開き、同期サーバ（`workers/api` の `GET /v1/projects/:id/sync`）につなぐ。`src/main.tsx` はまだ渡していない（クラウド保存と認証の配線と合わせて入れる）。
+
+- `src/store/sync-provider.ts` の `createSyncProvider` が y-websocket と同じプロトコルで Y.Doc と awareness を同期する。切れたら指数バックオフで再接続し、オフラインの間は online イベントを待つ。切れていた間の編集は再接続時に Yjs がマージする。
+- Y.Doc の状態は `@manga/storage` の `YDocStore`（ブラウザでは IndexedDB）に debounce して書き、次に開くときはそこから復元する。Project JSON から作り直すと履歴が別物になり、オフラインの編集をサーバとマージできないため。手元に状態が無いときは最初の同期を待ってから開き、サーバに Y.Doc があればそれを使う。
+- `src/store/presence.ts` の `createPresence` が awareness に名前、開いているページ、選択を載せる。色は clientID から決める。
+- プロジェクトのヘッダとエディタのツールバーに接続状態と開いている人を、ページ一覧に各ページを編集中の人を、エディタのインスペクタにコマとフキダシの一覧を出す。他の人が選んでいる要素はその人の色の枠で囲む。
+- ページのサムネイルは採用中の絵を `library.resolveAsset` で描く。`createCloudStorage` がアップロードした `r2:` の ref は他の端末からも読める。
+- テストは `src/store/fake-sync-server.ts` のプロセス内サーバにつなぐ。
 
 ## プロジェクトの読み書き
 

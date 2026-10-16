@@ -1,6 +1,7 @@
 import type { PageTemplate } from '@manga/schema'
 import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
+import { PeerBadge, usePeers } from '../collaboration-view'
 import { PageThumbnail } from '../page-thumbnail'
 import {
   addEpisodePatch,
@@ -18,8 +19,10 @@ const projectRoute = getRouteApi('/p/$projectId')
 
 function PageList() {
   const { projectId } = Route.useParams()
-  const { store } = projectRoute.useLoaderData()
+  const { store, collab } = projectRoute.useLoaderData()
+  const { library } = Route.useRouteContext()
   const project = useProject(store)
+  const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
   const [template, setTemplate] = useState<PageTemplate>('3rows')
   const [episodeId, setEpisodeId] = useState<string>()
@@ -80,12 +83,24 @@ function PageList() {
           <ol className="cards">
             {episode.pages.map((page, index) => {
               const status = artStatus(page)
+              const editing = peers.filter((peer) => peer.pageId === page.id)
               return (
                 <li key={page.id}>
                   <Link to="/p/$projectId/pages/$pageId" params={{ projectId, pageId: page.id }}>
-                    <PageThumbnail page={page} pageSize={project.settings.pageSize} />
+                    <PageThumbnail
+                      page={page}
+                      pageSize={project.settings.pageSize}
+                      resolveAsset={library.resolveAsset}
+                    />
                     <strong>{index + 1} ページ</strong>
                   </Link>
+                  {editing.length > 0 && (
+                    <span className="peers" aria-label="編集中の人">
+                      {editing.map((peer) => (
+                        <PeerBadge key={peer.clientId} name={peer.name} color={peer.color} />
+                      ))}
+                    </span>
+                  )}
                   <small>
                     コマ {page.panels.length} / 生成{' '}
                     <span className="art-status" data-status={status}>
