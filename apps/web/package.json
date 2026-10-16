@@ -13,6 +13,7 @@
   "dependencies": {
     "@manga/ai": "workspace:*",
     "@manga/editor-canvas": "workspace:*",
+    "@manga/inspector": "workspace:*",
     "@manga/schema": "workspace:*",
     "@manga/storage": "workspace:*",
     "@tanstack/react-router": "^1.170.44",
