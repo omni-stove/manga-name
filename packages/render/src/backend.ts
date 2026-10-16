@@ -14,6 +14,7 @@ export interface Backend {
 }
 
 export const FONT_FAMILY = 'Noto Sans JP'
+// Google Fonts の NotoSansJP[wght].ttf（SIL OFL 1.1、fonts/OFL.txt）
 const FONT_URL = new URL('../fonts/NotoSansJP.ttf', import.meta.url)
 
 let backendPromise: Promise<Backend> | undefined
