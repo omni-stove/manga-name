@@ -1,0 +1,41 @@
+name: E2E
+
+# ビルドとブラウザの起動で数分かかるので、PR ごとには走らせず毎晩 main で回す
+on:
+  schedule:
+    - cron: "0 18 * * *" # 03:00 JST
+  workflow_dispatch:
+
+concurrency:
+  group: e2e
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
+      - name: Install Chromium
+        run: pnpm --filter @manga/e2e exec playwright install --with-deps chromium
+
+      - name: E2E
+        run: pnpm --filter @manga/e2e e2e
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 14

@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
   - workers/*
+  - e2e
 
 # wrangler が連れてくる esbuild・sharp・workerd の install script は走らせない。どれも同梱の
 # optional dependency にあるビルド済みバイナリを確かめるだけで、無くても動くため。
