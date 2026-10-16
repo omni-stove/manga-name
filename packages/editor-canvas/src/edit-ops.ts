@@ -56,6 +56,7 @@ export function nudgePatch(page: Page, selection: Selection, dx: number, dy: num
   if (pointer === undefined || selection === null) return []
   const patch: Patch = []
   const move = (path: string, from: number, delta: number, max: number) => {
+    if (delta === 0) return
     const to = round(clamp(from + delta, 0, max))
     if (to !== from) patch.push({ op: 'replace', path: `${pointer}${path}`, value: to })
   }
