@@ -207,7 +207,8 @@ function Editor() {
       <div className="editor-body">
         <div
           className="canvas"
-          role="presentation"
+          role="application"
+          aria-label="キャンバス"
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes('Files')) e.preventDefault()
           }}

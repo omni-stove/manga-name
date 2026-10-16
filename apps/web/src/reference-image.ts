@@ -1,12 +1,12 @@
 import type { Page, Patch } from '@manga/schema'
 
 /** 参考画像を保存するときの長辺の上限（px）。大きな画像でキャンバス操作が重くならないよう読み込み時に縮める */
-export const REFERENCE_MAX_SIDE = 2048
+const REFERENCE_MAX_SIDE = 2048
 
-export type ReferenceFormat = 'png' | 'jpeg' | 'pdf'
+type ReferenceFormat = 'png' | 'jpeg' | 'pdf'
 
 /** 描ける画像。`draw` は (0, 0) から width × height に引き伸ばして描く */
-export interface Raster {
+interface Raster {
   width: number
   height: number
   draw(ctx: CanvasRenderingContext2D, width: number, height: number): void
@@ -25,7 +25,7 @@ export interface ReferenceCodec {
  * 先頭のバイトで形式を判定する。クリップボードやドロップの File は MIME が空のことがあるので、
  * `blob.type` には頼らない。対応外は null
  */
-export async function sniffFormat(blob: Blob): Promise<ReferenceFormat | null> {
+async function sniffFormat(blob: Blob): Promise<ReferenceFormat | null> {
   const head = new Uint8Array(await blob.slice(0, 8).arrayBuffer())
   const starts = (bytes: number[]) => bytes.every((b, i) => head[i] === b)
   if (starts([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'png'
@@ -35,7 +35,7 @@ export async function sniffFormat(blob: Blob): Promise<ReferenceFormat | null> {
 }
 
 /** アスペクト比を保って長辺を maxSide 以下にした整数の寸法。小さい画像は拡大しない */
-export function fitLongSide(
+function fitLongSide(
   width: number,
   height: number,
   maxSide = REFERENCE_MAX_SIDE,
