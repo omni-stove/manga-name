@@ -295,61 +295,61 @@ function Editor() {
             />
           </details>
           <fieldset disabled={!canEdit} className={styles.inspectorFields}>
-          <SelectionInspector
-            page={page}
-            pageId={pageId}
-            characters={project.characters}
-            selection={selection}
-            generating={generating}
-            apply={apply}
-            generate={generate}
-            referenceToggle={referenceToggle}
-            resolveAsset={resolveAsset}
-          />
-          <details open={selection === null}>
-            <summary>ページ</summary>
-            <PageInspector
+            <SelectionInspector
               page={page}
-              generating={
-                pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
-              }
-              onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
-              onGenerateAll={pageBatch.start}
-              onPickReference={referencePicker.open}
+              pageId={pageId}
+              characters={project.characters}
+              selection={selection}
+              generating={generating}
+              apply={apply}
+              generate={generate}
+              referenceToggle={referenceToggle}
+              resolveAsset={resolveAsset}
             />
-            {referencePicker.input}
-            <BatchOptions batch={pageBatch} />
-          </details>
-          <details>
-            <summary>キャラクター（{project.characters.length}）</summary>
-            {project.characters.length === 0 && (
-              <p className={common.placeholder}>
-                <Link to="/p/$projectId/characters" params={{ projectId }}>
-                  キャラクター一覧
-                </Link>
-                で追加できます
-              </p>
-            )}
-            {project.characters.map((character) => (
-              <CharacterPane
-                key={character.id}
-                character={character}
-                projectId={projectId}
-                library={library}
-                apply={apply}
-                resolveAsset={resolveAsset}
+            <details open={selection === null}>
+              <summary>ページ</summary>
+              <PageInspector
+                page={page}
+                generating={
+                  pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
+                }
+                onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
+                onGenerateAll={pageBatch.start}
+                onPickReference={referencePicker.open}
               />
-            ))}
-          </details>
-          <details>
-            <summary>プロジェクト設定</summary>
-            <ProjectSettingsInspector
-              settings={project.settings}
-              onChange={(patch) =>
-                apply('プロジェクト設定を変更', () => settingsInspectorPatch(patch))
-              }
-            />
-          </details>
+              {referencePicker.input}
+              <BatchOptions batch={pageBatch} />
+            </details>
+            <details>
+              <summary>キャラクター（{project.characters.length}）</summary>
+              {project.characters.length === 0 && (
+                <p className={common.placeholder}>
+                  <Link to="/p/$projectId/characters" params={{ projectId }}>
+                    キャラクター一覧
+                  </Link>
+                  で追加できます
+                </p>
+              )}
+              {project.characters.map((character) => (
+                <CharacterPane
+                  key={character.id}
+                  character={character}
+                  projectId={projectId}
+                  library={library}
+                  apply={apply}
+                  resolveAsset={resolveAsset}
+                />
+              ))}
+            </details>
+            <details>
+              <summary>プロジェクト設定</summary>
+              <ProjectSettingsInspector
+                settings={project.settings}
+                onChange={(patch) =>
+                  apply('プロジェクト設定を変更', () => settingsInspectorPatch(patch))
+                }
+              />
+            </details>
           </fieldset>
         </aside>
       </div>

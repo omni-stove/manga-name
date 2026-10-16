@@ -250,7 +250,10 @@ export function createInviteApp(now: () => number) {
       c.env.DB.prepare('DELETE FROM project_invites WHERE id = ?1').bind(invite.id),
     ])
     if (current !== null && current !== 'owner') await revokeSync(c.env, invite.projectId, userId)
-    return c.json({ projectId: invite.projectId, role: current === 'owner' ? 'owner' : invite.role })
+    return c.json({
+      projectId: invite.projectId,
+      role: current === 'owner' ? 'owner' : invite.role,
+    })
   })
 
   return app

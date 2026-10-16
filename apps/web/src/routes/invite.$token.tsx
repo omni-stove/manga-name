@@ -32,7 +32,9 @@ function AcceptInvite() {
     return (
       <section>
         <h1>プロジェクトへの招待</h1>
-        <p>招待を受け取るには、招待されたメールアドレスの Google アカウントでログインしてください。</p>
+        <p>
+          招待を受け取るには、招待されたメールアドレスの Google アカウントでログインしてください。
+        </p>
         <Button
           variant="primary"
           onClick={() =>

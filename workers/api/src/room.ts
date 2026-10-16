@@ -33,9 +33,9 @@ const MAX_CLIENTS_PER_SOCKET = 16
 /** プロジェクトが削除されたときに接続を閉じるコード */
 export const CLOSE_PROJECT_DELETED = 4404
 /** ロールで許されない変更を送ってきた接続を閉じるコード。つなぎ直しても同じ変更を送るだけなので、クライアントはつなぎ直さない */
-export const CLOSE_FORBIDDEN = 4403
+const CLOSE_FORBIDDEN = 4403
 /** ロールが変わったか外された接続を閉じるコード。つなぎ直させて、新しいロールで受け直す */
-export const CLOSE_ACCESS_CHANGED = 4401
+const CLOSE_ACCESS_CHANGED = 4401
 
 const PROJECT_ID_KEY = 'projectId'
 
@@ -89,7 +89,8 @@ function writableBy(doc: Y.Doc, bytes: Uint8Array, role: ProjectRole): boolean {
   const decoder = decoding.createDecoder(bytes)
   decoding.readVarUint(decoder)
   const type = decoding.readVarUint(decoder)
-  if (type !== syncProtocol.messageYjsSyncStep2 && type !== syncProtocol.messageYjsUpdate) return true
+  if (type !== syncProtocol.messageYjsSyncStep2 && type !== syncProtocol.messageYjsUpdate)
+    return true
   return updateAllowed(doc, decoding.readVarUint8Array(decoder), role)
 }
 

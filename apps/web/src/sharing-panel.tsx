@@ -3,12 +3,7 @@ import { Button, Input, Select } from '@manga/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import common from './common.module.css'
 import { errorMessage } from './route-error'
-import {
-  type MemberRole,
-  type Members,
-  ROLE_LABELS,
-  type SharingClient,
-} from './sharing'
+import { type MemberRole, type Members, ROLE_LABELS, type SharingClient } from './sharing'
 import styles from './sharing-panel.module.css'
 
 const MEMBER_ROLES: readonly MemberRole[] = ['editor', 'commenter', 'viewer']
@@ -152,8 +147,7 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
               <li key={invite.id}>
                 <span>{invite.email}</span>
                 <small>
-                  {ROLE_LABELS[invite.role]}・{new Date(invite.expiresAt).toLocaleDateString()}{' '}
-                  まで
+                  {ROLE_LABELS[invite.role]}・{new Date(invite.expiresAt).toLocaleDateString()} まで
                 </small>
                 <Button
                   size="small"

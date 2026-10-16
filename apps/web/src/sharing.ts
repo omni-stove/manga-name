@@ -11,14 +11,14 @@ export const ROLE_LABELS: Record<ProjectRole, string> = {
   viewer: '閲覧のみ',
 }
 
-export interface Member {
+interface Member {
   userId: string
   role: ProjectRole
   email: string | null
   name: string | null
 }
 
-export interface PendingInvite {
+interface PendingInvite {
   id: string
   email: string
   role: MemberRole
@@ -50,7 +50,11 @@ export interface SharingClient {
   /** 参加者と招待。クラウドに無いプロジェクトか未ログインなら null */
   members(localId: ID): Promise<Members | null>
   /** 招待を作り、受け取る人に渡すリンクを返す */
-  invite(localId: ID, email: string, role: MemberRole): Promise<{ invite: PendingInvite; url: string }>
+  invite(
+    localId: ID,
+    email: string,
+    role: MemberRole,
+  ): Promise<{ invite: PendingInvite; url: string }>
   revokeInvite(localId: ID, inviteId: string): Promise<void>
   setRole(localId: ID, userId: string, role: MemberRole): Promise<void>
   removeMember(localId: ID, userId: string): Promise<void>
