@@ -284,6 +284,9 @@ importers:
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
+      pdf-lib:
+        specifier: ^1.17.1
+        version: 1.17.1
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

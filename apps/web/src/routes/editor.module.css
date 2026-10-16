@@ -34,6 +34,13 @@
   margin-left: auto;
 }
 
+.exportProgress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-variant-numeric: tabular-nums;
+}
+
 .error {
   margin: 0;
   padding: var(--space-6) var(--space-16);

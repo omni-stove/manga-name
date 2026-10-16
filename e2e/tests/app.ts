@@ -1,6 +1,16 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import { inflateSync } from 'node:zlib'
 import { expect, type Locator, type Page } from '@playwright/test'
+import {
+  decodePDFRawStream,
+  PDFArray,
+  PDFDict,
+  PDFDocument,
+  PDFName,
+  type PDFObject,
+  PDFRawStream,
+} from 'pdf-lib'
 
 /** 6 コマ、右綴じ 1 ページのフィクスチャ。Fake の生成結果は docs/fixtures/art と同じバイト列になる */
 export const FIXTURE_PROJECT = fileURLToPath(
@@ -68,18 +78,30 @@ export async function waitSaved(page: Page): Promise<void> {
   await expect(page.getByText('保存済み', { exact: true })).toBeVisible()
 }
 
-/** 書き出しダイアログから PNG を保存し、ダウンロードされたバイト列を返す */
+/** 書き出しダイアログを開く */
+export async function openExportDialog(page: Page): Promise<Locator> {
+  await page.getByRole('button', { name: '書き出し', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '書き出し' })
+  await expect(dialog).toBeVisible()
+  return dialog
+}
+
+/** 開いている書き出しダイアログで書き出し、ダウンロードされたバイト列を返す */
+export async function submitExport(page: Page, dialog: Locator): Promise<Buffer> {
+  const download = page.waitForEvent('download')
+  await dialog.getByRole('button', { name: '書き出す' }).click()
+  const file = await (await download).path()
+  return readFile(file)
+}
+
+/** 書き出しダイアログから開いているページを PNG で保存し、ダウンロードされたバイト列を返す */
 export async function exportPng(
   page: Page,
   opts: { panelNumbers?: boolean } = {},
 ): Promise<Buffer> {
-  await page.getByRole('button', { name: '書き出し', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: 'このページを PNG で保存' })
+  const dialog = await openExportDialog(page)
   await dialog.getByLabel('コマ番号を入れる').setChecked(opts.panelNumbers ?? false)
-  const download = page.waitForEvent('download')
-  await dialog.getByRole('button', { name: '保存' }).click()
-  const file = await (await download).path()
-  return readFile(file)
+  return submitExport(page, dialog)
 }
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
@@ -140,4 +162,44 @@ export async function comparePng(
     },
     { a: a.toString('base64'), b: b.toString('base64'), width },
   )
+}
+
+export interface PdfSheet {
+  /** 紙面の大きさ（pt） */
+  width: number
+  height: number
+  /** 紙面に置かれた画像。x は左端（pt）、brightness は RGB の平均（0〜255） */
+  images: { x: number; width: number; brightness: number }[]
+}
+
+/**
+ * 書き出した PDF の紙面ごとに、大きさと置かれた画像を読む。
+ * exportPdf は 1 枚の画像を `w 0 0 h x y cm /Name Do` で置くので、その並びだけを読む
+ */
+export async function readPdfSheets(pdf: Buffer): Promise<PdfSheet[]> {
+  const doc = await PDFDocument.load(pdf)
+  return doc.getPages().map((sheet) => {
+    const { width, height } = sheet.getSize()
+    const xobjects = sheet.node.Resources()?.lookup(PDFName.of('XObject'), PDFDict)
+    const contents = sheet.node.Contents()
+    const streams: (PDFObject | undefined)[] =
+      contents instanceof PDFArray ? contents.asArray() : [contents]
+    const text = streams
+      .map((s) => s && doc.context.lookup(s))
+      .filter((s): s is PDFRawStream => s instanceof PDFRawStream)
+      .map((s) => new TextDecoder().decode(decodePDFRawStream(s).decode()))
+      .join('\n')
+    const images = [...text.matchAll(/([\d.]+) 0 0 [\d.]+ ([\d.]+) [\d.]+ cm\s+\/(\S+) Do/g)].map(
+      ([, w, x, name]) => {
+        const image = xobjects?.lookup(PDFName.of(name as string))
+        if (!(image instanceof PDFRawStream))
+          throw new Error(`image ${name} is not in the page resources`)
+        const rgb = inflateSync(Buffer.from(image.contents))
+        let sum = 0
+        for (const byte of rgb) sum += byte
+        return { x: Number(x), width: Number(w), brightness: sum / rgb.length }
+      },
+    )
+    return { width, height, images }
+  })
 }

@@ -1,50 +1,159 @@
 import type { RenderOptions } from '@manga/render'
-import { Button, Checkbox, Dialog, Field, Select } from '@manga/ui'
+import type { Page } from '@manga/schema'
+import { Button, Checkbox, Dialog, Field, FieldGroup, Input, Select } from '@manga/ui'
 import { useState } from 'react'
+import { countMissingArts, type ExportFormat } from './export-page-job'
 
-export type ExportOptions = Pick<RenderOptions, 'notes' | 'panelNumbers'>
+export interface ExportSettings {
+  format: ExportFormat
+  /** 書き出すページの範囲。エピソード内の 1 始まりで、両端を含む */
+  from: number
+  to: number
+  notes: RenderOptions['notes']
+  panelNumbers: boolean
+  /** PDF だけ。見開きで 1 枚にまとめる */
+  spread: boolean
+  dpi: number
+}
 
-/** 書き出しダイアログの既定。指示メモは印字せず、コマ番号も入れない */
-const DEFAULT_EXPORT_OPTIONS: ExportOptions = { notes: 'none', panelNumbers: false }
+type Range = 'current' | 'all' | 'custom'
 
-// 'sheet' は PDF が別ページを作る指定で、renderPage では 'none' と同じなので出さない
-const NOTES: readonly { value: ExportOptions['notes']; label: string }[] = [
+const FORMATS: readonly { value: ExportFormat; label: string }[] = [
+  { value: 'png', label: 'PNG（複数ページは zip）' },
+  { value: 'pdf', label: 'PDF' },
+]
+
+const RANGES: readonly { value: Range; label: string }[] = [
+  { value: 'current', label: 'このページ' },
+  { value: 'all', label: 'エピソードの全ページ' },
+  { value: 'custom', label: 'ページを指定' },
+]
+
+const NOTES: readonly { value: RenderOptions['notes']; label: string; pdfOnly?: boolean }[] = [
   { value: 'none', label: '印字しない' },
   { value: 'margin', label: 'コマ横の余白に印字する' },
+  { value: 'sheet', label: '各ページの後ろに一覧ページを足す', pdfOnly: true },
 ]
 
 /**
- * 「このページを PNG で保存」のモーダル。開いている間だけマウントする。
- * 保存で `onExport` を呼ぶ。閉じる操作（キャンセル、Esc）は `onCancel`
+ * 書き出しのモーダル。形式（PNG / PDF）、ページ範囲、指示メモ、コマ番号、見開き、dpi を選ぶ。
+ * 範囲に採用中の絵が無いコマがあれば警告するが、書き出しは止めない。
+ * 開いている間だけマウントする。書き出すで `onExport`、閉じる操作（キャンセル、Esc）で `onCancel`
  */
 export function ExportDialog({
+  pages,
+  currentIndex,
+  dpi,
   onCancel,
   onExport,
 }: {
+  /** 開いているページのエピソードのページ */
+  pages: readonly Page[]
+  /** 開いているページの添字 */
+  currentIndex: number
+  /** プロジェクト設定の dpi。dpi 欄の既定 */
+  dpi: number
   onCancel(): void
-  onExport(opts: ExportOptions): void
+  onExport(settings: ExportSettings): void
 }) {
-  const [opts, setOpts] = useState(DEFAULT_EXPORT_OPTIONS)
+  const [format, setFormat] = useState<ExportFormat>('png')
+  const [range, setRange] = useState<Range>('current')
+  const [custom, setCustom] = useState({ from: currentIndex + 1, to: currentIndex + 1 })
+  const [notes, setNotes] = useState<RenderOptions['notes']>('none')
+  const [panelNumbers, setPanelNumbers] = useState(false)
+  const [spread, setSpread] = useState(false)
+  const [dpiText, setDpiText] = useState(String(dpi))
+
+  const [from, to] =
+    range === 'current'
+      ? [currentIndex + 1, currentIndex + 1]
+      : range === 'all'
+        ? [1, pages.length]
+        : [custom.from, custom.to]
+  const rangeError =
+    Number.isInteger(from) && Number.isInteger(to) && from >= 1 && from <= to && to <= pages.length
+      ? undefined
+      : `1〜${pages.length} の範囲で、始まりを終わり以下にしてください`
+  const dpiValue = Number(dpiText)
+  const dpiError =
+    Number.isInteger(dpiValue) && dpiValue >= 72 && dpiValue <= 1200
+      ? undefined
+      : '72〜1200 の整数にしてください'
+  const missing = rangeError ? 0 : countMissingArts(pages.slice(from - 1, to))
+  const effectiveNotes = format === 'png' && notes === 'sheet' ? 'none' : notes
+
+  const submit = () => {
+    if (rangeError || dpiError) return
+    onExport({
+      format,
+      from,
+      to,
+      notes: effectiveNotes,
+      panelNumbers,
+      spread: format === 'pdf' && spread,
+      dpi: dpiValue,
+    })
+  }
+
   return (
     <Dialog
-      title="このページを PNG で保存"
+      title="書き出し"
       onClose={onCancel}
-      onSubmit={() => onExport(opts)}
+      onSubmit={submit}
       actions={
         <>
           <Button onClick={onCancel}>キャンセル</Button>
-          <Button type="submit" variant="primary">
-            保存
+          <Button type="submit" variant="primary" disabled={!!rangeError || !!dpiError}>
+            書き出す
           </Button>
         </>
       }
     >
+      <Field label="形式">
+        <Select value={format} onChange={(e) => setFormat(e.target.value as ExportFormat)}>
+          {FORMATS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="範囲">
+        <Select value={range} onChange={(e) => setRange(e.target.value as Range)}>
+          {RANGES.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {range === 'custom' && (
+        <FieldGroup label="ページ" error={rangeError}>
+          <Input
+            type="number"
+            aria-label="開始ページ"
+            min={1}
+            max={pages.length}
+            value={custom.from}
+            onChange={(e) => setCustom({ ...custom, from: e.target.valueAsNumber })}
+          />
+          〜
+          <Input
+            type="number"
+            aria-label="終了ページ"
+            min={1}
+            max={pages.length}
+            value={custom.to}
+            onChange={(e) => setCustom({ ...custom, to: e.target.valueAsNumber })}
+          />
+        </FieldGroup>
+      )}
       <Field label="指示メモ">
         <Select
-          value={opts.notes}
-          onChange={(e) => setOpts({ ...opts, notes: e.target.value as ExportOptions['notes'] })}
+          value={effectiveNotes}
+          onChange={(e) => setNotes(e.target.value as RenderOptions['notes'])}
         >
-          {NOTES.map((n) => (
+          {NOTES.filter((n) => format === 'pdf' || !n.pdfOnly).map((n) => (
             <option key={n.value} value={n.value}>
               {n.label}
             </option>
@@ -53,9 +162,28 @@ export function ExportDialog({
       </Field>
       <Checkbox
         label="コマ番号を入れる"
-        checked={opts.panelNumbers}
-        onChange={(e) => setOpts({ ...opts, panelNumbers: e.target.checked })}
+        checked={panelNumbers}
+        onChange={(e) => setPanelNumbers(e.target.checked)}
       />
+      {format === 'pdf' && (
+        <Checkbox
+          label="見開きでまとめる"
+          checked={spread}
+          onChange={(e) => setSpread(e.target.checked)}
+        />
+      )}
+      <Field label="dpi" error={dpiError}>
+        <Input
+          type="number"
+          min={72}
+          max={1200}
+          value={dpiText}
+          onChange={(e) => setDpiText(e.target.value)}
+        />
+      </Field>
+      {missing > 0 && (
+        <p role="status">未生成のコマが {missing} 個あります。枠だけのまま書き出します。</p>
+      )}
     </Dialog>
   )
 }
