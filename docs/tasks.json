@@ -601,7 +601,7 @@
       "group": "G2",
       "title": "e2e 基盤とシナリオ 1, 2, 3",
       "detail": "Playwright、CI 組込、Fake プロバイダでの生成と書き出し",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "16",
         "17",
@@ -617,7 +617,9 @@
       ],
       "spec": [
         "workstreams/WS-21-e2e-hardening.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "23",
