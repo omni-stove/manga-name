@@ -30,7 +30,7 @@ function useAssetUrl(resolve: ResolveAsset, ref: string | undefined): string | u
       if (url !== undefined) URL.revokeObjectURL(url)
     }
   }, [resolve, ref])
-  return resolved?.ref === ref ? resolved.url : undefined
+  return resolved !== undefined && resolved.ref === ref ? resolved.url : undefined
 }
 
 const noAsset: ResolveAsset = () => Promise.reject(new Error('no asset resolver'))

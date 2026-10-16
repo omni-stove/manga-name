@@ -92,7 +92,7 @@ export function createSyncProvider(options: SyncProviderOptions): SyncProvider {
   let resolvingUrl = false
 
   const send = (data: Uint8Array) => {
-    if (socket?.readyState === OPEN) socket.send(data)
+    if (socket?.readyState === OPEN) socket.send(data as Uint8Array<ArrayBuffer>)
   }
 
   const ownAwareness = () =>
@@ -191,7 +191,12 @@ export function createSyncProvider(options: SyncProviderOptions): SyncProvider {
       failures = 0
       state.setState({ status: 'connected', synced: false })
       send(message(MESSAGE_SYNC, (e) => syncProtocol.writeSyncStep1(e, doc)))
-      if (awareness.getLocalState() !== null) send(ownAwareness())
+      const local = awareness.getLocalState()
+      if (local !== null) {
+        // forgetPeers で消された側は clock が同じ状態を無視するので、clock を進めて送る
+        awareness.setLocalState(local)
+        send(ownAwareness())
+      }
     }
     ws.onmessage = (event: MessageEvent) => {
       if (socket !== ws || !(event.data instanceof ArrayBuffer)) return
