@@ -1090,7 +1090,7 @@
       "group": "G4",
       "title": "クラウド統合",
       "detail": "実 API + 認証",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "41",
         "39",
@@ -1107,7 +1107,9 @@
       ],
       "spec": [
         "workstreams/WS-15-cloud-storage.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "43",
