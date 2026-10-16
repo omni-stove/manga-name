@@ -147,7 +147,7 @@ const sameContent = (a: Project, b: Project) =>
   canonical({ ...a, id: undefined, updatedAt: undefined }) ===
   canonical({ ...b, id: undefined, updatedAt: undefined })
 
-const isNetworkError =(e: unknown) => e instanceof TypeError
+const isNetworkError = (e: unknown) => e instanceof TypeError
 
 /**
  * ローカル優先でクラウドに同期する StorageAdapter（docs/workstreams/WS-15-cloud-storage.md）。
