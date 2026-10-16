@@ -82,14 +82,18 @@ describe('PanelInspector', () => {
     )
     expect(container.querySelector('[data-art-id="art_2"] p')?.textContent).toBe('顔を大きく')
 
-    await act(async () => must(container.querySelector('[data-art-id="art_3"] button')).click())
+    await act(async () =>
+      must(container.querySelector<HTMLElement>('[data-art-id="art_3"] button')).click(),
+    )
     expect(onChange).toHaveBeenCalledWith([{ op: 'replace', path: '/artId', value: 'art_3' }])
 
-    await act(async () => must(container.querySelector('[data-art-id="art_2"] button')).click())
+    await act(async () =>
+      must(container.querySelector<HTMLElement>('[data-art-id="art_2"] button')).click(),
+    )
     expect(onChange).toHaveBeenCalledTimes(1)
   })
 
-  test('note is debounced 300ms, order is immediate, an invalid order emits nothing', async () => {
+  test('note is debounced 300ms, order commits on Enter, an invalid order emits nothing', async () => {
     vi.useFakeTimers()
     const onChange = vi.fn<(patch: Patch) => void>()
     const { container } = await render(
@@ -113,6 +117,10 @@ describe('PanelInspector', () => {
     expect(order.getAttribute('aria-invalid')).toBe('true')
     expect(onChange).toHaveBeenCalledTimes(1)
     await act(async () => setValue(order, '3'))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      order.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/order', value: 3 }])
   })
 
