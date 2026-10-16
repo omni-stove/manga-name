@@ -27,3 +27,16 @@ jobs:
 
       - name: Perf
         run: PERF=1 pnpm exec vitest run
+
+      # ubuntu-latest に入っている Chrome で測る
+      - name: Lighthouse
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @manga/web lighthouse
+
+      - name: Upload Lighthouse report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: apps/web/dist/lighthouse/
+          retention-days: 14

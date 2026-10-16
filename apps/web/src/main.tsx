@@ -15,6 +15,7 @@ import { createProjectLibrary } from './project-library'
 import { createAppRouter } from './router'
 import { createSharingClient } from './sharing'
 import { createTabSync } from './store/tab-sync'
+import { SyncStatusProvider } from './sync-status'
 import { AuthProvider } from './use-auth'
 import '@manga/ui/tokens.css'
 import '@manga/ui/base.css'
@@ -69,7 +70,9 @@ window.addEventListener('pagehide', () => void library.flushAll())
 createRoot(container).render(
   <StrictMode>
     <AuthProvider client={auth}>
-      <RouterProvider router={createAppRouter({ library, imageProvider, generation, sharing })} />
+      <SyncStatusProvider source={cloud}>
+        <RouterProvider router={createAppRouter({ library, imageProvider, generation, sharing })} />
+      </SyncStatusProvider>
     </AuthProvider>
   </StrictMode>,
 )
