@@ -387,7 +387,11 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     return link
   }
 
-  type UploadResult = { status: 'ok'; ref: string } | { status: 'retry' | 'quota' | 'rejected' }
+  type UploadResult =
+    | { status: 'ok'; ref: string }
+    | { status: 'retry' }
+    | { status: 'quota' }
+    | { status: 'rejected' }
 
   /** 署名 URL で 1 件アップロードする。ネットワークの失敗は TypeError のまま throw する */
   async function uploadBlob(cloudId: ID, blob: Blob): Promise<UploadResult> {
@@ -477,7 +481,8 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       return 'done'
     }
     let link = await links.get(localId)
-    if (link?.syncedUpdatedAt === project.updatedAt && !hasUnsentAssets(project, link)) return 'done'
+    if (link?.syncedUpdatedAt === project.updatedAt && !hasUnsentAssets(project, link))
+      return 'done'
     const refs = assetRefsByPriority(project)
 
     let laterSent = false
@@ -580,19 +585,19 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       state.again = true
       return state.running
     }
-    state.running = (async () => {
-      let outcome: PushOutcome
-      if (isOffline()) {
-        outcome = 'retry'
-      } else {
-        try {
-          outcome = await push(id)
-        } catch (e) {
-          // fetch の TypeError はオフラインや DNS の一時的な失敗なので、送れるまで再試行する
-          if (!isNetworkError(e)) onError(e)
-          outcome = isNetworkError(e) ? 'retry' : 'failed'
-        }
+    const attempt = async (): Promise<PushOutcome> => {
+      try {
+        return await push(id)
+      } catch (e) {
+        // fetch の TypeError はオフラインや DNS の一時的な失敗なので、送れるまで再試行する
+        if (!isNetworkError(e)) onError(e)
+        return isNetworkError(e) ? 'retry' : 'failed'
       }
+    }
+    state.running = (async () => {
+      // オフラインでも一度は await を挟む。同期的に最後まで進むと、下で消した state.running を
+      // この関数を囲む代入が後から上書きし、送信中のまま残る
+      const outcome = await (isOffline() ? 'retry' : attempt())
       state.running = undefined
       if (outcome === 'retry') {
         state.failures++
@@ -1274,7 +1279,10 @@ if (import.meta.vitest) {
 
     test('the adopted art is uploaded before the project, history after it', async () => {
       const { api, a, p, cloudId } = await synced()
-      const history = [await a.storage.putAsset(p.id, png(1)), await a.storage.putAsset(p.id, png(2))]
+      const history = [
+        await a.storage.putAsset(p.id, png(1)),
+        await a.storage.putAsset(p.id, png(2)),
+      ]
       const adopted = await a.storage.putAsset(p.id, png(3))
       await a.storage.saveProject(withArts(edit(p, 'A'), [...history, adopted]))
       const before = api.requests.length
