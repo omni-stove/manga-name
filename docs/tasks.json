@@ -768,7 +768,7 @@
       "group": "G3",
       "title": "focus ツールと vector ツール",
       "detail": "配置、ドラッグ、種別、矢印、ラベル",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -782,7 +782,9 @@
       ],
       "spec": [
         "workstreams/WS-11-hints-overlay.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "30",

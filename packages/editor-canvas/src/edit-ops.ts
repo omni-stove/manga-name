@@ -1,4 +1,5 @@
 import type { Page, Patch } from '@manga/schema'
+import { findFocus, findVector, moveFocusPatch } from './hint-ops'
 import type { Selection } from './types'
 
 /** 1 回のキー操作で動かす正規化座標の量 */
@@ -10,7 +11,7 @@ const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(mi
 // 0.01 刻みの加算で 0.30000000000000004 のような値を残さない
 const round = (v: number) => Math.round(v * 1000) / 1000
 
-/** 選択要素の JSON Pointer（ページ root 基準）。無ければ undefined。焦点とベクトルは Phase 2 */
+/** 選択要素の JSON Pointer（ページ root 基準）。無ければ undefined */
 function pointerOf(page: Page, selection: Selection): string | undefined {
   if (selection === null) return undefined
   if (selection.kind === 'panel') {
@@ -22,8 +23,11 @@ function pointerOf(page: Page, selection: Selection): string | undefined {
       const j = panel.bubbles.findIndex((b) => b.id === selection.id)
       if (j >= 0) return `/panels/${i}/bubbles/${j}`
     }
+    return undefined
   }
-  return undefined
+  const at = selection.kind === 'focus' ? findFocus(page, selection.id) : findVector(page, selection.id)
+  if (!at) return undefined
+  return `/panels/${at.panelIndex}/${selection.kind === 'focus' ? 'focusPoints' : 'vectors'}/${at.index}`
 }
 
 /** 選択要素を消す Patch。消せる要素が無ければ空 */
@@ -31,7 +35,7 @@ export function removePatch(page: Page, selection: Selection): Patch {
   const pointer = pointerOf(page, selection)
   if (pointer === undefined) return []
   const patch: Patch = []
-  if (selection?.kind === 'bubble') {
+  if (selection?.kind === 'bubble' || selection?.kind === 'focus') {
     // PanelSchema は vector の焦点参照がコマ内に実在することを要求するため、先に参照を外す
     for (const [i, panel] of page.panels.entries()) {
       for (const [j, vector] of panel.vectors.entries()) {
@@ -49,7 +53,8 @@ export function removePatch(page: Page, selection: Selection): Patch {
 
 /**
  * 選択要素を正規化座標で (dx, dy) 動かす Patch。コマはページの中に、
- * フキダシの中心としっぽはコマ内座標の 0..1 に収める。動かない軸は出さない
+ * フキダシの中心としっぽ、焦点、ベクトルの両端はコマ内座標の 0..1 に収める。動かない軸は出さない。
+ * 焦点は繋がったベクトルの端も一緒に動かす
  */
 export function nudgePatch(page: Page, selection: Selection, dx: number, dy: number): Patch {
   const pointer = pointerOf(page, selection)
@@ -76,7 +81,21 @@ export function nudgePatch(page: Page, selection: Selection, dx: number, dy: num
       move('/tail/x', bubble.tail.x, dx, 1)
       move('/tail/y', bubble.tail.y, dy, 1)
     }
+    return patch
   }
+  if (selection.kind === 'focus') {
+    const at = findFocus(page, selection.id)
+    const focus = at?.panel.focusPoints[at.index]
+    if (!focus) return []
+    return moveFocusPatch(page, focus.id, { x: focus.pos.x + dx, y: focus.pos.y + dy })
+  }
+  const at = findVector(page, selection.id)
+  const vector = at?.panel.vectors[at.index]
+  if (!vector) return []
+  move('/from/x', vector.from.x, dx, 1)
+  move('/from/y', vector.from.y, dy, 1)
+  move('/to/x', vector.to.x, dx, 1)
+  move('/to/y', vector.to.y, dy, 1)
   return patch
 }
 

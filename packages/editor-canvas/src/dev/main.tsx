@@ -1,4 +1,4 @@
-import { fixtures, type ID, type Page, type Patch } from '@manga/schema'
+import { type FocusKind, fixtures, type ID, type Page, type Patch } from '@manga/schema'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { EditorCanvas } from '../editor-canvas'
@@ -60,6 +60,7 @@ function Playground() {
   const [page, setPage] = useState(samplePage)
   const [selection, setSelection] = useState<Selection>(null)
   const [tool, setTool] = useState<Tool>('select')
+  const [focusKind, setFocusKind] = useState<FocusKind>('face')
   const [generating, setGenerating] = useState<Set<ID>>(() => new Set())
   const [layers, setLayers] = useState<Layers>({
     reference: true,
@@ -94,15 +95,33 @@ function Playground() {
           art
         </label>
         <select value={tool} onChange={(e) => setTool(e.target.value as Tool)}>
-          {(['select', 'panel', 'bubble', 'scribble'] as const).map((t) => (
+          {(['select', 'panel', 'bubble', 'focus', 'vector', 'scribble'] as const).map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
           ))}
         </select>
+        {tool === 'focus' && (
+          <select value={focusKind} onChange={(e) => setFocusKind(e.target.value as FocusKind)}>
+            {(['face', 'keyObject', 'sfx'] as const).map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+        )}
+        <label>
+          <input
+            type="checkbox"
+            checked={layers.hints}
+            onChange={(e) => setLayers({ ...layers, hints: e.target.checked })}
+          />
+          hints
+        </label>
         <span>
           ホイールでズーム、Space + ドラッグでパン。クリックで選択、Delete で削除、矢印キーで移動。
           panel ツールはドラッグで作成、ハンドルでリサイズ、ボタンで分割、Shift + クリックで結合。
+          focus ツールはクリックで配置、ドラッグで移動。vector ツールはドラッグで作成。
           「生成」でスピナーを切り替える
         </span>
         <span>選択: {selection ? `${selection.kind} ${selection.id}` : 'なし'}</span>
@@ -115,6 +134,7 @@ function Playground() {
           diagnosis={null}
           selection={selection}
           tool={tool}
+          focusKind={focusKind}
           layers={layers}
           generating={generating}
           onChange={(patch) => {
