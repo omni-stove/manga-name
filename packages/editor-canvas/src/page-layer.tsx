@@ -65,25 +65,27 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
           />
         )
       })}
-      {/* はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く */}
-      {page.panels.map((panel) => {
-        const rect = {
-          x: panel.rect.x * width,
-          y: panel.rect.y * height,
-          w: panel.rect.w * width,
-          h: panel.rect.h * height,
-        }
-        return [...panel.bubbles]
-          .sort((a, b) => a.order - b.order)
-          .map((bubble) => (
-            <BubbleView
-              key={bubble.id}
-              bubble={bubble}
-              panel={rect}
-              selected={props.selection?.kind === 'bubble' && props.selection.id === bubble.id}
-            />
-          ))
-      })}
+      {/* はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く。重なりの前後はレンダラと同じく order 順 */}
+      {[...page.panels]
+        .sort((a, b) => a.order - b.order)
+        .map((panel) => {
+          const rect = {
+            x: panel.rect.x * width,
+            y: panel.rect.y * height,
+            w: panel.rect.w * width,
+            h: panel.rect.h * height,
+          }
+          return [...panel.bubbles]
+            .sort((a, b) => a.order - b.order)
+            .map((bubble) => (
+              <BubbleView
+                key={bubble.id}
+                bubble={bubble}
+                panel={rect}
+                selected={props.selection?.kind === 'bubble' && props.selection.id === bubble.id}
+              />
+            ))
+        })}
     </g>
   )
 })
