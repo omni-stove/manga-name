@@ -1,5 +1,5 @@
-import { currentArt, type Page, type Stroke } from '@manga/schema'
-import { memo, useId, useMemo, useRef } from 'react'
+import { currentArt, type ID, type Page, type Stroke } from '@manga/schema'
+import { memo, useCallback, useId, useLayoutEffect, useMemo, useRef } from 'react'
 import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { BubbleToolLayer } from './bubble-tool-layer'
 import { findFocus, findVector, focusRadius, toPagePoint } from './hint-ops'
@@ -141,6 +141,12 @@ export function EditorCanvas(props: EditorCanvasProps) {
     return referenceRef === undefined ? arts : [referenceRef, ...arts]
   }, [page.panels, layers.art, referenceRef])
   const { assets, markError } = useAssetUrls(refs, props.resolveAsset)
+  // 親が毎回作り直す onGenerate で PageLayer の memo が外れないよう、identity を固定して最新を呼ぶ
+  const onGenerateRef = useRef(props.onGenerate)
+  useLayoutEffect(() => {
+    onGenerateRef.current = props.onGenerate
+  })
+  const generate = useCallback((panelId: ID) => onGenerateRef.current?.(panelId), [])
 
   const cursor = panning
     ? 'grabbing'
@@ -234,7 +240,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         selection={props.selection}
         idPrefix={idPrefix}
         onArtError={markError}
-        onGenerate={props.onGenerate}
+        onGenerate={props.onGenerate ? generate : undefined}
       />
       {layers.scribble && (
         <g data-layer="scribble" pointerEvents="none">
