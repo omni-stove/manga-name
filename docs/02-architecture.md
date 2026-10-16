@@ -18,7 +18,7 @@
 | 認証 | Phase 1 は共有アクセストークン。正式な方式は未決。`06-open-questions.md` 参照 | |
 | 画像生成 | 外部 API。プロバイダ抽象の裏に置く | 参照画像入力が必須。コマ単位で呼ぶ |
 | LLM | 外部 API。プロバイダ抽象の裏に置く | 脚本からの下書きと診断の言語化。Phase 2 以降 |
-| PDF | pdf-lib | レンダラが作った PNG をページとして並べる |
+| PDF | pdf-lib | レンダラが描いたページ画像を並べる |
 | モノレポ | pnpm workspaces。Turborepo は不採用 | パッケージ単位の build を持たず apps と Vitest がソースを直接読むため、タスク順序もキャッシュも不要 |
 | テスト | Vitest, Playwright（E2E は Phase 2 以降） | |
 | Lint / Format | Biome | |
@@ -116,7 +116,7 @@ schema  <-  render, ai, editor-canvas, inspector, diagnosis, storage
 「書き出し」
   -> render.renderPage(page, { resolveAsset, dpi })   Canvas 2D で合成。Web Worker
   -> PNG はそのまま保存
-  -> PDF は render.exportPdf が各ページの PNG を pdf-lib で束ねる
+  -> PDF は render.exportPdf が各ページの画像を pdf-lib で束ねる
 ```
 
 合成はクライアント側で完結する。サーバは要らない。

@@ -9,7 +9,7 @@ Phase 2 / 開発中の依存: DOC のみ / 統合時: WS-02, WS-06 / パッケ�
 `03-data-model.md` の `exportPdf` の通り。`packages/render` に置く。
 
 ## 内容
-- `pdf-lib` を使う。各ページは `renderPage` の PNG を 1 枚埋め込む。ベクタ化はしない。
+- `pdf-lib` を使う。各ページは `renderPage` と同じ描画の画像を 1 枚埋め込む。ベクタ化はしない。PNG を経由せず画素を RGB で deflate して埋め込む（pdf-lib の PNG 埋め込みは JS で展開と再圧縮をするので 20 ページ 10 秒に収まらないため）。
 - `spread: true` なら見開きで 1 枚にまとめる。右綴じは奇数ページが左。
 - `notes: 'sheet'` なら各ページの後ろに指示メモの一覧ページを足す。コマ番号、camera、note、セリフの一覧を横書きで。renderPage と同じ Noto Sans JP で画像に描いて埋め込む（pdf-lib の fontkit はこのフォントのサブセット化で字が欠けるため、PDF にフォントは埋め込まない）。
 - `pages` で範囲指定。
