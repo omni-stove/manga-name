@@ -2,6 +2,7 @@ import type { Episode, PageTemplate } from '@manga/schema'
 import { Button, Select } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
+import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { PeerBadge, usePeers } from '../collaboration-view'
 import collabStyles from '../collaboration-view.module.css'
@@ -15,8 +16,10 @@ import {
   PAGE_TEMPLATES,
   removePagePatch,
 } from '../project-ops'
+import { ScriptDraftDialog } from '../script-draft-dialog'
 import type { ProjectStore } from '../store/project-store'
 import { useApplyPatch, useProject } from '../use-project'
+import { useUndoShortcuts } from '../use-undo-shortcuts'
 import styles from './pages.module.css'
 
 export const Route = createFileRoute('/p/$projectId/')({ component: PageList })
@@ -26,12 +29,15 @@ const projectRoute = getRouteApi('/p/$projectId')
 function PageList() {
   const { projectId } = Route.useParams()
   const { store, collab } = projectRoute.useLoaderData()
-  const { library } = Route.useRouteContext()
+  const { library, llmProvider } = Route.useRouteContext()
   const project = useProject(store)
+  const { canUndo, canRedo } = useStore(store.state)
   const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
   const [template, setTemplate] = useState<PageTemplate>('3rows')
   const [episodeId, setEpisodeId] = useState<string>()
+  const [drafting, setDrafting] = useState(false)
+  useUndoShortcuts(store)
   const targetEpisode = project.episodes.find((e) => e.id === episodeId) ?? project.episodes.at(-1)
   // rtl の本では先のページが左にあるので、並べ替えのボタンを向きに合わせる
   const [earlier, later] = project.settings.direction === 'rtl' ? ['→', '←'] : ['←', '→']
@@ -77,7 +83,25 @@ function PageList() {
           ページを追加
         </Button>
         <Button onClick={() => apply('エピソードを追加', addEpisodePatch)}>エピソードを追加</Button>
+        <Button onClick={() => setDrafting(true)}>脚本から下書き</Button>
+        <span className={common.actions}>
+          <Button size="small" variant="ghost" disabled={!canUndo} onClick={() => store.undo()}>
+            Undo
+          </Button>
+          <Button size="small" variant="ghost" disabled={!canRedo} onClick={() => store.redo()}>
+            Redo
+          </Button>
+        </span>
       </form>
+      {drafting && (
+        <ScriptDraftDialog
+          project={project}
+          store={store}
+          llmProvider={llmProvider}
+          episodeId={targetEpisode?.id}
+          onClose={() => setDrafting(false)}
+        />
+      )}
       {error && (
         <p className={common.error} role="alert">
           {error}

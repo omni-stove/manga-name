@@ -76,18 +76,28 @@ export function addPagePatch(
   episodeId?: ID,
 ): { patch: Patch; page: Page } {
   const page = createPage(template, project.settings.direction)
+  return { patch: appendPagesPatch(project, [page], episodeId), page }
+}
+
+/**
+ * `pages` を順にエピソードの末尾に足す。1 回の applyPatch で入れれば Undo 1 回で全部戻る。
+ * 追加先の決め方は addPagePatch と同じ
+ */
+export function appendPagesPatch(project: Project, pages: Page[], episodeId?: ID): Patch {
+  if (pages.length === 0) return []
   if (project.episodes.length === 0) {
-    return {
-      patch: [{ op: 'add', path: '/episodes/-', value: newEpisode(project, [page]) }],
-      page,
-    }
+    return [{ op: 'add', path: '/episodes/-', value: newEpisode(project, pages) }]
   }
   const index =
     episodeId === undefined
       ? project.episodes.length - 1
       : project.episodes.findIndex((e) => e.id === episodeId)
   if (index < 0) throw new Error(`エピソードが見つかりません: ${episodeId}`)
-  return { patch: [{ op: 'add', path: `/episodes/${index}/pages/-`, value: page }], page }
+  return pages.map((page) => ({
+    op: 'add' as const,
+    path: `/episodes/${index}/pages/-`,
+    value: page,
+  }))
 }
 
 export function removePagePatch(project: Project, pageId: ID): Patch {
@@ -262,6 +272,21 @@ if (import.meta.vitest) {
       expect(b?.pages.map((p) => p.panels.length)).toEqual([0])
       expect(b?.title).toBe('第2話')
       expect(() => addPagePatch(store.get(), 'blank', 'nope')).toThrow()
+    })
+
+    test('appendPages adds every page in one Undo step', () => {
+      const store = storeOf(createEmptyProject('t'))
+      const pages = [createPage('blank', 'rtl'), createPage('2rows', 'rtl')]
+      store.applyPatch(appendPagesPatch(store.get(), pages))
+      expect(store.get().episodes[0]?.pages).toEqual(pages)
+
+      const more = [createPage('3rows', 'rtl'), createPage('4rows', 'rtl')]
+      store.applyPatch(appendPagesPatch(store.get(), more), { source: 'ai' })
+      expect(store.get().episodes[0]?.pages).toEqual([...pages, ...more])
+      store.undo()
+      expect(store.get().episodes[0]?.pages).toEqual(pages)
+      expect(appendPagesPatch(store.get(), [])).toEqual([])
+      expect(() => appendPagesPatch(store.get(), more, 'nope')).toThrow()
     })
 
     test('movePage reorders within the episode and ignores moves past the ends', () => {

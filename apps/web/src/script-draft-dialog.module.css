@@ -1,0 +1,76 @@
+/* Dialog は幅を受け取らないので、提案の一覧を出している間だけ外側の dialog を広げる */
+dialog:has(.result) {
+  width: min(56rem, calc(100vw - 2rem));
+}
+
+.inputs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.script {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  color: var(--text-muted);
+}
+
+.result {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-16);
+  max-height: min(60vh, 40rem);
+  overflow: auto;
+}
+
+.pages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-12);
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  align-content: start;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.preview {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+}
+
+.issue {
+  margin: 0;
+  font-size: var(--text-s);
+  overflow-wrap: anywhere;
+}
+
+.rationale {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  font-size: var(--text-s);
+  white-space: pre-line;
+}
+
+.rationaleTitle {
+  margin: 0 0 var(--space-8);
+  font-size: var(--text-m);
+}

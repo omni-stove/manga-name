@@ -876,7 +876,7 @@
       "group": "G3",
       "title": "脚本から下書き",
       "detail": "モーダル、provider 呼出と Abort、読み取り専用プレビュー、承認と ID 振り直し、applyPatch(ai)",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "32",
         "17",
@@ -893,7 +893,9 @@
       ],
       "spec": [
         "workstreams/WS-12-layout-proposal.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "34",

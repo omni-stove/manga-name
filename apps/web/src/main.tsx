@@ -11,6 +11,7 @@ import { createRoot } from 'react-dom/client'
 import { createAuthClient } from './auth'
 import { createPanelGeneration } from './generate-panel'
 import { createImageProvider, readApiBaseUrl } from './image-provider'
+import { createLlmProvider } from './llm-provider'
 import { createProjectLibrary } from './project-library'
 import { createAppRouter } from './router'
 import { createSharingClient } from './sharing'
@@ -59,6 +60,7 @@ const library = createProjectLibrary(storage, {
   }),
 })
 const imageProvider = createImageProvider({ baseUrl, getToken: auth.getToken })
+const llmProvider = createLlmProvider({ baseUrl, getToken: auth.getToken })
 const generation = createPanelGeneration({ library, imageProvider })
 
 // debounce 待ちの変更をタブを閉じる・隠す時点で書く。pagehide だけでは書き込みが終わる前にページが破棄されうる
@@ -67,11 +69,13 @@ document.addEventListener('visibilitychange', () => {
 })
 window.addEventListener('pagehide', () => void library.flushAll())
 
+const router = createAppRouter({ library, imageProvider, llmProvider, generation, sharing })
+
 createRoot(container).render(
   <StrictMode>
     <AuthProvider client={auth}>
       <SyncStatusProvider source={cloud}>
-        <RouterProvider router={createAppRouter({ library, imageProvider, generation, sharing })} />
+        <RouterProvider router={router} />
       </SyncStatusProvider>
     </AuthProvider>
   </StrictMode>,
