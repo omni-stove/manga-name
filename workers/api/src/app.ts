@@ -17,6 +17,7 @@ import { z } from 'zod'
 import { createUploadApp } from './assets'
 import { AUTH_BASE_PATH, getAuth } from './auth'
 import type { Env } from './env'
+import { createInviteApp } from './members'
 import { allowedOrigins } from './origins'
 import { isDecodablePng } from './png'
 import { createProjectsApp } from './projects'
@@ -105,7 +106,7 @@ const isFile = (v: unknown): v is File => typeof v !== 'string' && v !== null &&
 
 /**
  * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/propose-layout`、
- * `/v1/projects` の CRUD とアセット、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
+ * `/v1/projects` の CRUD とアセットと参加者、招待リンクの受け口 `/v1/invites/:token`、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
  * `/v1/health`、`/v1/auth/*`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
  * CORS は WEB_ORIGINS と tauri://localhost だけに許す。
  */
@@ -169,6 +170,7 @@ export function createApp(options: AppOptions = {}) {
   app.on(['GET', 'POST'], `${AUTH_BASE_PATH}/*`, (c) => getAuth(c.env).handler(c.req.raw))
 
   app.route('/v1/projects', createProjectsApp(now))
+  app.route('/v1/invites', createInviteApp(now))
   app.route('/v1/uploads', createUploadApp(now))
   app.route('/v1/usage', createUsageApp(now))
 

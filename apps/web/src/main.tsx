@@ -13,6 +13,7 @@ import { createPanelGeneration } from './generate-panel'
 import { createImageProvider, readApiBaseUrl } from './image-provider'
 import { createProjectLibrary } from './project-library'
 import { createAppRouter } from './router'
+import { createSharingClient } from './sharing'
 import { createTabSync } from './store/tab-sync'
 import { SyncStatusProvider } from './sync-status'
 import { AuthProvider } from './use-auth'
@@ -36,20 +37,27 @@ const cloud =
     ? null
     : createCloudStorage({ baseUrl, local, getToken: auth.getToken, fetch: auth.fetch })
 const storage = cloud ?? local
-// 共同編集の範囲（docs/06-open-questions.md #11）が決まるまで本番では開かず、e2e のビルドだけ同じブラウザのタブ同士でつなぐ
-const library = createProjectLibrary(
-  storage,
-  import.meta.env.VITE_COLLAB_TABS === '1'
-    ? {
-        collaboration: {
-          syncUrl: async (id) => `tab-sync:${id}`,
-          ydocs: createIndexedDbYDocStore(),
-          userName: 'タブ',
-          createSocket: createTabSync(),
-        },
-      }
-    : {},
-)
+const sharing = createSharingClient({
+  baseUrl,
+  fetch: auth.fetch,
+  // CloudStorage はクラウドの id を同期の URL（/v1/projects/<id>/sync）でだけ外に出す
+  cloudId: async (id) => {
+    const url = (await cloud?.syncUrl(id)) ?? null
+    return url === null ? null : decodeURIComponent(new URL(url).pathname.split('/').at(-2) ?? '')
+  },
+})
+// 本番の同期サーバにつなぐのは別タスクなので、e2e のビルドだけ同じブラウザのタブ同士でつなぐ
+const library = createProjectLibrary(storage, {
+  roleOf: sharing.role,
+  ...(import.meta.env.VITE_COLLAB_TABS === '1' && {
+    collaboration: {
+      syncUrl: async (id: string) => `tab-sync:${id}`,
+      ydocs: createIndexedDbYDocStore(),
+      userName: 'タブ',
+      createSocket: createTabSync(),
+    },
+  }),
+})
 const imageProvider = createImageProvider({ baseUrl, getToken: auth.getToken })
 const generation = createPanelGeneration({ library, imageProvider })
 
@@ -63,7 +71,7 @@ createRoot(container).render(
   <StrictMode>
     <AuthProvider client={auth}>
       <SyncStatusProvider source={cloud}>
-        <RouterProvider router={createAppRouter({ library, imageProvider, generation })} />
+        <RouterProvider router={createAppRouter({ library, imageProvider, generation, sharing })} />
       </SyncStatusProvider>
     </AuthProvider>
   </StrictMode>,

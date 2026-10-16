@@ -3,12 +3,18 @@ import * as decoding from 'lib0/decoding'
 import * as encoding from 'lib0/encoding'
 import * as syncProtocol from 'y-protocols/sync'
 import * as Y from 'yjs'
+import { type ProjectRole, updateAllowed } from './access'
 import type { Env } from './env'
 import { readYDocSnapshot, writeYDocSnapshot } from './project-store'
 import { createRoomStorage, type RoomStorage } from './room-storage'
 
 /** Worker が DO に渡す、接続先のプロジェクト id */
 export const PROJECT_ID_HEADER = 'x-project-id'
+/** Worker が DO に渡す、接続したユーザーの id とロール */
+export const USER_ID_HEADER = 'x-project-user'
+export const ROLE_HEADER = 'x-project-role'
+
+const ROLES: readonly string[] = ['owner', 'editor', 'commenter', 'viewer'] satisfies ProjectRole[]
 
 /** y-websocket のメッセージ種別 */
 const MESSAGE_SYNC = 0
@@ -26,12 +32,18 @@ const MAX_CLIENTS_PER_SOCKET = 16
 
 /** プロジェクトが削除されたときに接続を閉じるコード */
 export const CLOSE_PROJECT_DELETED = 4404
+/** ロールで許されない変更を送ってきた接続を閉じるコード。つなぎ直しても同じ変更を送るだけなので、クライアントはつなぎ直さない */
+const CLOSE_FORBIDDEN = 4403
+/** ロールが変わったか外された接続を閉じるコード。つなぎ直させて、新しいロールで受け直す */
+const CLOSE_ACCESS_CHANGED = 4401
 
 const PROJECT_ID_KEY = 'projectId'
 
 /** 各 WebSocket に serializeAttachment で持たせる情報。ハイバネーションから戻っても残る */
 interface Attachment {
   projectId: string
+  userId: string
+  role: ProjectRole
   /** この接続が送ってきた Awareness の clientID と最後の clock */
   clients: Record<string, number>
 }
@@ -70,6 +82,16 @@ function awarenessRemoval(clients: Record<string, number>) {
   return message(MESSAGE_AWARENESS, (e) =>
     encoding.writeVarUint8Array(e, encoding.toUint8Array(update)),
   )
+}
+
+/** sync メッセージ bytes が運ぶ Yjs の更新を role が当ててよいなら true。更新を運ばない step 1 は常に true */
+function writableBy(doc: Y.Doc, bytes: Uint8Array, role: ProjectRole): boolean {
+  const decoder = decoding.createDecoder(bytes)
+  decoding.readVarUint(decoder)
+  const type = decoding.readVarUint(decoder)
+  if (type !== syncProtocol.messageYjsSyncStep2 && type !== syncProtocol.messageYjsUpdate)
+    return true
+  return updateAllowed(doc, decoding.readVarUint8Array(decoder), role)
 }
 
 /**
@@ -164,6 +186,19 @@ function createRoom(ctx: DurableObjectState, env: Env) {
     await storage.clear()
   }
 
+  /** user の接続をすべて閉じる。ロールの変更と参加の取り消しを、つないだままの接続に効かせる */
+  function revoke(userId: string) {
+    for (const socket of ctx.getWebSockets()) {
+      const attachment = socket.deserializeAttachment() as Attachment | null
+      if (attachment?.userId !== userId) continue
+      try {
+        socket.close(CLOSE_ACCESS_CHANGED, 'access changed')
+      } catch {
+        // 既に閉じている
+      }
+    }
+  }
+
   return {
     async connect(request: Request): Promise<Response> {
       if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
@@ -171,13 +206,23 @@ function createRoom(ctx: DurableObjectState, env: Env) {
       }
       const projectId = request.headers.get(PROJECT_ID_HEADER)
       if (!projectId) return new Response(`${PROJECT_ID_HEADER} is required`, { status: 400 })
+      const userId = request.headers.get(USER_ID_HEADER)
+      const role = request.headers.get(ROLE_HEADER)
+      if (!userId || !role || !ROLES.includes(role)) {
+        return new Response(`${USER_ID_HEADER} and ${ROLE_HEADER} are required`, { status: 400 })
+      }
       // alarm は接続を伴わずに起きるので、どのプロジェクトかを storage に残しておく
       await ctx.storage.put(PROJECT_ID_KEY, projectId)
       const doc = await openDoc(projectId)
 
       const { 0: client, 1: server } = new WebSocketPair()
       ctx.acceptWebSocket(server)
-      server.serializeAttachment({ projectId, clients: {} } satisfies Attachment)
+      server.serializeAttachment({
+        projectId,
+        userId,
+        role: role as ProjectRole,
+        clients: {},
+      } satisfies Attachment)
       server.send(message(MESSAGE_SYNC, (e) => syncProtocol.writeSyncStep1(e, doc)))
       // 既存の接続に Awareness を送り直させ、新しい接続にも誰がいるかを伝える
       broadcast(
@@ -207,6 +252,10 @@ function createRoom(ctx: DurableObjectState, env: Env) {
         const decoder = decoding.createDecoder(bytes)
         switch (decoding.readVarUint(decoder)) {
           case MESSAGE_SYNC: {
+            if (!writableBy(doc, bytes, attachment.role)) {
+              ws.close(CLOSE_FORBIDDEN, 'this role cannot make the change')
+              return
+            }
             const encoder = encoding.createEncoder()
             encoding.writeVarUint(encoder, MESSAGE_SYNC)
             syncProtocol.readSyncMessage(decoder, encoder, doc, ws)
@@ -272,6 +321,7 @@ function createRoom(ctx: DurableObjectState, env: Env) {
     },
 
     purge,
+    revoke,
   }
 }
 
@@ -279,6 +329,7 @@ function createRoom(ctx: DurableObjectState, env: Env) {
  * 1 プロジェクト 1 インスタンスの同期サーバ。`idFromName(projectId)` で引く。
  * y-websocket と同じプロトコルで Yjs の更新を接続間に中継し、DO storage に永続化し、
  * 更新があれば SNAPSHOT_INTERVAL_MS 以内に D1 の project_ydoc_chunks に書く。
+ * 接続のロールで許されない更新（commenter の scribbles 以外、viewer のすべて）は当てずに CLOSE_FORBIDDEN で閉じる。
  * Durable Object はクラスでしか定義できないので、処理は createRoom に置いて委ねる。
  */
 export class ProjectRoom extends DurableObject<Env> {
@@ -307,6 +358,11 @@ export class ProjectRoom extends DurableObject<Env> {
 
   override alarm() {
     return this.room.snapshot()
+  }
+
+  /** user のロールが変わったか外されたときに、その接続を閉じる */
+  revoke(userId: string) {
+    this.room.revoke(userId)
   }
 
   /** プロジェクトの削除に合わせて、接続を閉じ DO storage を空にする */

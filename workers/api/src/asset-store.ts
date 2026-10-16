@@ -7,29 +7,18 @@ interface AssetRow {
 /** R2 のキー */
 export const assetKey = (projectId: string, assetId: string) => `${projectId}/${assetId}`
 
-/** owner のプロジェクトがあれば true */
-export async function ownsProject(db: D1Database, ownerId: string, projectId: string) {
-  const row = await db
-    .prepare('SELECT 1 AS found FROM projects WHERE id = ?1 AND owner_id = ?2')
-    .bind(projectId, ownerId)
-    .first<{ found: number }>()
-  return row !== null
-}
-
-/** owner のプロジェクトにある、削除されていないアセットの key、mime、size。無ければ null */
+/** プロジェクトにある、削除されていないアセットの key、mime、size。無ければ null。ロールは呼び出し側が確かめる */
 export function readAsset(
   db: D1Database,
-  ownerId: string,
   projectId: string,
   assetId: string,
 ): Promise<AssetRow | null> {
   return db
     .prepare(
-      `SELECT a.key AS key, a.mime AS mime, a.size AS size FROM assets a
-       JOIN projects p ON p.id = a.project_id
-       WHERE a.id = ?1 AND a.project_id = ?2 AND a.deleted_at IS NULL AND p.owner_id = ?3`,
+      `SELECT key, mime, size FROM assets
+       WHERE id = ?1 AND project_id = ?2 AND deleted_at IS NULL`,
     )
-    .bind(assetId, projectId, ownerId)
+    .bind(assetId, projectId)
     .first<AssetRow>()
 }
 
@@ -88,24 +77,22 @@ export async function discardAsset(db: D1Database, assetId: string) {
 }
 
 /**
- * owner のプロジェクトにあるアセットに deleted_at を立て、その key を返す。
- * 無いか削除済みなら null。
+ * プロジェクトにあるアセットに deleted_at を立て、その key を返す。
+ * 無いか削除済みなら null。ロールは呼び出し側が確かめる。
  */
 export async function deleteAsset(
   db: D1Database,
-  ownerId: string,
   projectId: string,
   assetId: string,
   now: number,
 ): Promise<string | null> {
   const row = await db
     .prepare(
-      `UPDATE assets SET deleted_at = ?4
+      `UPDATE assets SET deleted_at = ?3
        WHERE id = ?1 AND project_id = ?2 AND deleted_at IS NULL
-         AND EXISTS (SELECT 1 FROM projects WHERE id = ?2 AND owner_id = ?3)
        RETURNING key`,
     )
-    .bind(assetId, projectId, ownerId, now)
+    .bind(assetId, projectId, now)
     .first<{ key: string }>()
   return row?.key ?? null
 }

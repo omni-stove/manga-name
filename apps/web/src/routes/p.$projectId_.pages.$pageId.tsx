@@ -38,6 +38,7 @@ import { findPage, pagePatch } from '../project-ops'
 import { firstFile, referencePatch, toReferenceImage } from '../reference-image'
 import { errorMessage } from '../route-error'
 import { SaveStatusIndicator } from '../save-status'
+import { ROLE_LABELS } from '../sharing'
 import type { Peer } from '../store/presence'
 import { toasts } from '../toasts'
 import { useAssetResolver } from '../use-asset-resolver'
@@ -123,6 +124,12 @@ function Editor() {
   const { apply, error } = useApplyPatch(store)
   const resolveAsset = useAssetResolver(library.resolveAsset)
   const peers = usePeers(collab)
+  const role = library.role(projectId) ?? 'owner'
+  const canEdit = role === 'owner' || role === 'editor'
+  // commenter は手描きメモだけ書けるので、選択と手描き以外のツールを出さない
+  const tools = canEdit
+    ? TOOLS
+    : TOOLS.filter((t) => t.value === 'select' || (role === 'commenter' && t.value === 'scribble'))
   const [tool, setTool] = useState<Tool>('select')
   const [scribbleTool, setScribbleTool] = useState<ScribbleTool>('ink')
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
@@ -206,10 +213,11 @@ function Editor() {
         </Link>
         <span className={styles.pageNumber}>{pageIndex + 1} ページ</span>
         <CollaborationBar collab={collab} project={project} />
+        {!canEdit && <span className={common.placeholder}>{ROLE_LABELS[role]}</span>}
         <SegmentedControl
           label="ツール"
           value={tool}
-          options={TOOLS}
+          options={tools}
           onChange={(t) => setTool(t)}
         />
         {tool === 'scribble' && (
@@ -302,61 +310,63 @@ function Editor() {
               onSelect={setSelection}
             />
           </details>
-          <SelectionInspector
-            page={page}
-            pageId={pageId}
-            characters={project.characters}
-            selection={selection}
-            generating={generating}
-            apply={apply}
-            generate={generate}
-            referenceToggle={referenceToggle}
-            resolveAsset={resolveAsset}
-          />
-          <details open={selection === null}>
-            <summary>ページ</summary>
-            <PageInspector
+          <fieldset disabled={!canEdit} className={styles.inspectorFields}>
+            <SelectionInspector
               page={page}
-              generating={
-                pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
-              }
-              onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
-              onGenerateAll={pageBatch.start}
-              onPickReference={referencePicker.open}
+              pageId={pageId}
+              characters={project.characters}
+              selection={selection}
+              generating={generating}
+              apply={apply}
+              generate={generate}
+              referenceToggle={referenceToggle}
+              resolveAsset={resolveAsset}
             />
-            {referencePicker.input}
-            <BatchOptions batch={pageBatch} />
-          </details>
-          <details>
-            <summary>キャラクター（{project.characters.length}）</summary>
-            {project.characters.length === 0 && (
-              <p className={common.placeholder}>
-                <Link to="/p/$projectId/characters" params={{ projectId }}>
-                  キャラクター一覧
-                </Link>
-                で追加できます
-              </p>
-            )}
-            {project.characters.map((character) => (
-              <CharacterPane
-                key={character.id}
-                character={character}
-                projectId={projectId}
-                library={library}
-                apply={apply}
-                resolveAsset={resolveAsset}
+            <details open={selection === null}>
+              <summary>ページ</summary>
+              <PageInspector
+                page={page}
+                generating={
+                  pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
+                }
+                onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
+                onGenerateAll={pageBatch.start}
+                onPickReference={referencePicker.open}
               />
-            ))}
-          </details>
-          <details>
-            <summary>プロジェクト設定</summary>
-            <ProjectSettingsInspector
-              settings={project.settings}
-              onChange={(patch) =>
-                apply('プロジェクト設定を変更', () => settingsInspectorPatch(patch))
-              }
-            />
-          </details>
+              {referencePicker.input}
+              <BatchOptions batch={pageBatch} />
+            </details>
+            <details>
+              <summary>キャラクター（{project.characters.length}）</summary>
+              {project.characters.length === 0 && (
+                <p className={common.placeholder}>
+                  <Link to="/p/$projectId/characters" params={{ projectId }}>
+                    キャラクター一覧
+                  </Link>
+                  で追加できます
+                </p>
+              )}
+              {project.characters.map((character) => (
+                <CharacterPane
+                  key={character.id}
+                  character={character}
+                  projectId={projectId}
+                  library={library}
+                  apply={apply}
+                  resolveAsset={resolveAsset}
+                />
+              ))}
+            </details>
+            <details>
+              <summary>プロジェクト設定</summary>
+              <ProjectSettingsInspector
+                settings={project.settings}
+                onChange={(patch) =>
+                  apply('プロジェクト設定を変更', () => settingsInspectorPatch(patch))
+                }
+              />
+            </details>
+          </fieldset>
         </aside>
       </div>
     </section>
