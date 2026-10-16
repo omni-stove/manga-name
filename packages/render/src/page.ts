@@ -1,5 +1,5 @@
 import { currentArt, type Page, type Panel } from '@manga/schema'
-import { getBackend, loadFonts } from './backend'
+import { getBackend, loadFonts, type Surface } from './backend'
 import { bubbleGeometry, drawBubble, textBox } from './bubble'
 import { type PxRect, pagePixelSize, rectToPx } from './geometry'
 import { drawCover, drawFrame, drawNotesMargin, drawPanelNumber, drawPlaceholder } from './panel'
@@ -35,6 +35,15 @@ export async function renderPage(
   ctx: RenderContext,
   opts: RenderOptions,
 ): Promise<Blob> {
+  return (await drawPage(page, ctx, opts)).toPng()
+}
+
+/** renderPage が PNG にする前の Surface。PNG を経由せず画素を使う呼び出し側（exportPdf）向け */
+export async function drawPage(
+  page: Page,
+  ctx: RenderContext,
+  opts: RenderOptions,
+): Promise<Surface> {
   const [backend] = await Promise.all([getBackend(), loadFonts()])
   const pageSize = pagePixelSize(ctx.settings, opts.width)
   const margin = opts.notes === 'margin' ? Math.round(pageSize.w * NOTES_MARGIN) : 0
@@ -74,7 +83,7 @@ export async function renderPage(
     drawNotesMargin(c, panels, area, pageSize.w * MARGIN_FONT)
   }
 
-  return surface.toPng()
+  return surface
 }
 
 if (import.meta.vitest) {

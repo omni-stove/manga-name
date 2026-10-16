@@ -1,4 +1,5 @@
 export { renderLayoutPng } from './layout-png'
 export { renderPage } from './page'
+export { type ExportPdfOptions, exportPdf } from './pdf'
 export { layoutBubbleText, rotatesInVertical } from './text'
 export type { RenderContext, RenderOptions } from './types'

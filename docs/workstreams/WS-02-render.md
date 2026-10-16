@@ -11,7 +11,7 @@ Phase 1 / 開発中の依存: DOC のみ / パッケージ: `packages/render`
 ```ts
 export function renderPage(page: Page, ctx: RenderContext, opts: RenderOptions): Promise<Blob>;
 export function renderLayoutPng(page: Page, panelId: ID, opts: { width: number }): Promise<Blob>;
-export function exportPdf(project: Project, episodeId: ID, opts: RenderOptions & { pages: 'all' | ID[]; spread: boolean }): Promise<Blob>;   // Phase 2（WS-08）
+export function exportPdf(project: Project, episodeId: ID, opts: ExportPdfOptions): Promise<Blob>;   // Phase 2（WS-08）。ExportPdfOptions は 03-data-model.md の exportPdf の opts
 export function layoutBubbleText(text: string, size: Size, fontPx: number): { lines: string[][]; fontPx: number };   // 縦書きの行割り。テストしやすいよう公開
 ```
 
