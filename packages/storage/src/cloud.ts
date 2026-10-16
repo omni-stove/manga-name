@@ -451,12 +451,15 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       pushes.delete(id)
       await state?.running
       const link = await links.get(id)
-      if (link) {
+      // リンクもローカルの版も無い id は、listProjects が並べたクラウドだけのプロジェクトの id
+      const cloudId =
+        link?.cloudId ?? ((await local.loadProject(id).catch(() => undefined)) ? undefined : id)
+      if (cloudId !== undefined) {
         // クラウドへの DELETE が済む前にローカルだけ消すと、未ログインや失敗のあとで一覧にクラウド側が戻ってくる
-        const res = await request(`/${encodeURIComponent(link.cloudId)}`, { method: 'DELETE' })
-        if (res === null) throw new Error(`DELETE project ${link.cloudId} needs a token`)
+        const res = await request(`/${encodeURIComponent(cloudId)}`, { method: 'DELETE' })
+        if (res === null) throw new Error(`DELETE project ${cloudId} needs a token`)
         if (!res.ok && res.status !== 404) {
-          throw await unexpected(res, `DELETE project ${link.cloudId}`)
+          throw await unexpected(res, `DELETE project ${cloudId}`)
         }
       }
       await local.deleteProject(id)
