@@ -312,7 +312,7 @@
       "group": "G1",
       "title": "EditorCanvas の描画",
       "detail": "座標系、ズーム、パン、Panels、Bubbles（縦書き）、Art（clip）、未生成コマの note 表示、generating 表示",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "04"
       ],
@@ -327,14 +327,16 @@
       ],
       "spec": [
         "workstreams/WS-04-editor-canvas.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "11",
       "group": "G1",
       "title": "エディタ画面の配線",
       "detail": "EditorCanvas + layers + resolveAsset + ImageProvider の DI",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "09",
         "10"
@@ -348,14 +350,16 @@
       ],
       "spec": [
         "workstreams/WS-06-app-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "12",
       "group": "G1",
       "title": "Inspector と右ペイン",
       "detail": "Panel / Bubble / Character / Page / ProjectSettings の各フォームと生成セクション（ボタン、修正指示、履歴）。エディタ右ペインに配線",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "11"
       ],
@@ -372,14 +376,16 @@
       ],
       "spec": [
         "workstreams/WS-05-inspector.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "13",
       "group": "G1",
       "title": "generatePanel",
       "detail": "renderLayoutPng → キャラ参照 → previous → ImageProvider → putAsset → applyPatch(ai)。generating store、二重起動拒否、履歴切替と削除",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "12",
         "05"
@@ -397,14 +403,16 @@
       "spec": [
         "02-architecture.md データフロー 生成",
         "workstreams/WS-07-panel-art.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "14",
       "group": "G1",
       "title": "PNG 書き出し",
       "detail": "renderPage を Web Worker で実行、ダイアログ（notes、panelNumbers）、ダウンロード",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "13"
       ],
@@ -417,7 +425,9 @@
       ],
       "spec": [
         "workstreams/WS-07-panel-art.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "15",

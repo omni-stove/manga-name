@@ -244,8 +244,24 @@ a {
 .toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 1rem;
   padding-bottom: 0.5rem;
+}
+
+.tool-group {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.tool-group legend {
+  padding: 0 0.25rem;
+  opacity: 0.7;
 }
 
 .toolbar-actions {
@@ -262,21 +278,250 @@ a {
   min-height: 0;
 }
 
-.canvas-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed color-mix(in srgb, currentColor 30%, transparent);
+.canvas {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   border-radius: 0.5rem;
 }
 
-.inspector-placeholder {
+.inspector {
   overflow: auto;
   border-left: 1px solid color-mix(in srgb, currentColor 20%, transparent);
   padding-left: 1rem;
+  font-size: 0.875rem;
 }
 
-.inspector-placeholder pre {
+.inspector h2 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+
+.inspector h3 {
+  font-size: 0.9375rem;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.inspector h4 {
+  font-size: 0.8125rem;
+  margin: 1rem 0 0.25rem;
+  opacity: 0.8;
+}
+
+.inspector > details {
+  margin-top: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  padding-top: 0.5rem;
+}
+
+.inspector summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.inspector input:not([type="file"]),
+.inspector select,
+.inspector textarea {
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.inspector [aria-invalid="true"] {
+  outline: 2px solid #c62828;
+}
+
+.in-field {
+  display: grid;
+  gap: 0.125rem;
+  margin: 0.5rem 0;
+}
+
+.in-label {
   font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.in-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.in-muted {
+  opacity: 0.6;
+}
+
+.in-hint {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.in-hint small {
+  display: block;
+  color: #c62828;
+}
+
+.in-list,
+.in-arts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.in-list li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.125rem 0;
+}
+
+.in-order {
+  min-width: 1.5em;
+  text-align: right;
+  opacity: 0.7;
+}
+
+.in-ellipsis {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.in-arts li {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.in-arts li[data-current] {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.in-thumb {
+  flex: none;
+  width: 6rem;
+  height: 6rem;
+  padding: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.in-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.in-art-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.in-art-meta p {
+  margin: 0.25rem 0;
+}
+
+.in-art-meta pre {
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.in-reference {
+  max-width: 6rem;
+  max-height: 6rem;
+}
+
+.in-diagnosis {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.in-diagnosis dd {
+  margin: 0;
+}
+
+.in-diagnosis ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.toasts {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 10;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  max-width: min(24rem, calc(100vw - 2rem));
+}
+
+.toast {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: Canvas;
+  color: CanvasText;
+  box-shadow: 0 0.25rem 1rem color-mix(in srgb, currentColor 25%, transparent);
+  border-left: 0.25rem solid currentColor;
+  white-space: pre-line;
+}
+
+.toast[data-kind="error"] {
+  border-left-color: #c62828;
+}
+
+.toast span {
+  flex: 1;
+}
+
+.in-art-remove {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.in-art-remove li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.export-dialog {
+  min-width: 20rem;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 0.5rem;
+}
+
+.export-dialog h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.export-dialog select {
+  font: inherit;
+  width: 100%;
+}
+
+.export-dialog .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0;
 }

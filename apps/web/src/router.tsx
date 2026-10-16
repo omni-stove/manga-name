@@ -4,6 +4,8 @@ import {
   type RouterHistory,
   RouterProvider,
 } from '@tanstack/react-router'
+import type { PanelGeneration } from './generate-panel'
+import type { ImageProvider } from './image-provider'
 import type { ProjectLibrary } from './project-library'
 import { RouteError } from './route-error'
 import { routeTree } from './routeTree.gen'
@@ -11,6 +13,10 @@ import { routeTree } from './routeTree.gen'
 /** 各ルートの loader と画面が `context` から使う依存 */
 export interface RouterContext {
   library: ProjectLibrary
+  /** 生成に使う ImageProvider。`createImageProvider()` で設定から作る */
+  imageProvider: ImageProvider
+  /** コマの生成と進行状況。画面を離れても生成が続くよう、ルーターより長く生きる */
+  generation: PanelGeneration
 }
 
 /** アプリのルーター。`history` を省くとブラウザ履歴を使う */
@@ -37,6 +43,8 @@ if (import.meta.vitest) {
   const { createIndexedDbStorage, createMemoryStorage, createMemoryYDocStore } = await import(
     '@manga/storage'
   )
+  const { createPanelGeneration } = await import('./generate-panel')
+  const { createImageProvider } = await import('./image-provider')
   const { createProjectLibrary } = await import('./project-library')
   const { addPagePatch } = await import('./project-ops')
   const { createFakeSyncServer } = await import('./store/fake-sync-server')
@@ -45,7 +53,11 @@ if (import.meta.vitest) {
   await import('fake-indexeddb/auto')
 
   const render = async (library: ProjectLibrary, path: string) => {
-    const router = createAppRouter({ library }, createMemoryHistory({ initialEntries: [path] }))
+    const imageProvider = createImageProvider({ baseUrl: '', token: '' })
+    const router = createAppRouter(
+      { library, imageProvider, generation: createPanelGeneration({ library, imageProvider }) },
+      createMemoryHistory({ initialEntries: [path] }),
+    )
     await router.load()
     return renderToString(<RouterProvider router={router} />)
   }

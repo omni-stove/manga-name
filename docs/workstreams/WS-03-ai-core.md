@@ -35,6 +35,12 @@ export const prompts: {
 
 negative は `settings.style.negative`。
 
+## Phase 1 の実プロバイダ（06-open-questions.md #1 #2 の決定）
+- Google Gemini `gemini-nano-banana-2.1`（generateContent、`responseModalities: ['IMAGE']`、1K）。API キーは Workers の secret `GEMINI_API_KEY`。
+- 画像は parts に inlineData で、配置図、参照画像、キャラ参照（`<name>` を直前のテキスト part で示す）、前回の絵の順に並べ、最後にプロンプトを置く。
+- 配置図は参照画像として渡すだけで、マスクは使わない。白抜きが守られなくてもフキダシはレンダラが上に重ねる。
+- 目視でモノクロ線画が出なければ OpenAI gpt-image-2.5 に替える。プロバイダは Workers の中だけで差し替え、アプリの契約は変えない。
+
 ## Workers ルート（Phase 1）
 ```
 POST /v1/ai/panel-art    multipart (json: PanelArtRequest の Blob 以外 / layout: png / reference?: png / character_<id>?: png / previous?: png) -> image/png

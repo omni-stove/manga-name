@@ -112,6 +112,8 @@ export function createSyncProvider(options: SyncProviderOptions): SyncProvider {
     { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
     from: unknown,
   ) => {
+    // 離脱した相手の clock を残すと、再接続した相手が送る同じ clock の状態を applyAwarenessUpdate が無視する
+    for (const id of removed) if (id !== awareness.clientID) awareness.meta.delete(id)
     if (from === origin) return
     if ([...added, ...updated, ...removed].includes(awareness.clientID)) send(ownAwareness())
   }
@@ -191,12 +193,7 @@ export function createSyncProvider(options: SyncProviderOptions): SyncProvider {
       failures = 0
       state.setState({ status: 'connected', synced: false })
       send(message(MESSAGE_SYNC, (e) => syncProtocol.writeSyncStep1(e, doc)))
-      const local = awareness.getLocalState()
-      if (local !== null) {
-        // forgetPeers で消された側は clock が同じ状態を無視するので、clock を進めて送る
-        awareness.setLocalState(local)
-        send(ownAwareness())
-      }
+      if (awareness.getLocalState() !== null) send(ownAwareness())
     }
     ws.onmessage = (event: MessageEvent) => {
       if (socket !== ws || !(event.data instanceof ArrayBuffer)) return
@@ -363,6 +360,37 @@ if (import.meta.vitest) {
         expect(b.text.toJSON()).toEqual(a.text.toJSON())
       })
       expect(a.provider.state.getState()).toEqual({ status: 'connected', synced: true })
+    })
+
+    test('presence comes back when only one client reconnects', async () => {
+      const server = createFakeSyncServer()
+      const sockets: ReturnType<typeof server.createSocket>[] = []
+      const a = connectClient(server, {
+        createSocket: (url) => {
+          const socket = server.createSocket(url)
+          sockets.push(socket)
+          return socket
+        },
+      })
+      const b = connectClient(server)
+      a.awareness.setLocalState({ name: 'a' })
+      b.awareness.setLocalState({ name: 'b' })
+      await vi.waitFor(() => {
+        expect(a.awareness.getStates().get(b.doc.clientID)).toEqual({ name: 'b' })
+        expect(b.awareness.getStates().get(a.doc.clientID)).toEqual({ name: 'a' })
+      })
+
+      const removedFromB: number[] = []
+      b.awareness.on('change', ({ removed }: { removed: number[] }) =>
+        removedFromB.push(...removed),
+      )
+      sockets[0]?.close()
+      await vi.waitFor(() => {
+        expect(removedFromB).toContain(a.doc.clientID)
+        expect(sockets.length).toBe(2)
+        expect(a.awareness.getStates().get(b.doc.clientID)).toEqual({ name: 'b' })
+        expect(b.awareness.getStates().get(a.doc.clientID)).toEqual({ name: 'a' })
+      })
     })
 
     test('waits while there is no URL yet and connects once there is', async () => {

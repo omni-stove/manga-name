@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // 契約の PanelArtRequest が Blob を持つため
     "lib": ["ES2023", "DOM"]
   },
   "include": ["src"]

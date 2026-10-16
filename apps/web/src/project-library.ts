@@ -4,7 +4,7 @@ import { Awareness } from 'y-protocols/awareness'
 import * as Y from 'yjs'
 import type { StoreApi } from 'zustand/vanilla'
 import { createPresence, type Presence } from './store/presence'
-import { createProjectStore, type WebProjectStore } from './store/project-store'
+import { createProjectStore, type ProjectStore, type WebProjectStore } from './store/project-store'
 import { createSyncProvider, type SyncProviderState } from './store/sync-provider'
 import { createYjsProjectStore } from './store/yjs-project-store'
 
@@ -18,16 +18,22 @@ export interface ProjectLibrary {
   open(id: ID): Promise<WebProjectStore | undefined>
   /** open 済みのプロジェクトの共同編集の接続と presence。共同編集で開いていなければ undefined */
   collaboration(id: ID): Collaboration | undefined
-  /** アセットの ref を表示用 URL にする。呼び出し側が URL.revokeObjectURL で解放する */
-  resolveAsset(ref: string): Promise<string>
   /** 空のプロジェクトを作って保存する */
   create(title: string): Promise<Project>
+  /** store が今もその id で開かれているか。remove 済みなら false。長く待つ処理が削除後の書き戻しを避けるのに使う */
+  isOpen(id: ID, store: ProjectStore): Promise<boolean>
   /** 検証済みのプロジェクトを保存する。id が既存と重なるときは新しい id を振る */
   import(project: Project): Promise<Project>
   /** 未保存の変更を書いてから、プロジェクトとアセットを消す */
   remove(id: ID): Promise<void>
   /** 開いている全プロジェクトの未保存の変更を保存する */
   flushAll(): Promise<void>
+  /** PanelArt.ref を表示用 URL にする。呼び出し側が URL.revokeObjectURL で解放する。無ければ throw */
+  resolveAsset(ref: string): Promise<string>
+  /** ref の画像を Blob で返す。生成の参照画像と前回の絵に使う。無ければ throw */
+  loadAsset(ref: string): Promise<Blob>
+  /** 画像を保存して ref を返す */
+  putAsset(projectId: ID, blob: Blob, hint?: string): Promise<string>
 }
 
 /** 共同編集で開いたプロジェクトの、同期サーバとの接続と他のクライアント */
@@ -199,7 +205,9 @@ export function createProjectLibrary(
       return store
     },
     collaboration: (id) => sessions.get(id),
-    resolveAsset: (ref) => storage.resolveAsset(ref),
+    async isOpen(id, store) {
+      return (await opened.get(id)?.catch(() => undefined)) === store
+    },
     async create(title) {
       const project = createEmptyProject(title)
       await storage.saveProject(project)
@@ -218,16 +226,21 @@ export function createProjectLibrary(
       return imported
     },
     async remove(id) {
-      const store = await opened.get(id)?.catch(() => undefined)
+      const pending = opened.get(id)
+      // flush を待つ間に isOpen が true を返すと、生成の書き込みが flush の後に保存されて復活する
       opened.delete(id)
       const session = sessions.get(id)
       sessions.delete(id)
       // 先に切らないと、flush を待つ間に届いた他のクライアントの更新が新しい debounce を張り、削除の後に保存が走ってプロジェクトが復活する
       session?.close()
+      const store = await pending?.catch(() => undefined)
+      // 先に書き切らないと、debounce 中の保存が削除の後に走ってプロジェクトが復活する
       await store?.flush()
       await session?.flush()
       await storage.deleteProject(id)
       await collaboration?.ydocs.delete(id)
+      // 待つ間に open(id) が呼ばれると、まだ消えていないプロジェクトの store が opened に入る
+      opened.delete(id)
     },
     async flushAll() {
       const stores = await Promise.all([...opened.values()].map((s) => s.catch(() => undefined)))
@@ -236,6 +249,9 @@ export function createProjectLibrary(
         ...[...sessions.values()].map((s) => s.flush()),
       ])
     },
+    resolveAsset: (ref) => storage.resolveAsset(ref),
+    loadAsset: (ref) => storage.loadAsset(ref),
+    putAsset: (projectId, blob, hint) => storage.putAsset(projectId, blob, hint),
   }
 }
 

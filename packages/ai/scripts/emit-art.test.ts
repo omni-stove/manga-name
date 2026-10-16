@@ -5,6 +5,7 @@ import { placeholderPng, placeholderSize } from '../src/placeholder'
 
 // @types/node を入れずに済ませるため、生成を npm script ではなくテストにしている。
 // このファイルは tsconfig の include 外で、typecheck の対象にならない。
+// placeholderPng を変えたら `pnpm exec vitest run packages/ai/scripts/emit-art.test.ts` で作り直す。
 test('emits docs/fixtures/art/<panelId>.png for the sample page', () => {
   const dir = new URL('../../../docs/fixtures/art/', import.meta.url)
   mkdirSync(dir, { recursive: true })
