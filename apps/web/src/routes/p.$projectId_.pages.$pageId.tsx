@@ -10,6 +10,7 @@ import type { Character, ID, Page, Panel, Patch, Project } from '@manga/schema'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { useStore } from 'zustand'
+import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { ExportDialog, type ExportOptions } from '../export-dialog'
 import { downloadBlob, exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
@@ -67,9 +68,6 @@ const ALL_LAYERS: Layers = {
   diagnosis: true,
 }
 
-// ページ一括の生成はタスク 20。それまで「このページを全部生成」は何もしない
-const notWired = () => {}
-
 type Apply = (label: string, build: (project: Project) => Patch) => boolean
 type Generate = (panelId: ID, instruction?: string) => void
 /** 書き出しダイアログが開いているか、閉じて Worker が描いている最中か */
@@ -100,6 +98,13 @@ function Editor() {
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
   useUndoShortcuts(store)
+  const pageBatch = useBatchGeneration({
+    generation,
+    store,
+    projectId,
+    scope: `page/${pageId}`,
+    pageIds: [pageId],
+  })
   const found = findPage(project, pageId)
   // 開いている間に Undo や別タブの操作でページが消えることがある
   if (!found) return <PageNotFound />
@@ -221,10 +226,13 @@ function Editor() {
             <summary>ページ</summary>
             <PageInspector
               page={page}
-              generating={page.panels.some((panel) => generating.has(panel.id))}
+              generating={
+                pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
+              }
               onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
-              onGenerateAll={notWired}
+              onGenerateAll={pageBatch.start}
             />
+            <BatchOptions batch={pageBatch} />
           </details>
           <details>
             <summary>キャラクター（{project.characters.length}）</summary>

@@ -9,8 +9,12 @@ declare global {
       PROJECT_ROOMS: DurableObjectNamespace<ProjectRoom>
       /** アセット本体。キーは `<project_id>/<asset_id>` */
       ASSETS: R2Bucket
+      /** Cloudflare Images。Gemini の JPEG を PNG にする */
+      IMAGES: ImagesBinding
       /** 共有アクセストークン（secret）。Phase 3 で WS-14 の認証に置き換える */
       APP_ACCESS_TOKEN: string
+      /** Gemini の API キー（secret）。無ければ画像生成は Fake */
+      GEMINI_API_KEY?: string
       /** アップロード用署名 URL の HMAC 鍵（secret） */
       ASSET_URL_SECRET: string
       /** CORS で許可する apps/web のオリジン。カンマ区切り */

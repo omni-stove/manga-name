@@ -525,7 +525,7 @@
       "id": "19",
       "group": "G2",
       "title": "実画像プロバイダ接続",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "18"
       ],
@@ -543,14 +543,16 @@
       "spec": [
         "workstreams/WS-03-ai-core.md",
         "06-open-questions.md #1 #2"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "20",
       "group": "G2",
       "title": "一括生成とキャンセル",
       "detail": "ページ単位とエピソード単位、並列 3、AbortController",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "13"
       ],
@@ -564,7 +566,9 @@
       ],
       "spec": [
         "workstreams/WS-07-panel-art.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "21",
