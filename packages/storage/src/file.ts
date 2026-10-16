@@ -299,6 +299,16 @@ if (import.meta.vitest) {
       ])
     })
 
+    test('hasProject is true for a saved file even when it cannot be parsed', async () => {
+      const { files, storage } = setup()
+      expect(await storage.hasProject?.('nope')).toBe(false)
+      const p = createEmptyProject('a')
+      await storage.saveProject(p)
+      files.set(`root/${p.id}.manga.json`, '{')
+      expect(await storage.hasProject?.(p.id)).toBe(true)
+      expect(await storage.listProjects()).toEqual([])
+    })
+
     test('loadProject rejects a missing project and a file that does not pass parseProject', async () => {
       const { files, storage } = setup()
       await expect(storage.loadProject('nope')).rejects.toThrow(/not found/)
