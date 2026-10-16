@@ -1107,7 +1107,7 @@
       "id": "45",
       "group": "G5",
       "title": "Tauri 2 雛形、platform 判定、createFileStorage",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "09"
       ],
@@ -1123,7 +1123,9 @@
       ],
       "spec": [
         "workstreams/WS-17-desktop-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "46",

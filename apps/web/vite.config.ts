@@ -13,6 +13,8 @@ export default defineConfig({
     }),
     react(),
   ],
+  // apps/desktop の devUrl がこのポートを指すので、塞がっていても別のポートに逃げない
+  server: { port: 5173, strictPort: true },
   // in-source のテストブロックを本番ビルドから落とす
   define: { 'import.meta.vitest': 'undefined' },
 })

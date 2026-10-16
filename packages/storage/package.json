@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@manga/schema": "workspace:*",
+    "@tauri-apps/plugin-fs": "^2.4.2",
     "idb": "^8.0.3"
   },
   "devDependencies": {

@@ -39,7 +39,7 @@ pnpm --filter @manga/web test
 
 ## プロジェクトの読み書き
 
-`src/main.tsx` が IndexedDB の StorageAdapter から `createProjectLibrary`（`src/project-library.ts`）を作り、ルーターの `context.library` に渡す。
+`src/main.tsx` が `defaultStorageKind()` で選んだ StorageAdapter（ブラウザでは IndexedDB、`apps/desktop` の中ではファイル）から `createProjectLibrary`（`src/project-library.ts`）を作り、ルーターの `context.library` に渡す。
 
 - `/` の loader が `library.flushAll()` で debounce 待ちの変更を書いてから `library.list()` を読む。作成、削除、JSON のインポート（ファイル選択かドロップ）はここで行う。
 - `/p/$projectId` とエディタの loader が `library.open(id)` で ProjectStore を開く。同じ id には同じ store を返すので、タブを移っても履歴と未保存の変更が残る。

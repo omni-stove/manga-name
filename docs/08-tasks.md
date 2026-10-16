@@ -42,7 +42,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 
 ## 進捗
 
-完了 15 / 着手中 0 / 未着手 44
+完了 16 / 着手中 0 / 未着手 43
 
 ### G0 基盤
 
@@ -105,7 +105,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 
 ### G5 Desktop
 
-- [ ] 45 Tauri 2 雛形、platform 判定、createFileStorage
+- [x] 45 Tauri 2 雛形、platform 判定、createFileStorage（完了 2026-10-16）
 - [ ] 46 ネイティブダイアログ、最近開いたファイル、メニュー、ウィンドウ復元、トークン保存
 - [ ] 47 Desktop ビルド CI
 - [ ] 48 タグビルドとバージョン同期
@@ -382,7 +382,7 @@ graph LR
 
 | ID | 着手 | 完了 | タスク | 依存 | 範囲 | 完了条件 | 仕様 |
 |---|---|---|---|---|---|---|---|
-| 45 | [ ] | [ ] | **Tauri 2 雛形、platform 判定、createFileStorage** | 09 | `apps/desktop`<br>`packages/storage`<br>`apps/web` | - macOS で起動し、フィクスチャを開いて保存して再度開ける<br>- 保存ファイルが `parseProject` を通る<br>- createFileStorage の put / resolve / load テスト（plugin-fs をモック） | [workstreams/WS-17-desktop-shell.md](workstreams/WS-17-desktop-shell.md) |
+| 45 | [x] | [x] | **Tauri 2 雛形、platform 判定、createFileStorage** | 09 | `apps/desktop`<br>`packages/storage`<br>`apps/web` | - macOS で起動し、フィクスチャを開いて保存して再度開ける<br>- 保存ファイルが `parseProject` を通る<br>- createFileStorage の put / resolve / load テスト（plugin-fs をモック） | [workstreams/WS-17-desktop-shell.md](workstreams/WS-17-desktop-shell.md) |
 | 46 | [ ] | [ ] | **ネイティブダイアログ、最近開いたファイル、メニュー、ウィンドウ復元、トークン保存** | 45, 39 | `apps/desktop`<br>`apps/web` | - メニューの Undo / Redo が store に届く<br>- 再起動でウィンドウ位置と最近のファイルが戻る<br>- Desktop でログインし再起動後も残る | [workstreams/WS-17-desktop-shell.md](workstreams/WS-17-desktop-shell.md)<br>[workstreams/WS-14-auth.md](workstreams/WS-14-auth.md) |
 | 47 | [ ] | [ ] | **Desktop ビルド CI**<br>macOS / Windows マトリクス。ビルドのみ | 46 | `.github` | - 両 OS の build job が green | [workstreams/WS-17-desktop-shell.md](workstreams/WS-17-desktop-shell.md) |
 | 48 | [ ] | [ ] | **タグビルドとバージョン同期** | 47 | `.github`<br>`apps/desktop` | - タグ push で両 OS のインストーラが Releases に上がる<br>- package.json と tauri.conf.json の version が一致するチェック | [workstreams/WS-18-desktop-distribution.md](workstreams/WS-18-desktop-distribution.md) |
