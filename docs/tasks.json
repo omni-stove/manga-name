@@ -947,7 +947,7 @@
       "id": "37",
       "group": "G4",
       "title": "staging deploy",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "36"
       ],
@@ -960,7 +960,9 @@
       ],
       "spec": [
         "workstreams/WS-13-workers-api.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "38",

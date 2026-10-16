@@ -21,6 +21,29 @@
     "WEB_ORIGINS": "http://localhost:5173",
     // 06-open-questions.md #9 が決まるまでの仮の値
     "MONTHLY_GENERATION_LIMIT": "300"
+  },
+  // 秘密: wrangler secret put APP_ACCESS_TOKEN、ASSET_URL_SECRET、GEMINI_API_KEY（staging は --env staging）
+  "env": {
+    // bindings と vars は env に継承されないので、トップレベルと同じものを staging のリソースで書き直す
+    "staging": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "manga-api-staging",
+          "database_id": "12b85aa8-23f8-41ae-942d-e4b5cc44c125",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [{ "name": "PROJECT_ROOMS", "class_name": "ProjectRoom" }]
+      },
+      "images": { "binding": "IMAGES" },
+      "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "manga-assets-staging" }],
+      "vars": {
+        // staging の apps/web のオリジンが決まるまではローカルの apps/web から叩く
+        "WEB_ORIGINS": "http://localhost:5173",
+        "MONTHLY_GENERATION_LIMIT": "300"
+      }
+    }
   }
-  // 秘密: wrangler secret put APP_ACCESS_TOKEN、ASSET_URL_SECRET、GEMINI_API_KEY
 }

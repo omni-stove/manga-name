@@ -1,0 +1,53 @@
+name: Deploy staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "workers/api/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-staging.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
+      # 新しいコードが新しい列を読む前にスキーマを揃える
+      - name: Apply D1 migrations
+        working-directory: workers/api
+        run: pnpm exec wrangler d1 migrations apply DB --env staging --remote
+
+      - name: Deploy
+        id: deploy
+        working-directory: workers/api
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler deploy --env staging | tee "$RUNNER_TEMP/deploy.log"
+          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' "$RUNNER_TEMP/deploy.log" | head -n1)
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # 反映直後は旧版が返ることがあるので数回待つ
+      - name: Health check
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$URL/v1/health"
