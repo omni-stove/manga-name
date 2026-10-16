@@ -101,7 +101,7 @@ function referenceCrop(
   rect: Rect,
 ): PixelRect {
   // 画像 1px あたりのページの長さ。キャンバスの preserveAspectRatio="xMidYMid meet" と同じ
-  const unit = Math.max(pageSize.w / image.width, pageSize.h / image.height)
+  const unit = Math.min(pageSize.w / image.width, pageSize.h / image.height)
   const pageW = pageSize.w / unit
   const pageH = pageSize.h / unit
   const offsetX = (pageW - image.width) / 2
