@@ -814,7 +814,7 @@
       "group": "G3",
       "title": "Workers propose-layout ルート",
       "detail": "prompts.proposeLayout、ルート、応答検証、createHttpLlmProvider",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "18"
       ],
@@ -829,7 +829,9 @@
       ],
       "spec": [
         "workstreams/WS-12-layout-proposal.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "33",
