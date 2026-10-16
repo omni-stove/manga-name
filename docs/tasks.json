@@ -1321,7 +1321,7 @@
       "group": "G6",
       "title": "Durable Object 同期サーバ",
       "detail": "永続化、D1 スナップショット",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "35"
       ],
@@ -1334,7 +1334,9 @@
       ],
       "spec": [
         "workstreams/WS-19-collaboration.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "56",

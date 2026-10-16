@@ -13,6 +13,9 @@
     "@manga/ai": "workspace:*",
     "@manga/schema": "workspace:*",
     "hono": "^4.9.0",
+    "lib0": "^0.2.114",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.27",
     "zod": "^4.6.7"
   },
   "devDependencies": {

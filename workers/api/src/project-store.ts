@@ -151,13 +151,19 @@ export async function saveProject(
   return current ? { status: 'conflict', updatedAt: current.updatedAt } : { status: 'not-found' }
 }
 
-/** owner のプロジェクトを本文とアセットの行ごと消す。消したら true。R2 の本体は呼び出し側が消す */
+/** owner のプロジェクトを本文と Yjs スナップショットとアセットの行ごと消す。消したら true。R2 の本体は呼び出し側が消す */
 export async function deleteProject(db: D1Database, ownerId: string, id: string) {
   // 外部キーの CASCADE が無効な環境でも本文を残さないよう、本文から明示的に消す
-  const [, , removed] = await db.batch([
+  const [, , , removed] = await db.batch([
     db
       .prepare(
         `DELETE FROM project_doc_chunks
+         WHERE project_id = (SELECT id FROM projects WHERE id = ?1 AND owner_id = ?2)`,
+      )
+      .bind(id, ownerId),
+    db
+      .prepare(
+        `DELETE FROM project_ydoc_chunks
          WHERE project_id = (SELECT id FROM projects WHERE id = ?1 AND owner_id = ?2)`,
       )
       .bind(id, ownerId),
@@ -170,4 +176,65 @@ export async function deleteProject(db: D1Database, ownerId: string, id: string)
     db.prepare('DELETE FROM projects WHERE id = ?1 AND owner_id = ?2').bind(id, ownerId),
   ])
   return removed?.meta.changes === 1
+}
+
+/** owner のプロジェクトがあれば true */
+export async function projectExists(db: D1Database, ownerId: string, id: string) {
+  const row = await db
+    .prepare('SELECT 1 AS found FROM projects WHERE id = ?1 AND owner_id = ?2')
+    .bind(id, ownerId)
+    .first<{ found: number }>()
+  return row !== null
+}
+
+/** Yjs の状態を 1 行に入れる最大バイト数。D1 の 1 行 2MB に収める */
+const YDOC_CHUNK_BYTES = 1024 * 1024
+
+/**
+ * プロジェクトの Yjs の状態（Y.encodeStateAsUpdate）を D1 に置き換えて書く。
+ * プロジェクトが D1 に無ければ何も書かずに false を返す。
+ */
+export async function writeYDocSnapshot(
+  db: D1Database,
+  projectId: string,
+  state: Uint8Array,
+): Promise<boolean> {
+  const inserts: D1PreparedStatement[] = []
+  for (let seq = 0; seq * YDOC_CHUNK_BYTES < Math.max(state.byteLength, 1); seq++) {
+    const chunk = state.slice(seq * YDOC_CHUNK_BYTES, (seq + 1) * YDOC_CHUNK_BYTES)
+    inserts.push(
+      db
+        .prepare(
+          // 削除と競合した alarm が、消えたプロジェクトの状態を書き戻さないようにする
+          `INSERT INTO project_ydoc_chunks (project_id, seq, data)
+           SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM projects WHERE id = ?1)`,
+        )
+        .bind(projectId, seq, chunk.buffer),
+    )
+  }
+  const [, first] = await db.batch([
+    db.prepare('DELETE FROM project_ydoc_chunks WHERE project_id = ?1').bind(projectId),
+    ...inserts,
+  ])
+  return first?.meta.changes === 1
+}
+
+/** writeYDocSnapshot で書いた Yjs の状態。無ければ null */
+export async function readYDocSnapshot(
+  db: D1Database,
+  projectId: string,
+): Promise<Uint8Array | null> {
+  const { results } = await db
+    .prepare('SELECT data FROM project_ydoc_chunks WHERE project_id = ?1 ORDER BY seq')
+    .bind(projectId)
+    .all<{ data: ArrayBuffer | number[] }>()
+  if (results.length === 0) return null
+  const chunks = results.map((r) => new Uint8Array(r.data))
+  const state = new Uint8Array(chunks.reduce((n, c) => n + c.byteLength, 0))
+  let offset = 0
+  for (const chunk of chunks) {
+    state.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return state
 }

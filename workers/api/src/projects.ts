@@ -8,9 +8,11 @@ import {
   deleteProject,
   insertProject,
   listProjects,
+  projectExists,
   readProject,
   saveProject,
 } from './project-store'
+import { PROJECT_ID_HEADER } from './room'
 import { requireUser, type UserEnv } from './user'
 
 /** 1 Project JSON の上限（バイト） */
@@ -36,6 +38,7 @@ const readProjectJson = (request: Request) =>
 /**
  * `/v1/projects` 以下。X-Debug-User ヘッダのユーザーを owner とし、他人のプロジェクトは 404 にする。
  * GET / PUT は ETag に updated_at を載せ、PUT は If-Match が一致しないと 409。
+ * `GET /:id/sync` は WebSocket を ProjectRoom（y-websocket プロトコル）につなぐ。
  * `/:id/assets` 以下も同じ認証とレート制限の下に置く。now は現在時刻（Unix ミリ秒）。
  */
 export function createProjectsApp(now: () => number = Date.now) {
@@ -102,10 +105,31 @@ export function createProjectsApp(now: () => number = Date.now) {
     }
   })
 
+  app.get('/:id/sync', async (c) => {
+    if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') {
+      return c.json({ error: 'expected a WebSocket upgrade' }, 426)
+    }
+    const id = c.req.param('id')
+    if (!(await projectExists(c.env.DB, c.get('userId'), id))) {
+      return c.json({ error: 'not found' }, 404)
+    }
+    const headers = new Headers(c.req.raw.headers)
+    headers.set(PROJECT_ID_HEADER, id)
+    const room = c.env.PROJECT_ROOMS.get(c.env.PROJECT_ROOMS.idFromName(id))
+    return room.fetch(c.req.url, { headers })
+  })
+
   app.delete('/:id', async (c) => {
     const id = c.req.param('id')
     const removed = await deleteProject(c.env.DB, c.get('userId'), id)
     if (!removed) return c.json({ error: 'not found' }, 404)
+    try {
+      await c.env.PROJECT_ROOMS.get(c.env.PROJECT_ROOMS.idFromName(id)).purge()
+    } catch (e) {
+      // D1 から消えた時点で同期にはつなげないので削除は成功として返す。alarm が残っていれば、
+      // そこで D1 に無いのを見て DO storage を消す
+      console.error('failed to purge the sync room', id, e)
+    }
     await deleteAssetObjects(c.env.ASSETS, id)
     return c.body(null, 204)
   })
