@@ -66,9 +66,8 @@ function ProjectList() {
           新規作成
         </button>
       </form>
-      <div
+      <fieldset
         className="drop-zone"
-        role="group"
         data-dragging={dragging}
         onDragOver={(e) => {
           e.preventDefault()
@@ -92,7 +91,7 @@ function ProjectList() {
             }}
           />
         </label>
-      </div>
+      </fieldset>
       {error && (
         <p className="error" role="alert">
           {error}

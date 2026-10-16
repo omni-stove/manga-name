@@ -140,6 +140,8 @@ a {
 }
 
 .drop-zone {
+  /* fieldset の既定 min-inline-size: min-content が親より広がるのを防ぐ */
+  min-inline-size: 0;
   margin: 1rem 0;
   padding: 1rem;
   border: 1px dashed color-mix(in srgb, currentColor 30%, transparent);
