@@ -15,7 +15,7 @@ const noSubscription = () => () => {}
 // クラウドを使わない構成（API の URL が無い、テスト）では null で、同期状態を出さない
 const SyncStatusContext = createContext<SyncStatusSource | null>(null)
 
-/** 子孫の useSyncState と SyncStatusIndicator が source の同期状態を読むようにする */
+/** 子孫の SyncStatusIndicator が source の同期状態を読むようにする */
 export function SyncStatusProvider({
   source,
   children,
@@ -33,11 +33,6 @@ function useSyncStatus(): SyncStatus {
     source?.getSyncStatus ?? (() => SYNCED),
     () => SYNCED,
   )
-}
-
-/** クラウドとの同期状態。クラウドを使わない構成では常に 'synced' */
-export function useSyncState(): SyncState {
-  return useSyncStatus().state
 }
 
 const LABEL: Record<SyncState, string> = {

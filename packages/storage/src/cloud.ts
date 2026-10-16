@@ -483,6 +483,11 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     let link = await links.get(localId)
     if (link?.syncedUpdatedAt === project.updatedAt && !hasUnsentAssets(project, link))
       return 'done'
+    // 上限超過は今回の送信で 413 を受けたときだけ立て直す
+    if (quotaExceeded) {
+      quotaExceeded = false
+      notify()
+    }
     const refs = assetRefsByPriority(project)
 
     let laterSent = false
@@ -492,6 +497,11 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       laterSent = true
       const later = await uploadRefs(localId, link, refs.later)
       link = later.link
+      if (later.uploaded > 0) {
+        // ref を書き換えた本文がまだ PUT されていないので、次の送信で送り直させる
+        link = { ...link, syncedUpdatedAt: null }
+        await links.set(localId, link)
+      }
       if (later.outcome === 'retry') return 'retry'
       return later.uploaded === 0 ? 'done' : undefined
     }
