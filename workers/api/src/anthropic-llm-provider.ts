@@ -32,7 +32,9 @@ export function createAnthropicLlmProvider(opts: AnthropicLlmProviderOptions): L
         maxRetries: 0,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
         // jsonSchema に validate を渡さないのは、範囲と参照整合まで見る Zod の検証を呼び出し側が持つため
-        output: Output.object({ schema: jsonSchema<LayoutProposalResponse>(schema as JSONSchema7) }),
+        output: Output.object({
+          schema: jsonSchema<LayoutProposalResponse>(schema as JSONSchema7),
+        }),
         providerOptions: {
           // ざっくり提案してざっくり直す用途なので、思考を浅くして費用と待ち時間を抑える
           anthropic: { structuredOutputMode: 'outputFormat', effort: 'low' },
