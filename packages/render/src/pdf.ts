@@ -8,9 +8,9 @@ import {
   popGraphicsState,
   pushGraphicsState,
 } from 'pdf-lib'
-import { FONT_FAMILY, getBackend, loadFonts } from './backend'
+import { FONT_FAMILY, getBackend, loadFonts, type Surface } from './backend'
 import { pagePixelSize } from './geometry'
-import { renderPage } from './page'
+import { drawPage } from './page'
 import { wrapHorizontal } from './text'
 import type { RenderContext, RenderOptions } from './types'
 
@@ -38,7 +38,7 @@ interface Numbered {
 }
 
 /**
- * エピソードのページを renderPage の PNG にして PDF に束ねる。
+ * エピソードのページを renderPage と同じ描画で画像にして PDF に束ねる。
  * pages で範囲を絞り、spread なら見開き 1 枚にする（rtl は奇数ページが左、ltr は右）。
  * notes: 'sheet' なら各紙面の後ろに指示メモの一覧ページを足す。
  */
@@ -76,11 +76,11 @@ export async function exportPdf(
       if (renders.has(ahead)) continue
       // 展開と圧縮も先行側で済ませ、メインの待ちを PDF への配置だけにする
       const job = Promise.all([
-        renderPage(ahead.page, ctx, renderOpts).then((png) => embedOpaquePng(doc, png)),
+        drawPage(ahead.page, ctx, renderOpts).then((surface) => embedOpaque(doc, surface)),
         (opts.notes === 'sheet'
           ? renderNotesSheets(ahead.page, ahead.number, ctx, opts.width)
           : Promise.resolve([])
-        ).then((pngs) => Promise.all(pngs.map((png) => embedOpaquePng(doc, png)))),
+        ).then((surfaces) => Promise.all(surfaces.map((surface) => embedOpaque(doc, surface)))),
       ]).then(([page, notes]) => ({ page, notes }))
       // 先に描き始めた分が、手前のページの失敗で待たれないまま reject しても未処理にしない
       job.catch(() => undefined)
@@ -131,16 +131,12 @@ interface Embedded {
 }
 
 /**
- * 不透明な PNG を RGB の画像 XObject として埋め込む。アルファは捨てる（renderPage の背景は白で塗りつぶし済み）。
+ * 不透明な Surface を RGB の画像 XObject として埋め込む。アルファは捨てる（背景は白で塗りつぶし済み）。
  * pdf-lib の embedPng を使わないのは、PNG の展開と再圧縮を JS（pako）でやるので 300dpi 1 枚に 200ms 前後かかり、
- * 20 ページ 10 秒に収まらないため。デコードは Backend、圧縮は CompressionStream でネイティブに任せる
+ * 20 ページ 10 秒に収まらないため。PNG も経由せず、画素を直接取り出して CompressionStream でネイティブに圧縮する
  */
-async function embedOpaquePng(doc: PDFDocument, png: Blob): Promise<Embedded> {
-  const backend = await getBackend()
-  const decoded = await backend.decodeImage(png)
-  const { width, height } = decoded as { width: number; height: number }
-  const surface = backend.createSurface(width, height)
-  surface.ctx.drawImage(decoded, 0, 0)
+async function embedOpaque(doc: PDFDocument, surface: Surface): Promise<Embedded> {
+  const { width, height } = surface
   const rgba = surface.ctx.getImageData(0, 0, width, height).data
   const rgb = new Uint8Array(width * height * 3)
   for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
@@ -195,7 +191,7 @@ function onLeftHalf(number: number, direction: Project['settings']['direction'])
 }
 
 /**
- * ページ 1 枚分の指示メモ（コマ番号、camera、note、セリフ）を横書きで並べた PNG。収まらなければ複数枚。
+ * ページ 1 枚分の指示メモ（コマ番号、camera、note、セリフ）を横書きで並べた Surface。収まらなければ複数枚。
  * pdf-lib に Noto Sans JP を埋め込んで文字で書かないのは、@pdf-lib/fontkit のサブセット化で字が欠け、
  * サブセットしないと PDF ごとに約 6MB 増えるうえ可変フォントの既定の太さ（Thin）になるため
  */
@@ -204,7 +200,7 @@ async function renderNotesSheets(
   number: number,
   ctx: RenderContext,
   width: number | undefined,
-): Promise<Blob[]> {
+): Promise<Surface[]> {
   const [backend] = await Promise.all([getBackend(), loadFonts()])
   const size = pagePixelSize(ctx.settings, width)
   const fontPx = size.w * SHEET_FONT
@@ -256,7 +252,7 @@ async function renderNotesSheets(
       y += lineHeight
     }
   }
-  return Promise.all(surfaces.map((surface) => surface.toPng()))
+  return surfaces
 }
 
 if (import.meta.vitest) {
