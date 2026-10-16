@@ -1,4 +1,9 @@
-import { createCloudStorage, createStorage, defaultStorageKind } from '@manga/storage'
+import {
+  createCloudStorage,
+  createIndexedDbYDocStore,
+  createStorage,
+  defaultStorageKind,
+} from '@manga/storage'
 import { applyThemePreference, readThemePreference } from '@manga/ui'
 import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
@@ -9,6 +14,7 @@ import { createImageProvider, readApiBaseUrl } from './image-provider'
 import { createProjectLibrary } from './project-library'
 import { createAppRouter } from './router'
 import { createSharingClient } from './sharing'
+import { createTabSync } from './store/tab-sync'
 import { AuthProvider } from './use-auth'
 import '@manga/ui/tokens.css'
 import '@manga/ui/base.css'
@@ -39,7 +45,18 @@ const sharing = createSharingClient({
     return url === null ? null : decodeURIComponent(new URL(url).pathname.split('/').at(-2) ?? '')
   },
 })
-const library = createProjectLibrary(storage, { roleOf: sharing.role })
+// 本番の同期サーバにつなぐのは別タスクなので、e2e のビルドだけ同じブラウザのタブ同士でつなぐ
+const library = createProjectLibrary(storage, {
+  roleOf: sharing.role,
+  ...(import.meta.env.VITE_COLLAB_TABS === '1' && {
+    collaboration: {
+      syncUrl: async (id: string) => `tab-sync:${id}`,
+      ydocs: createIndexedDbYDocStore(),
+      userName: 'タブ',
+      createSocket: createTabSync(),
+    },
+  }),
+})
 const imageProvider = createImageProvider({ baseUrl, getToken: auth.getToken })
 const generation = createPanelGeneration({ library, imageProvider })
 
