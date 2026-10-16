@@ -86,14 +86,14 @@ export function useScribble(opts: Options) {
     const d = drawing.current
     if (!d) return
     const last = d.points[d.points.length - 1]
+    const point = { x: round(clamp01(p.x / opts.width)), y: round(clamp01(p.y / opts.height)) }
     if (
       last &&
-      Math.hypot(p.x - last.x * opts.width, p.y - last.y * opts.height) <
+      Math.hypot((point.x - last.x) * opts.width, (point.y - last.y) * opts.height) <
         SCRIBBLE_MIN_STEP * opts.width
     ) {
       return
     }
-    const point = { x: round(clamp01(p.x / opts.width)), y: round(clamp01(p.y / opts.height)) }
     d.points.push(point)
     d.attr += `${d.attr ? ' ' : ''}${point.x * opts.width},${point.y * opts.height}`
     opts.liveRef.current?.setAttribute('points', d.attr)
@@ -122,6 +122,7 @@ export function useScribble(opts: Options) {
       }
       // Space や中ボタンのパンは useViewport が preventDefault 済み
       if (e.defaultPrevented || e.button !== 0) return
+      if (drawing.current) return
       e.currentTarget.focus({ preventScroll: true })
       if (opts.tool === 'eraser') {
         erase(e)
@@ -168,4 +169,3 @@ export function useScribble(opts: Options) {
 
   return { handlers }
 }
-
