@@ -9,6 +9,7 @@ export default defineConfig(async () => {
         wrangler: { configPath: './wrangler.jsonc' },
         miniflare: {
           bindings: {
+            ENVIRONMENT: 'development',
             BETTER_AUTH_SECRET: 'test-better-auth-secret-0123456789abcdef',
             ASSET_URL_SECRET: 'test-asset-secret',
             TEST_MIGRATIONS: migrations,
