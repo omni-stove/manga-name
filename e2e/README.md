@@ -7,4 +7,4 @@ pnpm --filter @manga/e2e exec playwright install chromium  # 初回だけ
 pnpm --filter @manga/e2e e2e
 ```
 
-webServer が apps/web をビルドして `vite preview`（4173 番）で配る。CI（`.github/workflows/e2e.yml`）は毎晩 03:00 JST に main で走り、Actions の画面から手動でも起動できる。失敗したテストのスクリーンショットとトレースが artifact `e2e-report` に残り、`pnpm --filter @manga/e2e exec playwright show-trace <trace.zip>` で開ける。
+webServer が apps/web をビルドして `vite preview`（4173 番）で配る。プロジェクト `collab` は `VITE_COLLAB_TABS=1` で別にビルドした apps/web（4174 番）に対して、シナリオ 1, 2, 3 と `collab-*.e2e.ts` を共同編集モードで流す。このビルドは同じブラウザのタブ同士を SharedWorker の同期サーバでつなぐので、workers/api もログインも要らない（仕様は `docs/workstreams/WS-19-collaboration.md`）。CI（`.github/workflows/e2e.yml`）は毎晩 03:00 JST に main で走り、Actions の画面から手動でも起動できる。失敗したテストのスクリーンショットとトレースが artifact `e2e-report` に残り、`pnpm --filter @manga/e2e exec playwright show-trace <trace.zip>` で開ける。
