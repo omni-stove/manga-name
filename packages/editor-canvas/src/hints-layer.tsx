@@ -5,12 +5,12 @@ import { FONT_FAMILY, SELECTED } from './page-layer'
 import type { Selection } from './types'
 import type { HintDraft } from './use-hint-tool'
 
-export const FOCUS_COLORS: Record<FocusKind, string> = {
+const FOCUS_COLORS: Record<FocusKind, string> = {
   face: '#2563eb',
   keyObject: '#f97316',
   sfx: '#9333ea',
 }
-export const VECTOR_COLOR = '#16a34a'
+const VECTOR_COLOR = '#16a34a'
 
 const DOT_RADIUS = 0.8
 const LABEL_SIZE = 2.4
@@ -35,7 +35,8 @@ interface HintsLayerProps {
  */
 export const HintsLayer = memo(function HintsLayer(props: HintsLayerProps) {
   const { page, width, height, selection, draft } = props
-  const selectedId = selection?.kind === 'focus' || selection?.kind === 'vector' ? selection.id : undefined
+  const selectedId =
+    selection?.kind === 'focus' || selection?.kind === 'vector' ? selection.id : undefined
   return (
     <g data-layer="hints" pointerEvents="none">
       {page.panels.map((panel) => {
@@ -64,7 +65,13 @@ export const HintsLayer = memo(function HintsLayer(props: HintsLayerProps) {
               />
             ))}
             {draft?.kind === 'vector' && draft.panelId === panel.id && (
-              <Arrow from={toPage(draft.from)} to={toPage(draft.to)} width={2} dashed data-draft="vector" />
+              <Arrow
+                from={toPage(draft.from)}
+                to={toPage(draft.to)}
+                width={2}
+                dashed
+                data-draft="vector"
+              />
             )}
           </g>
         )

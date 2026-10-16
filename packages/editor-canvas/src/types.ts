@@ -1,4 +1,12 @@
-import type { Character, FocusKind, ID, Page, PageDiagnosis, Patch, ProjectSettings } from '@manga/schema'
+import type {
+  Character,
+  FocusKind,
+  ID,
+  Page,
+  PageDiagnosis,
+  Patch,
+  ProjectSettings,
+} from '@manga/schema'
 
 export type Selection = { kind: 'panel' | 'bubble' | 'focus' | 'vector'; id: ID } | null
 

@@ -94,7 +94,13 @@ export function useHintTool(opts: Options) {
       if (opts.tool === 'focus') {
         const hit = hintAt(opts.page, opts.width, opts.height, at, tolerance)
         if (hit?.kind === 'focus') {
-          take(e, { kind: 'move', pointerId: e.pointerId, focusId: hit.id, client, dragging: false })
+          take(e, {
+            kind: 'move',
+            pointerId: e.pointerId,
+            focusId: hit.id,
+            client,
+            dragging: false,
+          })
           select(hit)
           return
         }

@@ -331,7 +331,15 @@ function Highlight({
   const to = toPagePoint(at.panel, width, height, vector.to)
   return (
     <g data-layer="highlight" data-hovered-id={target.id}>
-      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} {...stroke} strokeWidth={5} strokeOpacity={0.6} />
+      <line
+        x1={from.x}
+        y1={from.y}
+        x2={to.x}
+        y2={to.y}
+        {...stroke}
+        strokeWidth={5}
+        strokeOpacity={0.6}
+      />
     </g>
   )
 }

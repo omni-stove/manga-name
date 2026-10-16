@@ -108,6 +108,8 @@ export function useSelection(opts: Options) {
         if (opts.selection !== null) opts.onSelect(null)
         return
       }
+      const hintSelected = opts.selection?.kind === 'focus' || opts.selection?.kind === 'vector'
+      if (hintSelected && !opts.hints) return
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const patch = removePatch(opts.page, opts.selection)
         if (patch.length === 0) return

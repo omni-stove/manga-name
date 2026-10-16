@@ -13,7 +13,7 @@ import { inBubble, type PagePoint, panelAt, panelBox } from './hit-test'
 import type { View } from './view'
 
 /** weight 1 の焦点の描画半径（mm） */
-export const FOCUS_RADIUS = 10
+const FOCUS_RADIUS = 10
 const DEFAULT_WEIGHT = 0.5
 /** 焦点とベクトルを掴める距離。viewBox の幅に対する比率なので、ズームしても画面上の距離が変わらない */
 const HIT_RATIO = 0.012
@@ -122,7 +122,7 @@ export function hintAt(
  * ベクトルの端が乗っている焦点かフキダシの ID。焦点を優先する。
  * PanelSchema が参照先をコマ内に限るので、そのコマの中だけを見る
  */
-export function anchorAt(
+function anchorAt(
   panel: Panel,
   width: number,
   height: number,
@@ -180,9 +180,7 @@ export function moveFocusPatch(page: Page, focusId: ID, pos: Point): Patch {
   const to = { x: round(clamp01(pos.x)), y: round(clamp01(pos.y)) }
   if (to.x === focus.pos.x && to.y === focus.pos.y) return []
   const base = `/panels/${at.panelIndex}`
-  const patch: Patch = [
-    { op: 'replace', path: `${base}/focusPoints/${at.index}/pos`, value: to },
-  ]
+  const patch: Patch = [{ op: 'replace', path: `${base}/focusPoints/${at.index}/pos`, value: to }]
   const dx = to.x - focus.pos.x
   const dy = to.y - focus.pos.y
   for (const [j, vector] of at.panel.vectors.entries()) {

@@ -25,7 +25,8 @@ function pointerOf(page: Page, selection: Selection): string | undefined {
     }
     return undefined
   }
-  const at = selection.kind === 'focus' ? findFocus(page, selection.id) : findVector(page, selection.id)
+  const at =
+    selection.kind === 'focus' ? findFocus(page, selection.id) : findVector(page, selection.id)
   if (!at) return undefined
   return `/panels/${at.panelIndex}/${selection.kind === 'focus' ? 'focusPoints' : 'vectors'}/${at.index}`
 }
