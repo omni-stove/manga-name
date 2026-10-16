@@ -1,0 +1,15 @@
+{
+  "name": "@manga/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "icons": "tauri icon app-icon.svg",
+    "dev": "pnpm icons && tauri dev",
+    "build": "pnpm icons && tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.6"
+  }
+}

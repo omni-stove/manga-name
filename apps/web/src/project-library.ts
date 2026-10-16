@@ -34,7 +34,11 @@ export function createProjectLibrary(
   // Promise を持つのは、同じ id を並行して開いたときに store を 2 つ作らないため
   const opened = new Map<ID, Promise<WebProjectStore | undefined>>()
 
-  const exists = async (id: ID) => (await storage.listProjects()).some((p) => p.id === id)
+  // file アダプタは読めないファイルを listProjects から外すので、あれば hasProject で確かめる
+  const exists = async (id: ID) =>
+    storage.hasProject
+      ? storage.hasProject(id)
+      : (await storage.listProjects()).some((p) => p.id === id)
 
   const load = async (id: ID) => {
     try {
@@ -76,7 +80,10 @@ export function createProjectLibrary(
     async import(project) {
       const imported = {
         ...project,
-        id: (await exists(project.id)) ? newId() : project.id,
+        id:
+          (storage.canStoreId?.(project.id) ?? true) && !(await exists(project.id))
+            ? project.id
+            : newId(),
         updatedAt: now(),
       }
       await storage.saveProject(imported)
