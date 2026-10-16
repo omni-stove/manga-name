@@ -312,7 +312,7 @@
       "group": "G1",
       "title": "EditorCanvas の描画",
       "detail": "座標系、ズーム、パン、Panels、Bubbles（縦書き）、Art（clip）、未生成コマの note 表示、generating 表示",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "04"
       ],
@@ -327,7 +327,9 @@
       ],
       "spec": [
         "workstreams/WS-04-editor-canvas.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "11",

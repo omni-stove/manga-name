@@ -1,0 +1,360 @@
+import { type Bubble, currentArt, type ID, type Page, type Panel } from '@manga/schema'
+import { memo } from 'react'
+import { type Box, bodyPath, bubbleGeometry, tailPath, textBox } from './bubble-shape'
+import type { Selection } from './types'
+import type { AssetState } from './use-asset-urls'
+import { COLUMN_PITCH, layoutVertical } from './vertical-text'
+
+const FONT_FAMILY = '"Noto Sans JP", sans-serif'
+const SELECTED = '#2563eb'
+const NOTE_COLOR = '#888'
+const NUMBER_RADIUS = 3.2
+
+interface PageLayerProps {
+  page: Page
+  /** ページの大きさ（mm）。SVG のユーザー単位 */
+  width: number
+  height: number
+  showArt: boolean
+  assets: ReadonlyMap<string, AssetState>
+  generating: Set<ID>
+  selection: Selection
+  /** clipPath の id の接頭辞。同じ文書に複数のキャンバスがあっても衝突しない値 */
+  idPrefix: string
+  onArtError(ref: string): void
+  onGenerate?(panelId: ID): void
+}
+
+/**
+ * ページの白地、コマ、生成画像、フキダシを描く。ズームとパンでは props が変わらないので、
+ * memo で再描画を飛ばす
+ */
+export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
+  const { page, width, height } = props
+  return (
+    <g data-layer="page">
+      <rect
+        x={0}
+        y={0}
+        width={width}
+        height={height}
+        fill="#fff"
+        stroke="#d4d4d4"
+        strokeWidth={1}
+        vectorEffect="non-scaling-stroke"
+      />
+      {page.panels.map((panel, i) => {
+        const ref = currentArt(panel)?.ref
+        return (
+          <PanelView
+            key={panel.id}
+            panel={panel}
+            rect={{
+              x: panel.rect.x * width,
+              y: panel.rect.y * height,
+              w: panel.rect.w * width,
+              h: panel.rect.h * height,
+            }}
+            artRef={props.showArt ? ref : undefined}
+            asset={props.showArt && ref !== undefined ? props.assets.get(ref) : undefined}
+            generating={props.generating.has(panel.id)}
+            selection={props.selection}
+            clipId={`${props.idPrefix}-clip-${i}`}
+            onArtError={props.onArtError}
+            onGenerate={props.onGenerate}
+          />
+        )
+      })}
+    </g>
+  )
+})
+
+function PanelView({
+  panel,
+  rect,
+  artRef,
+  asset,
+  generating,
+  selection,
+  clipId,
+  onArtError,
+  onGenerate,
+}: {
+  panel: Panel
+  rect: Box
+  artRef: string | undefined
+  asset: AssetState | undefined
+  generating: boolean
+  selection: Selection
+  clipId: string
+  onArtError(ref: string): void
+  onGenerate?(panelId: ID): void
+}) {
+  const selected = selection?.kind === 'panel' && selection.id === panel.id
+  const url = asset && 'url' in asset ? asset.url : undefined
+  return (
+    <g
+      className="ec-panel"
+      data-panel-id={panel.id}
+      data-generating={generating || undefined}
+      data-art-error={(asset && 'error' in asset) || undefined}
+    >
+      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} fill="#fff" />
+      {artRef !== undefined && url !== undefined ? (
+        <>
+          <clipPath id={clipId}>
+            <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} />
+          </clipPath>
+          <image
+            href={url}
+            x={rect.x}
+            y={rect.y}
+            width={rect.w}
+            height={rect.h}
+            preserveAspectRatio="xMidYMid slice"
+            clipPath={`url(#${clipId})`}
+            onError={() => onArtError(artRef)}
+          />
+        </>
+      ) : (
+        <Placeholder
+          panel={panel}
+          rect={rect}
+          error={asset !== undefined && 'error' in asset}
+        />
+      )}
+      <rect
+        x={rect.x}
+        y={rect.y}
+        width={rect.w}
+        height={rect.h}
+        fill="none"
+        stroke={selected ? SELECTED : '#000'}
+        strokeWidth={selected ? 2 : 1}
+        vectorEffect="non-scaling-stroke"
+      />
+      {[...panel.bubbles]
+        .sort((a, b) => a.order - b.order)
+        .map((bubble) => (
+          <BubbleView
+            key={bubble.id}
+            bubble={bubble}
+            panel={rect}
+            selected={selection?.kind === 'bubble' && selection.id === bubble.id}
+          />
+        ))}
+      {generating && <GeneratingOverlay rect={rect} />}
+      <PanelNumber order={panel.order} rect={rect} />
+      {onGenerate && !generating && (
+        <GenerateButton rect={rect} onClick={() => onGenerate(panel.id)} />
+      )}
+    </g>
+  )
+}
+
+/** 未生成コマの中身。camera と note を灰色の横書きで、コマに収まるぶんだけ出す */
+function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: boolean }) {
+  if (!panel.camera && !panel.note && !error) return null
+  return (
+    <foreignObject x={rect.x} y={rect.y} width={rect.w} height={rect.h} data-placeholder="">
+      <div
+        style={{
+          boxSizing: 'border-box',
+          height: '100%',
+          overflow: 'hidden',
+          padding: `1.5px ${NUMBER_RADIUS * 2 + 2}px 1.5px 1.5px`,
+          color: NOTE_COLOR,
+          fontFamily: FONT_FAMILY,
+          fontSize: '2.6px',
+          lineHeight: 1.4,
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {error && <div style={{ color: '#dc2626' }}>画像を読み込めません</div>}
+        {panel.camera && <div>[{panel.camera}]</div>}
+        {panel.note && <div>{panel.note}</div>}
+      </div>
+    </foreignObject>
+  )
+}
+
+/** 右上の赤丸の番号 */
+function PanelNumber({ order, rect }: { order: number; rect: Box }) {
+  const r = NUMBER_RADIUS
+  const cx = rect.x + rect.w - r - 1
+  const cy = rect.y + r + 1
+  return (
+    <g data-panel-number={order}>
+      <circle cx={cx} cy={cy} r={r} fill="#dc2626" />
+      <text
+        x={cx}
+        y={cy}
+        fill="#fff"
+        fontFamily={FONT_FAMILY}
+        fontSize={r * 1.1}
+        fontWeight="bold"
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        {order}
+      </text>
+    </g>
+  )
+}
+
+/** 半透明の白と回るスピナー */
+function GeneratingOverlay({ rect }: { rect: Box }) {
+  const cx = rect.x + rect.w / 2
+  const cy = rect.y + rect.h / 2
+  const r = Math.min(12, Math.max(3, Math.min(rect.w, rect.h) * 0.12))
+  return (
+    <g data-spinner="" role="status" aria-label="生成中">
+      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} fill="#fff" opacity={0.6} />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        stroke="#d4d4d4"
+        strokeWidth={3}
+        vectorEffect="non-scaling-stroke"
+      />
+      <path
+        d={`M${cx} ${cy - r}A${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+        fill="none"
+        stroke={SELECTED}
+        strokeWidth={3}
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      >
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from={`0 ${cx} ${cy}`}
+          to={`360 ${cx} ${cy}`}
+          dur="0.9s"
+          repeatCount="indefinite"
+        />
+      </path>
+    </g>
+  )
+}
+
+/** コマのホバーで出す「生成」ボタン。右下に置く */
+function GenerateButton({ rect, onClick }: { rect: Box; onClick(): void }) {
+  const w = 12
+  const h = 5
+  const x = rect.x + rect.w - w - 1.5
+  const y = rect.y + rect.h - h - 1.5
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: SVG の中に <button> は置けない
+    <g
+      className="ec-generate"
+      role="button"
+      tabIndex={0}
+      aria-label="このコマを生成"
+      style={{ cursor: 'pointer' }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return
+        e.preventDefault()
+        onClick()
+      }}
+    >
+      <rect x={x} y={y} width={w} height={h} rx={1} fill={SELECTED} />
+      <text
+        x={x + w / 2}
+        y={y + h / 2}
+        fill="#fff"
+        fontFamily={FONT_FAMILY}
+        fontSize={2.6}
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        生成
+      </text>
+    </g>
+  )
+}
+
+/**
+ * フキダシ。太線で輪郭を描いてから同じ形を白で塗り重ね、本体としっぽの継ぎ目の線を消す。
+ * 外側に残る線は太線の半分になる
+ */
+function BubbleView({
+  bubble,
+  panel,
+  selected,
+}: {
+  bubble: Bubble
+  panel: Box
+  selected: boolean
+}) {
+  const g = bubbleGeometry(bubble, panel)
+  const body = bodyPath(bubble.shape, g)
+  const tail = tailPath(bubble.shape, g)
+  const box = textBox(bubble.shape, g)
+  const layout = layoutVertical(bubble.text, box)
+  const pitch = layout.fontSize * COLUMN_PITCH
+  const blockWidth =
+    layout.columns.length === 0 ? 0 : (layout.columns.length - 1) * pitch + layout.fontSize
+  const right = box.x + box.w / 2 + blockWidth / 2 - layout.fontSize / 2
+  const shapes = tail === null ? [body] : [tail, body]
+  return (
+    <g className="ec-bubble" data-bubble-id={bubble.id} data-shape={bubble.shape}>
+      {shapes.map((d) => (
+        <path
+          key={`stroke-${d}`}
+          d={d}
+          fill="#fff"
+          stroke="#000"
+          strokeWidth={2}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+      {shapes.map((d) => (
+        <path key={`fill-${d}`} d={d} fill="#fff" />
+      ))}
+      {selected && (
+        <path
+          d={body}
+          fill="none"
+          stroke={SELECTED}
+          strokeWidth={2}
+          strokeDasharray="4 2"
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
+      {layout.columns.length > 0 && (
+        <text
+          writingMode="vertical-rl"
+          fontFamily={FONT_FAMILY}
+          fontSize={layout.fontSize}
+          textAnchor="middle"
+          fill="#000"
+          data-truncated={layout.truncated || undefined}
+        >
+          {layout.columns.map((column, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
+            <tspan key={i} x={right - i * pitch} y={box.y + box.h / 2}>
+              {column}
+            </tspan>
+          ))}
+        </text>
+      )}
+      <text
+        x={g.cx + g.rx}
+        y={g.cy - g.ry}
+        fill="#666"
+        fontFamily={FONT_FAMILY}
+        fontSize={2.2}
+        textAnchor="middle"
+        data-bubble-order={bubble.order}
+      >
+        {bubble.order}
+      </text>
+    </g>
+  )
+}
