@@ -1,0 +1,105 @@
+import { env } from 'cloudflare:workers'
+import { fixtures } from '@manga/schema'
+import { beforeEach, describe, expect, test } from 'vitest'
+import { createApp } from '../src/app'
+import { DEBUG_USER_HEADER } from '../src/user'
+
+const app = createApp()
+const staging = { ...env, ENVIRONMENT: 'staging' }
+
+const DAY = 86_400_000
+
+/** auth_users と auth_sessions に userId のユーザーと、token のセッションを expiresAt まで入れる */
+async function seedSession(userId: string, token: string, expiresAt: number) {
+  const now = new Date().toISOString()
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO auth_users (id, name, email, emailVerified, image, createdAt, updatedAt)
+       VALUES (?1, ?1, ?1 || '@example.com', 1, NULL, ?2, ?2)`,
+    ).bind(userId, now),
+    env.DB.prepare(
+      `INSERT INTO auth_sessions (id, expiresAt, token, createdAt, updatedAt, userId)
+       VALUES (?1, ?2, ?3, ?4, ?4, ?5)`,
+    ).bind(`s_${token}`, new Date(expiresAt).toISOString(), token, now, userId),
+  ])
+}
+
+const bearer = (token: string) => ({ authorization: `Bearer ${token}` })
+
+function proposeLayout(headers: Record<string, string>, target = env) {
+  const { settings, characters } = fixtures.samplePage01
+  return app.request(
+    '/v1/ai/propose-layout',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ project: { settings, characters }, script: '森を歩く。' }),
+    },
+    target,
+  )
+}
+
+beforeEach(async () => {
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM auth_sessions'),
+    env.DB.prepare('DELETE FROM auth_users'),
+    env.DB.prepare('DELETE FROM ai_usage'),
+    env.DB.prepare('DELETE FROM rate_limits'),
+  ])
+})
+
+describe('Bearer token', () => {
+  test('a valid session token authenticates as its user', async () => {
+    await seedSession('u_alice', 'tok-alice', Date.now() + DAY)
+    const res = await app.request('/v1/projects', { headers: bearer('tok-alice') }, staging)
+    expect(res.status).toBe(200)
+  })
+
+  test('401 on a missing, unknown, malformed or expired token', async () => {
+    await seedSession('u_alice', 'tok-alice', Date.now() + DAY)
+    await seedSession('u_bob', 'tok-bob', Date.now() - 1_000)
+    for (const headers of [
+      {},
+      bearer('nope'),
+      { authorization: 'tok-alice' },
+      { authorization: 'Basic tok-alice' },
+      bearer('tok-bob'),
+    ]) {
+      expect((await app.request('/v1/projects', { headers }, staging)).status).toBe(401)
+    }
+  })
+
+  test('/v1/ai/* is authenticated and counted for the session user', async () => {
+    await seedSession('u_alice', 'tok-alice', Date.now() + DAY)
+    expect((await proposeLayout({}, staging)).status).toBe(401)
+    expect((await proposeLayout(bearer('nope'), staging)).status).toBe(401)
+
+    expect((await proposeLayout(bearer('tok-alice'), staging)).status).toBe(200)
+    const { results } = await env.DB.prepare('SELECT user_id FROM ai_usage').all()
+    expect(results).toEqual([{ user_id: 'u_alice' }])
+  })
+})
+
+describe('X-Debug-User', () => {
+  test('is accepted when ENVIRONMENT is development', async () => {
+    expect(env.ENVIRONMENT).toBe('development')
+    const headers = { [DEBUG_USER_HEADER]: 'alice' }
+    expect((await app.request('/v1/projects', { headers }, env)).status).toBe(200)
+    expect((await proposeLayout(headers)).status).toBe(200)
+  })
+
+  test('is ignored outside development', async () => {
+    const headers = { [DEBUG_USER_HEADER]: 'alice' }
+    expect((await app.request('/v1/projects', { headers }, staging)).status).toBe(401)
+    expect((await proposeLayout(headers, staging)).status).toBe(401)
+  })
+
+  test('does not override the Bearer user outside development', async () => {
+    await seedSession('u_alice', 'tok-alice', Date.now() + DAY)
+    const headers = { ...bearer('tok-alice'), [DEBUG_USER_HEADER]: 'mallory' }
+    const res = await proposeLayout(headers, staging)
+    expect(res.status).toBe(200)
+    const { results } = await env.DB.prepare('SELECT user_id FROM ai_usage').all()
+    expect(results).toEqual([{ user_id: 'u_alice' }])
+  })
+})

@@ -1,5 +1,5 @@
-import { currentArt, type Page } from '@manga/schema'
-import { useId, useMemo, useRef } from 'react'
+import { currentArt, type Page, type Stroke } from '@manga/schema'
+import { memo, useId, useMemo, useRef } from 'react'
 import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { BubbleToolLayer } from './bubble-tool-layer'
 import { panelBox } from './hit-test'
@@ -9,6 +9,7 @@ import type { EditorCanvasProps, Selection } from './types'
 import { useAssetUrls } from './use-asset-urls'
 import { useBubbleTool } from './use-bubble-tool'
 import { usePanelTool } from './use-panel-tool'
+import { polylinePoints, SCRIBBLE_WIDTH, useScribble } from './use-scribble'
 import { sameSelection, useSelection } from './use-selection'
 import { useViewport } from './use-viewport'
 import { zoomOf } from './view'
@@ -21,6 +22,14 @@ const STYLE = `
 
 const HOVER = '#93c5fd'
 
+const SCRIBBLE_COLORS: Record<Stroke['color'], string> = {
+  ink: '#1f2937',
+  red: '#dc2626',
+  blue: '#2563eb',
+}
+
+const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
+
 /**
  * 1 ページを SVG で描くキャンバス。ユーザー単位はページの mm（`settings.pageSize`）で、
  * ズームとパンは viewBox で表す。ページの外側は灰色。
@@ -31,7 +40,8 @@ const HOVER = '#93c5fd'
  * しっぽの先端のドラッグでしっぽを動かす。セリフは縦書きで、収まらなければ末尾を省略記号にする。
  * Patch はページ root 基準で `onChange` に 1 操作 1 回出し、Undo / Redo は持たない。
  * 参考画像はページの白地の上、コマの下に描く。
- * 焦点、ベクトル、診断、手描きのレイヤーは枠だけ置き、中身は後のタスクで足す
+ * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
+ * 焦点、ベクトル、診断のレイヤーは枠だけ置き、中身は後のタスクで足す
  */
 export function EditorCanvas(props: EditorCanvasProps) {
   const { page, settings, layers } = props
@@ -73,7 +83,26 @@ export function EditorCanvas(props: EditorCanvasProps) {
     onChange: props.onChange,
     onSelect: props.onSelect,
   })
+  const liveRef = useRef<SVGPolylineElement>(null)
+  const scribbleTool = props.scribbleTool ?? 'ink'
+  const scribble = useScribble({
+    page,
+    width: pageW,
+    height: pageH,
+    view,
+    tool: scribbleTool,
+    liveRef,
+    onChange: props.onChange,
+  })
+  const scribbleSelected = props.tool === 'scribble'
+  const scribbling = scribbleSelected && layers.scribble
+  const pointer = scribbling
+    ? scribble.handlers
+    : scribbleSelected
+      ? IDLE_POINTER
+      : selection.handlers
   const hovered =
+    scribbleSelected ||
     panelTool.draft !== null ||
     bubbleTool.draft !== null ||
     sameSelection(selection.hovered, props.selection)
@@ -96,13 +125,13 @@ export function EditorCanvas(props: EditorCanvasProps) {
     ? 'grabbing'
     : spaceHeld
       ? 'grab'
-      : props.tool === 'panel'
+      : props.tool === 'panel' || scribbling
         ? 'crosshair'
         : props.tool === 'bubble'
           ? selection.hovered?.kind === 'bubble'
             ? 'move'
             : 'crosshair'
-          : selection.hovered !== null
+          : !scribbleSelected && selection.hovered !== null
             ? 'pointer'
             : undefined
 
@@ -133,25 +162,28 @@ export function EditorCanvas(props: EditorCanvasProps) {
         viewport.handlers.onPointerDown(e)
         panelTool.handlers.onPointerDown(e)
         bubbleTool.handlers.onPointerDown(e)
-        selection.handlers.onPointerDown(e)
+        pointer.onPointerDown(e)
       }}
       onPointerMove={(e) => {
         viewport.handlers.onPointerMove(e)
         panelTool.handlers.onPointerMove(e)
         bubbleTool.handlers.onPointerMove(e)
-        selection.handlers.onPointerMove(e)
+        pointer.onPointerMove(e)
       }}
       onPointerUp={(e) => {
         viewport.handlers.onPointerUp(e)
         panelTool.handlers.onPointerUp(e)
         bubbleTool.handlers.onPointerUp(e)
+        // 押している間にツールが切り替わっても、各フックの状態が取り残されないよう両方に渡す
         selection.handlers.onPointerUp(e)
+        scribble.handlers.onPointerUp(e)
       }}
       onPointerCancel={(e) => {
         viewport.handlers.onPointerCancel(e)
         panelTool.handlers.onPointerCancel(e)
         bubbleTool.handlers.onPointerCancel(e)
         selection.handlers.onPointerCancel()
+        scribble.handlers.onPointerCancel(e)
       }}
       onKeyDown={(e) => {
         if (panelTool.handlers.onKeyDown(e) || bubbleTool.handlers.onKeyDown(e)) return
@@ -173,7 +205,22 @@ export function EditorCanvas(props: EditorCanvasProps) {
         onArtError={markError}
         onGenerate={props.onGenerate}
       />
-      {layers.scribble && <g data-layer="scribble" />}
+      {layers.scribble && (
+        <g data-layer="scribble" pointerEvents="none">
+          <Scribbles scribbles={page.scribbles} width={pageW} height={pageH} />
+          {scribbling && (
+            <polyline
+              ref={liveRef}
+              data-live-stroke
+              fill="none"
+              stroke={SCRIBBLE_COLORS[scribbleTool === 'eraser' ? 'ink' : scribbleTool]}
+              strokeWidth={SCRIBBLE_WIDTH * pageW}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+        </g>
+      )}
       {layers.hints && <g data-layer="hints" />}
       {layers.diagnosis && props.diagnosis !== null && <g data-layer="diagnosis" />}
       <Highlight page={page} width={pageW} height={pageH} target={hovered} />
@@ -193,6 +240,30 @@ export function EditorCanvas(props: EditorCanvasProps) {
     </svg>
   )
 }
+
+/** 手描きの線。描いている間は再描画しないよう scribbles が変わったときだけ描き直す */
+const Scribbles = memo(function Scribbles({
+  scribbles,
+  width,
+  height,
+}: {
+  scribbles: Stroke[]
+  width: number
+  height: number
+}) {
+  return scribbles.map((stroke) => (
+    <polyline
+      key={stroke.id}
+      data-stroke-id={stroke.id}
+      points={polylinePoints(stroke.points, width, height)}
+      fill="none"
+      stroke={SCRIBBLE_COLORS[stroke.color]}
+      strokeWidth={stroke.width * width}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ))
+})
 
 /** ホバー中の要素の輪郭。選択中の要素には出さない */
 function Highlight({
