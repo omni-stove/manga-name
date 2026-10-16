@@ -26,7 +26,8 @@ const HOVER = '#93c5fd'
  * `panel` ツールではドラッグでコマを作り、選択中のコマをハンドルでリサイズ、ボタンで分割、
  * Shift + クリックで結合する。端は他のコマとページの端に 0.01 以内で吸い付く。
  * Patch はページ root 基準で `onChange` に 1 操作 1 回出し、Undo / Redo は持たない。
- * 焦点、ベクトル、診断、参考画像、手描きのレイヤーは枠だけ置き、中身は後のタスクで足す
+ * 参考画像はページの白地の上、コマの下に描く。
+ * 焦点、ベクトル、診断、手描きのレイヤーは枠だけ置き、中身は後のタスクで足す
  */
 export function EditorCanvas(props: EditorCanvasProps) {
   const { page, settings, layers } = props
@@ -61,16 +62,16 @@ export function EditorCanvas(props: EditorCanvasProps) {
       ? null
       : selection.hovered
 
-  const refs = useMemo(
-    () =>
-      layers.art
-        ? page.panels.flatMap((p) => {
-            const ref = currentArt(p)?.ref
-            return ref === undefined ? [] : [ref]
-          })
-        : [],
-    [page.panels, layers.art],
-  )
+  const referenceRef = layers.reference ? page.reference?.ref : undefined
+  const refs = useMemo(() => {
+    const arts = layers.art
+      ? page.panels.flatMap((p) => {
+          const ref = currentArt(p)?.ref
+          return ref === undefined ? [] : [ref]
+        })
+      : []
+    return referenceRef === undefined ? arts : [referenceRef, ...arts]
+  }, [page.panels, layers.art, referenceRef])
   const { assets, markError } = useAssetUrls(refs, props.resolveAsset)
 
   const cursor = panning
@@ -132,12 +133,12 @@ export function EditorCanvas(props: EditorCanvasProps) {
     >
       <title>ページ</title>
       <style>{STYLE}</style>
-      {layers.reference && <g data-layer="reference" />}
       <PageLayer
         page={page}
         width={pageW}
         height={pageH}
         showArt={layers.art}
+        showReference={layers.reference}
         assets={assets}
         generating={props.generating}
         selection={props.selection}

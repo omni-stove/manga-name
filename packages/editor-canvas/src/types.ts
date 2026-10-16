@@ -28,6 +28,6 @@ export interface EditorCanvasProps {
   onSelect(sel: Selection): void
   /** コマのホバーに出す「生成」ボタン */
   onGenerate?(panelId: ID): void
-  /** PanelArt.ref を表示用 URL にする */
+  /** PanelArt.ref と Page.reference.ref を表示用 URL にする */
   resolveAsset(ref: string): Promise<string>
 }

@@ -1,4 +1,11 @@
-import { type Bubble, currentArt, type ID, type Page, type Panel } from '@manga/schema'
+import {
+  type Bubble,
+  currentArt,
+  type ID,
+  type Page,
+  type Panel,
+  type ReferenceImage,
+} from '@manga/schema'
 import { memo } from 'react'
 import { type Box, bodyPath, bubbleGeometry, tailPath, textBox } from './bubble-shape'
 import { panelBox } from './hit-test'
@@ -17,6 +24,8 @@ interface PageLayerProps {
   width: number
   height: number
   showArt: boolean
+  /** 参考画像のレイヤーを出すか。出しても `page.reference.visible` が false なら隠す */
+  showReference: boolean
   assets: ReadonlyMap<string, AssetState>
   generating: Set<ID>
   selection: Selection
@@ -27,7 +36,7 @@ interface PageLayerProps {
 }
 
 /**
- * ページの白地、コマ、生成画像、フキダシを描く。ズームとパンでは props が変わらないので、
+ * ページの白地、参考画像、コマ、生成画像、フキダシを描く。ズームとパンでは props が変わらないので、
  * memo で再描画を飛ばす
  */
 export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
@@ -44,6 +53,15 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
         strokeWidth={1}
         vectorEffect="non-scaling-stroke"
       />
+      {props.showReference && page.reference && (
+        <ReferenceView
+          reference={page.reference}
+          asset={props.assets.get(page.reference.ref)}
+          width={width}
+          height={height}
+          onError={props.onArtError}
+        />
+      )}
       {page.panels.map((panel, i) => {
         const ref = currentArt(panel)?.ref
         return (
@@ -124,7 +142,6 @@ function PanelView({
       data-generating={generating || undefined}
       data-art-error={(asset && 'error' in asset) || undefined}
     >
-      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} fill="#fff" />
       {artRef !== undefined && url !== undefined ? (
         <>
           <clipPath id={clipId}>
@@ -155,6 +172,43 @@ function PanelView({
         vectorEffect="non-scaling-stroke"
       />
       <PanelNumber order={panel.order} rect={rect} />
+    </g>
+  )
+}
+
+/**
+ * ページ全体にアスペクト比を保って中央に収めた参考画像。コマは塗らないので、未生成のコマ越しに見える
+ */
+function ReferenceView({
+  reference,
+  asset,
+  width,
+  height,
+  onError,
+}: {
+  reference: ReferenceImage
+  asset: AssetState | undefined
+  width: number
+  height: number
+  onError(ref: string): void
+}) {
+  const url = asset && 'url' in asset ? asset.url : undefined
+  return (
+    <g data-layer="reference" data-reference-error={(asset && 'error' in asset) || undefined}>
+      {url !== undefined && (
+        <image
+          href={url}
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          preserveAspectRatio="xMidYMid meet"
+          opacity={reference.opacity}
+          visibility={reference.visible ? 'visible' : 'hidden'}
+          pointerEvents="none"
+          onError={() => onError(reference.ref)}
+        />
+      )}
     </g>
   )
 }
