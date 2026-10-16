@@ -46,7 +46,6 @@ export function PanelInspector({
   const bubbles = byOrder(panel.bubbles)
   const speakerOf = (bubble: Bubble) =>
     characters.find((c) => c.id === bubble.speakerId)?.shortName ?? ''
-  // 新しい版を上に出す
   const arts = [...panel.arts].reverse()
 
   return (
