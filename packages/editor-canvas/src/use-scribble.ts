@@ -75,9 +75,12 @@ function strokeAt(
 export function useScribble(opts: Options) {
   const drawing = useRef<{ pointerId: number; points: Point[]; attr: string } | null>(null)
   const touches = useRef(new Set<number>())
+  // タッチの消しゴムは、2 本目の指が来ないと分かる pointerup まで消さない
+  const pendingErase = useRef<{ pointerId: number; clientX: number; clientY: number } | null>(null)
 
   const clear = () => {
     drawing.current = null
+    pendingErase.current = null
     opts.liveRef.current?.setAttribute('points', '')
   }
   const toPage = (e: { clientX: number; clientY: number }, box: ClientBox): Mm | null =>
@@ -98,10 +101,10 @@ export function useScribble(opts: Options) {
     d.attr += `${d.attr ? ' ' : ''}${point.x * opts.width},${point.y * opts.height}`
     opts.liveRef.current?.setAttribute('points', d.attr)
   }
-  const erase = (e: ReactPointerEvent<SVGSVGElement>) => {
-    const box = boxOf(e.currentTarget)
-    const p = toPage(e, box)
-    const q = toPage({ clientX: e.clientX + ERASE_SLOP_PX, clientY: e.clientY }, box)
+  const erase = (at: { clientX: number; clientY: number }, svg: SVGSVGElement) => {
+    const box = boxOf(svg)
+    const p = toPage(at, box)
+    const q = toPage({ clientX: at.clientX + ERASE_SLOP_PX, clientY: at.clientY }, box)
     if (!p || !q) return
     const i = strokeAt(opts.page.scribbles, opts.width, opts.height, p, q.x - p.x)
     if (i >= 0) opts.onChange([{ op: 'remove', path: `/scribbles/${i}` }])
@@ -125,7 +128,11 @@ export function useScribble(opts: Options) {
       if (drawing.current) return
       e.currentTarget.focus({ preventScroll: true })
       if (opts.tool === 'eraser') {
-        erase(e)
+        if (e.pointerType === 'touch') {
+          pendingErase.current = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY }
+        } else {
+          erase(e, e.currentTarget)
+        }
         return
       }
       try {
@@ -149,6 +156,12 @@ export function useScribble(opts: Options) {
     },
     onPointerUp(e: ReactPointerEvent<SVGSVGElement>) {
       endTouch(e)
+      const pending = pendingErase.current
+      if (pending?.pointerId === e.pointerId) {
+        pendingErase.current = null
+        erase(pending, e.currentTarget)
+        return
+      }
       const d = drawing.current
       if (d?.pointerId !== e.pointerId) return
       clear()
@@ -163,6 +176,7 @@ export function useScribble(opts: Options) {
     },
     onPointerCancel(e: ReactPointerEvent<SVGSVGElement>) {
       endTouch(e)
+      if (pendingErase.current?.pointerId === e.pointerId) pendingErase.current = null
       if (drawing.current?.pointerId === e.pointerId) clear()
     },
   }
