@@ -51,6 +51,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
     width: pageW,
     height: pageH,
     view,
+    panning,
     tool: props.tool,
     direction: settings.direction,
     selection: props.selection,

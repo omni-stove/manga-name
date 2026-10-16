@@ -28,6 +28,8 @@ interface Options {
   width: number
   height: number
   view: View
+  /** パンやピンチの最中。進行中の操作を取り消し、新しい操作も始めない */
+  panning: boolean
   tool: Tool
   direction: ReadingDirection
   selection: Selection
@@ -114,7 +116,7 @@ export function usePanelTool(opts: Options) {
 
   const handlers = {
     onPointerDown(e: ReactPointerEvent<SVGSVGElement>) {
-      if (!active || gesture.current !== null) return
+      if (!active || opts.panning || gesture.current !== null) return
       if (e.defaultPrevented || e.button !== 0 || e.isPrimary === false) return
       const at = pointAt(e)
       if (at === null) return
@@ -151,7 +153,12 @@ export function usePanelTool(opts: Options) {
     },
     onPointerMove(e: ReactPointerEvent<SVGSVGElement>) {
       const g = gesture.current
-      if (!g || g.pointerId !== e.pointerId) return
+      if (!g) return
+      if (opts.panning) {
+        end()
+        return
+      }
+      if (g.pointerId !== e.pointerId) return
       if (g.kind === 'resize') {
         const at = pointAt(e)
         if (at === null) return
@@ -174,7 +181,12 @@ export function usePanelTool(opts: Options) {
     },
     onPointerUp(e: ReactPointerEvent<SVGSVGElement>) {
       const g = gesture.current
-      if (!g || g.pointerId !== e.pointerId) return
+      if (!g) return
+      if (opts.panning) {
+        end()
+        return
+      }
+      if (g.pointerId !== e.pointerId) return
       end()
       if (g.kind === 'merge') {
         if (selectedId === undefined) return
