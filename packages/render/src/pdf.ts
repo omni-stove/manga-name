@@ -172,14 +172,14 @@ function drawEmbedded(
   )
 }
 
-/** 紙面ごとのページ。見開きでは奇数ページとその次の偶数ページを組にし、相方が範囲外なら片側だけ */
+/** 紙面ごとのページ。見開きでは偶数ページとその次の奇数ページを組にし（1 ページ目は単独）、相方が範囲外なら片側だけ */
 function groupSheets(targets: Numbered[], spread: boolean): Numbered[][] {
   if (!spread) return targets.map((t) => [t])
   const groups: Numbered[][] = []
   for (const t of targets) {
     const last = groups.at(-1)
     const partner = last?.length === 1 && last[0] ? last[0] : undefined
-    if (partner && partner.number % 2 === 1 && partner.number + 1 === t.number) last?.push(t)
+    if (partner && partner.number % 2 === 0 &&partner.number + 1 === t.number) last?.push(t)
     else groups.push([t])
   }
   return groups
@@ -344,11 +344,11 @@ if (import.meta.vitest) {
     expect(progress).toEqual([2, 2])
   })
 
-  test('見開きは奇数ページと次の偶数ページを組にし、相方が範囲外なら片側だけ', () => {
+  test('見開きは偶数ページと次の奇数ページを組にし、相方が範囲外なら片側だけ', () => {
     const n = (...numbers: number[]) => numbers.map((number) => ({ page: template, number }))
     const numbers = (groups: Numbered[][]) => groups.map((g) => g.map((t) => t.number))
-    expect(numbers(groupSheets(n(1, 2, 3, 4, 5), true))).toEqual([[1, 2], [3, 4], [5]])
-    expect(numbers(groupSheets(n(2, 3, 5, 6), true))).toEqual([[2], [3], [5, 6]])
+    expect(numbers(groupSheets(n(1, 2, 3, 4, 5), true))).toEqual([[1], [2, 3], [4, 5]])
+    expect(numbers(groupSheets(n(2, 3, 5, 6), true))).toEqual([[2, 3], [5], [6]])
     expect(numbers(groupSheets(n(1, 2), false))).toEqual([[1], [2]])
   })
 
