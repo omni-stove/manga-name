@@ -550,7 +550,7 @@
       "group": "G2",
       "title": "一括生成とキャンセル",
       "detail": "ページ単位とエピソード単位、並列 3、AbortController",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "13"
       ],
@@ -564,7 +564,9 @@
       ],
       "spec": [
         "workstreams/WS-07-panel-art.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "21",
