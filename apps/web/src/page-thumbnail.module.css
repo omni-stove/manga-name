@@ -17,6 +17,6 @@
   stroke-width: 1;
 }
 
-.panel[data-art="true"] {
+.art {
   fill: color-mix(in srgb, var(--ink) 25%, transparent);
 }

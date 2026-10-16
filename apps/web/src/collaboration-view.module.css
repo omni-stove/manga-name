@@ -1,0 +1,42 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  font-size: var(--text-s);
+}
+
+.syncStatus {
+  color: var(--text-muted);
+}
+
+.syncStatus[data-status="offline"],
+.syncStatus[data-status="closed"] {
+  color: var(--alert);
+}
+
+.peers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  list-style: none;
+}
+
+/* 人ごとの色は --peer-color で、peerColor() が style に入れる */
+.peer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-xs);
+}
+
+.peer::before {
+  content: "";
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--peer-color);
+}

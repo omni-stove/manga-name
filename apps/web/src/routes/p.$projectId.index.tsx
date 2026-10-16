@@ -3,6 +3,8 @@ import { Button, Select } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
+import { PeerBadge, usePeers } from '../collaboration-view'
+import collabStyles from '../collaboration-view.module.css'
 import common from '../common.module.css'
 import { PageThumbnail } from '../page-thumbnail'
 import {
@@ -23,8 +25,10 @@ const projectRoute = getRouteApi('/p/$projectId')
 
 function PageList() {
   const { projectId } = Route.useParams()
-  const { store } = projectRoute.useLoaderData()
+  const { store, collab } = projectRoute.useLoaderData()
+  const { library } = Route.useRouteContext()
   const project = useProject(store)
+  const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
   const [template, setTemplate] = useState<PageTemplate>('3rows')
   const [episodeId, setEpisodeId] = useState<string>()
@@ -93,6 +97,7 @@ function PageList() {
           >
             {episode.pages.map((page, index) => {
               const status = artStatus(page)
+              const editing = peers.filter((peer) => peer.pageId === page.id)
               return (
                 <li key={page.id} className={common.card}>
                   <Link
@@ -100,9 +105,20 @@ function PageList() {
                     params={{ projectId, pageId: page.id }}
                     className={common.cardLink}
                   >
-                    <PageThumbnail page={page} pageSize={project.settings.pageSize} />
+                    <PageThumbnail
+                      page={page}
+                      pageSize={project.settings.pageSize}
+                      resolveAsset={library.resolveAsset}
+                    />
                     <strong>{index + 1} ページ</strong>
                   </Link>
+                  {editing.length > 0 && (
+                    <fieldset className={collabStyles.peers} aria-label="編集中の人">
+                      {editing.map((peer) => (
+                        <PeerBadge key={peer.clientId} name={peer.name} color={peer.color} />
+                      ))}
+                    </fieldset>
+                  )}
                   <small className={styles.meta}>
                     コマ {page.panels.length} / 生成{' '}
                     <span className={styles.status} data-status={status}>

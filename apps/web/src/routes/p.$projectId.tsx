@@ -1,6 +1,7 @@
 import { Button } from '@manga/ui'
 import { createFileRoute, Link, notFound, Outlet, useParams } from '@tanstack/react-router'
 import { useStore } from 'zustand'
+import { CollaborationBar } from '../collaboration-view'
 import { downloadText, exportFileName, exportProjectJson } from '../project-file'
 import { SaveStatusIndicator } from '../save-status'
 import { useProject } from '../use-project'
@@ -10,7 +11,7 @@ export const Route = createFileRoute('/p/$projectId')({
   loader: async ({ context, params }) => {
     const store = await context.library.open(params.projectId)
     if (!store) throw notFound()
-    return { store }
+    return { store, collab: context.library.collaboration(params.projectId) }
   },
   component: ProjectLayout,
   notFoundComponent: ProjectNotFound,
@@ -18,13 +19,14 @@ export const Route = createFileRoute('/p/$projectId')({
 
 function ProjectLayout() {
   const { projectId } = Route.useParams()
-  const { store } = Route.useLoaderData()
+  const { store, collab } = Route.useLoaderData()
   const project = useProject(store)
   const { canUndo, canRedo } = useStore(store.state)
   return (
     <section>
       <header className={styles.header}>
         <h1 className={styles.title}>{project.title || '無題'}</h1>
+        <CollaborationBar collab={collab} project={project} />
         <nav className={styles.tabs}>
           <Link to="/p/$projectId" params={{ projectId }} activeOptions={{ exact: true }}>
             ページ

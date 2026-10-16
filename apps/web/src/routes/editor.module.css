@@ -128,6 +128,11 @@
   font-weight: var(--weight-medium);
 }
 
+.outline button[data-peer-selected="true"] {
+  outline: 2px solid var(--peer-color);
+  outline-offset: -2px;
+}
+
 .ellipsis {
   flex: 1;
   min-width: 0;
