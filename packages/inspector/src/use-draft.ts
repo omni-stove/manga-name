@@ -30,7 +30,6 @@ export function useDraft<T>(
   }, [])
 
   useEffect(() => {
-    // 入力中は外の変更で下書きを上書きしない
     if (pending.current === undefined) setDraft(value)
   }, [value])
 
