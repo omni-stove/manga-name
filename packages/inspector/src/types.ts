@@ -1,12 +1,17 @@
 import type {
   Bubble,
   Character,
+  FocusDiagnosis,
+  FocusPoint,
+  ID,
+  Issue,
   Page,
   PageDiagnosis,
   Panel,
   PanelDiagnosis,
   Patch,
   ProjectSettings,
+  Vector,
 } from '@manga/schema'
 
 /** どの Inspector も `onChange` の path は渡したオブジェクトを root とする */
@@ -22,6 +27,9 @@ export interface PanelInspectorProps {
   /** 生成に参考画像の切り抜きを渡すか。ページに参考画像が無ければ undefined で、切り替えを出さない */
   useReference?: boolean
   onUseReferenceChange?(use: boolean): void
+  /** 生成に診断の `hint` を渡すか。既定はオン */
+  useHint?: boolean
+  onUseHintChange?(use: boolean): void
   /** PanelArt.ref を表示用 URL にする */
   resolveAsset(ref: string): Promise<string>
 }
@@ -30,6 +38,26 @@ export interface BubbleInspectorProps {
   bubble: Bubble
   characters: Character[]
   onChange(patch: Patch): void
+}
+
+export interface FocusInspectorProps {
+  focus: FocusPoint
+  characters: Character[]
+  diagnosis?: FocusDiagnosis
+  onChange(patch: Patch): void
+}
+
+export interface VectorInspectorProps {
+  vector: Vector
+  /** `targetFocusId` に選べる、同じコマの焦点とフキダシ */
+  targets: readonly { value: ID; label: string }[]
+  onChange(patch: Patch): void
+}
+
+export interface IssueListProps {
+  issues: readonly Issue[]
+  /** Issue が指す要素へ選択を移す */
+  onFocus(issue: Issue): void
 }
 
 export interface CharacterInspectorProps {

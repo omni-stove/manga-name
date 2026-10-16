@@ -1,13 +1,23 @@
-import { type FocusKind, fixtures, type ID, type Page, type Patch } from '@manga/schema'
+import {
+  type FocusKind,
+  fixtures,
+  type ID,
+  type Page,
+  PageDiagnosisSchema,
+  type Patch,
+} from '@manga/schema'
 import '@manga/ui/tokens.css'
 import '@manga/ui/base.css'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import diagnosisFixture from '../../../../docs/fixtures/sample-page-01.diagnosis.json'
 import { EditorCanvas } from '../editor-canvas'
 import type { Layers, Selection, Tool } from '../types'
 
 const project = fixtures.samplePage01
 const samplePage = project.episodes[0]?.pages[0] as Page
+// 診断の計算はアプリ側の仕事なので、プレイグラウンドは編集前のページの診断だけを出す
+const sampleDiagnosis = PageDiagnosisSchema.parse(diagnosisFixture.diagnosis)
 
 /** 全コマに docs/fixtures/art/<panelId>.png を採用したページ */
 function withFixtureArts(page: Page): Page {
@@ -133,7 +143,7 @@ function Playground() {
           page={page}
           settings={project.settings}
           characters={project.characters}
-          diagnosis={null}
+          diagnosis={page === samplePage ? sampleDiagnosis : null}
           selection={selection}
           tool={tool}
           focusKind={focusKind}

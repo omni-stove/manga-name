@@ -196,6 +196,9 @@ importers:
       '@manga/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@manga/diagnosis':
+        specifier: workspace:*
+        version: link:../../packages/diagnosis
       '@manga/editor-canvas':
         specifier: workspace:*
         version: link:../../packages/editor-canvas

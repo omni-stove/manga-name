@@ -801,7 +801,7 @@
       "group": "G3",
       "title": "診断オーバーレイと Inspector",
       "detail": "sweep、bubble chain、焦点ラベルの診断、凡例と集計、FocusInspector、VectorInspector、IssueList、diagnosePage の useMemo 配線",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "28",
         "29",
@@ -821,7 +821,9 @@
       ],
       "spec": [
         "workstreams/WS-11-hints-overlay.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "31",

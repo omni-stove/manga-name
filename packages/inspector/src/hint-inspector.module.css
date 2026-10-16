@@ -1,0 +1,31 @@
+.slider {
+  width: 100%;
+  accent-color: var(--text);
+}
+
+.diagnosis {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-6) var(--space-12);
+  margin: var(--space-10) 0;
+  padding: var(--space-10) var(--space-12);
+  border-radius: var(--radius-m);
+  background: var(--surface-sunken);
+}
+
+.diagnosis dt {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+}
+
+.diagnosis dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.diagnosis [data-status="weak"],
+.diagnosis [data-status="miss"] {
+  color: var(--alert);
+  font-weight: var(--weight-medium);
+}
