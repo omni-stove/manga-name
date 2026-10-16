@@ -500,7 +500,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     if (link?.syncedUpdatedAt === project.updatedAt && !hasUnsentAssets(project, localId, link))
       return 'done'
     attempt.sending = true
-    const refs = assetRefsByPriority(project)
+    let refs = assetRefsByPriority(project)
 
     let laterSent = false
     /** PUT が通った後に履歴を送る。送れた分があればもう一度 PUT するので undefined を返す */
@@ -570,6 +570,13 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
           await links.set(localId, link)
           const outcome = await sendLater()
           if (outcome) return outcome
+          continue
+        }
+        if (link.syncedUpdatedAt === project.updatedAt) {
+          // 手元は前回の同期から変わっていないので競合ではない。クラウドの版を取り込み、残りのアセットを送る
+          project = await adopt(localId, link.cloudId, remote)
+          refs = assetRefsByPriority(project)
+          link = await links.get(localId)
           continue
         }
         await keepCloudCopy(remote.project)
