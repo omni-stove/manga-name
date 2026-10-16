@@ -383,7 +383,7 @@ describe('panel tool', () => {
         value: expect.objectContaining({ order: 7, rect: { x: 0.2, y: 0.3, w: 0.3, h: 0.205 } }),
       },
     ])
-    expect(onSelect).toHaveBeenCalledWith({ kind: 'panel', id: (patch[0]?.value as Panel).id })
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'panel', id: (patch[0] as { value: Panel }).value.id })
     expect(svg.querySelector('[data-draft]')).toBeNull()
   })
 
@@ -418,7 +418,14 @@ describe('panel tool', () => {
     fire(svg, pointer('pointerup', { id: 1, ...clientAt(0.485, 0.39) }))
     expect(onChange).toHaveBeenCalledTimes(1)
     expect(patchOf(onChange)).toEqual([
-      { op: 'replace', path: '/panels/1/rect', value: { x: 0.48, y: 0.275, w: 0.52, h: 0.23 } },
+      {
+        op: 'replace',
+        path: '/panels/1',
+        value: expect.objectContaining({
+          id: 'pn_2',
+          rect: { x: 0.48, y: 0.275, w: 0.52, h: 0.23 },
+        }),
+      },
     ])
   })
 

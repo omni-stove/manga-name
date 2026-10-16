@@ -115,7 +115,8 @@ function readingOrder<T extends { rect: Rect }>(
   direction: ReadingDirection,
 ): T[] {
   const rows: { bottom: number; items: T[] }[] = []
-  const byTop = [...panels].sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
+  const sign = direction === 'rtl' ? -1 : 1
+  const byTop = [...panels].sort((a, b) => a.rect.y - b.rect.y || sign * (a.rect.x - b.rect.x))
   for (const p of byTop) {
     const row = rows.at(-1)
     const bottom = p.rect.y + p.rect.h
@@ -227,13 +228,24 @@ export function createPanelPatch(page: Page, rect: Rect): { patch: Patch; id: ID
   }
 }
 
-/** コマ panelId の rect を置き換える Patch。変わらなければ空 */
+/**
+ * コマ panelId の rect を置き換える Patch。中身はページ上の見た目を保つようにコマ内座標を移し直し、
+ * コマ全体を replace する。変わらなければ空
+ */
 export function resizePanelPatch(page: Page, panelId: ID, rect: Rect): Patch {
   const i = page.panels.findIndex((p) => p.id === panelId)
   const prev = page.panels[i]
   if (!prev) return []
   const same = (['x', 'y', 'w', 'h'] as const).every((k) => prev.rect[k] === rect[k])
-  return same ? [] : [{ op: 'replace', path: `/panels/${i}/rect`, value: rect }]
+  if (same) return []
+  const { sweep, ...base } = prev
+  const resized: Panel = {
+    ...base,
+    rect,
+    ...contentIn(prev, rect, () => true),
+    ...(sweep && { sweep: moveSweep(sweep, prev.rect, rect) }),
+  }
+  return [{ op: 'replace', path: `/panels/${i}`, value: resized }]
 }
 
 /**
@@ -504,10 +516,10 @@ if (import.meta.vitest) {
     expect(createPanelPatch(page, { ...rect, w: 0.01 })).toBeNull()
   })
 
-  test('resizePanelPatch replaces the rect, or nothing when unchanged', () => {
+  test('resizePanelPatch replaces the panel, or nothing when unchanged', () => {
     const rect = { x: 0.48, y: 0.275, w: 0.52, h: 0.23 }
     expect(resizePanelPatch(page, 'pn_2', rect)).toEqual([
-      { op: 'replace', path: '/panels/1/rect', value: rect },
+      { op: 'replace', path: '/panels/1', value: expect.objectContaining({ id: 'pn_2', rect }) },
     ])
     expect(resizePanelPatch(page, 'pn_2', (page.panels[1] as Panel).rect)).toEqual([])
     expect(resizePanelPatch(page, 'nope', rect)).toEqual([])
