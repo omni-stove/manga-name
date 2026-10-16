@@ -830,7 +830,7 @@
       "group": "G3",
       "title": "ヒントをプロンプトへ",
       "detail": "generatePanel が panelHint を渡す。PanelInspector に hint 表示とチェック",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "30",
         "13"
@@ -845,7 +845,9 @@
       ],
       "spec": [
         "workstreams/WS-11-hints-overlay.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "32",
