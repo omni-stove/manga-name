@@ -289,7 +289,7 @@
       "group": "G1",
       "title": "プロジェクト一覧、ページ一覧、キャラクター、設定",
       "detail": "作成、削除、ページ追加（テンプレート）、並べ替え、キャラクター追加、settings 編集、IndexedDB 復元、JSON export / import",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "08"
       ],
@@ -303,7 +303,9 @@
       ],
       "spec": [
         "workstreams/WS-06-app-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "10",

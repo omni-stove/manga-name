@@ -1,32 +1,127 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { artStatus, findProject } from '../placeholder'
+import type { PageTemplate } from '@manga/schema'
+import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
+import { useState } from 'react'
+import { PageThumbnail } from '../page-thumbnail'
+import {
+  addEpisodePatch,
+  addPagePatch,
+  artStatus,
+  movePagePatch,
+  PAGE_TEMPLATES,
+  removePagePatch,
+} from '../project-ops'
+import { useApplyPatch, useProject } from '../use-project'
 
 export const Route = createFileRoute('/p/$projectId/')({ component: PageList })
 
+const projectRoute = getRouteApi('/p/$projectId')
+
 function PageList() {
   const { projectId } = Route.useParams()
-  const project = findProject(projectId)
-  if (!project) return null
+  const { store } = projectRoute.useLoaderData()
+  const project = useProject(store)
+  const { apply, error } = useApplyPatch(store)
+  const [template, setTemplate] = useState<PageTemplate>('3rows')
+  const [episodeId, setEpisodeId] = useState<string>()
+  const targetEpisode = project.episodes.find((e) => e.id === episodeId) ?? project.episodes.at(-1)
+  // rtl の本では先のページが左にあるので、並べ替えのボタンを向きに合わせる
+  const [earlier, later] = project.settings.direction === 'rtl' ? ['→', '←'] : ['←', '→']
+
   return (
     <>
       <h2>ページ一覧</h2>
-      <p className="placeholder">ページ追加（テンプレート選択）、削除、並べ替えはここに入る。</p>
+      <form
+        className="toolbar"
+        onSubmit={(e) => {
+          e.preventDefault()
+          apply('ページを追加', (p) => addPagePatch(p, template, targetEpisode?.id).patch)
+        }}
+      >
+        <label>
+          テンプレート{' '}
+          <select
+            value={template}
+            onChange={(e) => setTemplate(e.currentTarget.value as PageTemplate)}
+          >
+            {PAGE_TEMPLATES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {project.episodes.length > 1 && (
+          <label>
+            追加先{' '}
+            <select value={targetEpisode?.id} onChange={(e) => setEpisodeId(e.currentTarget.value)}>
+              {project.episodes.map((episode) => (
+                <option key={episode.id} value={episode.id}>
+                  {episode.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <button type="submit">ページを追加</button>
+        <button type="button" onClick={() => apply('エピソードを追加', addEpisodePatch)}>
+          エピソードを追加
+        </button>
+      </form>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      {project.episodes.length === 0 && <p>まだページがありません。</p>}
       {project.episodes.map((episode) => (
         <article key={episode.id}>
           <h3>{episode.title}</h3>
+          {episode.pages.length === 0 && <p>ページがありません。</p>}
           <ol className="cards">
-            {episode.pages.map((page, index) => (
-              <li key={page.id}>
-                <Link to="/p/$projectId/pages/$pageId" params={{ projectId, pageId: page.id }}>
-                  <strong>
-                    {index + 1}. {page.id}
-                  </strong>
+            {episode.pages.map((page, index) => {
+              const status = artStatus(page)
+              return (
+                <li key={page.id}>
+                  <Link to="/p/$projectId/pages/$pageId" params={{ projectId, pageId: page.id }}>
+                    <PageThumbnail page={page} pageSize={project.settings.pageSize} />
+                    <strong>{index + 1} ページ</strong>
+                  </Link>
                   <small>
-                    {page.side} / コマ {page.panels.length} / 生成 {artStatus(page)}
+                    コマ {page.panels.length} / 生成{' '}
+                    <span className="art-status" data-status={status}>
+                      {status}
+                    </span>
                   </small>
-                </Link>
-              </li>
-            ))}
+                  <span className="card-actions">
+                    <button
+                      type="button"
+                      aria-label="前へ"
+                      disabled={index === 0}
+                      onClick={() => apply('ページを移動', (p) => movePagePatch(p, page.id, -1))}
+                    >
+                      {earlier}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="後ろへ"
+                      disabled={index === episode.pages.length - 1}
+                      onClick={() => apply('ページを移動', (p) => movePagePatch(p, page.id, 1))}
+                    >
+                      {later}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!window.confirm(`${index + 1} ページを削除しますか？`)) return
+                        apply('ページを削除', (p) => removePagePatch(p, page.id))
+                      }}
+                    >
+                      削除
+                    </button>
+                  </span>
+                </li>
+              )
+            })}
           </ol>
         </article>
       ))}
