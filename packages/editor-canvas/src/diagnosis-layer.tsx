@@ -1,11 +1,4 @@
-import type {
-  FocusDiagnosis,
-  FocusStatus,
-  ID,
-  Page,
-  PageDiagnosis,
-  Point,
-} from '@manga/schema'
+import type { FocusDiagnosis, FocusStatus, ID, Page, PageDiagnosis, Point } from '@manga/schema'
 import { memo } from 'react'
 import { toPagePoint } from './hint-ops'
 import { panelBox } from './hit-test'
@@ -33,7 +26,7 @@ const LEGEND_SWATCH = 6
 const BUBBLE_LABEL = 'フキダシ'
 
 /** 集計行。例 `reading order OK | focus points: 12 ok 12 miss 0`。weak は 1 件以上のときだけ出す */
-export function summaryLine(diagnosis: PageDiagnosis): string {
+function summaryLine(diagnosis: PageDiagnosis): string {
   const { total, ok, weak, miss } = diagnosis.summary
   const order = diagnosis.readingOrderOk ? 'OK' : 'NG'
   const weakPart = weak > 0 ? ` weak ${weak}` : ''
@@ -41,7 +34,7 @@ export function summaryLine(diagnosis: PageDiagnosis): string {
 }
 
 /** 焦点ラベルの診断。`<label> <S>S/<W>W t<t> <status>` */
-export function focusLabel(label: string, focus: FocusDiagnosis): string {
+function focusLabel(label: string, focus: FocusDiagnosis): string {
   const head = label === '' ? '' : `${label} `
   return `${head}${focus.strong}S/${focus.weak}W t${focus.t.toFixed(2)} ${focus.status}`
 }
@@ -68,7 +61,9 @@ export const DiagnosisLayer = memo(function DiagnosisLayer(props: DiagnosisLayer
     .sort((a, b) => a.order - b.order)
     .flatMap((panel) => {
       const d = byPanel.get(panel.id)
-      return d && d.sweepPath.length > 0 ? [{ panelId: panel.id, path: d.sweepPath.map(toPage) }] : []
+      return d && d.sweepPath.length > 0
+        ? [{ panelId: panel.id, path: d.sweepPath.map(toPage) }]
+        : []
     })
   const links = sweeps.slice(1).map((next, i) => {
     const prev = sweeps[i] as (typeof sweeps)[number]
@@ -179,7 +174,12 @@ export const DiagnosisLayer = memo(function DiagnosisLayer(props: DiagnosisLayer
         data-diagnosis="summary"
         x={0}
         y={height + SUMMARY_GAP}
-        style={{ fill: diagnosis.summary.miss > 0 || !diagnosis.readingOrderOk ? 'var(--alert)' : 'var(--text)' }}
+        style={{
+          fill:
+            diagnosis.summary.miss > 0 || !diagnosis.readingOrderOk
+              ? 'var(--alert)'
+              : 'var(--text)',
+        }}
         fontFamily={FONT_FAMILY}
         fontSize={SUMMARY_SIZE}
         dominantBaseline="hanging"
@@ -209,12 +209,17 @@ function focusAnchors(
   return anchors
 }
 
-const LEGEND: readonly { key: string; label: string; stroke: string; dash?: string; width: number }[] =
-  [
-    { key: 'sweep', label: '視線経路', stroke: SWEEP_COLOR, dash: '5 3', width: 1.5 },
-    { key: 'chain', label: 'フキダシ順', stroke: CHAIN_COLOR, width: 4 },
-    { key: 'vector', label: '誘導線', stroke: 'var(--hint-vector)', width: 2 },
-  ]
+const LEGEND: readonly {
+  key: string
+  label: string
+  stroke: string
+  dash?: string
+  width: number
+}[] = [
+  { key: 'sweep', label: '視線経路', stroke: SWEEP_COLOR, dash: '5 3', width: 1.5 },
+  { key: 'chain', label: 'フキダシ順', stroke: CHAIN_COLOR, width: 4 },
+  { key: 'vector', label: '誘導線', stroke: 'var(--hint-vector)', width: 2 },
+]
 
 const LEGEND_STATUS: readonly FocusStatus[] = ['ok', 'weak', 'miss']
 

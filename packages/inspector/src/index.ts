@@ -5,7 +5,6 @@ export { IssueList } from './issue-list'
 export { PageInspector } from './page-inspector'
 export { PanelInspector } from './panel-inspector'
 export { ProjectSettingsInspector } from './project-settings-inspector'
-export { VectorInspector } from './vector-inspector'
 export type {
   BubbleInspectorProps,
   CharacterInspectorProps,
@@ -16,3 +15,4 @@ export type {
   ProjectSettingsInspectorProps,
   VectorInspectorProps,
 } from './types'
+export { VectorInspector } from './vector-inspector'
