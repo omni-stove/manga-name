@@ -131,7 +131,23 @@ interface PushState {
 /** 引用符付きの強い ETag から値を取り出す */
 const parseEtag = (header: string | null) => header?.match(/^\s*"([^"]+)"/)?.[1]
 
-const isNetworkError = (e: unknown) => e instanceof TypeError
+/** キーの並びに依らない JSON 文字列 */
+const canonical = (v: unknown): string =>
+  JSON.stringify(v, (_, x) =>
+    x && typeof x === 'object' && !Array.isArray(x)
+      ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : x,
+  )
+
+/**
+ * id と updatedAt 以外が同じか。PUT がサーバで保存されたのに応答だけ失われた場合、
+ * クラウド版は手元と同じ内容で updatedAt だけ進んでおり、競合ではない
+ */
+const sameContent = (a: Project, b: Project) =>
+  canonical({ ...a, id: undefined, updatedAt: undefined }) ===
+  canonical({ ...b, id: undefined, updatedAt: undefined })
+
+const isNetworkError =(e: unknown) => e instanceof TypeError
 
 /**
  * ローカル優先でクラウドに同期する StorageAdapter（docs/workstreams/WS-15-cloud-storage.md）。
@@ -260,6 +276,14 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
           link = undefined
           continue
         }
+        if (sameContent(remote.project, project)) {
+          await links.set(localId, {
+            cloudId: link.cloudId,
+            etag: remote.etag,
+            syncedUpdatedAt: project.updatedAt,
+          })
+          return 'done'
+        }
         await keepCloudCopy(remote.project)
         link = { ...link, etag: remote.etag }
         await links.set(localId, link)
@@ -385,6 +409,14 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     const cloudChanged = link.etag !== remote.etag
     const localChanged = link.syncedUpdatedAt !== localProject.updatedAt
     if (cloudChanged && !localChanged) return adopt(id, cloudId, remote)
+    if (cloudChanged && sameContent(remote.project, localProject)) {
+      await links.set(id, {
+        cloudId,
+        etag: remote.etag,
+        syncedUpdatedAt: localProject.updatedAt,
+      })
+      return localProject
+    }
     if (cloudChanged) {
       await keepCloudCopy(remote.project)
       await links.set(id, { ...link, etag: remote.etag })
