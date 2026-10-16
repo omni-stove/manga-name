@@ -995,7 +995,7 @@
       "group": "G4",
       "title": "createCloudStorage",
       "detail": "ローカル優先、2 秒 debounce、起動時比較、409 は別名保存",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "06",
         "35"
@@ -1009,7 +1009,9 @@
       ],
       "spec": [
         "workstreams/WS-15-cloud-storage.md"
-      ]
+      ],
+      "startedAt": "2026-10-15",
+      "doneAt": "2026-10-15"
     },
     {
       "id": "41",

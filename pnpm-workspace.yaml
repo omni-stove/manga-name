@@ -9,6 +9,8 @@ allowBuilds:
   esbuild: false
   sharp: false
   workerd: false
+  # msw の postinstall はブラウザ用 Service Worker を配置するだけで、node のテストでは使わない。
+  msw: false
 
 # 全パッケージで同じバージョンを使う依存。各 package.json では "catalog:" と書く。
 catalog:
