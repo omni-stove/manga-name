@@ -30,6 +30,12 @@
   --guide-tint: color-mix(in srgb, var(--guide) 14%, transparent);
   --on-guide: #fff;
 
+  /* 焦点と誘導線。種類の見分けがつくよう、guide と alert から色相を離す */
+  --hint-face: var(--guide);
+  --hint-object: #e0901e;
+  --hint-sfx: #8e5bd6;
+  --hint-vector: #2f9e6a;
+
   --alert: #d9402b;
   --alert-tint: color-mix(in srgb, var(--alert) 12%, transparent);
   --on-alert: #fff;

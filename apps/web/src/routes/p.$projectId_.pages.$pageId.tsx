@@ -1,4 +1,10 @@
-import { EditorCanvas, type Layers, type Selection, type Tool } from '@manga/editor-canvas'
+import {
+  EditorCanvas,
+  type Layers,
+  type ScribbleTool,
+  type Selection,
+  type Tool,
+} from '@manga/editor-canvas'
 import {
   BubbleInspector,
   CharacterInspector,
@@ -56,6 +62,13 @@ const TOOLS: readonly { value: Tool; label: string }[] = [
   { value: 'scribble', label: '手描き' },
 ]
 
+const SCRIBBLE_TOOLS: readonly { value: ScribbleTool; label: string }[] = [
+  { value: 'ink', label: '黒' },
+  { value: 'red', label: '赤' },
+  { value: 'blue', label: '青' },
+  { value: 'eraser', label: '消しゴム' },
+]
+
 const LAYERS: readonly { key: keyof Layers; label: string }[] = [
   { key: 'reference', label: '参考' },
   { key: 'art', label: '絵' },
@@ -98,6 +111,7 @@ function Editor() {
   const { apply, error } = useApplyPatch(store)
   const resolveAsset = useAssetResolver(library.resolveAsset)
   const [tool, setTool] = useState<Tool>('select')
+  const [scribbleTool, setScribbleTool] = useState<ScribbleTool>('ink')
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
@@ -161,6 +175,14 @@ function Editor() {
           options={TOOLS}
           onChange={(t) => setTool(t)}
         />
+        {tool === 'scribble' && (
+          <SegmentedControl
+            label="ペン"
+            value={scribbleTool}
+            options={SCRIBBLE_TOOLS}
+            onChange={(t) => setScribbleTool(t)}
+          />
+        )}
         <ToolGroup label="レイヤー">
           {LAYERS.map((l) => (
             <Checkbox
@@ -218,6 +240,7 @@ function Editor() {
             diagnosis={null}
             selection={selection}
             tool={tool}
+            scribbleTool={scribbleTool}
             layers={layers}
             generating={generating}
             onChange={(patch) => apply('キャンバスの編集', (p) => pagePatch(p, pageId, patch))}

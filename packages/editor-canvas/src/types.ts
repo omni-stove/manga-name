@@ -1,8 +1,19 @@
-import type { Character, ID, Page, PageDiagnosis, Patch, ProjectSettings } from '@manga/schema'
+import type {
+  Character,
+  FocusKind,
+  ID,
+  Page,
+  PageDiagnosis,
+  Patch,
+  ProjectSettings,
+} from '@manga/schema'
 
 export type Selection = { kind: 'panel' | 'bubble' | 'focus' | 'vector'; id: ID } | null
 
 export type Tool = 'select' | 'panel' | 'bubble' | 'focus' | 'vector' | 'scribble'
+
+/** `scribble` ツールで使うペンの色か消しゴム */
+export type ScribbleTool = 'ink' | 'red' | 'blue' | 'eraser'
 
 export interface Layers {
   reference: boolean
@@ -20,6 +31,10 @@ export interface EditorCanvasProps {
   diagnosis: PageDiagnosis | null
   selection: Selection
   tool: Tool
+  /** `tool === 'scribble'` のときの色か消しゴム。既定は ink */
+  scribbleTool?: ScribbleTool
+  /** `focus` ツールで置く焦点の種別。ツールバーで選ぶ。既定は face */
+  focusKind?: FocusKind
   layers: Layers
   /** 生成中のコマ。スピナーを重ねる */
   generating: Set<ID>

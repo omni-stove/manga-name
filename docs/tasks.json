@@ -482,7 +482,7 @@
       "group": "G2",
       "title": "bubble ツール",
       "detail": "クリック作成、移動、リサイズ、しっぽ、縦書き省略",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -496,7 +496,9 @@
       ],
       "spec": [
         "workstreams/WS-04-editor-canvas.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "18",
@@ -577,7 +579,7 @@
       "group": "G2",
       "title": "描画性能",
       "detail": "memo、ドラッグ中の再描画範囲、画像のキャッシュ",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "16",
         "17"
@@ -590,7 +592,9 @@
       ],
       "spec": [
         "workstreams/WS-04-editor-canvas.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "22",
@@ -768,7 +772,7 @@
       "group": "G3",
       "title": "focus ツールと vector ツール",
       "detail": "配置、ドラッグ、種別、矢印、ラベル",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -782,7 +786,9 @@
       ],
       "spec": [
         "workstreams/WS-11-hints-overlay.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "30",
@@ -1285,7 +1291,7 @@
       "group": "G6",
       "title": "手描きメモ",
       "detail": "Pointer Events、間引き 0.002、polyline 即時描画、pointerup で Stroke Patch、消しゴム、3 色",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -1300,7 +1306,9 @@
       ],
       "spec": [
         "workstreams/WS-20-scribble.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "53",

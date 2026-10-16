@@ -1,4 +1,4 @@
-import type { Page, Panel } from '@manga/schema'
+import type { Bubble, Page, Panel } from '@manga/schema'
 import { type Box, bubbleGeometry } from './bubble-shape'
 import type { Selection } from './types'
 
@@ -9,7 +9,7 @@ export interface PagePoint {
 }
 
 /** コマの正規化 rect をページ座標（mm）の矩形にする */
-export function panelBox(panel: Panel, width: number, height: number): Box {
+export function panelBox(panel: Pick<Panel, 'rect'>, width: number, height: number): Box {
   return {
     x: panel.rect.x * width,
     y: panel.rect.y * height,
@@ -21,6 +21,17 @@ export function panelBox(panel: Panel, width: number, height: number): Box {
 const inBox = (p: PagePoint, b: Box) =>
   p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h
 
+/** ページ座標の点がフキダシの本体の中か。panel はフキダシのコマの矩形（mm） */
+export function inBubble(bubble: Bubble, panel: Box, p: PagePoint): boolean {
+  const g = bubbleGeometry(bubble, panel)
+  if (g.rx <= 0 || g.ry <= 0) return false
+  const dx = (p.x - g.cx) / g.rx
+  const dy = (p.y - g.cy) / g.ry
+  return bubble.shape === 'narration'
+    ? Math.abs(dx) <= 1 && Math.abs(dy) <= 1
+    : dx * dx + dy * dy <= 1
+}
+
 /**
  * ページ座標の点にある要素。描画の前後と同じく、フキダシはコマより手前、
  * フキダシ同士とコマ同士は order の大きいものが手前。何も無ければ null
@@ -30,15 +41,7 @@ export function hitTest(page: Page, width: number, height: number, p: PagePoint)
   for (const panel of panels) {
     const box = panelBox(panel, width, height)
     for (const bubble of [...panel.bubbles].sort((a, b) => b.order - a.order)) {
-      const g = bubbleGeometry(bubble, box)
-      if (g.rx <= 0 || g.ry <= 0) continue
-      const dx = (p.x - g.cx) / g.rx
-      const dy = (p.y - g.cy) / g.ry
-      const inside =
-        bubble.shape === 'narration'
-          ? Math.abs(dx) <= 1 && Math.abs(dy) <= 1
-          : dx * dx + dy * dy <= 1
-      if (inside) return { kind: 'bubble', id: bubble.id }
+      if (inBubble(bubble, box, p)) return { kind: 'bubble', id: bubble.id }
     }
   }
   const panel = panelAt(page, width, height, p)
