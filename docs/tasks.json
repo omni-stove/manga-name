@@ -434,7 +434,7 @@
       "group": "G2",
       "title": "編集パイプライン",
       "detail": "ツールバー（tool、layers、Undo / Redo、保存状態）、選択、ハイライト、Delete、キーボード移動",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "14"
       ],
@@ -450,14 +450,16 @@
       "spec": [
         "workstreams/WS-04-editor-canvas.md",
         "workstreams/WS-06-app-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "16",
       "group": "G2",
       "title": "panel ツール",
       "detail": "作成、リサイズ、スナップ、分割、結合",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -471,14 +473,16 @@
       ],
       "spec": [
         "workstreams/WS-04-editor-canvas.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "17",
       "group": "G2",
       "title": "bubble ツール",
       "detail": "クリック作成、移動、リサイズ、しっぽ、縦書き省略",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -492,7 +496,9 @@
       ],
       "spec": [
         "workstreams/WS-04-editor-canvas.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "18",
@@ -523,7 +529,7 @@
       "id": "19",
       "group": "G2",
       "title": "実画像プロバイダ接続",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "18"
       ],
@@ -541,14 +547,16 @@
       "spec": [
         "workstreams/WS-03-ai-core.md",
         "06-open-questions.md #1 #2"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "20",
       "group": "G2",
       "title": "一括生成とキャンセル",
       "detail": "ページ単位とエピソード単位、並列 3、AbortController",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "13"
       ],
@@ -562,7 +570,9 @@
       ],
       "spec": [
         "workstreams/WS-07-panel-art.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "21",
@@ -612,7 +622,7 @@
       "group": "G3",
       "title": "exportPdf",
       "detail": "pdf-lib、renderPage の PNG 埋め込み、spread、notes sheet、pages",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "05"
       ],
@@ -627,7 +637,9 @@
       ],
       "spec": [
         "workstreams/WS-08-export.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "24",
@@ -658,7 +670,7 @@
       "group": "G3",
       "title": "参考画像の読込と描画",
       "detail": "drop / picker / paste、PNG / JPEG / PDF、縮小、putAsset、reference Patch、最下層描画",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -675,7 +687,9 @@
       ],
       "spec": [
         "workstreams/WS-09-reference-image.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "26",
@@ -873,7 +887,7 @@
       "id": "34",
       "group": "G3",
       "title": "実 LLM 接続",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "32"
       ],
@@ -889,7 +903,9 @@
       "spec": [
         "workstreams/WS-12-layout-proposal.md",
         "06-open-questions.md #4"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "35",
@@ -941,7 +957,7 @@
       "id": "37",
       "group": "G4",
       "title": "staging deploy",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "36"
       ],
@@ -954,13 +970,15 @@
       ],
       "spec": [
         "workstreams/WS-13-workers-api.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "38",
       "group": "G4",
       "title": "認証ミドルウェア",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "35"
       ],
@@ -977,7 +995,9 @@
       ],
       "spec": [
         "workstreams/WS-14-auth.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "39",
@@ -1267,7 +1287,7 @@
       "group": "G6",
       "title": "手描きメモ",
       "detail": "Pointer Events、間引き 0.002、polyline 即時描画、pointerup で Stroke Patch、消しゴム、3 色",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -1282,7 +1302,9 @@
       ],
       "spec": [
         "workstreams/WS-20-scribble.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "53",

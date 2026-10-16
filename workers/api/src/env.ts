@@ -9,13 +9,26 @@ declare global {
       PROJECT_ROOMS: DurableObjectNamespace<ProjectRoom>
       /** アセット本体。キーは `<project_id>/<asset_id>` */
       ASSETS: R2Bucket
-      /** 共有アクセストークン（secret）。Phase 3 で WS-14 の認証に置き換える */
-      APP_ACCESS_TOKEN: string
+      /** Cloudflare Images。Gemini の JPEG を PNG にする */
+      IMAGES: ImagesBinding
+      /** Better Auth のセッションと Cookie の署名鍵（secret） */
+      BETTER_AUTH_SECRET: string
+      /** この Worker の公開 URL。OAuth のコールバック URL の組み立てに使う。無ければ要求の URL から推す */
+      BETTER_AUTH_URL?: string
+      /** Google OAuth のクライアント（secret）。無ければログインできず、開発時の X-Debug-User だけが通る */
+      GOOGLE_CLIENT_ID?: string
+      GOOGLE_CLIENT_SECRET?: string
+      /** development なら X-Debug-User でユーザーを名乗れる */
+      ENVIRONMENT: string
+      /** Gemini の API キー（secret）。無ければ画像生成は Fake */
+      GEMINI_API_KEY?: string
+      /** Anthropic の API キー（secret）。無ければ LLM は Fake */
+      ANTHROPIC_API_KEY?: string
       /** アップロード用署名 URL の HMAC 鍵（secret） */
       ASSET_URL_SECRET: string
       /** CORS で許可する apps/web のオリジン。カンマ区切り */
       WEB_ORIGINS: string
-      /** ユーザー（X-Debug-User が無ければ共有トークン）あたりの月間生成回数の上限 */
+      /** ユーザーあたりの月間生成回数の上限 */
       MONTHLY_GENERATION_LIMIT: string
     }
   }

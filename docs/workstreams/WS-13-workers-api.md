@@ -26,7 +26,7 @@ GET    /v1/usage                            当月の生成回数と上限
 
 ## 制約
 - `PUT` は `parseProject` を通らない JSON を 400 で拒否。
-- 1 Project JSON 上限 5MB、1 アセット 20MB、1 プロジェクトのアセット合計は `06-open-questions.md` #10 で決める。
+- 1 Project JSON 上限 5MB、1 アセット 20MB、1 ユーザーのアセット合計 5GB（`06-open-questions.md` #10）。`upload-url` で `assets.size` の合計に申告サイズを足して超えるなら 413。
 - レート制限: ユーザーあたり 60 req/min。生成は別枠で月間上限（#9 で決める）。
 - CORS: `apps/web` のオリジンと `tauri://localhost`。
 

@@ -1,4 +1,10 @@
-import { EditorCanvas, type Layers, type Selection, type Tool } from '@manga/editor-canvas'
+import {
+  EditorCanvas,
+  type Layers,
+  type ScribbleTool,
+  type Selection,
+  type Tool,
+} from '@manga/editor-canvas'
 import {
   BubbleInspector,
   CharacterInspector,
@@ -8,8 +14,9 @@ import {
 } from '@manga/inspector'
 import type { Character, ID, Page, Panel, Patch, Project } from '@manga/schema'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
-import { type CSSProperties, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
+import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { CollaborationBar, PeerBadge, peerColor, usePeers } from '../collaboration-view'
 import { ExportDialog, type ExportOptions } from '../export-dialog'
 import { downloadBlob, exportFileName, pageExporter } from '../export-page'
@@ -26,11 +33,14 @@ import {
 } from '../inspector-ops'
 import type { ProjectLibrary } from '../project-library'
 import { findPage, pagePatch } from '../project-ops'
+import { firstFile, referencePatch, toReferenceImage } from '../reference-image'
 import { errorMessage } from '../route-error'
+import { SaveStatusIndicator } from '../save-status'
 import type { Peer } from '../store/presence'
 import { toasts } from '../toasts'
 import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
+import { useUndoShortcuts } from '../use-undo-shortcuts'
 
 export const Route = createFileRoute('/p/$projectId_/pages/$pageId')({
   loader: async ({ context, params }) => {
@@ -51,6 +61,13 @@ const TOOLS: readonly { value: Tool; label: string }[] = [
   { value: 'scribble', label: '手描き' },
 ]
 
+const SCRIBBLE_TOOLS: readonly { value: ScribbleTool; label: string }[] = [
+  { value: 'ink', label: '黒' },
+  { value: 'red', label: '赤' },
+  { value: 'blue', label: '青' },
+  { value: 'eraser', label: '消しゴム' },
+]
+
 const LAYERS: readonly { key: keyof Layers; label: string }[] = [
   { key: 'reference', label: '参考' },
   { key: 'art', label: '絵' },
@@ -67,15 +84,20 @@ const ALL_LAYERS: Layers = {
   diagnosis: true,
 }
 
-// ページ一括の生成はタスク 20。それまで「このページを全部生成」は何もしない
-const notWired = () => {}
-
 type Apply = (label: string, build: (project: Project) => Patch) => boolean
 type Generate = (panelId: ID, instruction?: string) => void
 /** 書き出しダイアログが開いているか、閉じて Worker が描いている最中か */
 type Exporting = 'closed' | 'dialog' | 'busy'
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString('ja-JP')
+
+/** 選択が指す要素がまだページにあるか。Delete や Undo で消えた要素の選択は無いものとして扱う */
+function hasElement(page: Page, selection: Selection): boolean {
+  if (selection === null) return false
+  if (selection.kind === 'panel') return findPanel(page, selection.id) !== undefined
+  if (selection.kind === 'bubble') return findBubble(page, selection.id) !== undefined
+  return false
+}
 
 function Editor() {
   const { projectId, pageId } = Route.useParams()
@@ -89,13 +111,35 @@ function Editor() {
   const resolveAsset = useAssetResolver(library.resolveAsset)
   const peers = usePeers(collab)
   const [tool, setTool] = useState<Tool>('select')
+  const [scribbleTool, setScribbleTool] = useState<ScribbleTool>('ink')
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
-  const [selection, setSelection] = useState<Selection>(null)
+  const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
+  useUndoShortcuts(store)
+  const importReference = (file: Blob) => {
+    toReferenceImage(file)
+      .then((blob) => library.putAsset(projectId, blob, `reference-${pageId}`))
+      .then(
+        (ref) =>
+          apply('参考画像を読み込み', (p) => {
+            const current = findPage(p, pageId)
+            if (!current) throw new Error('ページがもうありません')
+            return pagePatch(p, pageId, referencePatch(current.page, ref))
+          }),
+        (err) => toasts.push(`参考画像を読み込めません: ${errorMessage(err)}`),
+      )
+  }
+  useReferencePaste(importReference)
+  const pageBatch = useBatchGeneration({
+    generation,
+    store,
+    projectId,
+    scope: `page/${pageId}`,
+    pageIds: [pageId],
+  })
   const found = findPage(project, pageId)
-  // 他のクライアントの操作でページや要素が消えることがあるので、今のページにある id だけを選択として扱う
-  const onPage = new Set(found?.page.panels.flatMap((p) => [p.id, ...p.bubbles.map((b) => b.id)]))
-  const selectedId = selection && onPage.has(selection.id) ? selection.id : null
+  // presence は早期 return より前に送るので、page を待たずに今ある要素の選択だけを選ぶ
+  const selectedId = found && hasElement(found.page, selected) ? selected?.id : undefined
 
   useEffect(() => {
     collab?.presence.setLocation({ pageId, selection: selectedId ? [selectedId] : [] })
@@ -105,8 +149,7 @@ function Editor() {
   // 開いている間に Undo や別タブの操作でページが消えることがある
   if (!found) return <PageNotFound />
   const { page, pageIndex } = found
-  const toggle = (kind: 'panel' | 'bubble', id: ID) =>
-    setSelection((s) => (s?.id === id ? null : { kind, id }))
+  const selection = hasElement(page, selected) ? selected : null
   // 結果は generation がトーストと Patch で出すので、ここでは待たない
   const generate: Generate = (panelId, instruction) =>
     void generation.generate({ store, projectId, pageId, panelId, instruction })
@@ -150,6 +193,23 @@ function Editor() {
             </label>
           ))}
         </fieldset>
+        {tool === 'scribble' && (
+          <fieldset className="tool-group">
+            <legend>ペン</legend>
+            {SCRIBBLE_TOOLS.map((t) => (
+              <label key={t.value}>
+                <input
+                  type="radio"
+                  name="scribble-tool"
+                  value={t.value}
+                  checked={scribbleTool === t.value}
+                  onChange={() => setScribbleTool(t.value)}
+                />
+                {t.label}
+              </label>
+            ))}
+          </fieldset>
+        )}
         <fieldset className="tool-group">
           <legend>レイヤー</legend>
           {LAYERS.map((l) => (
@@ -164,6 +224,7 @@ function Editor() {
           ))}
         </fieldset>
         <span className="toolbar-actions">
+          <SaveStatusIndicator store={store} />
           <button type="button" disabled={!canUndo} onClick={() => store.undo()}>
             Undo
           </button>
@@ -187,7 +248,20 @@ function Editor() {
       )}
       {error && <p className="error">{error}</p>}
       <div className="editor-body">
-        <div className="canvas">
+        <div
+          className="canvas"
+          role="application"
+          aria-label="キャンバス"
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+          }}
+          onDrop={(e) => {
+            const file = firstFile(e.dataTransfer)
+            if (!file) return
+            e.preventDefault()
+            importReference(file)
+          }}
+        >
           <EditorCanvas
             page={page}
             settings={project.settings}
@@ -195,6 +269,7 @@ function Editor() {
             diagnosis={null}
             selection={selection}
             tool={tool}
+            scribbleTool={scribbleTool}
             layers={layers}
             generating={generating}
             onChange={(patch) => apply('キャンバスの編集', (p) => pagePatch(p, pageId, patch))}
@@ -205,13 +280,15 @@ function Editor() {
         </div>
         <aside className="inspector">
           <h2>インスペクタ</h2>
-          <ElementList
-            page={page}
-            selected={selectedId}
-            selfColor={collab?.presence.color}
-            peers={peers.filter((peer) => peer.pageId === page.id)}
-            onToggle={toggle}
-          />
+          <details open>
+            <summary>要素（{page.panels.length}）</summary>
+            <ElementOutline
+              page={page}
+              selection={selection}
+              peers={peers.filter((peer) => peer.pageId === page.id)}
+              onSelect={setSelection}
+            />
+          </details>
           <SelectionInspector
             page={page}
             pageId={pageId}
@@ -226,10 +303,14 @@ function Editor() {
             <summary>ページ</summary>
             <PageInspector
               page={page}
-              generating={page.panels.some((panel) => generating.has(panel.id))}
+              generating={
+                pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
+              }
               onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
-              onGenerateAll={notWired}
+              onGenerateAll={pageBatch.start}
             />
+            <BatchOptions batch={pageBatch} />
+            <ReferencePicker onPick={importReference} />
           </details>
           <details>
             <summary>キャラクター（{project.characters.length}）</summary>
@@ -267,63 +348,73 @@ function Editor() {
   )
 }
 
-/** ページのコマとフキダシ。押すと選択し、他のクライアントが選んでいるものはその人のカーソル色で囲む */
-function ElementList({
+/** ページのコマとフキダシを読み順に並べたリスト。押すとキャンバスと同じ選択になり、他のクライアントが選んでいるものはその人のカーソル色で囲む */
+function ElementOutline({
   page,
-  selected,
-  selfColor = 'currentColor',
+  selection,
   peers,
-  onToggle,
+  onSelect,
 }: {
   page: Page
-  selected: ID | null
-  selfColor?: string
+  selection: Selection
   peers: Peer[]
-  onToggle(kind: 'panel' | 'bubble', id: ID): void
+  onSelect(sel: Selection): void
 }) {
-  const element = (kind: 'panel' | 'bubble', id: ID, label: string) => {
-    const by = peers.filter((peer) => peer.selection.includes(id))
-    const style = {
-      '--self-color': selfColor,
-      ...(by[0] ? peerColor(by[0].color) : {}),
-    } as CSSProperties
-    return (
-      <button
-        type="button"
-        className="element"
-        aria-pressed={selected === id}
-        data-peer-selected={by.length > 0}
-        style={style}
-        onClick={() => onToggle(kind, id)}
-      >
-        {label}
-        {by.map((peer) => (
-          <PeerBadge key={peer.clientId} name={peer.name} color={peer.color} />
-        ))}
-      </button>
-    )
-  }
+  const isSelected = (kind: 'panel' | 'bubble', id: ID) =>
+    selection?.kind === kind && selection.id === id
+  const peersOn = (id: ID) => peers.filter((peer) => peer.selection.includes(id))
+  const peerProps = (by: Peer[]) => ({
+    'data-peer-selected': by.length > 0,
+    style: by[0] ? peerColor(by[0].color) : undefined,
+  })
+  const badges = (by: Peer[]) =>
+    by.map((peer) => <PeerBadge key={peer.clientId} name={peer.name} color={peer.color} />)
+  if (page.panels.length === 0) return <p className="placeholder">コマがありません</p>
   return (
-    <ol className="element-list" aria-label="コマとフキダシ">
-      {page.panels.map((panel, index) => (
-        <li key={panel.id}>
-          {element('panel', panel.id, `コマ ${index + 1}`)}
-          {panel.bubbles.length > 0 && (
-            <ol>
-              {panel.bubbles.map((bubble) => (
-                <li key={bubble.id}>
-                  {element(
-                    'bubble',
-                    bubble.id,
-                    `フキダシ ${bubble.order}${bubble.text ? `「${bubble.text}」` : ''}`,
-                  )}
-                </li>
-              ))}
-            </ol>
-          )}
-        </li>
-      ))}
-    </ol>
+    <ul className="outline">
+      {[...page.panels]
+        .sort((a, b) => a.order - b.order)
+        .map((panel) => {
+          const by = peersOn(panel.id)
+          return (
+            <li key={panel.id}>
+              <button
+                type="button"
+                aria-current={isSelected('panel', panel.id) || undefined}
+                {...peerProps(by)}
+                onClick={() => onSelect({ kind: 'panel', id: panel.id })}
+              >
+                コマ {panel.order}
+                {panel.camera && ` [${panel.camera}]`}
+              </button>
+              {badges(by)}
+              {panel.bubbles.length > 0 && (
+                <ul>
+                  {[...panel.bubbles]
+                    .sort((a, b) => a.order - b.order)
+                    .map((bubble) => {
+                      const byBubble = peersOn(bubble.id)
+                      return (
+                        <li key={bubble.id}>
+                          <button
+                            type="button"
+                            className="in-ellipsis"
+                            aria-current={isSelected('bubble', bubble.id) || undefined}
+                            {...peerProps(byBubble)}
+                            onClick={() => onSelect({ kind: 'bubble', id: bubble.id })}
+                          >
+                            フキダシ {bubble.order} {bubble.text || '（空）'}
+                          </button>
+                          {badges(byBubble)}
+                        </li>
+                      )
+                    })}
+                </ul>
+              )}
+            </li>
+          )
+        })}
+    </ul>
   )
 }
 
@@ -413,6 +504,59 @@ function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply:
       </ul>
     </details>
   )
+}
+
+/** 参考画像を選ぶファイルダイアログ。不透明度などの操作は PageInspector に置く（タスク 26） */
+function ReferencePicker({ onPick }: { onPick(file: File): void }) {
+  const fileInput = useRef<HTMLInputElement>(null)
+  return (
+    <div className="inspector-section" data-inspector="reference-picker">
+      <button type="button" onClick={() => fileInput.current?.click()}>
+        参考画像を読み込む
+      </button>
+      <p className="placeholder">
+        PNG、JPEG、PDF。キャンバスへのドロップと貼り付けでも読み込めます
+      </p>
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/png,image/jpeg,application/pdf"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          // 同じファイルを選び直しても change が出るように空にする
+          e.target.value = ''
+          if (file) onPick(file)
+        }}
+      />
+    </div>
+  )
+}
+
+/**
+ * クリップボードのファイルを onFile に渡す。文字入力欄への貼り付けとファイルを含まない貼り付けには触らない
+ */
+function useReferencePaste(onFile: (file: File) => void) {
+  const latest = useRef(onFile)
+  latest.current = onFile
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const target = e.target
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return
+      }
+      const file = firstFile(e.clipboardData)
+      if (!file) return
+      e.preventDefault()
+      latest.current(file)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [])
 }
 
 /** CharacterInspector に、参照画像を選ぶファイルダイアログと putAsset を付ける */

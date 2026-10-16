@@ -94,7 +94,7 @@ graph TD
 | 11 | [hints-overlay](workstreams/WS-11-hints-overlay.md) | 2 | editor-canvas, inspector, apps/web | DOC | 04, 05, 07, 10 |
 | 12 | [layout-proposal](workstreams/WS-12-layout-proposal.md) | 2 | packages/ai, apps/web | DOC | 03, 06 |
 | 13 | [workers-api](workstreams/WS-13-workers-api.md) | 3 | workers/api | DOC | 03, 14 |
-| 14 | [auth](workstreams/WS-14-auth.md) | 3 | workers/api, apps/* | 未決事項の決定 | 13 |
+| 14 | [auth](workstreams/WS-14-auth.md) | 3 | workers/api, apps/* | DOC | 13 |
 | 15 | [cloud-storage](workstreams/WS-15-cloud-storage.md) | 3 | packages/storage | DOC | 06, 13, 14 |
 | 16 | [critique](workstreams/WS-16-critique.md) | 3 | packages/ai, apps/web | DOC | 03, 10, 11 |
 | 17 | [desktop-shell](workstreams/WS-17-desktop-shell.md) | 4 | apps/desktop, packages/storage | DOC | 06 |

@@ -19,7 +19,7 @@ function isEditable(target: EventTarget | null): boolean {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
-function capture(el: Element, pointerId: number): void {
+export function capture(el: Element, pointerId: number): void {
   try {
     el.setPointerCapture(pointerId)
   } catch {
@@ -78,7 +78,7 @@ export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: numb
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code !== 'Space' || isEditable(e.target)) return
       const svg = svgRef.current
-      const focused = svg !== null && svg.contains(document.activeElement)
+      const focused = svg?.contains(document.activeElement) ?? false
       if (!hovered.current && !focused && !spaceRef.current) return
       e.preventDefault()
       if (!spaceRef.current) setSpace(true)

@@ -2,7 +2,7 @@ import { createFileRoute, Link, notFound, Outlet, useParams } from '@tanstack/re
 import { useStore } from 'zustand'
 import { CollaborationBar } from '../collaboration-view'
 import { downloadText, exportFileName, exportProjectJson } from '../project-file'
-import type { SaveStatus } from '../store/project-store'
+import { SaveStatusIndicator } from '../save-status'
 import { useProject } from '../use-project'
 
 export const Route = createFileRoute('/p/$projectId')({
@@ -15,18 +15,11 @@ export const Route = createFileRoute('/p/$projectId')({
   notFoundComponent: ProjectNotFound,
 })
 
-const SAVE_STATUS: Record<SaveStatus, string> = {
-  saved: '保存済み',
-  pending: '未保存',
-  saving: '保存中…',
-  error: '保存に失敗しました',
-}
-
 function ProjectLayout() {
   const { projectId } = Route.useParams()
   const { store, collab } = Route.useLoaderData()
   const project = useProject(store)
-  const { canUndo, canRedo, saveStatus, saveError } = useStore(store.state)
+  const { canUndo, canRedo } = useStore(store.state)
   return (
     <section>
       <header className="project-header">
@@ -44,17 +37,7 @@ function ProjectLayout() {
           </Link>
         </nav>
         <span className="toolbar-actions">
-          <span
-            className={saveStatus === 'error' ? 'save-status error' : 'save-status'}
-            title={saveError instanceof Error ? saveError.message : undefined}
-          >
-            {SAVE_STATUS[saveStatus]}
-          </span>
-          {saveStatus === 'error' && (
-            <button type="button" onClick={() => void store.flush()}>
-              再保存
-            </button>
-          )}
+          <SaveStatusIndicator store={store} />
           <button type="button" disabled={!canUndo} onClick={() => store.undo()}>
             Undo
           </button>
