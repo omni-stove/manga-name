@@ -110,13 +110,15 @@ function layoutWidth(panel: Panel, settings: ProjectSettings, longSide: number):
 }
 
 /** ImageProvider は signal を受け取らないので、中止されたら応答を待たずに捨てる */
-function abortable<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return promise
+function abortable<T>(start: () => Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return start()
+  signal.throwIfAborted()
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(signal.reason)
-    if (signal.aborted) return onAbort()
     signal.addEventListener('abort', onAbort, { once: true })
-    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+    start()
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener('abort', onAbort))
   })
 }
 
@@ -226,7 +228,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       ...(characterRefs.length > 0 && { characterRefs }),
       ...(previous && { previous: { art: previous.art, instruction: previous.instruction } }),
     }
-    const res = await abortable(imageProvider.generatePanelArt(req), signal)
+    const res = await abortable(() => imageProvider.generatePanelArt(req), signal)
     signal?.throwIfAborted()
     await assertOpen(store, projectId)
     const ref = await library.putAsset(projectId, res.image, `art-${panelId}`)
