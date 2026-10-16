@@ -51,7 +51,7 @@ type Gesture =
   | { kind: 'merge'; pointerId: number; targetId: ID; client: Pos }
 
 /** ハンドルの一辺。viewBox の幅に対する比率なので、ズームしても画面上の大きさが変わらない */
-const HANDLE_RATIO = 0.018
+export const HANDLE_RATIO = 0.018
 
 /** コマの 4 隅と 4 辺の中点にあるハンドルの位置（ページ座標、mm） */
 export function handlePoints(box: Box): { handle: Handle; x: number; y: number }[] {
