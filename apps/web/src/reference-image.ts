@@ -64,15 +64,11 @@ export async function toReferenceImage(
       : await codec.decodeImage(blob)
   try {
     const size = fitLongSide(raster.width, raster.height)
+    const type = format === 'jpeg' ? 'image/jpeg' : 'image/png'
     if (format !== 'pdf' && size.width === raster.width && size.height === raster.height) {
-      return blob
+      return new Blob([blob], { type })
     }
-    return await codec.encode(
-      raster,
-      size.width,
-      size.height,
-      format === 'jpeg' ? 'image/jpeg' : 'image/png',
-    )
+    return await codec.encode(raster, size.width, size.height, type)
   } finally {
     raster.close?.()
   }
@@ -124,8 +120,9 @@ const browserCodec: ReferenceCodec = {
       import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
     ])
     pdfjs.GlobalWorkerOptions.workerSrc = worker.default
-    const doc = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise
+    const task = pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) })
     try {
+      const doc = await task.promise
       const page = await doc.getPage(1)
       const base = page.getViewport({ scale: 1 })
       const viewport = page.getViewport({ scale: maxSide / Math.max(base.width, base.height) })
@@ -137,7 +134,7 @@ const browserCodec: ReferenceCodec = {
         draw: (target, w, h) => target.drawImage(canvas, 0, 0, w, h),
       }
     } finally {
-      void doc.destroy()
+      void task.destroy()
     }
   },
   async encode(raster, width, height, type) {
@@ -193,7 +190,9 @@ if (import.meta.vitest) {
     test('a PNG within the limit is stored as is', async () => {
       const { codec, calls } = fakeCodec({ width: 800, height: 600 })
       const png = fileOf(PNG)
-      expect(await toReferenceImage(png, codec)).toBe(png)
+      const out = await toReferenceImage(png, codec)
+      expect(out.type).toBe('image/png')
+      expect(out.size).toBe(png.size)
       expect(calls).toEqual({ decode: 1, pdf: [], encode: [] })
     })
 
@@ -221,7 +220,11 @@ if (import.meta.vitest) {
 
     test('other formats are refused', async () => {
       const { codec } = fakeCodec({ width: 10, height: 10 })
-      const gif = fileOf([...'GIF89a'].map((c) => c.charCodeAt(0)), 64, 'image/gif')
+      const gif = fileOf(
+        [...'GIF89a'].map((c) => c.charCodeAt(0)),
+        64,
+        'image/gif',
+      )
       await expect(toReferenceImage(gif, codec)).rejects.toThrow('PNG、JPEG、PDF')
     })
   })

@@ -145,7 +145,8 @@ describe('reference image', () => {
   const referenceUrl = 'blob:reference'
   const withReference = (reference: Page['reference']): Partial<EditorCanvasProps> => ({
     page: { ...pageWithArts, reference },
-    resolveAsset: (ref) => (ref === 'blob:ref' ? Promise.resolve(referenceUrl) : resolveFixture(ref)),
+    resolveAsset: (ref) =>
+      ref === 'blob:ref' ? Promise.resolve(referenceUrl) : resolveFixture(ref),
   })
 
   test('is drawn below every panel, fitted to the page, with opacity and visibility', async () => {
@@ -164,7 +165,9 @@ describe('reference image', () => {
     expect(first.getAttribute('visibility')).toBe('visible')
     const layer = must(svg.querySelector('[data-layer="reference"]'))
     const firstPanel = must(svg.querySelector('[data-panel-id]'))
-    expect(layer.compareDocumentPosition(firstPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(
+      layer.compareDocumentPosition(firstPanel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 
   test('visible = false keeps the image hidden', async () => {

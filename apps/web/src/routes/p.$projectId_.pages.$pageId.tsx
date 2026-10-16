@@ -207,6 +207,7 @@ function Editor() {
       <div className="editor-body">
         <div
           className="canvas"
+          role="presentation"
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes('Files')) e.preventDefault()
           }}
@@ -444,7 +445,9 @@ function ReferencePicker({ onPick }: { onPick(file: File): void }) {
       <button type="button" onClick={() => fileInput.current?.click()}>
         参考画像を読み込む
       </button>
-      <p className="placeholder">PNG、JPEG、PDF。キャンバスへのドロップと貼り付けでも読み込めます</p>
+      <p className="placeholder">
+        PNG、JPEG、PDF。キャンバスへのドロップと貼り付けでも読み込めます
+      </p>
       <input
         ref={fileInput}
         type="file"
