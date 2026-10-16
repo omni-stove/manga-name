@@ -1,15 +1,27 @@
-import { fixtures } from '@manga/schema'
 import {
   createMemoryHistory,
   createRouter,
   type RouterHistory,
   RouterProvider,
 } from '@tanstack/react-router'
+import type { ProjectLibrary } from './project-library'
+import { RouteError } from './route-error'
 import { routeTree } from './routeTree.gen'
 
+/** 各ルートの loader と画面が `context` から使う依存 */
+export interface RouterContext {
+  library: ProjectLibrary
+}
+
 /** アプリのルーター。`history` を省くとブラウザ履歴を使う */
-export function createAppRouter(history?: RouterHistory) {
-  return createRouter({ routeTree, history, defaultPreload: 'intent' })
+export function createAppRouter(context: RouterContext, history?: RouterHistory) {
+  return createRouter({
+    routeTree,
+    context,
+    history,
+    defaultPreload: 'intent',
+    defaultErrorComponent: RouteError,
+  })
 }
 
 declare module '@tanstack/react-router' {
@@ -19,11 +31,18 @@ declare module '@tanstack/react-router' {
 }
 
 if (import.meta.vitest) {
-  const { describe, expect, test } = import.meta.vitest
+  const { beforeEach, describe, expect, test } = import.meta.vitest
   const { renderToString } = await import('react-dom/server')
+  const { fixtures } = await import('@manga/schema')
+  const { createIndexedDbStorage, createMemoryStorage } = await import('@manga/storage')
+  const { createProjectLibrary } = await import('./project-library')
+  const { addPagePatch } = await import('./project-ops')
+  // fake-indexeddb の exports は ./auto に types を付けていないので、副作用 import の型解決は諦める
+  // @ts-expect-error TS7016
+  await import('fake-indexeddb/auto')
 
-  const render = async (path: string) => {
-    const router = createAppRouter(createMemoryHistory({ initialEntries: [path] }))
+  const render = async (library: ProjectLibrary, path: string) => {
+    const router = createAppRouter({ library }, createMemoryHistory({ initialEntries: [path] }))
     await router.load()
     return renderToString(<RouterProvider router={router} />)
   }
@@ -31,6 +50,13 @@ if (import.meta.vitest) {
   const project = fixtures.samplePage01
   const projectId = project.id
   const pageId = project.episodes[0]?.pages[0]?.id ?? ''
+
+  let library: ProjectLibrary
+  beforeEach(async () => {
+    const storage = createMemoryStorage()
+    await storage.saveProject(project)
+    library = createProjectLibrary(storage)
+  })
 
   describe('6 ルートが描画される', () => {
     test.each([
@@ -41,15 +67,40 @@ if (import.meta.vitest) {
       [`/p/${projectId}/settings`, 'プロジェクト設定'],
       ['/settings', 'アプリ設定'],
     ])('%s', async (path, heading) => {
-      expect(await render(path)).toContain(heading)
+      expect(await render(library, path)).toContain(heading)
     })
   })
 
-  test('フィクスチャのページが一覧に出る', async () => {
-    expect(await render(`/p/${projectId}`)).toContain(pageId)
+  test('保存済みのプロジェクトが一覧に出る', async () => {
+    expect(await render(library, '/')).toContain(project.title)
   })
 
-  test('知らないプロジェクトは見つからない旨を出す', async () => {
-    expect(await render('/p/nope')).toContain('見つかりません')
+  test('ページ一覧にページと生成状況が出る', async () => {
+    const html = await render(library, `/p/${projectId}`)
+    expect(html).toContain(`/p/${projectId}/pages/${pageId}`)
+    expect(html).toContain('未生成')
+  })
+
+  test('知らないプロジェクトとページは見つからない旨を出す', async () => {
+    expect(await render(library, '/p/nope')).toContain('見つかりません')
+    expect(await render(library, `/p/${projectId}/pages/nope`)).toContain('見つかりません')
+  })
+
+  test('リロード後も IndexedDB から復元される', async () => {
+    const name = `test-${crypto.randomUUID()}`
+    const before = createProjectLibrary(createIndexedDbStorage(name))
+    const created = await before.create('復元テスト')
+    const store = await before.open(created.id)
+    if (!store) throw new Error('作ったプロジェクトが開けない')
+    const { patch, page } = addPagePatch(store.get(), '3rows')
+    store.applyPatch(patch)
+    await before.flushAll()
+
+    // 別のアダプタとライブラリで開き直すことで、メモリ上の状態を持ち越さないリロードを再現する
+    const after = createProjectLibrary(createIndexedDbStorage(name))
+    expect(await render(after, '/')).toContain('復元テスト')
+    const html = await render(after, `/p/${created.id}`)
+    expect(html).toContain(`/p/${created.id}/pages/${page.id}`)
+    expect((await after.open(created.id))?.get().episodes[0]?.pages[0]?.panels).toHaveLength(6)
   })
 }
