@@ -29,7 +29,22 @@ function pointerOf(page: Page, selection: Selection): string | undefined {
 /** 選択要素を消す Patch。消せる要素が無ければ空 */
 export function removePatch(page: Page, selection: Selection): Patch {
   const pointer = pointerOf(page, selection)
-  return pointer === undefined ? [] : [{ op: 'remove', path: pointer }]
+  if (pointer === undefined) return []
+  const patch: Patch = []
+  if (selection?.kind === 'bubble') {
+    // PanelSchema は vector の焦点参照がコマ内に実在することを要求するため、先に参照を外す
+    for (const [i, panel] of page.panels.entries()) {
+      for (const [j, vector] of panel.vectors.entries()) {
+        for (const key of ['sourceFocusId', 'targetFocusId'] as const) {
+          if (vector[key] === selection.id) {
+            patch.push({ op: 'remove', path: `/panels/${i}/vectors/${j}/${key}` })
+          }
+        }
+      }
+    }
+  }
+  patch.push({ op: 'remove', path: pointer })
+  return patch
 }
 
 /**
