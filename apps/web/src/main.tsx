@@ -8,6 +8,7 @@ import { createPanelGeneration } from './generate-panel'
 import { createImageProvider, readApiBaseUrl } from './image-provider'
 import { createProjectLibrary } from './project-library'
 import { createAppRouter } from './router'
+import { SyncStatusProvider } from './sync-status'
 import { AuthProvider } from './use-auth'
 import '@manga/ui/tokens.css'
 import '@manga/ui/base.css'
@@ -24,10 +25,11 @@ void auth.restore()
 
 const local = createStorage(defaultStorageKind())
 // 未ログインの間 getToken は null を返し、クラウドストレージはローカルだけで動く
-const storage =
+const cloud =
   baseUrl === ''
-    ? local
+    ? null
     : createCloudStorage({ baseUrl, local, getToken: auth.getToken, fetch: auth.fetch })
+const storage = cloud ?? local
 const library = createProjectLibrary(storage)
 const imageProvider = createImageProvider({ baseUrl, getToken: auth.getToken })
 const generation = createPanelGeneration({ library, imageProvider })
@@ -41,7 +43,9 @@ window.addEventListener('pagehide', () => void library.flushAll())
 createRoot(container).render(
   <StrictMode>
     <AuthProvider client={auth}>
-      <RouterProvider router={createAppRouter({ library, imageProvider, generation })} />
+      <SyncStatusProvider source={cloud}>
+        <RouterProvider router={createAppRouter({ library, imageProvider, generation })} />
+      </SyncStatusProvider>
     </AuthProvider>
   </StrictMode>,
 )

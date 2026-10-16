@@ -12,6 +12,12 @@ export interface CloudLink {
   etag: string
   /** 最後に同期したときのローカルの updatedAt。今のローカルと違えば未送信の変更がある。null は未送信 */
   syncedUpdatedAt: ISODate | null
+  /**
+   * アップロード済みのアセットの、ローカルの ref からクラウドの `r2:` の ref への対応。
+   * ローカルのプロジェクトは手元の ref のまま持ち、クラウドへ送る本文でだけ書き換える。
+   * アプリの ProjectStore が手元の ref を持ち続けるので、ローカルを書き換えても次の保存で戻される
+   */
+  assets?: Record<string, string>
 }
 
 /** ローカルの id ごとの CloudLink の置き場。リロードをまたいで残る必要がある */
@@ -36,6 +42,29 @@ export interface CloudStorageOptions {
   /** 送信の失敗を再試行しないと決めたときに呼ぶ。既定は console.warn */
   onError?: (error: unknown) => void
   fetch?: typeof fetch
+  /** 既定は navigator.onLine と window の online / offline イベント */
+  connectivity?: Connectivity
+}
+
+/** 端末がネットワークにつながっているかと、その変化 */
+export interface Connectivity {
+  isOnline(): boolean
+  /** つながり方が変わるたびに listener を呼ぶ。戻り値で解除する */
+  subscribe(listener: () => void): () => void
+}
+
+/**
+ * - synced: 手元の変更はすべてクラウドにある
+ * - pending: 送信待ち・送信中、または送れずに諦めた変更がある
+ * - offline: オフライン、またはクラウドに届かず再試行を待っている
+ * - conflict: 他の端末の変更と競合し、クラウド版を別名で残した。dismissConflict まで続く
+ */
+export type SyncState = 'synced' | 'pending' | 'offline' | 'conflict'
+
+export interface SyncStatus {
+  state: SyncState
+  /** upload-url が 413（保存上限超過）を返した。アセットは手元に残し、次の保存で送り直す */
+  quotaExceeded: boolean
 }
 
 export interface CloudStorage extends StorageAdapter {
@@ -44,6 +73,12 @@ export interface CloudStorage extends StorageAdapter {
    * まだクラウドに作られていないか、未ログインなら null
    */
   syncUrl(localId: ID): Promise<string | null>
+  /** 今の同期状態。変わらない間は同じオブジェクトを返す */
+  getSyncStatus(): SyncStatus
+  /** 同期状態が変わるたびに listener を呼ぶ。戻り値で解除する */
+  subscribeSyncStatus(listener: () => void): () => void
+  /** 'conflict' を利用者が確認したものとして解除する */
+  dismissConflict(): void
   /** debounce 待ちの送信を今すぐ行い、送信中のものも含めて終わるまで待つ */
   flush(): Promise<void>
   /** タイマーとイベントリスナを外す。以降の送信は行わない */
@@ -71,6 +106,61 @@ export function parseCloudAssetRef(ref: string): { cloudId: ID; assetId: string 
   const [cloudId, assetId, ...rest] = ref.slice(R2_PREFIX.length).split('/')
   if (!cloudId || !assetId || rest.length > 0) return undefined
   return { cloudId, assetId }
+}
+
+/** プロジェクトのアセットの ref をすべて map で置き換えた複製 */
+function mapAssetRefs(p: Project, map: (ref: string) => string): Project {
+  return {
+    ...p,
+    characters: p.characters.map((c) =>
+      c.referenceRef === undefined ? c : { ...c, referenceRef: map(c.referenceRef) },
+    ),
+    episodes: p.episodes.map((e) => ({
+      ...e,
+      pages: e.pages.map((page) => ({
+        ...page,
+        ...(page.reference && { reference: { ...page.reference, ref: map(page.reference.ref) } }),
+        panels: page.panels.map((panel) => ({
+          ...panel,
+          arts: panel.arts.map((art) => ({ ...art, ref: map(art.ref) })),
+        })),
+      })),
+    })),
+  }
+}
+
+/**
+ * アップロードする順に分けたアセットの ref。first は採用中の絵、キャラの参照画像、ページの参照画像で、
+ * later は採用されていない生成履歴。履歴は件数が多いので、画面に出るものを先に送る
+ */
+function assetRefsByPriority(p: Project): { first: string[]; later: string[] } {
+  const first = new Set<string>()
+  const later = new Set<string>()
+  for (const c of p.characters) if (c.referenceRef !== undefined) first.add(c.referenceRef)
+  for (const e of p.episodes) {
+    for (const page of e.pages) {
+      if (page.reference) first.add(page.reference.ref)
+      for (const panel of page.panels) {
+        for (const art of panel.arts) (art.id === panel.artId ? first : later).add(art.ref)
+      }
+    }
+  }
+  return { first: [...first], later: [...later].filter((r) => !first.has(r)) }
+}
+
+function browserConnectivity(): Connectivity {
+  return {
+    isOnline: () => typeof navigator === 'undefined' || navigator.onLine !== false,
+    subscribe(listener) {
+      if (typeof window === 'undefined') return () => {}
+      window.addEventListener('online', listener)
+      window.addEventListener('offline', listener)
+      return () => {
+        window.removeEventListener('online', listener)
+        window.removeEventListener('offline', listener)
+      }
+    },
+  }
 }
 
 /** 競合したクラウド版を別名で残すときのタイトル */
@@ -180,10 +270,12 @@ const isTransient = (res: Response) => res.status === 429 || res.status >= 500
  * - loadProject はクラウドの版と比べ、変更があった側を採用する。両方に変更があれば競合として扱う。
  * - PUT が 409 のときはクラウド版を「（クラウド版）」付きの別プロジェクトとしてローカルに保存して
  *   クラウドにも新規で送り、手元の版でクラウドを上書きする。どちらの版も両方に残る。
- * - putAsset はプロジェクトがクラウドにあり送れる画像なら署名 URL でアップロードし、
- *   他の端末からも読める `r2:<クラウドのプロジェクト id>/<アセット id>` を返す。
- *   送れないとき（未ログイン、オフライン、未送信のプロジェクト、失敗）は local に置いて `blob:` を返す。
+ * - putAsset は local に置いて手元の ref を返す。プロジェクトを送るときに、プロジェクトが参照する
+ *   送れる画像を署名 URL でアップロードし、送る本文の ref を `r2:<クラウドのプロジェクト id>/<アセット id>`
+ *   に書き換える。採用中の絵と参照画像は PUT の前に、生成履歴は PUT の後に送ってもう一度 PUT する。
+ *   upload-url が 413 なら再試行せず、次の保存まで残りのアセットを送らない。
  * - `r2:` の ref はクラウドから読み、メモリに MAX_CACHED_ASSETS 件まで持つ。他の ref は local に委ねる。
+ * - 同期状態は getSyncStatus と subscribeSyncStatus で読む。
  */
 export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
   const { local, getToken } = opts
@@ -193,11 +285,34 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
   const onError = opts.onError ?? ((e: unknown) => console.warn('cloud sync failed', e))
   // 呼ぶたびに globalThis.fetch を引くのは、作成後に差し替えられた fetch（msw など）も通すため
   const doFetch: typeof fetch = opts.fetch ?? ((input, init) => globalThis.fetch(input, init))
+  const connectivity = opts.connectivity ?? browserConnectivity()
   const pushes = new Map<ID, PushState>()
   const assetCache = new Map<string, Blob>()
+  /** 送りを諦めたプロジェクト。次に送れるまで pending として見せる */
+  const failed = new Set<ID>()
+  /** 手元に無い、または送れない型のアセットの ref。送り直しても変わらないので覚えておく */
+  const unsendable = new Set<string>()
+  let quotaExceeded = false
+  let conflict = false
   let disposed = false
+  let status: SyncStatus = { state: 'synced', quotaExceeded: false }
+  const listeners = new Set<() => void>()
 
-  const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false
+  const isOffline = () => !connectivity.isOnline()
+
+  function notify() {
+    const retrying = [...pushes.values()].some((s) => s.failures > 0)
+    const state: SyncState = conflict
+      ? 'conflict'
+      : isOffline() || retrying
+        ? 'offline'
+        : pushes.size > 0 || failed.size > 0
+          ? 'pending'
+          : 'synced'
+    if (state === status.state && quotaExceeded === status.quotaExceeded) return
+    status = { state, quotaExceeded }
+    for (const listener of listeners) listener()
+  }
 
   /** トークンが無ければ null。ネットワークの失敗は TypeError のまま throw する */
   async function request(path: string, init: RequestInit = {}): Promise<Response | null> {
@@ -222,11 +337,26 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     return { status: 'ok', project, etag: parseEtag(res.headers.get('etag')) ?? project.updatedAt }
   }
 
+  /** クラウドへ送る本文。アップロード済みのアセットの ref を `r2:` に書き換える */
+  const toCloud = (project: Project, link: CloudLink): Project => ({
+    ...mapAssetRefs(project, (ref) => link.assets?.[ref] ?? ref),
+    id: link.cloudId,
+  })
+
   /** クラウドの版をローカルの id で保存し、同期済みとして記録する */
   async function adopt(localId: ID, cloudId: ID, remote: { project: Project; etag: string }) {
-    const project = { ...remote.project, id: localId }
+    const prev = await links.get(localId)
+    const assets = prev?.cloudId === cloudId ? prev.assets : undefined
+    // 手元から送ったアセットは手元の ref に戻し、クラウドから読み直さずに済ませる
+    const back = new Map(Object.entries(assets ?? {}).map(([localRef, r2]) => [r2, localRef]))
+    const project = { ...mapAssetRefs(remote.project, (ref) => back.get(ref) ?? ref), id: localId }
     await local.saveProject(project)
-    await links.set(localId, { cloudId, etag: remote.etag, syncedUpdatedAt: project.updatedAt })
+    await links.set(localId, {
+      cloudId,
+      etag: remote.etag,
+      syncedUpdatedAt: project.updatedAt,
+      ...(assets && { assets }),
+    })
     return project
   }
 
@@ -234,6 +364,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
   async function keepCloudCopy(remote: Project) {
     const copy = { ...remote, id: newId(), title: conflictCopyTitle(remote.title) }
     await local.saveProject(copy)
+    conflict = true
     schedule(copy.id, 0)
   }
 
@@ -256,6 +387,87 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     return link
   }
 
+  type UploadResult = { status: 'ok'; ref: string } | { status: 'retry' | 'quota' | 'rejected' }
+
+  /** 署名 URL で 1 件アップロードする。ネットワークの失敗は TypeError のまま throw する */
+  async function uploadBlob(cloudId: ID, blob: Blob): Promise<UploadResult> {
+    const res = await request(`/${encodeURIComponent(cloudId)}/assets/upload-url`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mime: blob.type, size: blob.size }),
+    })
+    if (res === null || isTransient(res)) return { status: 'retry' }
+    if (res.status === 413) return { status: 'quota' }
+    if (!res.ok) {
+      onError(await unexpected(res, 'POST upload-url'))
+      return { status: 'rejected' }
+    }
+    const { assetId, url } = (await res.json()) as { assetId: string; url: string }
+    // 署名 URL が認可を兼ねるので Authorization は付けない
+    const put = await doFetch(url, {
+      method: 'PUT',
+      headers: { 'content-type': blob.type },
+      body: blob,
+    })
+    if (isTransient(put)) return { status: 'retry' }
+    if (!put.ok) {
+      onError(await unexpected(put, `PUT asset ${assetId}`))
+      return { status: 'rejected' }
+    }
+    return { status: 'ok', ref: toCloudAssetRef(cloudId, assetId) }
+  }
+
+  const needsUpload = (ref: string, link: CloudLink | undefined) =>
+    !parseCloudAssetRef(ref) && !unsendable.has(ref) && !link?.assets?.[ref]
+
+  /**
+   * refs のうち未アップロードのものを順に送り、1 件ごとに link に記録する。
+   * 'retry' は時間をおけば送れる失敗で、それまでに送れた分は link に残る
+   */
+  async function uploadRefs(localId: ID, link: CloudLink, refs: string[]) {
+    let uploaded = 0
+    for (const ref of refs) {
+      if (!needsUpload(ref, link)) continue
+      let blob: Blob
+      try {
+        blob = await local.loadAsset(ref)
+      } catch {
+        // 他の端末が手元の ref のまま送ったアセットは、この端末には無い
+        unsendable.add(ref)
+        continue
+      }
+      if (!UPLOADABLE_MIME_TYPES.has(blob.type)) {
+        unsendable.add(ref)
+        continue
+      }
+      const result = await uploadBlob(link.cloudId, blob)
+      if (result.status === 'retry') return { link, outcome: 'retry' as const, uploaded }
+      if (result.status === 'quota') {
+        quotaExceeded = true
+        notify()
+        break
+      }
+      if (result.status === 'rejected') {
+        unsendable.add(ref)
+        continue
+      }
+      quotaExceeded = false
+      notify()
+      cacheAsset(result.ref, blob)
+      link = { ...link, assets: { ...link.assets, [ref]: result.ref } }
+      await links.set(localId, link)
+      uploaded++
+    }
+    return { link, outcome: 'ok' as const, uploaded }
+  }
+
+  /** 前回の送信で送り切れなかったアセットがあるか。上限超過のあいだは次の保存まで送らない */
+  const hasUnsentAssets = (project: Project, link: CloudLink | undefined) => {
+    if (quotaExceeded) return false
+    const { first, later } = assetRefsByPriority(project)
+    return [...first, ...later].some((r) => needsUpload(r, link))
+  }
+
   async function push(localId: ID): Promise<PushOutcome> {
     let project: Project
     try {
@@ -265,7 +477,19 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       return 'done'
     }
     let link = await links.get(localId)
-    if (link?.syncedUpdatedAt === project.updatedAt) return 'done'
+    if (link?.syncedUpdatedAt === project.updatedAt && !hasUnsentAssets(project, link)) return 'done'
+    const refs = assetRefsByPriority(project)
+
+    let laterSent = false
+    /** PUT が通った後に履歴を送る。送れた分があればもう一度 PUT するので undefined を返す */
+    const sendLater = async (): Promise<PushOutcome | undefined> => {
+      if (laterSent || !link) return 'done'
+      laterSent = true
+      const later = await uploadRefs(localId, link, refs.later)
+      link = later.link
+      if (later.outcome === 'retry') return 'retry'
+      return later.uploaded === 0 ? 'done' : undefined
+    }
 
     for (let attempt = 0; attempt < MAX_PUTS_PER_PUSH; attempt++) {
       if (!link) {
@@ -273,22 +497,26 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
         if (created === null) return 'retry'
         link = created
       }
+      // 他の端末が開いたときに表示できるよう、画面に出る画像は PUT より先に送る
+      const first = await uploadRefs(localId, link, refs.first)
+      link = first.link
+      if (first.outcome === 'retry') return 'retry'
+      const body = toCloud(project, link)
       const res = await request(`/${encodeURIComponent(link.cloudId)}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json', 'if-match': `"${link.etag}"` },
-        body: JSON.stringify({ ...project, id: link.cloudId }),
+        body: JSON.stringify(body),
       })
       if (res === null) return 'retry'
       if (res.ok) {
-        const body = (await res.json()) as { updatedAt?: string }
-        const etag = parseEtag(res.headers.get('etag')) ?? body.updatedAt
+        const resBody = (await res.json()) as { updatedAt?: string }
+        const etag = parseEtag(res.headers.get('etag')) ?? resBody.updatedAt
         if (!etag) throw new Error('PUT project returned no updatedAt')
-        await links.set(localId, {
-          cloudId: link.cloudId,
-          etag,
-          syncedUpdatedAt: project.updatedAt,
-        })
-        return 'done'
+        link = { ...link, etag, syncedUpdatedAt: project.updatedAt }
+        await links.set(localId, link)
+        const outcome = await sendLater()
+        if (outcome) return outcome
+        continue
       }
       if (res.status === 404) {
         // 別の端末で消されたクラウド側を、手元に残っている版で作り直す
@@ -304,13 +532,12 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
           link = undefined
           continue
         }
-        if (sameContent(remote.project, project)) {
-          await links.set(localId, {
-            cloudId: link.cloudId,
-            etag: remote.etag,
-            syncedUpdatedAt: project.updatedAt,
-          })
-          return 'done'
+        if (sameContent(remote.project, body)) {
+          link = { ...link, etag: remote.etag, syncedUpdatedAt: project.updatedAt }
+          await links.set(localId, link)
+          const outcome = await sendLater()
+          if (outcome) return outcome
+          continue
         }
         await keepCloudCopy(remote.project)
         link = { ...link, etag: remote.etag }
@@ -342,6 +569,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     }
     clearTimeout(state.timer)
     state.timer = setTimeout(() => void run(id), delay)
+    notify()
   }
 
   function run(id: ID): Promise<void> {
@@ -372,27 +600,33 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
         if (disposed) return
         const delay = Math.min(FIRST_RETRY_MS * 2 ** (state.failures - 1), MAX_RETRY_MS)
         state.timer = setTimeout(() => void run(id), delay)
+        notify()
         return
       }
       state.failures = 0
+      if (outcome === 'failed') failed.add(id)
+      else failed.delete(id)
       if (state.again) {
         state.again = false
         schedule(id, debounceMs)
       } else {
         pushes.delete(id)
       }
+      notify()
     })()
     return state.running
   }
 
   const isPending = (id: ID) => pushes.has(id)
 
-  const onOnline = () => {
-    for (const [id, state] of pushes) {
-      if (state.timer !== undefined && state.failures > 0) void run(id)
+  const unsubscribeConnectivity = connectivity.subscribe(() => {
+    if (!isOffline()) {
+      for (const [id, state] of pushes) {
+        if (state.timer !== undefined && state.failures > 0) void run(id)
+      }
     }
-  }
-  if (typeof window !== 'undefined') window.addEventListener('online', onOnline)
+    notify()
+  })
 
   function cacheAsset(ref: string, blob: Blob) {
     assetCache.delete(ref)
@@ -401,37 +635,6 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     for (const oldest of assetCache.keys()) {
       if (assetCache.size <= MAX_CACHED_ASSETS) break
       assetCache.delete(oldest)
-    }
-  }
-
-  /** アップロードできたら `r2:` の ref、ローカルに置くべきときは null */
-  async function uploadAsset(localId: ID, blob: Blob): Promise<string | null> {
-    if (isOffline() || !UPLOADABLE_MIME_TYPES.has(blob.type)) return null
-    const link = await links.get(localId)
-    if (!link) return null
-    try {
-      const res = await request(`/${encodeURIComponent(link.cloudId)}/assets/upload-url`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mime: blob.type, size: blob.size }),
-      })
-      if (res === null || isTransient(res)) return null
-      if (!res.ok) throw await unexpected(res, 'POST upload-url')
-      const { assetId, url } = (await res.json()) as { assetId: string; url: string }
-      // 署名 URL が認可を兼ねるので Authorization は付けない
-      const put = await doFetch(url, {
-        method: 'PUT',
-        headers: { 'content-type': blob.type },
-        body: blob,
-      })
-      if (isTransient(put)) return null
-      if (!put.ok) throw await unexpected(put, `PUT asset ${assetId}`)
-      const ref = toCloudAssetRef(link.cloudId, assetId)
-      cacheAsset(ref, blob)
-      return ref
-    } catch (e) {
-      if (!isNetworkError(e)) onError(e)
-      return null
     }
   }
 
@@ -500,19 +703,15 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     const cloudChanged = link.etag !== remote.etag
     const localChanged = link.syncedUpdatedAt !== localProject.updatedAt
     if (cloudChanged && !localChanged) return adopt(id, cloudId, remote)
-    if (cloudChanged && sameContent(remote.project, localProject)) {
-      await links.set(id, {
-        cloudId,
-        etag: remote.etag,
-        syncedUpdatedAt: localProject.updatedAt,
-      })
+    if (cloudChanged && sameContent(remote.project, toCloud(localProject, link))) {
+      await links.set(id, { ...link, etag: remote.etag, syncedUpdatedAt: localProject.updatedAt })
       return localProject
     }
     if (cloudChanged) {
       await keepCloudCopy(remote.project)
       await links.set(id, { ...link, etag: remote.etag })
     }
-    if (localChanged) schedule(id, debounceMs)
+    if (localChanged || hasUnsentAssets(localProject, link)) schedule(id, debounceMs)
     return localProject
   }
 
@@ -564,6 +763,8 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       }
       await local.deleteProject(id)
       await links.delete(id)
+      failed.delete(id)
+      notify()
       if (cloudId !== undefined) {
         for (const ref of assetCache.keys()) {
           if (parseCloudAssetRef(ref)?.cloudId === cloudId) assetCache.delete(ref)
@@ -575,8 +776,15 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       return URL.createObjectURL(await loadAsset(ref))
     },
     loadAsset,
-    async putAsset(projectId, blob, hint) {
-      return (await uploadAsset(projectId, blob)) ?? local.putAsset(projectId, blob, hint)
+    putAsset: (projectId, blob, hint) => local.putAsset(projectId, blob, hint),
+    getSyncStatus: () => status,
+    subscribeSyncStatus(listener) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    dismissConflict() {
+      conflict = false
+      notify()
     },
     async syncUrl(localId) {
       const link = await links.get(localId)
@@ -598,7 +806,8 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       disposed = true
       for (const state of pushes.values()) clearTimeout(state.timer)
       pushes.clear()
-      if (typeof window !== 'undefined') window.removeEventListener('online', onOnline)
+      unsubscribeConnectivity()
+      listeners.clear()
     },
   }
 }
@@ -606,7 +815,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
 if (import.meta.vitest) {
   const { http, HttpResponse } = await import('msw')
   const { setupServer } = await import('msw/node')
-  const { createEmptyProject } = await import('@manga/schema')
+  const { createEmptyProject, createPage } = await import('@manga/schema')
   const { summarize } = await import('./adapter')
   const { createMemoryStorage } = await import('./memory')
   const { afterAll, afterEach, beforeAll, describe, expect, test, vi } = import.meta.vitest
@@ -902,6 +1111,59 @@ if (import.meta.vitest) {
       expect(errors).toEqual([])
     })
 
+    test('edits made offline are sent when the device comes back online', async () => {
+      const api = useApi()
+      let online = false
+      const listeners = new Set<() => void>()
+      const { storage, links, errors } = createDevice({
+        connectivity: {
+          isOnline: () => online,
+          subscribe(listener) {
+            listeners.add(listener)
+            return () => listeners.delete(listener)
+          },
+        },
+      })
+      const p = createEmptyProject('A')
+      await storage.saveProject(p)
+      await storage.saveProject(edit(p, 'offline edit'))
+      await storage.flush()
+      expect(api.requests).toEqual([])
+      expect(storage.getSyncStatus().state).toBe('offline')
+
+      online = true
+      for (const listener of listeners) listener()
+      await vi.waitFor(async () =>
+        expect((await links.get(p.id))?.syncedUpdatedAt).toBe(edit(p, '').updatedAt),
+      )
+      expect(api.rows.get(await cloudIdOf(links, p.id))?.title).toBe('offline edit')
+      expect(storage.getSyncStatus().state).toBe('synced')
+      expect(errors).toEqual([])
+    })
+
+    test('the sync status goes pending, synced, and conflict until dismissed', async () => {
+      useApi()
+      const a = createDevice()
+      const seen: SyncState[] = []
+      a.storage.subscribeSyncStatus(() => seen.push(a.storage.getSyncStatus().state))
+      expect(a.storage.getSyncStatus().state).toBe('synced')
+      const p = createEmptyProject('A')
+      await a.storage.saveProject(p)
+      expect(a.storage.getSyncStatus().state).toBe('pending')
+      await a.storage.flush()
+      expect(seen).toEqual(['pending', 'synced'])
+
+      const b = createDevice()
+      const loaded = await b.storage.loadProject(await cloudIdOf(a.links, p.id))
+      await b.storage.saveProject(edit(loaded, 'from B'))
+      await b.storage.flush()
+      await a.storage.saveProject(edit(p, 'from A'))
+      await a.storage.flush()
+      expect(a.storage.getSyncStatus().state).toBe('conflict')
+      a.storage.dismissConflict()
+      expect(a.storage.getSyncStatus().state).toBe('synced')
+    })
+
     test('without a token it works on the local storage and sends nothing', async () => {
       const api = useApi()
       const { storage } = createDevice({ getToken: async () => null })
@@ -956,8 +1218,27 @@ if (import.meta.vitest) {
   })
 
   describe('createCloudStorage assets', () => {
-    const png = () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' })
+    const png = (byte = 0) =>
+      new Blob([new Uint8Array([137, 80, 78, 71, byte])], { type: 'image/png' })
     const bytes = async (blob: Blob) => [...new Uint8Array(await blob.arrayBuffer())]
+
+    /** 1 コマに arts を並べ、最後の 1 枚を採用中にする */
+    const withArts = (p: Project, refs: string[]): Project => {
+      const page = createPage('2rows', 'rtl')
+      const panel = page.panels[0]
+      if (!panel) throw new Error('no panel')
+      panel.arts = refs.map((ref, i) => ({
+        id: `art${i}`,
+        ref,
+        provider: 'fake',
+        prompt: 'p',
+        createdAt: p.createdAt,
+      }))
+      panel.artId = `art${refs.length - 1}`
+      return { ...p, episodes: [{ id: 'ep', title: 'ep', pages: [page] }] }
+    }
+    const artRefs = (p: Project | undefined) =>
+      p?.episodes[0]?.pages[0]?.panels[0]?.arts.map((a) => a.ref) ?? []
 
     const synced = async () => {
       const api = useApi()
@@ -968,50 +1249,126 @@ if (import.meta.vitest) {
       return { api, a, p, cloudId: await cloudIdOf(a.links, p.id) }
     }
 
-    test('putAsset uploads to the cloud and another device can load it', async () => {
+    test('putAsset stores locally and the next push uploads it and rewrites the ref', async () => {
       const { api, a, p, cloudId } = await synced()
       const ref = await a.storage.putAsset(p.id, png(), 'panel')
-      expect(parseCloudAssetRef(ref)).toEqual({ cloudId, assetId: expect.any(String) })
-      expect(api.assets.size).toBe(1)
+      expect(ref).toMatch(/^blob:/)
+      expect(api.assets.size).toBe(0)
+
+      const edited = withArts(edit(p, 'A'), [ref])
+      await a.storage.saveProject(edited)
+      await a.storage.flush()
+      const [cloudRef] = artRefs(api.rows.get(cloudId))
+      expect(parseCloudAssetRef(cloudRef ?? '')).toEqual({ cloudId, assetId: expect.any(String) })
+      expect(artRefs(await a.local.loadProject(p.id))).toEqual([ref])
       expect(a.errors).toEqual([])
 
       const b = createDevice()
-      expect(await bytes(await b.storage.loadAsset(ref))).toEqual([137, 80, 78, 71])
-      const url = await b.storage.resolveAsset(ref)
+      const loaded = await b.storage.loadProject(cloudId)
+      const [loadedRef] = artRefs(loaded)
+      expect(await bytes(await b.storage.loadAsset(loadedRef ?? ''))).toEqual([137, 80, 78, 71, 0])
+      const url = await b.storage.resolveAsset(loadedRef ?? '')
       expect(url).toMatch(/^blob:/)
       URL.revokeObjectURL(url)
     })
 
-    test('a loaded cloud asset is served from memory afterwards', async () => {
-      const { api, a, p } = await synced()
-      const ref = await a.storage.putAsset(p.id, png())
-      const b = createDevice()
-      await b.storage.loadAsset(ref)
+    test('the adopted art is uploaded before the project, history after it', async () => {
+      const { api, a, p, cloudId } = await synced()
+      const history = [await a.storage.putAsset(p.id, png(1)), await a.storage.putAsset(p.id, png(2))]
+      const adopted = await a.storage.putAsset(p.id, png(3))
+      await a.storage.saveProject(withArts(edit(p, 'A'), [...history, adopted]))
       const before = api.requests.length
-      await b.storage.loadAsset(ref)
+      await a.storage.flush()
+
+      const cloudRefs = artRefs(api.rows.get(cloudId))
+      expect(cloudRefs.every((r) => parseCloudAssetRef(r))).toBe(true)
+      const uploadIndex = (r: string | undefined) =>
+        api.requests.findIndex((q) => q === `PUT /v1/uploads/${r?.slice('r2:'.length)}`)
+      const sent = api.requests.slice(before)
+      expect(sent.filter((q) => q === `PUT /v1/projects/${cloudId}`)).toHaveLength(2)
+      const firstPut = api.requests.indexOf(`PUT /v1/projects/${cloudId}`, before)
+      expect(uploadIndex(cloudRefs[2])).toBeLessThan(firstPut)
+      expect(uploadIndex(cloudRefs[0])).toBeGreaterThan(firstPut)
+      expect(uploadIndex(cloudRefs[1])).toBeGreaterThan(firstPut)
+      expect(a.storage.getSyncStatus()).toEqual({ state: 'synced', quotaExceeded: false })
+    })
+
+    test('a project adopted back from the cloud keeps the local refs', async () => {
+      const { a, p, cloudId } = await synced()
+      const ref = await a.storage.putAsset(p.id, png())
+      const edited = withArts(edit(p, 'A'), [ref])
+      await a.storage.saveProject(edited)
+      await a.storage.flush()
+
+      const b = createDevice()
+      const loaded = await b.storage.loadProject(cloudId)
+      await b.storage.saveProject(edit(loaded, 'from B'))
+      await b.storage.flush()
+
+      const reloaded = await a.storage.loadProject(p.id)
+      expect(reloaded.title).toBe('from B')
+      expect(artRefs(reloaded)).toEqual([ref])
+    })
+
+    test('a loaded cloud asset is served from memory afterwards', async () => {
+      const { api, a, p, cloudId } = await synced()
+      await a.storage.saveProject(withArts(edit(p, 'A'), [await a.storage.putAsset(p.id, png())]))
+      await a.storage.flush()
+      const [ref] = artRefs(api.rows.get(cloudId))
+      const b = createDevice()
+      await b.storage.loadAsset(ref ?? '')
+      const before = api.requests.length
+      await b.storage.loadAsset(ref ?? '')
       expect(api.requests).toHaveLength(before)
     })
 
-    test('putAsset keeps the asset locally when it cannot be uploaded', async () => {
-      const api = useApi()
-      const { storage, local, errors } = createDevice()
-      const p = createEmptyProject('A')
-      await storage.saveProject(p)
-      const unsynced = await storage.putAsset(p.id, png())
-      expect(unsynced).toMatch(/^blob:/)
-      expect(await bytes(await local.loadAsset(unsynced))).toEqual([137, 80, 78, 71])
-
-      await storage.flush()
-      const svg = await storage.putAsset(p.id, new Blob(['<svg/>'], { type: 'image/svg+xml' }))
-      expect(svg).toMatch(/^blob:/)
+    test('assets that cannot be sent stay local, and failed uploads are retried', async () => {
+      const { api, a, p, cloudId } = await synced()
+      const svg = await a.storage.putAsset(p.id, new Blob(['<svg/>'], { type: 'image/svg+xml' }))
+      const image = await a.storage.putAsset(p.id, png())
       server.use(
         http.post(`${BASE}/v1/projects/:id/assets/upload-url`, () => HttpResponse.error(), {
           once: true,
         }),
       )
-      expect(await storage.putAsset(p.id, png())).toMatch(/^blob:/)
+      await a.storage.saveProject(withArts(edit(p, 'A'), [svg, image]))
+      await a.storage.flush()
       expect(api.assets.size).toBe(0)
-      expect(errors).toEqual([])
+      expect(a.storage.getSyncStatus().state).toBe('offline')
+
+      await vi.waitFor(() => expect(api.assets.size).toBe(1), { timeout: 3000 })
+      await vi.waitFor(() => {
+        const [first, second] = artRefs(api.rows.get(cloudId))
+        expect(first).toBe(svg)
+        expect(parseCloudAssetRef(second ?? '')).toBeDefined()
+      })
+      expect(a.errors).toEqual([])
+    })
+
+    test('a 413 from upload-url keeps the asset local without retrying', async () => {
+      const { api, a, p, cloudId } = await synced()
+      let full = true
+      server.use(
+        http.post(`${BASE}/v1/projects/:id/assets/upload-url`, () =>
+          full ? HttpResponse.json({ error: 'quota' }, { status: 413 }) : undefined,
+        ),
+      )
+      const ref = await a.storage.putAsset(p.id, png())
+      await a.storage.saveProject(withArts(edit(p, 'A'), [ref]))
+      await a.storage.flush()
+      expect(artRefs(api.rows.get(cloudId))).toEqual([ref])
+      expect(a.storage.getSyncStatus()).toEqual({ state: 'synced', quotaExceeded: true })
+      expect(await bytes(await a.local.loadAsset(ref))).toEqual([137, 80, 78, 71, 0])
+
+      full = false
+      const before = api.requests.length
+      await a.storage.flush()
+      expect(api.requests).toHaveLength(before)
+
+      await a.storage.saveProject(withArts(edit(edit(p, 'A'), 'B'), [ref]))
+      await a.storage.flush()
+      expect(parseCloudAssetRef(artRefs(api.rows.get(cloudId))[0] ?? '')).toBeDefined()
+      expect(a.storage.getSyncStatus().quotaExceeded).toBe(false)
     })
 
     test('loading a missing cloud asset rejects', async () => {
