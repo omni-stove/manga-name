@@ -4,6 +4,7 @@ import {
   type ID,
   type Page,
   type Panel,
+  type Rect,
   type ReferenceImage,
 } from '@manga/schema'
 import { memo } from 'react'
@@ -36,8 +37,9 @@ interface PageLayerProps {
 }
 
 /**
- * ページの白地、参考画像、コマ、生成画像、フキダシを描く。ズームとパンでは props が変わらないので、
- * memo で再描画を飛ばす
+ * ページの白地、参考画像、コマ、生成画像、フキダシを描く。ズームとパンとドラッグでは props が変わらないので、
+ * memo で再描画を飛ばす。コマ、フキダシ、オーバーレイもそれぞれ memo し、編集や選択の変更では
+ * 変わった要素だけを描き直す
  */
 export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
   const { page, width, height } = props
@@ -68,11 +70,12 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
           <PanelView
             key={panel.id}
             panel={panel}
-            rect={panelBox(panel, width, height)}
+            width={width}
+            height={height}
             artRef={props.showArt ? ref : undefined}
             asset={props.showArt && ref !== undefined ? props.assets.get(ref) : undefined}
             generating={props.generating.has(panel.id)}
-            selection={props.selection}
+            selected={isSelected(props.selection, 'panel', panel.id)}
             clipId={`${props.idPrefix}-clip-${i}`}
             onArtError={props.onArtError}
           />
@@ -81,59 +84,61 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
       {/* はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く。重なりの前後はレンダラと同じく order 順 */}
       {[...page.panels]
         .sort((a, b) => a.order - b.order)
-        .map((panel) => {
-          const rect = panelBox(panel, width, height)
-          return [...panel.bubbles]
+        .map((panel) =>
+          [...panel.bubbles]
             .sort((a, b) => a.order - b.order)
             .map((bubble) => (
               <BubbleView
                 key={bubble.id}
                 bubble={bubble}
-                panel={rect}
-                selected={props.selection?.kind === 'bubble' && props.selection.id === bubble.id}
+                panelRect={panel.rect}
+                width={width}
+                height={height}
+                selected={isSelected(props.selection, 'bubble', bubble.id)}
               />
-            ))
-        })}
+            )),
+        )}
       {/* スピナーと生成ボタンはエディタだけの UI なので、フキダシに隠れないよう最後に描く */}
-      {page.panels.map((panel) => {
-        const rect = panelBox(panel, width, height)
-        const generating = props.generating.has(panel.id)
-        const { onGenerate } = props
-        return (
-          <g key={panel.id} className="ec-overlay" data-overlay-panel-id={panel.id}>
-            {/* フキダシの上でも .ec-overlay:hover を効かせるための当たり判定 */}
-            <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} fill="transparent" />
-            {generating && <GeneratingOverlay rect={rect} />}
-            {onGenerate && !generating && (
-              <GenerateButton rect={rect} onClick={() => onGenerate(panel.id)} />
-            )}
-          </g>
-        )
-      })}
+      {page.panels.map((panel) => (
+        <PanelOverlay
+          key={panel.id}
+          panelId={panel.id}
+          panelRect={panel.rect}
+          width={width}
+          height={height}
+          generating={props.generating.has(panel.id)}
+          onGenerate={props.onGenerate}
+        />
+      ))}
     </g>
   )
 })
 
-function PanelView({
+const isSelected = (selection: Selection, kind: 'panel' | 'bubble', id: ID) =>
+  selection?.kind === kind && selection.id === id
+
+const PanelView = memo(function PanelView({
   panel,
-  rect,
+  width,
+  height,
   artRef,
   asset,
   generating,
-  selection,
+  selected,
   clipId,
   onArtError,
 }: {
   panel: Panel
-  rect: Box
+  width: number
+  height: number
   artRef: string | undefined
   asset: AssetState | undefined
   generating: boolean
-  selection: Selection
+  selected: boolean
   clipId: string
   onArtError(ref: string): void
 }) {
-  const selected = selection?.kind === 'panel' && selection.id === panel.id
+  const rect = panelBox(panel, width, height)
   const url = asset && 'url' in asset ? asset.url : undefined
   return (
     <g
@@ -174,7 +179,36 @@ function PanelView({
       <PanelNumber order={panel.order} rect={rect} />
     </g>
   )
-}
+})
+
+/** コマの上に重ねるスピナーと生成ボタン */
+const PanelOverlay = memo(function PanelOverlay({
+  panelId,
+  panelRect,
+  width,
+  height,
+  generating,
+  onGenerate,
+}: {
+  panelId: ID
+  panelRect: Rect
+  width: number
+  height: number
+  generating: boolean
+  onGenerate?(panelId: ID): void
+}) {
+  const rect = panelBox({ rect: panelRect }, width, height)
+  return (
+    <g className="ec-overlay" data-overlay-panel-id={panelId}>
+      {/* フキダシの上でも .ec-overlay:hover を効かせるための当たり判定 */}
+      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} fill="transparent" />
+      {generating && <GeneratingOverlay rect={rect} />}
+      {onGenerate && !generating && (
+        <GenerateButton rect={rect} onClick={() => onGenerate(panelId)} />
+      )}
+    </g>
+  )
+})
 
 /**
  * ページ全体にアスペクト比を保って中央に収めた参考画像。コマは塗らないので、未生成のコマ越しに見える
@@ -343,16 +377,20 @@ function GenerateButton({ rect, onClick }: { rect: Box; onClick(): void }) {
  * フキダシ。太線で輪郭を描いてから同じ形を白で塗り重ね、本体としっぽの継ぎ目の線を消す。
  * 外側に残る線は太線の半分になる
  */
-function BubbleView({
+const BubbleView = memo(function BubbleView({
   bubble,
-  panel,
+  panelRect,
+  width,
+  height,
   selected,
 }: {
   bubble: Bubble
-  panel: Box
+  panelRect: Rect
+  width: number
+  height: number
   selected: boolean
 }) {
-  const g = bubbleGeometry(bubble, panel)
+  const g = bubbleGeometry(bubble, panelBox({ rect: panelRect }, width, height))
   const body = bodyPath(bubble.shape, g)
   const tail = tailPath(bubble.shape, g)
   const box = textBox(bubble.shape, g)
@@ -418,4 +456,4 @@ function BubbleView({
       </text>
     </g>
   )
-}
+})

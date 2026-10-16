@@ -579,7 +579,7 @@
       "group": "G2",
       "title": "描画性能",
       "detail": "memo、ドラッグ中の再描画範囲、画像のキャッシュ",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "16",
         "17"
@@ -592,7 +592,9 @@
       ],
       "spec": [
         "workstreams/WS-04-editor-canvas.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "22",

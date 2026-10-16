@@ -9,7 +9,7 @@ export interface PagePoint {
 }
 
 /** コマの正規化 rect をページ座標（mm）の矩形にする */
-export function panelBox(panel: Panel, width: number, height: number): Box {
+export function panelBox(panel: Pick<Panel, 'rect'>, width: number, height: number): Box {
   return {
     x: panel.rect.x * width,
     y: panel.rect.y * height,
