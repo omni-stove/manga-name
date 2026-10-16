@@ -997,16 +997,13 @@ if (import.meta.vitest) {
       const { storage, local, errors } = createDevice()
       const p = createEmptyProject('A')
       await storage.saveProject(p)
-      // まだクラウドに作られていない
       const unsynced = await storage.putAsset(p.id, png())
       expect(unsynced).toMatch(/^blob:/)
       expect(await bytes(await local.loadAsset(unsynced))).toEqual([137, 80, 78, 71])
 
       await storage.flush()
-      // workers/api が受けない型
       const svg = await storage.putAsset(p.id, new Blob(['<svg/>'], { type: 'image/svg+xml' }))
       expect(svg).toMatch(/^blob:/)
-      // 一時的な失敗は報告せず、ローカルに置く
       server.use(
         http.post(`${BASE}/v1/projects/:id/assets/upload-url`, () => HttpResponse.error(), {
           once: true,

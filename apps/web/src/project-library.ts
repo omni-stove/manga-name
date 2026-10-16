@@ -454,7 +454,6 @@ if (import.meta.vitest) {
       await a.library.flushAll()
       b.store.applyPatch(setDpi(600))
 
-      // 保存済みのデータだけを持ち越して開き直す。元のタブは閉じる
       const local = { storage: createMemoryStorage(), ydocs: createMemoryYDocStore() }
       await local.storage.saveProject(await a.storage.loadProject(project.id))
       const saved = await a.ydocs.load(project.id)

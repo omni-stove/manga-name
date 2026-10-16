@@ -326,7 +326,6 @@ if (import.meta.vitest) {
       await vi.waitFor(() =>
         expect(b.awareness.getStates().get(a.doc.clientID)).toEqual({ name: 'a' }),
       )
-      // 後からつないだ側にも、先にいた側の状態が届く
       const c = connectClient(server)
       await vi.waitFor(() =>
         expect(c.awareness.getStates().get(a.doc.clientID)).toEqual({ name: 'a' }),
@@ -349,7 +348,6 @@ if (import.meta.vitest) {
       server.setOnline(false)
       server.disconnectAll()
       await vi.waitFor(() => expect(a.provider.state.getState().status).toBe('connecting'))
-      // 切れた相手の presence は残さない
       expect(a.awareness.getStates().has(b.doc.clientID)).toBe(false)
       a.text.set('a', 'offline')
       b.text.set('b', 'offline')
