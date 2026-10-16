@@ -27,8 +27,8 @@ const PT_PER_MM = 72 / 25.4
 /** 指示メモページの寸法。ページ幅に対する比率 */
 const SHEET_FONT = 0.025
 const SHEET_PAD = 0.08
-// 描画と PNG エンコードはネイティブ側や別スレッドで進むので、埋め込み（JS）と並べる。
-// 増やしても速くならず、300dpi の PNG を抱えるメモリだけが増える
+// 先行ジョブ（描画、デコード、RGB 変換、deflate）の同時数。
+// 増やすと、デコード中の 300dpi の RGBA サーフェスと deflate 済みの XObject を抱えるメモリだけが増える
 const RENDER_AHEAD = 3
 
 interface Numbered {
