@@ -420,3 +420,26 @@ a {
   gap: 0.5rem;
   align-items: center;
 }
+
+.export-dialog {
+  min-width: 20rem;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 0.5rem;
+}
+
+.export-dialog h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.export-dialog select {
+  font: inherit;
+  width: 100%;
+}
+
+.export-dialog .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0;
+}

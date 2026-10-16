@@ -10,6 +10,9 @@ import type { Character, ID, Page, Panel, Patch, Project } from '@manga/schema'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { useStore } from 'zustand'
+import { ExportDialog, type ExportOptions } from '../export-dialog'
+import { downloadBlob, exportFileName, pageExporter } from '../export-page'
+import { collectExportJob } from '../export-page-job'
 import { generatingPanels } from '../generate-panel'
 import {
   bubblePatch,
@@ -23,6 +26,7 @@ import {
 import type { ProjectLibrary } from '../project-library'
 import { findPage, pagePatch } from '../project-ops'
 import { errorMessage } from '../route-error'
+import { toasts } from '../toasts'
 import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
 
@@ -66,6 +70,8 @@ const notWired = () => {}
 
 type Apply = (label: string, build: (project: Project) => Patch) => boolean
 type Generate = (panelId: ID, instruction?: string) => void
+/** 書き出しダイアログが開いているか、閉じて Worker が描いている最中か */
+type Exporting = 'closed' | 'dialog' | 'busy'
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString('ja-JP')
 
@@ -82,6 +88,7 @@ function Editor() {
   const [tool, setTool] = useState<Tool>('select')
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
   const [selection, setSelection] = useState<Selection>(null)
+  const [exporting, setExporting] = useState<Exporting>('closed')
   const found = findPage(project, pageId)
   // 開いている間に Undo や別タブの操作でページが消えることがある
   if (!found) return <PageNotFound />
@@ -89,6 +96,23 @@ function Editor() {
   // 結果は generation がトーストと Patch で出すので、ここでは待たない
   const generate: Generate = (panelId, instruction) =>
     void generation.generate({ store, projectId, pageId, panelId, instruction })
+  // ダイアログは先に閉じ、描いている間も編集できるようにする。終わればダウンロードが始まる
+  const exportPng = async (opts: ExportOptions) => {
+    setExporting('busy')
+    try {
+      const { settings, characters } = project
+      const job = await collectExportJob(
+        page,
+        { settings, characters, loadAsset: library.loadAsset },
+        opts,
+      )
+      downloadBlob(await pageExporter.exportPng(job), exportFileName(project.title, pageIndex))
+    } catch (e) {
+      toasts.push(`PNG の書き出しに失敗しました: ${errorMessage(e)}`)
+    } finally {
+      setExporting('closed')
+    }
+  }
   return (
     <section className="editor">
       <header className="toolbar">
@@ -131,11 +155,21 @@ function Editor() {
           <button type="button" disabled={!canRedo} onClick={() => store.redo()}>
             Redo
           </button>
-          <button type="button" disabled>
-            書き出し
+          <button
+            type="button"
+            disabled={exporting === 'busy'}
+            onClick={() => setExporting('dialog')}
+          >
+            {exporting === 'busy' ? '書き出し中…' : '書き出し'}
           </button>
         </span>
       </header>
+      {exporting === 'dialog' && (
+        <ExportDialog
+          onCancel={() => setExporting('closed')}
+          onExport={(opts) => void exportPng(opts)}
+        />
+      )}
       {error && <p className="error">{error}</p>}
       <div className="editor-body">
         <div className="canvas">
