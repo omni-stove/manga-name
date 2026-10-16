@@ -1,5 +1,5 @@
 import type { Page } from '@manga/schema'
-import { Button } from '@manga/ui'
+import { Button, Checkbox, Field } from '@manga/ui'
 import { DEBOUNCE_MS, SelectField, TextField } from './fields'
 import styles from './page-inspector.module.css'
 import { optionalString, replace } from './patch'
@@ -18,7 +18,9 @@ export function PageInspector({
   generating = false,
   onChange,
   onGenerateAll,
+  onPickReference,
 }: PageInspectorProps) {
+  const { reference } = page
   return (
     <div className={section.section} data-inspector="page">
       <h3 className={section.title}>ページ</h3>
@@ -35,6 +37,45 @@ export function PageInspector({
         delayMs={DEBOUNCE_MS}
         onCommit={(v) => onChange(optionalString('/note', page.note, v))}
       />
+      <h4 className={section.heading}>参考画像</h4>
+      {reference === undefined ? (
+        <p className={section.muted}>
+          なし。PNG、JPEG、PDF。キャンバスへのドロップと貼り付けでも読み込めます
+        </p>
+      ) : (
+        <>
+          <Field label="不透明度" hint={`${Math.round(reference.opacity * 100)}%`}>
+            <input
+              type="range"
+              className={styles.opacity}
+              min={0}
+              max={1}
+              step={0.05}
+              value={reference.opacity}
+              onChange={(e) => onChange(replace('/reference/opacity', Number(e.target.value)))}
+            />
+          </Field>
+          <Checkbox
+            label="表示"
+            checked={reference.visible}
+            onChange={(e) => onChange(replace('/reference/visible', e.target.checked))}
+          />
+        </>
+      )}
+      <div className={section.group}>
+        <Button size="small" onClick={onPickReference}>
+          {reference === undefined ? '読み込む' : '差し替え'}
+        </Button>
+        {reference !== undefined && (
+          <Button
+            size="small"
+            variant="ghost"
+            onClick={() => onChange([{ op: 'remove', path: '/reference' }])}
+          >
+            削除
+          </Button>
+        )}
+      </div>
       <div className={section.group}>
         <Button
           variant="primary"

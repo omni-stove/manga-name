@@ -23,7 +23,7 @@ import common from '../common.module.css'
 import { ExportDialog, type ExportOptions } from '../export-dialog'
 import { downloadBlob, exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
-import { generatingPanels } from '../generate-panel'
+import { generatingPanels, usesReference } from '../generate-panel'
 import {
   bubblePatch,
   characterPatch,
@@ -89,6 +89,13 @@ const ALL_LAYERS: Layers = {
 
 type Apply = (label: string, build: (project: Project) => Patch) => boolean
 type Generate = (panelId: ID, instruction?: string) => void
+/** コマの「参考画像を使う」。ページに参考画像が無ければ undefined */
+interface ReferenceToggle {
+  uses(panelId: ID): boolean | undefined
+  set(panelId: ID, use: boolean): void
+}
+
+const REFERENCE_ACCEPT = 'image/png,image/jpeg,application/pdf'
 /** 書き出しダイアログが開いているか、閉じて Worker が描いている最中か */
 type Exporting = 'closed' | 'dialog' | 'busy'
 
@@ -110,6 +117,7 @@ function Editor() {
   const { canUndo, canRedo } = useStore(store.state)
   const generatingState = useStore(generation.generating)
   const generating = generatingPanels(generatingState, projectId)
+  const referenceOptOut = useStore(generation.referenceOptOut)
   const { apply, error } = useApplyPatch(store)
   const resolveAsset = useAssetResolver(library.resolveAsset)
   const peers = usePeers(collab)
@@ -133,6 +141,7 @@ function Editor() {
       )
   }
   useReferencePaste(importReference)
+  const referencePicker = useFilePicker(REFERENCE_ACCEPT, importReference)
   const pageBatch = useBatchGeneration({
     generation,
     store,
@@ -156,6 +165,11 @@ function Editor() {
   // 結果は generation がトーストと Patch で出すので、ここでは待たない
   const generate: Generate = (panelId, instruction) =>
     void generation.generate({ store, projectId, pageId, panelId, instruction })
+  const referenceToggle: ReferenceToggle = {
+    uses: (panelId) =>
+      page.reference ? usesReference(referenceOptOut, projectId, panelId) : undefined,
+    set: (panelId, use) => generation.setUseReference(projectId, panelId, use),
+  }
   // ダイアログは先に閉じ、描いている間も編集できるようにする。終わればダウンロードが始まる
   const exportPng = async (opts: ExportOptions) => {
     setExporting('busy')
@@ -280,6 +294,7 @@ function Editor() {
             generating={generating}
             apply={apply}
             generate={generate}
+            referenceToggle={referenceToggle}
             resolveAsset={resolveAsset}
           />
           <details open={selection === null}>
@@ -291,9 +306,10 @@ function Editor() {
               }
               onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
               onGenerateAll={pageBatch.start}
+              onPickReference={referencePicker.open}
             />
+            {referencePicker.input}
             <BatchOptions batch={pageBatch} />
-            <ReferencePicker onPick={importReference} />
           </details>
           <details>
             <summary>キャラクター（{project.characters.length}）</summary>
@@ -410,6 +426,7 @@ function SelectionInspector({
   generating,
   apply,
   generate,
+  referenceToggle,
   resolveAsset,
 }: {
   page: Page
@@ -419,6 +436,7 @@ function SelectionInspector({
   generating: Set<ID>
   apply: Apply
   generate: Generate
+  referenceToggle: ReferenceToggle
   resolveAsset(ref: string): Promise<string>
 }) {
   if (selection === null) {
@@ -440,6 +458,8 @@ function SelectionInspector({
             apply('コマを編集', (p) => panelPatch(p, pageId, selection.id, patch))
           }
           onGenerate={(instruction) => generate(selection.id, instruction)}
+          useReference={referenceToggle.uses(selection.id)}
+          onUseReferenceChange={(use) => referenceToggle.set(selection.id, use)}
           resolveAsset={resolveAsset}
         />
         <ArtRemoval panel={found.panel} pageId={pageId} apply={apply} />
@@ -492,31 +512,24 @@ function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply:
   )
 }
 
-/** 参考画像を選ぶファイルダイアログ。不透明度などの操作は PageInspector に置く（タスク 26） */
-function ReferencePicker({ onPick }: { onPick(file: File): void }) {
-  const fileInput = useRef<HTMLInputElement>(null)
-  return (
-    <div className={styles.section} data-inspector="reference-picker">
-      <Button size="small" onClick={() => fileInput.current?.click()}>
-        参考画像を読み込む
-      </Button>
-      <p className={`${common.placeholder} ${styles.note}`}>
-        PNG、JPEG、PDF。キャンバスへのドロップと貼り付けでも読み込めます
-      </p>
-      <input
-        ref={fileInput}
-        type="file"
-        accept="image/png,image/jpeg,application/pdf"
-        hidden
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          // 同じファイルを選び直しても change が出るように空にする
-          e.target.value = ''
-          if (file) onPick(file)
-        }}
-      />
-    </div>
+/** 非表示のファイル入力と、そのダイアログを開く関数。`input` は画面のどこかに置く */
+function useFilePicker(accept: string, onPick: (file: File) => void) {
+  const ref = useRef<HTMLInputElement>(null)
+  const input = (
+    <input
+      ref={ref}
+      type="file"
+      accept={accept}
+      hidden
+      onChange={(e) => {
+        const file = e.target.files?.[0]
+        // 同じファイルを選び直しても change が出るように空にする
+        e.target.value = ''
+        if (file) onPick(file)
+      }}
+    />
   )
+  return { open: () => ref.current?.click(), input }
 }
 
 /**
@@ -545,7 +558,7 @@ function useReferencePaste(onFile: (file: File) => void) {
   }, [])
 }
 
-/** CharacterInspector に、参照画像を選ぶファイルダイアログと putAsset を付ける */
+/** CharacterInspector に、参照画像を選ぶファイルダイアログと putAsset を付ける。読み込みはページの参考画像と同じ経路 */
 function CharacterPane({
   character,
   projectId,
@@ -559,8 +572,20 @@ function CharacterPane({
   apply: Apply
   resolveAsset(ref: string): Promise<string>
 }) {
-  const fileInput = useRef<HTMLInputElement>(null)
   const [pickError, setPickError] = useState<string>()
+  const picker = useFilePicker(REFERENCE_ACCEPT, (file) => {
+    toReferenceImage(file)
+      .then((blob) => library.putAsset(projectId, blob, `reference-${character.id}`))
+      .then(
+        (ref) => {
+          setPickError(undefined)
+          apply('参照画像を差し替え', (p) =>
+            characterPatch(p, character.id, [{ op: 'add', path: '/referenceRef', value: ref }]),
+          )
+        },
+        (err) => setPickError(errorMessage(err)),
+      )
+  })
   return (
     <>
       <CharacterInspector
@@ -568,7 +593,7 @@ function CharacterPane({
         onChange={(patch) =>
           apply('キャラクターを編集', (p) => characterPatch(p, character.id, patch))
         }
-        onPickReference={() => fileInput.current?.click()}
+        onPickReference={picker.open}
         resolveAsset={resolveAsset}
       />
       {pickError && (
@@ -576,27 +601,7 @@ function CharacterPane({
           {pickError}
         </p>
       )}
-      <input
-        ref={fileInput}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          // 同じファイルを選び直しても change が出るように空にする
-          e.target.value = ''
-          if (!file) return
-          library.putAsset(projectId, file, `reference-${character.id}`).then(
-            (ref) => {
-              setPickError(undefined)
-              apply('参照画像を差し替え', (p) =>
-                characterPatch(p, character.id, [{ op: 'add', path: '/referenceRef', value: ref }]),
-              )
-            },
-            (err) => setPickError(errorMessage(err)),
-          )
-        }}
-      />
+      {picker.input}
     </>
   )
 }

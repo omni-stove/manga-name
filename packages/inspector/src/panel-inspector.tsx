@@ -6,7 +6,7 @@ import {
   PanelSchema,
   type Patch,
 } from '@manga/schema'
-import { Button, Field, IconButton, TextArea } from '@manga/ui'
+import { Button, Checkbox, Field, IconButton, TextArea } from '@manga/ui'
 import { useId, useMemo, useState } from 'react'
 import { DEBOUNCE_MS, NumberField, TextField } from './fields'
 import styles from './panel-inspector.module.css'
@@ -39,6 +39,8 @@ export function PanelInspector({
   generating = false,
   onChange,
   onGenerate,
+  useReference,
+  onUseReferenceChange,
   resolveAsset,
 }: PanelInspectorProps) {
   const cameraListId = useId()
@@ -147,6 +149,13 @@ export function PanelInspector({
       )}
 
       <h4 className={section.heading}>生成</h4>
+      {useReference !== undefined && (
+        <Checkbox
+          label="参考画像を使う"
+          checked={useReference}
+          onChange={(e) => onUseReferenceChange?.(e.target.checked)}
+        />
+      )}
       <div className={section.group}>
         <Button variant="primary" disabled={generating} onClick={() => onGenerate()}>
           {generating ? '生成中…' : '生成'}

@@ -19,6 +19,9 @@ export interface PanelInspectorProps {
   onChange(patch: Patch): void
   /** instruction 付きは採用中の絵への修正指示つき再生成 */
   onGenerate(instruction?: string): void
+  /** 生成に参考画像の切り抜きを渡すか。ページに参考画像が無ければ undefined で、切り替えを出さない */
+  useReference?: boolean
+  onUseReferenceChange?(use: boolean): void
   /** PanelArt.ref を表示用 URL にする */
   resolveAsset(ref: string): Promise<string>
 }
@@ -44,6 +47,8 @@ export interface PageInspectorProps {
   generating?: boolean
   onChange(patch: Patch): void
   onGenerateAll(): void
+  /** 参考画像を選ぶ UI を開く。選んだ結果は親が `reference` の Patch にする */
+  onPickReference(): void
 }
 
 export interface ProjectSettingsInspectorProps {

@@ -1,4 +1,4 @@
-import type { Page, Patch } from '@manga/schema'
+import type { Page, Patch, ProjectSettings, Rect } from '@manga/schema'
 
 /** 参考画像を保存するときの長辺の上限（px）。大きな画像でキャンバス操作が重くならないよう読み込み時に縮める */
 const REFERENCE_MAX_SIDE = 2048
@@ -81,6 +81,69 @@ export function referencePatch(page: Page, ref: string): Patch {
   const current = page.reference
   const value = current ? { ...current, ref } : { ref, opacity: 0.5, visible: true }
   return [{ op: 'add', path: '/reference', value }]
+}
+
+/** 画像の px で表した矩形 */
+interface PixelRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/**
+ * ページ全体に中央フィットした参考画像の上で、コマの `rect` が占める範囲を画像の px で返す。
+ * 画像とページの縦横比が違えば、範囲は画像の外にはみ出す
+ */
+export function referenceCrop(
+  image: { width: number; height: number },
+  pageSize: ProjectSettings['pageSize'],
+  rect: Rect,
+): PixelRect {
+  // 画像 1px あたりのページの長さ。キャンバスの preserveAspectRatio="xMidYMid meet" と同じ
+  const unit = Math.max(pageSize.w / image.width, pageSize.h / image.height)
+  const pageW = pageSize.w / unit
+  const pageH = pageSize.h / unit
+  const offsetX = (pageW - image.width) / 2
+  const offsetY = (pageH - image.height) / 2
+  return {
+    x: rect.x * pageW - offsetX,
+    y: rect.y * pageH - offsetY,
+    w: rect.w * pageW,
+    h: rect.h * pageH,
+  }
+}
+
+/**
+ * 参考画像からコマの `rect` の範囲を切り抜いた PNG。画像の外は透明にする。
+ * 寸法は `referenceCrop` の幅と高さを丸めたもの
+ */
+export async function cropReference(
+  image: Blob,
+  pageSize: ProjectSettings['pageSize'],
+  rect: Rect,
+  codec: ReferenceCodec = browserCodec,
+): Promise<Blob> {
+  const raster = await codec.decodeImage(image)
+  try {
+    const crop = referenceCrop(raster, pageSize, rect)
+    const width = Math.max(1, Math.round(crop.w))
+    const height = Math.max(1, Math.round(crop.h))
+    const cropped: Raster = {
+      width,
+      height,
+      draw: (ctx, w, h) => {
+        ctx.save()
+        ctx.scale(w / crop.w, h / crop.h)
+        ctx.translate(-crop.x, -crop.y)
+        raster.draw(ctx, raster.width, raster.height)
+        ctx.restore()
+      },
+    }
+    return await codec.encode(cropped, width, height, 'image/png')
+  } finally {
+    raster.close?.()
+  }
 }
 
 /** ドロップや貼り付けの DataTransfer から最初のファイル。無ければ undefined */
