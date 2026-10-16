@@ -650,7 +650,7 @@
       "group": "G3",
       "title": "書き出し UI",
       "detail": "形式（PNG zip / PDF）、範囲、notes、panelNumbers、spread、dpi。Web Worker と進捗",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "23",
         "14",
@@ -667,7 +667,9 @@
       ],
       "spec": [
         "workstreams/WS-08-export.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "25",

@@ -12,7 +12,7 @@ import {
   PanelInspector,
   ProjectSettingsInspector,
 } from '@manga/inspector'
-import type { Character, ID, Page, Panel, Patch, Project } from '@manga/schema'
+import type { Character, Episode, ID, Page, Panel, Patch, Project } from '@manga/schema'
 import { Button, Checkbox, SegmentedControl, ToolGroup } from '@manga/ui'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
@@ -20,7 +20,7 @@ import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { CollaborationBar, PeerBadge, peerColor, usePeers } from '../collaboration-view'
 import common from '../common.module.css'
-import { ExportDialog, type ExportOptions } from '../export-dialog'
+import { ExportDialog, type ExportSettings } from '../export-dialog'
 import { downloadBlob, exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
 import { generatingPanels, usesReference } from '../generate-panel'
@@ -97,7 +97,10 @@ interface ReferenceToggle {
 
 const REFERENCE_ACCEPT = 'image/png,image/jpeg,application/pdf'
 /** 書き出しダイアログが開いているか、閉じて Worker が描いている最中か */
-type Exporting = 'closed' | 'dialog' | 'busy'
+/** busy は書き出し中で、done / total は描き終えたページ数と対象のページ数 */
+type Exporting = 'closed' | 'dialog' | { done: number; total: number }
+
+const MM_PER_INCH = 25.4
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString('ja-JP')
 
@@ -160,7 +163,8 @@ function Editor() {
 
   // 開いている間に Undo や別タブの操作でページが消えることがある
   if (!found) return <PageNotFound />
-  const { page, pageIndex } = found
+  const { page, pageIndex, episodeIndex } = found
+  const episode = project.episodes[episodeIndex] as Episode
   const selection = hasElement(page, selected) ? selected : null
   // 結果は generation がトーストと Patch で出すので、ここでは待たない
   const generate: Generate = (panelId, instruction) =>
@@ -171,18 +175,26 @@ function Editor() {
     set: (panelId, use) => generation.setUseReference(projectId, panelId, use),
   }
   // ダイアログは先に閉じ、描いている間も編集できるようにする。終わればダウンロードが始まる
-  const exportPng = async (opts: ExportOptions) => {
-    setExporting('busy')
+  const exportPages = async ({ format, from, to, dpi, ...opts }: ExportSettings) => {
+    const total = to - from + 1
+    setExporting({ done: 0, total })
     try {
-      const { settings, characters } = project
+      const pageIds = episode.pages.slice(from - 1, to).map((p) => p.id)
+      const width = Math.round((project.settings.pageSize.w / MM_PER_INCH) * dpi)
       const job = await collectExportJob(
-        page,
-        { settings, characters, loadAsset: library.loadAsset },
-        opts,
+        project,
+        episode.id,
+        pageIds,
+        format,
+        { ...opts, width },
+        library.loadAsset,
       )
-      downloadBlob(await pageExporter.exportPng(job), exportFileName(project.title, pageIndex))
+      const blob = await pageExporter.run(job, (done) => setExporting({ done, total }))
+      const numbers = Array.from({ length: total }, (_, i) => from + i)
+      const ext = format === 'pdf' ? 'pdf' : total === 1 ? 'png' : 'zip'
+      downloadBlob(blob, exportFileName(project.title, numbers, ext))
     } catch (e) {
-      toasts.push(`PNG の書き出しに失敗しました: ${errorMessage(e)}`)
+      toasts.push(`書き出しに失敗しました: ${errorMessage(e)}`)
     } finally {
       setExporting('closed')
     }
@@ -227,20 +239,29 @@ function Editor() {
           <Button size="small" variant="ghost" disabled={!canRedo} onClick={() => store.redo()}>
             Redo
           </Button>
-          <Button
-            size="small"
-            variant="primary"
-            disabled={exporting === 'busy'}
-            onClick={() => setExporting('dialog')}
-          >
-            {exporting === 'busy' ? '書き出し中…' : '書き出し'}
-          </Button>
+          {typeof exporting === 'object' ? (
+            <span className={styles.exportProgress} role="status">
+              書き出し中… {exporting.done} / {exporting.total}
+              <progress
+                aria-label="書き出しの進捗"
+                value={exporting.done}
+                max={exporting.total}
+              />
+            </span>
+          ) : (
+            <Button size="small" variant="primary" onClick={() => setExporting('dialog')}>
+              書き出し
+            </Button>
+          )}
         </span>
       </header>
       {exporting === 'dialog' && (
         <ExportDialog
+          pages={episode.pages}
+          currentIndex={pageIndex}
+          dpi={project.settings.dpi}
           onCancel={() => setExporting('closed')}
-          onExport={(opts) => void exportPng(opts)}
+          onExport={(settings) => void exportPages(settings)}
         />
       )}
       {error && <p className={`${common.error} ${styles.error}`}>{error}</p>}

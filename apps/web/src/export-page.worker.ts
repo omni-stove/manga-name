@@ -9,9 +9,12 @@ const scope = self as unknown as {
 scope.onmessage = async (e) => {
   const { id, job } = e.data
   try {
-    scope.postMessage({ id, ok: true, png: await runExportJob(job) })
+    const blob = await runExportJob(job, (done, total) =>
+      scope.postMessage({ id, kind: 'progress', done, total }),
+    )
+    scope.postMessage({ id, kind: 'done', blob })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    scope.postMessage({ id, ok: false, message })
+    scope.postMessage({ id, kind: 'error', message })
   }
 }

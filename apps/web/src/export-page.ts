@@ -9,13 +9,17 @@ interface WorkerLike {
 }
 
 export interface PageExporter {
-  /** ExportJob を Worker で描いて PNG を返す。描いている間メインスレッドは空く */
-  exportPng(job: ExportJob): Promise<Blob>
+  /**
+   * ExportJob を Worker で描いて PNG、zip、PDF のいずれかを返す。描いている間メインスレッドは空く。
+   * 1 ページ描き終えるごとに onProgress を呼ぶ
+   */
+  run(job: ExportJob, onProgress?: (done: number, total: number) => void): Promise<Blob>
 }
 
 interface Pending {
-  resolve(png: Blob): void
+  resolve(blob: Blob): void
   reject(error: unknown): void
+  onProgress?(done: number, total: number): void
 }
 
 const spawnWorker = (): WorkerLike =>
@@ -41,11 +45,16 @@ function createPageExporter(spawn: () => WorkerLike = spawnWorker): PageExporter
     if (worker) return worker
     const w = spawn()
     w.onmessage = (e) => {
-      const p = pending.get(e.data.id)
+      const reply = e.data
+      const p = pending.get(reply.id)
       if (!p) return
-      pending.delete(e.data.id)
-      if (e.data.ok) p.resolve(e.data.png)
-      else p.reject(new Error(e.data.message))
+      if (reply.kind === 'progress') {
+        p.onProgress?.(reply.done, reply.total)
+        return
+      }
+      pending.delete(reply.id)
+      if (reply.kind === 'done') p.resolve(reply.blob)
+      else p.reject(new Error(reply.message))
     }
     // 読み込みの失敗や onmessage の外の例外は、どの要求のものか分からない
     w.onerror = (e) => drop(new Error(e.message || 'Worker が停止しました'))
@@ -54,10 +63,10 @@ function createPageExporter(spawn: () => WorkerLike = spawnWorker): PageExporter
   }
 
   return {
-    exportPng: (job) =>
+    run: (job, onProgress) =>
       new Promise((resolve, reject) => {
         const id = nextId++
-        pending.set(id, { resolve, reject })
+        pending.set(id, { resolve, reject, onProgress })
         ensureWorker().postMessage({ id, job })
       }),
   }
@@ -66,10 +75,16 @@ function createPageExporter(spawn: () => WorkerLike = spawnWorker): PageExporter
 /** アプリ全体で 1 つの exporter。Worker は最初の書き出しまで作らない */
 export const pageExporter = createPageExporter()
 
-/** `title_p03.png` の形。ファイル名に使えない文字は `_` にする */
-export function exportFileName(title: string, pageIndex: number): string {
+/**
+ * 1 ページなら `title_p03.png`、複数なら `title_p01-03.zip` の形。番号はエピソード内の 1 始まり。
+ * ファイル名に使えない文字は `_` にする
+ */
+export function exportFileName(title: string, numbers: readonly number[], ext: string): string {
   const safe = (title || '無題').replace(/[\\/:*?"<>|]/g, '_')
-  return `${safe}_p${String(pageIndex + 1).padStart(2, '0')}.png`
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const first = numbers[0] ?? 1
+  const last = numbers.at(-1) ?? first
+  return `${safe}_p${first === last ? pad(first) : `${pad(first)}-${pad(last)}`}.${ext}`
 }
 
 /** Blob をブラウザのダウンロードとして保存する */
@@ -110,14 +125,18 @@ if (import.meta.vitest) {
   const job = {} as ExportJob
 
   describe('createPageExporter', () => {
-    test('resolves each export with the png the worker posts back, on one worker', async () => {
+    test('resolves each export with the blob the worker posts back, on one worker', async () => {
       const w = fakeWorker()
       const exporter = createPageExporter(w.spawn)
-      const a = exporter.exportPng(job)
-      const b = exporter.exportPng(job)
+      const progress: [number, number][] = []
+      const a = exporter.run(job, (done, total) => progress.push([done, total]))
+      const b = exporter.run(job)
       expect(w.requests.map((r) => r.id)).toEqual([1, 2])
-      w.reply({ id: 2, ok: true, png: new Blob(['b']) })
-      w.reply({ id: 1, ok: false, message: 'boom' })
+      w.reply({ id: 1, kind: 'progress', done: 1, total: 2 })
+      w.reply({ id: 2, kind: 'progress', done: 1, total: 1 })
+      w.reply({ id: 2, kind: 'done', blob: new Blob(['b']) })
+      w.reply({ id: 1, kind: 'error', message: 'boom' })
+      expect(progress).toEqual([[1, 2]])
       expect(await (await b).text()).toBe('b')
       await expect(a).rejects.toThrow('boom')
       expect(w.counts()).toEqual({ spawned: 1, terminated: 0 })
@@ -126,19 +145,20 @@ if (import.meta.vitest) {
     test('a worker error rejects every pending export and the next export gets a new worker', async () => {
       const w = fakeWorker()
       const exporter = createPageExporter(w.spawn)
-      const a = exporter.exportPng(job)
+      const a = exporter.run(job)
       w.fail('script failed')
       await expect(a).rejects.toThrow('script failed')
-      const b = exporter.exportPng(job)
+      const b = exporter.run(job)
       expect(w.counts()).toEqual({ spawned: 2, terminated: 1 })
-      w.reply({ id: 2, ok: true, png: new Blob(['ok']) })
+      w.reply({ id: 2, kind: 'done', blob: new Blob(['ok']) })
       expect(await (await b).text()).toBe('ok')
     })
   })
 
   test('exportFileName', () => {
-    expect(exportFileName('夏の話', 2)).toBe('夏の話_p03.png')
-    expect(exportFileName('', 0)).toBe('無題_p01.png')
-    expect(exportFileName('a/b:c', 9)).toBe('a_b_c_p10.png')
+    expect(exportFileName('夏の話', [3], 'png')).toBe('夏の話_p03.png')
+    expect(exportFileName('', [1], 'png')).toBe('無題_p01.png')
+    expect(exportFileName('a/b:c', [10], 'png')).toBe('a_b_c_p10.png')
+    expect(exportFileName('夏の話', [1, 2, 3], 'pdf')).toBe('夏の話_p01-03.pdf')
   })
 }
