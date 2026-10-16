@@ -535,6 +535,50 @@ if (import.meta.vitest) {
       expect(seen[0]?.characterRefs?.map((r) => r.characterId)).toEqual([characterId])
     })
 
+    test('sends the panel hint unless the panel opts out of it', async () => {
+      const seen: PanelArtRequest[] = []
+      const fake = createFakeImageProvider()
+      const { generate, generation } = setup({
+        generatePanelArt(req) {
+          seen.push(req)
+          return fake.generatePanelArt(req)
+        },
+      })
+      // docs/fixtures/sample-page-01.diagnosis.json の pn_1 の hint
+      const expected =
+        '視線は中央の glass-crystal forest を大きく捉え、右上の フキダシ から中央下の E tiny, walking へ流れる'
+
+      await generate()
+      expect(seen[0]?.hint).toBe(expected)
+
+      generation.setUseHint(sample.id, panelId, false)
+      expect(usesHint(generation.hintOptOut.getState(), sample.id, panelId)).toBe(false)
+      await generate()
+      expect(seen[1]).not.toHaveProperty('hint')
+
+      generation.setUseHint(sample.id, panelId, true)
+      await generate()
+      expect(seen[2]?.hint).toBe(expected)
+    })
+
+    test('a panel with an empty hint sends no hint', async () => {
+      const seen: PanelArtRequest[] = []
+      const fake = createFakeImageProvider()
+      const { generate, store } = setup({
+        generatePanelArt(req) {
+          seen.push(req)
+          return fake.generatePanelArt(req)
+        },
+      })
+      store.applyPatch([
+        { op: 'replace', path: '/episodes/0/pages/0/panels/0/vectors', value: [] },
+        { op: 'replace', path: '/episodes/0/pages/0/panels/0/focusPoints', value: [] },
+        { op: 'replace', path: '/episodes/0/pages/0/panels/0/bubbles', value: [] },
+      ])
+      await generate()
+      expect(seen[0]).not.toHaveProperty('hint')
+    })
+
     test('a project removed while generating fails without a patch or an asset', async () => {
       const fake = createFakeImageProvider()
       let close = () => {}
