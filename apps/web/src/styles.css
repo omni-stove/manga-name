@@ -372,3 +372,51 @@ a {
   margin: 0;
   padding-left: 1rem;
 }
+
+.toasts {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 10;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  max-width: min(24rem, calc(100vw - 2rem));
+}
+
+.toast {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: Canvas;
+  color: CanvasText;
+  box-shadow: 0 0.25rem 1rem color-mix(in srgb, currentColor 25%, transparent);
+  border-left: 0.25rem solid currentColor;
+  white-space: pre-line;
+}
+
+.toast[data-kind="error"] {
+  border-left-color: #c62828;
+}
+
+.toast span {
+  flex: 1;
+}
+
+.in-art-remove {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.in-art-remove li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}

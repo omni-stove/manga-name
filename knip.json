@@ -3,7 +3,7 @@
   "ignoreBinaries": ["biome", "mise"],
   "workspaces": {
     "packages/render": {
-      "entry": ["src/index.ts", "src/backend-node.ts"]
+      "entry": ["src/backend-node.ts"]
     },
     "apps/web": {
       "entry": ["src/store/project-store.ts", "src/store/yjs-project-store.ts"]

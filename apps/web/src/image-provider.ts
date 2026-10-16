@@ -32,7 +32,7 @@ function localStorageOrNull(): Storage | null {
 
 /**
  * 画面に DI する ImageProvider。プロキシの URL が入っていれば Workers のプロキシを叩き、
- * 無ければ Fake を返す。生成の配線（WS-07）はこれを `context.imageProvider` から受け取る
+ * 無ければ Fake を返す。`createPanelGeneration` がこれで生成する
  */
 export function createImageProvider(
   settings: AiProxySettings = readAiProxySettings(),

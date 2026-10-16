@@ -77,6 +77,26 @@ export function bubblePatch(project: Project, pageId: ID, bubbleId: ID, patch: P
   ]
 }
 
+/**
+ * 履歴から絵を 1 枚消す Patch。採用中の絵は消せない。
+ * 消す絵を親に持つ絵は `parentId` を外す（parentId は arts の中を指す決まりのため）。アセットは残し、Undo で戻せる
+ */
+export function removeArtPatch(project: Project, pageId: ID, panelId: ID, artId: ID): Patch {
+  const { page } = pagePrefix(project, pageId)
+  const found = findPanel(page, panelId)
+  if (!found) throw new Error(`panel ${panelId} is not in page ${pageId}`)
+  const { panel } = found
+  const index = panel.arts.findIndex((a) => a.id === artId)
+  if (index < 0) throw new Error(`art ${artId} is not in panel ${panelId}`)
+  if (panel.artId === artId) throw new Error('採用中の絵は削除できません')
+  return panelPatch(project, pageId, panelId, [
+    ...panel.arts.flatMap((a, i) =>
+      a.parentId === artId ? [{ op: 'remove' as const, path: `/arts/${i}/parentId` }] : [],
+    ),
+    { op: 'remove', path: `/arts/${index}` },
+  ])
+}
+
 /** Character root の Patch を Project root に。無いキャラクターなら throw */
 export function characterPatch(project: Project, characterId: ID, patch: Patch): Patch {
   const index = project.characters.findIndex((c) => c.id === characterId)
@@ -194,6 +214,48 @@ if (import.meta.vitest) {
         first.order + 1,
         first.order,
       ])
+    })
+  })
+
+  describe('removeArtPatch', () => {
+    const art = (id: string, parentId?: string) => ({
+      id,
+      ref: `blob:${id}`,
+      provider: 'fake',
+      prompt: 'p',
+      createdAt: '2026-10-16T00:00:00.000Z',
+      ...(parentId && { parentId }),
+    })
+    const withArts = () => {
+      const store = storeOf()
+      store.applyPatch([
+        { op: 'add', path: '/episodes/0/pages/0/panels/0/arts/-', value: art('a1') },
+        { op: 'add', path: '/episodes/0/pages/0/panels/0/arts/-', value: art('a2', 'a1') },
+        { op: 'add', path: '/episodes/0/pages/0/panels/0/arts/-', value: art('a3', 'a2') },
+        { op: 'add', path: '/episodes/0/pages/0/panels/0/artId', value: 'a3' },
+      ])
+      return store
+    }
+
+    test('removes the art and clears the parentId of its children', () => {
+      const store = withArts()
+      const patch = removeArtPatch(store.get(), pageId, panelOf(0).id, 'a1')
+      expect(patch).toEqual([
+        { op: 'remove', path: '/episodes/0/pages/0/panels/0/arts/1/parentId' },
+        { op: 'remove', path: '/episodes/0/pages/0/panels/0/arts/0' },
+      ])
+      store.applyPatch(patch)
+      const arts = store.get().episodes[0]?.pages[0]?.panels[0]?.arts ?? []
+      expect(arts.map((a) => a.id)).toEqual(['a2', 'a3'])
+      expect(arts[0]?.parentId).toBeUndefined()
+      expect(arts[1]?.parentId).toBe('a2')
+    })
+
+    test('refuses the adopted art and unknown ids', () => {
+      const store = withArts()
+      expect(() => removeArtPatch(store.get(), pageId, panelOf(0).id, 'a3')).toThrow('採用中')
+      expect(() => removeArtPatch(store.get(), pageId, panelOf(0).id, 'nope')).toThrow('art')
+      expect(() => removeArtPatch(store.get(), pageId, 'nope', 'a1')).toThrow('panel')
     })
   })
 
