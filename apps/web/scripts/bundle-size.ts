@@ -43,7 +43,8 @@ for (const file of files) {
 
 const kb = (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`
 const total = rows.reduce((sum, row) => sum + row.gzip, 0)
-for (const row of rows.sort((a, b) => b.gzip - a.gzip)) console.log(`${kb(row.gzip).padStart(10)}  ${row.file}`)
+for (const row of rows.sort((a, b) => b.gzip - a.gzip))
+  console.log(`${kb(row.gzip).padStart(10)}  ${row.file}`)
 console.log(`${kb(total).padStart(10)}  合計（gzip、上限 ${kb(BUDGET)}）`)
 
 let failed = false
