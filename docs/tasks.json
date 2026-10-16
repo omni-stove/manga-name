@@ -976,7 +976,7 @@
       "id": "38",
       "group": "G4",
       "title": "認証ミドルウェア",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "35"
       ],
@@ -993,7 +993,9 @@
       ],
       "spec": [
         "workstreams/WS-14-auth.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "39",

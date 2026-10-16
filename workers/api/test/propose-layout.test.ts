@@ -3,6 +3,7 @@ import { aiFixtures, createFakeLlmProvider, type LlmProvider } from '@manga/ai'
 import { fixtures, type LayoutProposalResponse } from '@manga/schema'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createApp } from '../src/app'
+import { DEBUG_USER_HEADER } from '../src/user'
 
 const { settings, characters } = fixtures.samplePage01
 const request = {
@@ -11,10 +12,11 @@ const request = {
   pageCount: 1,
 }
 
+/** headers は認証のヘッダ。既定は開発時の X-Debug-User: alice */
 function post(
   app: ReturnType<typeof createApp>,
   body: unknown = request,
-  token: string | null = 'test-token',
+  headers: Record<string, string> = { [DEBUG_USER_HEADER]: 'alice' },
 ) {
   return app.request(
     '/v1/ai/propose-layout',
@@ -22,7 +24,7 @@ function post(
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        ...(token === null ? {} : { authorization: `Bearer ${token}` }),
+        ...headers,
       },
       body: typeof body === 'string' ? body : JSON.stringify(body),
     },
@@ -56,7 +58,10 @@ const invalid = async () =>
   ({ pages: [{ id: 'tmp_pg_1' }], rationale: 'r' }) as unknown as LayoutProposalResponse
 
 beforeEach(async () => {
-  await env.DB.exec('DELETE FROM ai_usage')
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM ai_usage'),
+    env.DB.prepare('DELETE FROM rate_limits'),
+  ])
 })
 
 describe('POST /v1/ai/propose-layout', () => {
@@ -78,8 +83,8 @@ describe('POST /v1/ai/propose-layout', () => {
 
   test('401 without a token or with a wrong token', async () => {
     const app = createApp()
-    expect((await post(app, request, null)).status).toBe(401)
-    expect((await post(app, request, 'nope')).status).toBe(401)
+    expect((await post(app, request, {})).status).toBe(401)
+    expect((await post(app, request, { authorization: 'Bearer nope' })).status).toBe(401)
     expect((await usageRows()).results).toHaveLength(0)
   })
 

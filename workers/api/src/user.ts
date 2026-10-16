@@ -1,4 +1,5 @@
 import { createMiddleware } from 'hono/factory'
+import { sessionUserId } from './auth'
 import type { Env } from './env'
 
 export const DEBUG_USER_HEADER = 'x-debug-user'
@@ -12,7 +13,19 @@ const USER_ID = /^[\w.@+-]{1,128}$/
 export type UserEnv = { Bindings: Env; Variables: { userId: string } }
 
 /** X-Debug-User に使える文字列なら true */
-export const isUserId = (value: string) => USER_ID.test(value)
+const isUserId = (value: string) => USER_ID.test(value)
+
+/**
+ * 要求のユーザー id。開発時は X-Debug-User を、それ以外は Bearer トークンを Better Auth のセッションとして検証する。
+ * どちらでも決まらなければ null
+ */
+async function authenticate(env: Env, headers: Headers): Promise<string | null> {
+  const debugUser = headers.get(DEBUG_USER_HEADER)
+  if (debugUser !== null && env.ENVIRONMENT === 'development') {
+    return isUserId(debugUser) ? debugUser : null
+  }
+  return sessionUserId(env, headers)
+}
 
 /**
  * user の now を含む窓の要求数を 1 増やし、上限を超えていれば窓が明けるまでの秒数を返す。
@@ -39,15 +52,13 @@ async function hitRateLimit(db: D1Database, userId: string, now: number): Promis
 }
 
 /**
- * X-Debug-User のユーザーを userId に入れ、ユーザーごとに RATE_LIMIT_PER_MINUTE を超えたら 429 にする。
- * WS-14 の認証ミドルウェアが userId を入れるまでの代替。
+ * `Authorization: Bearer <token>` を検証してユーザーを userId に入れ、ユーザーごとに RATE_LIMIT_PER_MINUTE を
+ * 超えたら 429 にする。検証できなければ 401。ENVIRONMENT が development なら X-Debug-User のユーザーでもよい。
  */
 export function requireUser(now: () => number) {
   return createMiddleware<UserEnv>(async (c, next) => {
-    const userId = c.req.header(DEBUG_USER_HEADER)
-    if (userId === undefined || !isUserId(userId)) {
-      return c.json({ error: 'unauthorized' }, 401)
-    }
+    const userId = await authenticate(c.env, c.req.raw.headers)
+    if (userId === null) return c.json({ error: 'unauthorized' }, 401)
     const retryAfter = await hitRateLimit(c.env.DB, userId, now())
     if (retryAfter !== null) {
       return c.json({ error: 'rate limit exceeded' }, 429, { 'retry-after': String(retryAfter) })
