@@ -8,9 +8,9 @@ import { useEffect, useMemo } from 'react'
 export function useAssetResolver(
   resolve: (ref: string) => Promise<string>,
 ): (ref: string) => Promise<string> {
-  const cache = useMemo(() => new Map<string, Promise<string>>(), [resolve])
-  const resolveAsset = useMemo(
-    () => (ref: string) => {
+  const { cache, resolveAsset } = useMemo(() => {
+    const cache = new Map<string, Promise<string>>()
+    const resolveAsset = (ref: string) => {
       let url = cache.get(ref)
       if (!url) {
         url = resolve(ref)
@@ -19,9 +19,9 @@ export function useAssetResolver(
         url.catch(() => cache.delete(ref))
       }
       return url
-    },
-    [cache, resolve],
-  )
+    }
+    return { cache, resolveAsset }
+  }, [resolve])
 
   useEffect(
     () => () => {

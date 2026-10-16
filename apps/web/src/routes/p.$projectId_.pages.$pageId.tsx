@@ -4,8 +4,8 @@ import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-rout
 import { useState } from 'react'
 import { useStore } from 'zustand'
 import { findPage, pagePatch } from '../project-ops'
-import { useApplyPatch, useProject } from '../use-project'
 import { useAssetResolver } from '../use-asset-resolver'
+import { useApplyPatch, useProject } from '../use-project'
 
 export const Route = createFileRoute('/p/$projectId_/pages/$pageId')({
   loader: async ({ context, params }) => {
