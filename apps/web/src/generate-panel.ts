@@ -42,7 +42,7 @@ export interface PanelGeneration {
 }
 
 export interface PanelGenerationDeps {
-  library: Pick<ProjectLibrary, 'loadAsset' | 'putAsset'>
+  library: Pick<ProjectLibrary, 'isOpen' | 'loadAsset' | 'putAsset'>
   imageProvider: ImageProvider
   /** 失敗の文言の出し先。既定はトースト */
   notify?(message: string): void
@@ -117,6 +117,11 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     return { parentId: current.id, art: await library.loadAsset(current.ref), instruction }
   }
 
+  // 待つ間にプロジェクトが削除されると、書き込みが消したプロジェクトを復活させる
+  const assertOpen = async (store: ProjectStore, projectId: ID) => {
+    if (!(await library.isOpen(projectId, store))) throw new Error('生成中にプロジェクトが削除されました')
+  }
+
   const run = async ({ store, projectId, pageId, panelId, instruction }: GenerateRequest) => {
     const project = store.get()
     const page = findPage(project, pageId)?.page
@@ -139,7 +144,9 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       ...(previous && { previous: { art: previous.art, instruction: previous.instruction } }),
     }
     const res = await imageProvider.generatePanelArt(req)
+    await assertOpen(store, projectId)
     const ref = await library.putAsset(projectId, res.image, `art-${panelId}`)
+    await assertOpen(store, projectId)
     const art: PanelArt = {
       id: newId(),
       ref,
@@ -194,8 +201,10 @@ if (import.meta.vitest) {
     const library = createProjectLibrary(storage)
     const store = createProjectStore(sample, { saveProject: async () => {} })
     const notify = vi.fn<(message: string) => void>()
+    let open = true
     const generation = createPanelGeneration({
-      library,
+      // store は library.open を通さず作るので、開いている扱いにする
+      library: { ...library, isOpen: async () => open },
       imageProvider,
       notify,
       now: () => NOW,
@@ -208,7 +217,10 @@ if (import.meta.vitest) {
     }
     const generate = (instruction?: string) =>
       generation.generate({ store, projectId: sample.id, pageId, panelId, instruction })
-    return { storage, library, store, notify, generation, generate, panelNow }
+    const close = () => {
+      open = false
+    }
+    return { storage, library, store, notify, generation, generate, panelNow, close }
   }
 
   describe('generate', () => {
@@ -310,6 +322,22 @@ if (import.meta.vitest) {
       store.applyPatch([{ op: 'add', path: `/characters/${index}/referenceRef`, value: ref }])
       await generate()
       expect(seen[0]?.characterRefs?.map((r) => r.characterId)).toEqual([characterId])
+    })
+
+    test('a project removed while generating fails without a patch or an asset', async () => {
+      const fake = createFakeImageProvider()
+      let close = () => {}
+      const { generate, notify, store, ...rest } = setup({
+        async generatePanelArt(req) {
+          close()
+          return fake.generatePanelArt(req)
+        },
+      })
+      close = rest.close
+      const before = store.get()
+      expect(await generate()).toBe('failed')
+      expect(store.get()).toBe(before)
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining('削除されました'))
     })
 
     test('a panel removed while generating fails without a patch', async () => {

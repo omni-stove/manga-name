@@ -1,6 +1,6 @@
 import { createEmptyProject, type ID, newId, type Project } from '@manga/schema'
 import type { ProjectSummary, StorageAdapter } from '@manga/storage'
-import { createProjectStore, type WebProjectStore } from './store/project-store'
+import { createProjectStore, type ProjectStore, type WebProjectStore } from './store/project-store'
 
 /**
  * StorageAdapter の上に、開いているプロジェクトの ProjectStore を 1 プロジェクト 1 つずつ持つ層。
@@ -12,6 +12,8 @@ export interface ProjectLibrary {
   open(id: ID): Promise<WebProjectStore | undefined>
   /** 空のプロジェクトを作って保存する */
   create(title: string): Promise<Project>
+  /** store が今もその id で開かれているか。remove 済みなら false。長く待つ処理が削除後の書き戻しを避けるのに使う */
+  isOpen(id: ID, store: ProjectStore): Promise<boolean>
   /** 検証済みのプロジェクトを保存する。id が既存と重なるときは新しい id を振る */
   import(project: Project): Promise<Project>
   /** 未保存の変更を書いてから、プロジェクトとアセットを消す */
@@ -77,6 +79,9 @@ export function createProjectLibrary(
         )
       }
       return store
+    },
+    async isOpen(id, store) {
+      return (await opened.get(id)?.catch(() => undefined)) === store
     },
     async create(title) {
       const project = createEmptyProject(title)
