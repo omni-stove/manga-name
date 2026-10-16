@@ -54,7 +54,14 @@ type Gesture =
       client: Pos
       dragging: boolean
     }
-  | { kind: 'resize'; pointerId: number; start: Bubble; handle: BubbleHandle }
+  | {
+      kind: 'resize'
+      pointerId: number
+      start: Bubble
+      handle: BubbleHandle
+      client: Pos
+      dragging: boolean
+    }
   | { kind: 'tail'; pointerId: number; start: Bubble; client: Pos; dragging: boolean }
 
 /** 選択中のフキダシのハンドル（ページ座標、mm）。しっぽが無ければ下に未設定の先端を置く */
@@ -160,6 +167,8 @@ export function useBubbleTool(opts: Options) {
             pointerId: e.pointerId,
             start: selected.bubble,
             handle: corner.handle,
+            client,
+            dragging: false,
           })
           setDraft(selected)
           return
@@ -205,7 +214,7 @@ export function useBubbleTool(opts: Options) {
         }
         return
       }
-      if ((g.kind === 'move' || g.kind === 'tail') && !g.dragging) {
+      if (!g.dragging) {
         if (Math.hypot(e.clientX - g.client.x, e.clientY - g.client.y) <= CLICK_SLOP) return
         g.dragging = true
       }
@@ -230,7 +239,7 @@ export function useBubbleTool(opts: Options) {
         opts.onSelect({ kind: 'bubble', id: created.id })
         return
       }
-      if ((g.kind === 'move' || g.kind === 'tail') && !g.dragging) return
+      if (!g.dragging) return
       const box = panelOf(g.start.id)
       const at = pointAt(e)
       if (!box || at === null) return
