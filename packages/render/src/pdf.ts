@@ -69,33 +69,36 @@ export async function exportPdf(
 
   const doc = await PDFDocument.create()
 
-  const renders = new Map<Numbered, Promise<{ page: Blob; notes: Blob[] }>>()
+  const renders = new Map<Numbered, Promise<{ page: Embedded; notes: Embedded[] }>>()
   const render = (t: Numbered) => {
     const index = targets.indexOf(t)
     for (const ahead of targets.slice(index, index + RENDER_AHEAD + 1)) {
       if (renders.has(ahead)) continue
+      // 展開と圧縮も先行側で済ませ、メインの待ちを PDF への配置だけにする
       const job = Promise.all([
-        renderPage(ahead.page, ctx, renderOpts),
-        opts.notes === 'sheet' ? renderNotesSheets(ahead.page, ahead.number, ctx, opts.width) : [],
+        renderPage(ahead.page, ctx, renderOpts).then((png) => embedOpaquePng(doc, png)),
+        (opts.notes === 'sheet'
+          ? renderNotesSheets(ahead.page, ahead.number, ctx, opts.width)
+          : Promise.resolve([])
+        ).then((pngs) => Promise.all(pngs.map((png) => embedOpaquePng(doc, png)))),
       ]).then(([page, notes]) => ({ page, notes }))
       // 先に描き始めた分が、手前のページの失敗で待たれないまま reject しても未処理にしない
       job.catch(() => undefined)
       renders.set(ahead, job)
     }
-    return renders.get(t) as Promise<{ page: Blob; notes: Blob[] }>
+    return renders.get(t) as Promise<{ page: Embedded; notes: Embedded[] }>
   }
 
   let done = 0
   for (const group of groupSheets(targets, opts.spread)) {
     const images: { image: Embedded; leftHalf: boolean }[] = []
-    const notes: Blob[] = []
+    const notes: Embedded[] = []
     for (const t of group) {
       const rendered = await render(t)
       renders.delete(t)
       notes.push(...rendered.notes)
-      const image = await embedOpaquePng(doc, rendered.page)
-      const number = t.number
-      images.push({ image, leftHalf: onLeftHalf(number, project.settings.direction) })
+      const image = rendered.page
+      images.push({ image, leftHalf: onLeftHalf(t.number, project.settings.direction) })
       opts.onProgress?.(++done, targets.length)
     }
     // notes: 'margin' の余白で PNG が pageSize より横に長くなるので、幅は画像から決める
@@ -108,8 +111,7 @@ export async function exportPdf(
       const x = !opts.spread ? 0 : leftHalf ? halfWidth - w : halfWidth
       drawEmbedded(sheet, image, { x, y: 0, width: w, height: pageHeight })
     }
-    for (const png of notes) {
-      const image = await embedOpaquePng(doc, png)
+    for (const image of notes) {
       drawEmbedded(doc.addPage([pageWidth, pageHeight]), image, {
         x: 0,
         y: 0,
