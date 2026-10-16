@@ -483,11 +483,6 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     let link = await links.get(localId)
     if (link?.syncedUpdatedAt === project.updatedAt && !hasUnsentAssets(project, link))
       return 'done'
-    // 上限超過は今回の送信で 413 を受けたときだけ立て直す
-    if (quotaExceeded) {
-      quotaExceeded = false
-      notify()
-    }
     const refs = assetRefsByPriority(project)
 
     let laterSent = false
