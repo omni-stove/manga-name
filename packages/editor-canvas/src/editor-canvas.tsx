@@ -26,6 +26,8 @@ const SCRIBBLE_COLORS: Record<Stroke['color'], string> = {
   blue: '#2563eb',
 }
 
+const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
+
 /**
  * 1 ページを SVG で描くキャンバス。ユーザー単位はページの mm（`settings.pageSize`）で、
  * ズームとパンは viewBox で表す。ページの外側は灰色。
@@ -77,10 +79,17 @@ export function EditorCanvas(props: EditorCanvasProps) {
     liveRef,
     onChange: props.onChange,
   })
-  const scribbling = props.tool === 'scribble' && layers.scribble
-  const pointer = scribbling ? scribble.handlers : selection.handlers
+  const scribbleSelected = props.tool === 'scribble'
+  const scribbling = scribbleSelected && layers.scribble
+  const pointer = scribbling
+    ? scribble.handlers
+    : scribbleSelected
+      ? IDLE_POINTER
+      : selection.handlers
   const hovered =
-    scribbling || panelTool.draft !== null || sameSelection(selection.hovered, props.selection)
+    scribbleSelected ||
+    panelTool.draft !== null ||
+    sameSelection(selection.hovered, props.selection)
       ? null
       : selection.hovered
 
@@ -102,7 +111,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
       ? 'grab'
       : props.tool === 'panel' || scribbling
         ? 'crosshair'
-        : selection.hovered !== null
+        : !scribbleSelected && selection.hovered !== null
           ? 'pointer'
           : undefined
 
