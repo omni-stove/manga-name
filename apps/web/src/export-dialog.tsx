@@ -182,9 +182,7 @@ export function ExportDialog({
         />
       </Field>
       {missing > 0 && (
-        <p role="status">
-          未生成のコマが {missing} 個あります。枠だけのまま書き出します。
-        </p>
+        <p role="status">未生成のコマが {missing} 個あります。枠だけのまま書き出します。</p>
       )}
     </Dialog>
   )

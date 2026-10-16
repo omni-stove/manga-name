@@ -62,7 +62,7 @@ export function countMissingArts(pages: readonly Page[]): number {
 }
 
 /** PNG の zip に入れる名前。`p03.png` の形で、ページ番号はエピソード内の 1 始まり */
-export const zipEntryName = (number: number) => `p${String(number).padStart(2, '0')}.png`
+const zipEntryName = (number: number) => `p${String(number).padStart(2, '0')}.png`
 
 /**
  * ExportJob から書き出しのファイルを作る。PDF は exportPdf、PNG は 1 ページならその PNG、
@@ -145,7 +145,11 @@ if (import.meta.vitest) {
 
   const loadAsset = async (ref: string) =>
     new Blob([new Uint8Array(await readFile(new URL(ref.replace(/^file:/, ''), artDir)))])
-  const ctx: RenderContext = { settings: project.settings, characters: project.characters, loadAsset }
+  const ctx: RenderContext = {
+    settings: project.settings,
+    characters: project.characters,
+    loadAsset,
+  }
   const bytes = async (blob: Blob) => Buffer.from(await blob.arrayBuffer())
   const collect = (pageIds: ID[], format: ExportFormat = 'png', load = loadAsset) =>
     collectExportJob(project, episode.id, pageIds, format, opts, load)

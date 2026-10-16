@@ -192,7 +192,8 @@ export async function readPdfSheets(pdf: Buffer): Promise<PdfSheet[]> {
     const images = [...text.matchAll(/([\d.]+) 0 0 [\d.]+ ([\d.]+) [\d.]+ cm\s+\/(\S+) Do/g)].map(
       ([, w, x, name]) => {
         const image = xobjects?.lookup(PDFName.of(name as string))
-        if (!(image instanceof PDFRawStream)) throw new Error(`image ${name} is not in the page resources`)
+        if (!(image instanceof PDFRawStream))
+          throw new Error(`image ${name} is not in the page resources`)
         const rgb = inflateSync(Buffer.from(image.contents))
         let sum = 0
         for (const byte of rgb) sum += byte

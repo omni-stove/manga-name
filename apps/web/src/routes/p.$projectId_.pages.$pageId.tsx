@@ -96,8 +96,7 @@ interface ReferenceToggle {
 }
 
 const REFERENCE_ACCEPT = 'image/png,image/jpeg,application/pdf'
-/** 書き出しダイアログが開いているか、閉じて Worker が描いている最中か */
-/** busy は書き出し中で、done / total は描き終えたページ数と対象のページ数 */
+/** 書き出しダイアログが開いているか。`{ done, total }` は書き出し中で、描き終えたページ数と対象のページ数 */
 type Exporting = 'closed' | 'dialog' | { done: number; total: number }
 
 const MM_PER_INCH = 25.4
@@ -242,11 +241,7 @@ function Editor() {
           {typeof exporting === 'object' ? (
             <span className={styles.exportProgress} role="status">
               書き出し中… {exporting.done} / {exporting.total}
-              <progress
-                aria-label="書き出しの進捗"
-                value={exporting.done}
-                max={exporting.total}
-              />
+              <progress aria-label="書き出しの進捗" value={exporting.done} max={exporting.total} />
             </span>
           ) : (
             <Button size="small" variant="primary" onClick={() => setExporting('dialog')}>
