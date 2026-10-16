@@ -8,8 +8,8 @@ import { zoomOf } from './view'
 
 // SVG の中では :hover を属性で書けないので、生成ボタンの出し入れだけスタイルシートにする
 const STYLE = `
-.ec-generate { opacity: 0; transition: opacity 120ms; }
-.ec-panel:hover .ec-generate, .ec-generate:focus-visible { opacity: 1; }
+.ec-generate { opacity: 0; pointer-events: none; transition: opacity 120ms; }
+.ec-panel:hover .ec-generate, .ec-generate:focus-visible { opacity: 1; pointer-events: auto; }
 `
 
 /**
