@@ -5,6 +5,9 @@ export function exportProjectJson(project: Project): string {
   return `${JSON.stringify(project, null, 2)}\n`
 }
 
+/** ダイアログでプロジェクトの JSON を選ばせる絞り込み。拡張子は最後の `.json` しか指定できない */
+export const PROJECT_FILE_FILTERS = [{ name: 'マンガネーム', extensions: ['json'] }]
+
 /** 書き出しのファイル名。ファイル名に使えない文字は `_` にする */
 export function exportFileName(project: Project): string {
   const base = project.title.trim().replaceAll(/[\\/:*?"<>|\p{Cc}]/gu, '_') || project.id
@@ -31,17 +34,6 @@ function parseJson(text: string): unknown {
 function unwrap(json: unknown): unknown {
   if (typeof json !== 'object' || json === null || 'schemaVersion' in json) return json
   return 'project' in json ? json.project : json
-}
-
-/** ブラウザでテキストをファイルとしてダウンロードさせる */
-export function downloadText(fileName: string, text: string, type = 'application/json'): void {
-  const url = URL.createObjectURL(new Blob([text], { type }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  a.click()
-  // click 直後に revoke するとダウンロードが始まらないブラウザがある
-  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 if (import.meta.vitest) {

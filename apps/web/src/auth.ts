@@ -23,6 +23,13 @@ export interface AuthClient {
   fetch: typeof fetch
 }
 
+/** 再起動をまたいでトークンを持つ先 */
+export interface TokenStore {
+  load(): Promise<string | null>
+  /** null で消す */
+  save(token: string | null): Promise<void>
+}
+
 export interface AuthClientOptions {
   /** workers/api のオリジン。空なら API が無いものとして常に未ログイン */
   baseUrl: string
@@ -30,6 +37,8 @@ export interface AuthClientOptions {
   now?: () => number
   /** signIn の遷移先を開く。既定は location.assign */
   navigate?: (url: string) => void
+  /** Desktop で渡す。Web は API の Cookie から取り直せるので渡さない */
+  tokenStore?: TokenStore
 }
 
 interface Session {
@@ -43,7 +52,8 @@ const REFRESH_MARGIN_MS = 60_000
 
 /**
  * workers/api の Better Auth（Google OAuth と bearer プラグイン）につなぐクライアント。
- * トークンはメモリにだけ持ち、リロード後は API の Cookie のセッションから `restore()` で取り直す。
+ * トークンはメモリに持ち、リロード後は API の Cookie のセッションから `restore()` で取り直す。
+ * `tokenStore` があればトークンをそこにも書き、`restore()` はそのトークンを Bearer に付けて取り直す。
  * 取り直しが認証で失敗したら未ログインに戻し、呼び出し側はローカルモードで動き続ける。
  */
 export function createAuthClient(opts: AuthClientOptions): AuthClient {
@@ -55,8 +65,18 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
   const listeners = new Set<() => void>()
   let session: Session | null = null
   let refreshing: Promise<string | null> | null = null
+  /** tokenStore に書いてあるトークン。undefined はまだ読んでいない */
+  let saved: string | null | undefined
+
+  const persist = (token: string | null) => {
+    if (!opts.tokenStore || token === saved) return
+    saved = token
+    // 書けなくても今のセッションは続ける。次の起動でログインし直すだけになる
+    void opts.tokenStore.save(token).catch(() => {})
+  }
 
   const setSession = (next: Session | null) => {
+    persist(next?.token ?? null)
     if (session === next) return
     session = next
     for (const listener of listeners) listener()
@@ -64,7 +84,8 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
 
   const authFetch = (path: string, init: RequestInit = {}) => {
     const headers = new Headers(init.headers)
-    if (session) headers.set('authorization', `Bearer ${session.token}`)
+    const bearer = session?.token ?? saved
+    if (bearer) headers.set('authorization', `Bearer ${bearer}`)
     // Google から戻った直後は Cookie しか無いので、Bearer と一緒に Cookie も送る
     return doFetch(`${baseUrl}/v1/auth${path}`, { ...init, headers, credentials: 'include' })
   }
@@ -72,6 +93,9 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
   /** get-session でトークンを取り直す。認証の失敗は未ログインに戻し、通信の失敗は状態を変えずに null */
   async function refresh(): Promise<string | null> {
     if (baseUrl === '') return null
+    if (opts.tokenStore && saved === undefined) {
+      saved = await opts.tokenStore.load().catch(() => null)
+    }
     let res: Response
     try {
       res = await authFetch('/get-session')
@@ -155,7 +179,7 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
     },
     async signOut() {
       try {
-        if (baseUrl !== '' && session) await authFetch('/sign-out', { method: 'POST' })
+        if (baseUrl !== '' && (session || saved)) await authFetch('/sign-out', { method: 'POST' })
       } catch {
         // サーバに届かなくても手元のトークンは捨てる。サーバのセッションは期限で切れる
       } finally {

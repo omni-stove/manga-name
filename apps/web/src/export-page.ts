@@ -87,17 +87,6 @@ export function exportFileName(title: string, numbers: readonly number[], ext: s
   return `${safe}_p${first === last ? pad(first) : `${pad(first)}-${pad(last)}`}.${ext}`
 }
 
-/** Blob をブラウザのダウンロードとして保存する */
-export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  // click の直後に解放すると、ダウンロードが始まる前に URL が消えることがある
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
 
