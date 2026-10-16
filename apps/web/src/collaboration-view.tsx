@@ -1,5 +1,5 @@
 import type { Project } from '@manga/schema'
-import type { CSSProperties } from 'react'
+import { type CSSProperties, useSyncExternalStore } from 'react'
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import type { Collaboration } from './project-library'
@@ -13,7 +13,9 @@ const NO_SYNC = createStore<SyncProviderState>()(() => ({ status: 'closed', sync
 
 /** 同じプロジェクトを開いている他のクライアント。共同編集でなければ空 */
 export function usePeers(collab: Collaboration | undefined): Peer[] {
-  return useStore(collab?.presence.peers ?? NO_PEERS)
+  const store = collab?.presence.peers ?? NO_PEERS
+  // zustand の useStore は SSR で初期状態を返すので、描画時点の他のクライアントが出るよう getState を渡す
+  return useSyncExternalStore(store.subscribe, store.getState, store.getState)
 }
 
 const SYNC_STATUS: Record<SyncStatus, string> = {

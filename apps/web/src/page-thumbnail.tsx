@@ -57,7 +57,7 @@ function PanelArt({
   if (url === undefined) return <rect {...box} className="page-thumbnail-art" />
   // 入れ子の svg ははみ出しを切るので、slice で埋めた絵がコマ枠の外に出ない
   return (
-    <svg {...box}>
+    <svg {...box} role="img" aria-label="コマの絵">
       <image href={url} width="100%" height="100%" preserveAspectRatio="xMidYMid slice" />
     </svg>
   )

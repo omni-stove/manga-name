@@ -687,7 +687,9 @@ if (import.meta.vitest) {
       http.get(`${BASE}/v1/projects/:id/assets/:assetId`, ({ request, params }) => {
         if (!accept(request)) return unauthorized()
         const blob = assets.get(`${params.id}/${params.assetId}`)
-        return blob ? new HttpResponse(blob, { headers: { 'content-type': blob.type } }) : notFound()
+        return blob
+          ? new HttpResponse(blob, { headers: { 'content-type': blob.type } })
+          : notFound()
       }),
     ]
     return { rows, assets, requests, handlers }

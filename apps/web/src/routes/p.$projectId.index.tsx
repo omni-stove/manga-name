@@ -95,7 +95,7 @@ function PageList() {
                     <strong>{index + 1} ページ</strong>
                   </Link>
                   {editing.length > 0 && (
-                    <span className="peers" aria-label="編集中の人">
+                    <span className="peers" role="group" aria-label="編集中の人">
                       {editing.map((peer) => (
                         <PeerBadge key={peer.clientId} name={peer.name} color={peer.color} />
                       ))}

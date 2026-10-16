@@ -134,7 +134,10 @@ function ElementList({
             <ol>
               {panel.bubbles.map((bubble) => (
                 <li key={bubble.id}>
-                  {element(bubble.id, `フキダシ ${bubble.order}${bubble.text ? `「${bubble.text}」` : ''}`)}
+                  {element(
+                    bubble.id,
+                    `フキダシ ${bubble.order}${bubble.text ? `「${bubble.text}」` : ''}`,
+                  )}
                 </li>
               ))}
             </ol>

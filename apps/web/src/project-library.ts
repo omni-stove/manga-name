@@ -219,14 +219,13 @@ export function createProjectLibrary(
     },
     async remove(id) {
       const store = await opened.get(id)?.catch(() => undefined)
-      // 先に書き切らないと、debounce 中の保存が削除の後に走ってプロジェクトが復活する
-      await store?.flush()
       opened.delete(id)
       const session = sessions.get(id)
       sessions.delete(id)
-      // 書きかけの Y.Doc の状態が ydocs.delete の後に書かれないよう、書き終えてから閉じる
-      await session?.flush()
+      // 先に切らないと、flush を待つ間に届いた他のクライアントの更新が新しい debounce を張り、削除の後に保存が走ってプロジェクトが復活する
       session?.close()
+      await store?.flush()
+      await session?.flush()
       await storage.deleteProject(id)
       await collaboration?.ydocs.delete(id)
     },
@@ -365,9 +364,7 @@ if (import.meta.vitest) {
       vi.waitFor(() => expect(d.collab.sync.getState()).toMatchObject({ synced: true }))
 
     const setTitle = (title: string) => [{ op: 'replace' as const, path: '/title', value: title }]
-    const setDpi = (dpi: number) => [
-      { op: 'replace' as const, path: '/settings/dpi', value: dpi },
-    ]
+    const setDpi = (dpi: number) => [{ op: 'replace' as const, path: '/settings/dpi', value: dpi }]
 
     afterEach(async () => {
       for (const cleanup of cleanups.splice(0)) await cleanup()
@@ -388,9 +385,7 @@ if (import.meta.vitest) {
       const a = await createDevice(server, 'a')
       await connected(a)
       a.store.applyPatch(setTitle('from a'))
-      await vi.waitFor(() =>
-        expect(server.doc.getMap('project').get('title')).toBe('from a'),
-      )
+      await vi.waitFor(() => expect(server.doc.getMap('project').get('title')).toBe('from a'))
       const b = await createDevice(server, 'b')
       expect(b.store.get()).toEqual(a.store.get())
     })

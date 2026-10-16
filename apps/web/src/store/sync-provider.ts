@@ -130,7 +130,11 @@ export function createSyncProvider(options: SyncProviderOptions): SyncProvider {
         break
       }
       case MESSAGE_AWARENESS:
-        awarenessProtocol.applyAwarenessUpdate(awareness, decoding.readVarUint8Array(decoder), origin)
+        awarenessProtocol.applyAwarenessUpdate(
+          awareness,
+          decoding.readVarUint8Array(decoder),
+          origin,
+        )
         break
       case MESSAGE_QUERY_AWARENESS:
         if (awareness.getLocalState() !== null) send(ownAwareness())
@@ -319,10 +323,14 @@ if (import.meta.vitest) {
       const a = connectClient(server)
       const b = connectClient(server)
       a.awareness.setLocalState({ name: 'a' })
-      await vi.waitFor(() => expect(b.awareness.getStates().get(a.doc.clientID)).toEqual({ name: 'a' }))
+      await vi.waitFor(() =>
+        expect(b.awareness.getStates().get(a.doc.clientID)).toEqual({ name: 'a' }),
+      )
       // 後からつないだ側にも、先にいた側の状態が届く
       const c = connectClient(server)
-      await vi.waitFor(() => expect(c.awareness.getStates().get(a.doc.clientID)).toEqual({ name: 'a' }))
+      await vi.waitFor(() =>
+        expect(c.awareness.getStates().get(a.doc.clientID)).toEqual({ name: 'a' }),
+      )
 
       a.provider.destroy()
       await vi.waitFor(() => expect(b.awareness.getStates().has(a.doc.clientID)).toBe(false))
