@@ -755,16 +755,28 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
 
     const cloudChanged = link.etag !== remote.etag
     const localChanged = link.syncedUpdatedAt !== localProject.updatedAt
-    if (cloudChanged && !localChanged) return adopt(id, cloudId, remote)
+    const needsPush = (p: Project) => hasUnsentBody(link) || hasUnsentAssets(p, id, link)
+    if (cloudChanged && !localChanged) {
+      const adopted = await adopt(id, cloudId, remote)
+      // 前回 ref を書き換えた本文を PUT し切れずに閉じたときは、取り込んだ後も送り直す
+      if (needsPush(adopted)) schedule(id, debounceMs)
+      return adopted
+    }
     if (cloudChanged && sameContent(remote.project, toCloud(localProject, link))) {
-      await links.set(id, { ...link, etag: remote.etag, syncedUpdatedAt: localProject.updatedAt })
+      // クラウドの本文は今の assets ですべて書き換えた版と同じなので、それを PUT 済みとする
+      await links.set(id, {
+        ...link,
+        etag: remote.etag,
+        syncedUpdatedAt: localProject.updatedAt,
+        sentAssets: link.assets ?? {},
+      })
       return localProject
     }
     if (cloudChanged) {
       await keepCloudCopy(remote.project)
       await links.set(id, { ...link, etag: remote.etag })
     }
-    if (localChanged || hasUnsentAssets(localProject, id, link)) schedule(id, debounceMs)
+    if (localChanged || needsPush(localProject)) schedule(id, debounceMs)
     return localProject
   }
 
