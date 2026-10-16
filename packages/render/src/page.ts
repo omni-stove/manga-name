@@ -199,7 +199,8 @@ if (import.meta.vitest) {
     expect(a.equals(b)).toBe(true)
   })
 
-  test('300dpi の 1 ページが 500ms 以内', async () => {
+  // 共有ランナーの CPU で所要時間がぶれ、コードと無関係に落ちるので、PERF=1（mise run perf）のときだけ測る
+  test.runIf(process.env.PERF)('300dpi の 1 ページが 500ms 以内', async () => {
     const opts: RenderOptions = { notes: 'none', panelNumbers: true }
     // フォント登録とバックエンドの初期化は 1 回だけなので、計測から外す
     await renderPage(emptyPage, noAssets, opts)
