@@ -8,8 +8,8 @@ import {
 import type { ID, Page, PageDiagnosis, Patch } from '@manga/schema'
 import { applyPatches, produce } from 'immer'
 import { findPage, pagePatch } from './project-ops'
-import type { ProjectStore } from './store/project-store'
 import { toImmerPatch } from './store/json-patch'
+import type { ProjectStore } from './store/project-store'
 
 export type Suggestion = CritiqueResponse['suggestions'][number]
 
@@ -224,9 +224,7 @@ if (import.meta.vitest) {
   })
 
   test('previewPage returns undefined for a patch that does not fit the page', () => {
-    const patch: Patch = [
-      { op: 'replace', path: '/panels/9/bubbles/0/pos', value: { x: 0, y: 0 } },
-    ]
+    const patch: Patch = [{ op: 'replace', path: '/panels/9/bubbles/0/pos', value: { x: 0, y: 0 } }]
     expect(previewPage(page, patch)).toBeUndefined()
   })
 }

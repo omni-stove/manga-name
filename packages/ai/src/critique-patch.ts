@@ -40,11 +40,7 @@ export function checkCritiquePatch(page: Page, patch: Patch): CritiquePatchCheck
   return { ok: true, patch: rooted }
 }
 
-function checkOperation(
-  page: Page,
-  op: Patch[number],
-  vectorIds: Set<string>,
-): string | undefined {
+function checkOperation(page: Page, op: Patch[number], vectorIds: Set<string>): string | undefined {
   if (PANEL_RECT_PATH.test(op.path)) return REJECT_RECT
 
   const pos = POS_PATH.exec(op.path)

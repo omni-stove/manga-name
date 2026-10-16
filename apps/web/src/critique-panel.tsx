@@ -208,7 +208,8 @@ function Result({
             const preview = () => onPreview(state.kind === 'ready' ? state.patch : null)
             return (
               <li
-                key={`${i}-${suggestion.message}`}
+                // biome-ignore lint/suspicious/noArrayIndexKey: 提案の列は相談の応答ごとに固定で並び替わらず、同じ文言の提案も並びうる
+                key={i}
                 className={styles.card}
                 data-suggestion={i}
                 data-state={state.kind}

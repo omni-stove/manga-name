@@ -1,6 +1,7 @@
 import {
   type Character,
   type ID,
+  type JsonSchema,
   layoutProposalJsonSchema,
   type Page,
   type PageDiagnosis,
@@ -15,9 +16,6 @@ import {
   type LayoutProposalRequest,
   type PanelArtRequest,
 } from './provider'
-
-/** LLM の構造化出力に渡す JSON Schema */
-export type JsonSchema = ReturnType<typeof layoutProposalJsonSchema>
 
 /** LLM に渡すプロンプト。schema は構造化出力に対応したプロバイダにそのまま渡す */
 export interface LlmPrompt {

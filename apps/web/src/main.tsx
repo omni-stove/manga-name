@@ -3,12 +3,14 @@ import {
   createIndexedDbYDocStore,
   createStorage,
   defaultStorageKind,
+  detectPlatform,
 } from '@manga/storage'
 import { applyThemePreference, readThemePreference } from '@manga/ui'
 import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createAuthClient } from './auth'
+import { createDesktopTokenStore } from './desktop/desktop-store'
 import { createPanelGeneration } from './generate-panel'
 import { createImageProvider, readApiBaseUrl } from './image-provider'
 import { createLlmProvider } from './llm-provider'
@@ -17,6 +19,7 @@ import { createAppRouter } from './router'
 import { createSharingClient } from './sharing'
 import { createTabSync } from './store/tab-sync'
 import { SyncStatusProvider } from './sync-status'
+import { toasts } from './toasts'
 import { AuthProvider } from './use-auth'
 import '@manga/ui/tokens.css'
 import '@manga/ui/base.css'
@@ -27,11 +30,15 @@ applyThemePreference(readThemePreference())
 const container = document.getElementById('root')
 if (!container) throw new Error('#root がない')
 
+const platform = detectPlatform()
 const baseUrl = readApiBaseUrl()
-const auth = createAuthClient({ baseUrl })
+const auth = createAuthClient({
+  baseUrl,
+  tokenStore: platform === 'desktop' ? createDesktopTokenStore() : undefined,
+})
 void auth.restore()
 
-const local = createStorage(defaultStorageKind())
+const local = createStorage(defaultStorageKind(platform))
 // 未ログインの間 getToken は null を返し、クラウドストレージはローカルだけで動く
 const cloud =
   baseUrl === ''
@@ -62,6 +69,13 @@ const library = createProjectLibrary(storage, {
 const imageProvider = createImageProvider({ baseUrl, getToken: auth.getToken })
 const llmProvider = createLlmProvider({ baseUrl, getToken: auth.getToken })
 const generation = createPanelGeneration({ library, imageProvider })
+const router = createAppRouter({ library, imageProvider, llmProvider, generation, sharing })
+
+if (platform === 'desktop') {
+  import('./desktop/shell')
+    .then(({ startDesktopShell }) => startDesktopShell({ router, library }))
+    .catch((e: unknown) => toasts.push(`メニューを作れません: ${String(e)}`))
+}
 
 // debounce 待ちの変更をタブを閉じる・隠す時点で書く。pagehide だけでは書き込みが終わる前にページが破棄されうる
 document.addEventListener('visibilitychange', () => {
@@ -73,9 +87,7 @@ createRoot(container).render(
   <StrictMode>
     <AuthProvider client={auth}>
       <SyncStatusProvider source={cloud}>
-        <RouterProvider
-          router={createAppRouter({ library, imageProvider, llmProvider, generation, sharing })}
-        />
+        <RouterProvider router={router} />
       </SyncStatusProvider>
     </AuthProvider>
   </StrictMode>,
