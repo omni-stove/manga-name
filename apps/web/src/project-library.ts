@@ -1,6 +1,6 @@
 import { createEmptyProject, type ID, newId, type Project } from '@manga/schema'
 import type { ProjectSummary, StorageAdapter } from '@manga/storage'
-import { createProjectStore, type WebProjectStore } from './store/project-store'
+import { createProjectStore, type ProjectStore, type WebProjectStore } from './store/project-store'
 
 /**
  * StorageAdapter の上に、開いているプロジェクトの ProjectStore を 1 プロジェクト 1 つずつ持つ層。
@@ -12,6 +12,8 @@ export interface ProjectLibrary {
   open(id: ID): Promise<WebProjectStore | undefined>
   /** 空のプロジェクトを作って保存する */
   create(title: string): Promise<Project>
+  /** store が今もその id で開かれているか。remove 済みなら false。長く待つ処理が削除後の書き戻しを避けるのに使う */
+  isOpen(id: ID, store: ProjectStore): Promise<boolean>
   /** 検証済みのプロジェクトを保存する。id が既存と重なるときは新しい id を振る */
   import(project: Project): Promise<Project>
   /** 未保存の変更を書いてから、プロジェクトとアセットを消す */
@@ -20,6 +22,8 @@ export interface ProjectLibrary {
   flushAll(): Promise<void>
   /** PanelArt.ref を表示用 URL にする。呼び出し側が URL.revokeObjectURL で解放する。無ければ throw */
   resolveAsset(ref: string): Promise<string>
+  /** ref の画像を Blob で返す。生成の参照画像と前回の絵に使う。無ければ throw */
+  loadAsset(ref: string): Promise<Blob>
   /** 画像を保存して ref を返す */
   putAsset(projectId: ID, blob: Blob, hint?: string): Promise<string>
 }
@@ -76,6 +80,9 @@ export function createProjectLibrary(
       }
       return store
     },
+    async isOpen(id, store) {
+      return (await opened.get(id)?.catch(() => undefined)) === store
+    },
     async create(title) {
       const project = createEmptyProject(title)
       await storage.saveProject(project)
@@ -94,17 +101,22 @@ export function createProjectLibrary(
       return imported
     },
     async remove(id) {
-      const store = await opened.get(id)?.catch(() => undefined)
+      const pending = opened.get(id)
+      // flush を待つ間に isOpen が true を返すと、生成の書き込みが flush の後に保存されて復活する
+      opened.delete(id)
+      const store = await pending?.catch(() => undefined)
       // 先に書き切らないと、debounce 中の保存が削除の後に走ってプロジェクトが復活する
       await store?.flush()
-      opened.delete(id)
       await storage.deleteProject(id)
+      // 待つ間に open(id) が呼ばれると、まだ消えていないプロジェクトの store が opened に入る
+      opened.delete(id)
     },
     async flushAll() {
       const stores = await Promise.all([...opened.values()].map((s) => s.catch(() => undefined)))
       await Promise.all(stores.map((s) => s?.flush()))
     },
     resolveAsset: (ref) => storage.resolveAsset(ref),
+    loadAsset: (ref) => storage.loadAsset(ref),
     putAsset: (projectId, blob, hint) => storage.putAsset(projectId, blob, hint),
   }
 }

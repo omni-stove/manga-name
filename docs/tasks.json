@@ -385,7 +385,7 @@
       "group": "G1",
       "title": "generatePanel",
       "detail": "renderLayoutPng → キャラ参照 → previous → ImageProvider → putAsset → applyPatch(ai)。generating store、二重起動拒否、履歴切替と削除",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "12",
         "05"
@@ -403,7 +403,9 @@
       "spec": [
         "02-architecture.md データフロー 生成",
         "workstreams/WS-07-panel-art.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "14",

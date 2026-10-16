@@ -6,16 +6,18 @@ import {
   PanelInspector,
   ProjectSettingsInspector,
 } from '@manga/inspector'
-import type { Character, ID, Page, Patch, Project } from '@manga/schema'
+import type { Character, ID, Page, Panel, Patch, Project } from '@manga/schema'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { useStore } from 'zustand'
+import { generatingPanels } from '../generate-panel'
 import {
   bubblePatch,
   characterPatch,
   findBubble,
   findPanel,
   panelPatch,
+  removeArtPatch,
   settingsInspectorPatch,
 } from '../inspector-ops'
 import type { ProjectLibrary } from '../project-library'
@@ -59,18 +61,22 @@ const ALL_LAYERS: Layers = {
   diagnosis: true,
 }
 
-// 生成の配線（タスク 13）が入るまで、生成中のコマは無く「生成」は何もしない
-const NO_GENERATING = new Set<ID>()
+// ページ一括の生成はタスク 20。それまで「このページを全部生成」は何もしない
 const notWired = () => {}
 
 type Apply = (label: string, build: (project: Project) => Patch) => boolean
+type Generate = (panelId: ID, instruction?: string) => void
+
+const formatDate = (iso: string) => new Date(iso).toLocaleString('ja-JP')
 
 function Editor() {
   const { projectId, pageId } = Route.useParams()
   const { store } = Route.useLoaderData()
-  const { library } = Route.useRouteContext()
+  const { library, generation } = Route.useRouteContext()
   const project = useProject(store)
   const { canUndo, canRedo } = useStore(store.state)
+  const generatingState = useStore(generation.generating)
+  const generating = generatingPanels(generatingState, projectId)
   const { apply, error } = useApplyPatch(store)
   const resolveAsset = useAssetResolver(library.resolveAsset)
   const [tool, setTool] = useState<Tool>('select')
@@ -80,6 +86,9 @@ function Editor() {
   // 開いている間に Undo や別タブの操作でページが消えることがある
   if (!found) return <PageNotFound />
   const { page, pageIndex } = found
+  // 結果は generation がトーストと Patch で出すので、ここでは待たない
+  const generate: Generate = (panelId, instruction) =>
+    void generation.generate({ store, projectId, pageId, panelId, instruction })
   return (
     <section className="editor">
       <header className="toolbar">
@@ -138,9 +147,10 @@ function Editor() {
             selection={selection}
             tool={tool}
             layers={layers}
-            generating={NO_GENERATING}
+            generating={generating}
             onChange={(patch) => apply('キャンバスの編集', (p) => pagePatch(p, pageId, patch))}
             onSelect={setSelection}
+            onGenerate={generate}
             resolveAsset={resolveAsset}
           />
         </div>
@@ -151,13 +161,16 @@ function Editor() {
             pageId={pageId}
             characters={project.characters}
             selection={selection}
+            generating={generating}
             apply={apply}
+            generate={generate}
             resolveAsset={resolveAsset}
           />
           <details open={selection === null}>
             <summary>ページ</summary>
             <PageInspector
               page={page}
+              generating={page.panels.some((panel) => generating.has(panel.id))}
               onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
               onGenerateAll={notWired}
             />
@@ -204,14 +217,18 @@ function SelectionInspector({
   pageId,
   characters,
   selection,
+  generating,
   apply,
+  generate,
   resolveAsset,
 }: {
   page: Page
   pageId: ID
   characters: Character[]
   selection: Selection
+  generating: Set<ID>
   apply: Apply
+  generate: Generate
   resolveAsset(ref: string): Promise<string>
 }) {
   if (selection === null) {
@@ -221,14 +238,20 @@ function SelectionInspector({
     const found = findPanel(page, selection.id)
     if (!found) return <p className="placeholder">選んだコマはもうありません</p>
     return (
-      <PanelInspector
-        key={selection.id}
-        panel={found.panel}
-        characters={characters}
-        onChange={(patch) => apply('コマを編集', (p) => panelPatch(p, pageId, selection.id, patch))}
-        onGenerate={notWired}
-        resolveAsset={resolveAsset}
-      />
+      <>
+        <PanelInspector
+          key={selection.id}
+          panel={found.panel}
+          characters={characters}
+          generating={generating.has(selection.id)}
+          onChange={(patch) =>
+            apply('コマを編集', (p) => panelPatch(p, pageId, selection.id, patch))
+          }
+          onGenerate={(instruction) => generate(selection.id, instruction)}
+          resolveAsset={resolveAsset}
+        />
+        <ArtRemoval panel={found.panel} pageId={pageId} apply={apply} />
+      </>
     )
   }
   if (selection.kind === 'bubble') {
@@ -247,6 +270,33 @@ function SelectionInspector({
   }
   // 焦点とベクトルのフォームは Phase 2（タスク 30）
   return <p className="placeholder">この要素の編集は未対応です</p>
+}
+
+/** 履歴の削除。採用中の絵は消せないので、それ以外だけ並べる。アセットは残し、Undo で戻せる */
+function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply: Apply }) {
+  const removable = panel.arts.filter((art) => art.id !== panel.artId).reverse()
+  if (removable.length === 0) return null
+  return (
+    <details className="inspector-section" data-inspector="art-removal">
+      <summary>履歴の削除（{removable.length}）</summary>
+      <ul className="in-art-remove">
+        {removable.map((art) => (
+          <li key={art.id} data-art-id={art.id}>
+            <span className="in-ellipsis">
+              <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
+              {art.instruction && ` ${art.instruction}`}
+            </span>
+            <button
+              type="button"
+              onClick={() => apply('絵を削除', (p) => removeArtPatch(p, pageId, panel.id, art.id))}
+            >
+              削除
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
 }
 
 /** CharacterInspector に、参照画像を選ぶファイルダイアログと putAsset を付ける */

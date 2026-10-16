@@ -1,5 +1,6 @@
 import { createRootRouteWithContext, Link, Outlet } from '@tanstack/react-router'
 import type { RouterContext } from '../router'
+import { Toasts } from '../toasts'
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootLayout,
@@ -20,6 +21,7 @@ function RootLayout() {
       <main className="app-main">
         <Outlet />
       </main>
+      <Toasts />
     </div>
   )
 }
