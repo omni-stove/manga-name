@@ -21,6 +21,18 @@
   text-decoration: none;
 }
 
+.nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
 .nav a {
   color: var(--text-muted);
   text-decoration: none;

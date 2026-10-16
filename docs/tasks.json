@@ -1008,7 +1008,7 @@
       "group": "G4",
       "title": "Web ログインと共有トークン廃止",
       "detail": "useAuth、ログインフロー、リフレッシュ、ローカル降格、サインアウト",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "38",
         "09"
@@ -1024,7 +1024,9 @@
       ],
       "spec": [
         "workstreams/WS-14-auth.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "40",

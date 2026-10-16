@@ -1,6 +1,7 @@
 import { SegmentedControl, type ThemePreference, useThemePreference } from '@manga/ui'
 import { createFileRoute } from '@tanstack/react-router'
 import common from '../common.module.css'
+import { useAuth } from '../use-auth'
 
 export const Route = createFileRoute('/settings')({ component: AppSettings })
 
@@ -12,6 +13,7 @@ const THEMES: readonly { value: ThemePreference; label: string }[] = [
 
 function AppSettings() {
   const [theme, setTheme] = useThemePreference()
+  const { user } = useAuth()
   return (
     <section>
       <h1>アプリ設定</h1>
@@ -21,8 +23,8 @@ function AppSettings() {
         <dd>memory / indexeddb</dd>
         <dt>AI プロキシの URL</dt>
         <dd>未設定</dd>
-        <dt>アクセストークン</dt>
-        <dd>未設定</dd>
+        <dt>アカウント</dt>
+        <dd>{user ? `${user.name}（${user.email}）` : '未ログイン（ローカルモード）'}</dd>
         <dt>テーマ</dt>
         <dd>
           <SegmentedControl label="テーマ" value={theme} options={THEMES} onChange={setTheme} />
