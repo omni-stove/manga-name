@@ -416,12 +416,12 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       pushes.delete(id)
       await state?.running
       const link = await links.get(id)
-      // クラウドへの DELETE が失敗したときにローカルだけ消えると、一覧にクラウド側が戻ってくる
-      const res = await request(`/${encodeURIComponent(link?.cloudId ?? id)}`, {
-        method: 'DELETE',
-      })
+      const cloudId = link?.cloudId ?? id
+      // クラウドへの DELETE が済む前にローカルだけ消すと、未ログインや失敗のあとで一覧にクラウド側が戻ってくる
+      const res = await request(`/${encodeURIComponent(cloudId)}`, { method: 'DELETE' })
+      if (res === null && link) throw new Error(`DELETE project ${cloudId} needs a token`)
       if (res && !res.ok && res.status !== 404) {
-        throw await unexpected(res, `DELETE project ${link?.cloudId ?? id}`)
+        throw await unexpected(res, `DELETE project ${cloudId}`)
       }
       await local.deleteProject(id)
       await links.delete(id)
@@ -463,7 +463,10 @@ if (import.meta.vitest) {
     const rows = new Map<ID, Project>()
     const requests: string[] = []
     let clock = Date.now()
-    const tick = () => new Date((clock += 1000)).toISOString()
+    const tick = () => {
+      clock += 1000
+      return new Date(clock).toISOString()
+    }
     const etag = (p: Project) => ({ etag: `"${p.updatedAt}"` })
     const accept = (request: Request) => {
       requests.push(`${request.method} ${new URL(request.url).pathname}`)
@@ -754,6 +757,21 @@ if (import.meta.vitest) {
       expect(api.rows.has(cloudId)).toBe(false)
       expect(await links.get(p.id)).toBeUndefined()
       expect(await storage.listProjects()).toEqual([])
+    })
+
+    test('deleteProject keeps a synced project while signed out', async () => {
+      const api = useApi()
+      const { storage, local, links } = createDevice()
+      const p = createEmptyProject('A')
+      await storage.saveProject(p)
+      await storage.flush()
+      const cloudId = await cloudIdOf(links, p.id)
+
+      const signedOut = createDevice({ local, links, getToken: async () => null })
+      await expect(signedOut.storage.deleteProject(p.id)).rejects.toThrow(/needs a token/)
+      expect(await local.loadProject(p.id)).toEqual(p)
+      expect(api.rows.has(cloudId)).toBe(true)
+      expect(await links.get(p.id)).toBeDefined()
     })
   })
 }
