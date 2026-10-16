@@ -18,6 +18,8 @@ export interface ProjectLibrary {
   remove(id: ID): Promise<void>
   /** 開いている全プロジェクトの未保存の変更を保存する */
   flushAll(): Promise<void>
+  /** PanelArt.ref を表示用 URL にする。呼び出し側が URL.revokeObjectURL で解放する。無ければ throw */
+  resolveAsset(ref: string): Promise<string>
 }
 
 interface ProjectLibraryOptions {
@@ -100,6 +102,7 @@ export function createProjectLibrary(
       const stores = await Promise.all([...opened.values()].map((s) => s.catch(() => undefined)))
       await Promise.all(stores.map((s) => s?.flush()))
     },
+    resolveAsset: (ref) => storage.resolveAsset(ref),
   }
 }
 
