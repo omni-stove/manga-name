@@ -5,7 +5,7 @@ import type { WebProjectStore } from './project-store'
 const SCRIBBLES_PATH = /^\/episodes\/\d+\/pages\/\d+\/scribbles(\/|$)/
 
 /** role が patch を当ててよいなら true。commenter はページの scribbles の中だけ、viewer は何も当てられない */
-export function patchAllowed(patch: Patch, role: ProjectRole): boolean {
+function patchAllowed(patch: Patch, role: ProjectRole): boolean {
   if (role === 'owner' || role === 'editor') return true
   return role === 'commenter' && patch.every((op) => SCRIBBLES_PATH.test(op.path))
 }

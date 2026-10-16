@@ -6,7 +6,7 @@ import type { Env } from './env'
 import { requireUser, type UserEnv } from './user'
 
 /** 招待リンクの有効期間 */
-export const INVITE_TTL_MS = 7 * 24 * 60 * 60_000
+const INVITE_TTL_MS = 7 * 24 * 60 * 60_000
 
 const InviteSchema = z.object({
   email: z.email().max(320),

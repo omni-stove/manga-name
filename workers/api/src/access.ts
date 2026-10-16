@@ -89,8 +89,12 @@ export function updateAllowed(doc: Y.Doc, update: Uint8Array, role: ProjectRole)
   Y.applyUpdate(copy, Y.encodeStateAsUpdate(doc))
   let allowed = true
   copy.on('afterTransaction', (transaction: Y.Transaction) => {
-    for (const type of transaction.changed.keys()) {
-      if (role !== 'commenter' || !insideScribbles(type)) allowed = false
+    for (const [type, keys] of transaction.changed) {
+      if (role !== 'commenter') allowed = false
+      else if (insideScribbles(type)) continue
+      // クライアントは scribbles の変更と同じトランザクションでルートの updatedAt も書く
+      else if (type._item === null && keys.size === 1 && keys.has('updatedAt')) continue
+      else allowed = false
     }
   })
   Y.applyUpdate(copy, update)

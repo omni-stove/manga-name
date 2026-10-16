@@ -80,7 +80,7 @@ export interface SharingClientOptions {
 const ROLES_KEY = 'manga.project-roles'
 
 /** 招待リンクの、apps/web 側のパス */
-export const invitePath = (token: string) => `/invite/${encodeURIComponent(token)}`
+const invitePath = (token: string) => `/invite/${encodeURIComponent(token)}`
 
 async function failure(res: Response, what: string) {
   const body = (await res.json().catch(() => null)) as { error?: string } | null
