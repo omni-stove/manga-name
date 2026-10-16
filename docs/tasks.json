@@ -459,7 +459,7 @@
       "group": "G2",
       "title": "panel ツール",
       "detail": "作成、リサイズ、スナップ、分割、結合",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -473,7 +473,9 @@
       ],
       "spec": [
         "workstreams/WS-04-editor-canvas.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "17",
@@ -883,7 +885,7 @@
       "id": "34",
       "group": "G3",
       "title": "実 LLM 接続",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "32"
       ],
@@ -899,7 +901,9 @@
       "spec": [
         "workstreams/WS-12-layout-proposal.md",
         "06-open-questions.md #4"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "35",

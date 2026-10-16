@@ -22,7 +22,7 @@
     // 06-open-questions.md #9 が決まるまでの仮の値
     "MONTHLY_GENERATION_LIMIT": "300"
   },
-  // 秘密: wrangler secret put APP_ACCESS_TOKEN、ASSET_URL_SECRET、GEMINI_API_KEY（staging は --env staging）
+  // 秘密: wrangler secret put APP_ACCESS_TOKEN、ASSET_URL_SECRET、GEMINI_API_KEY、ANTHROPIC_API_KEY（staging は --env staging）
   "env": {
     // bindings と vars は env に継承されないので、トップレベルと同じものを staging のリソースで書き直す
     "staging": {

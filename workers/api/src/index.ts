@@ -1,4 +1,5 @@
-import { createFakeImageProvider } from '@manga/ai'
+import { createFakeImageProvider, createFakeLlmProvider } from '@manga/ai'
+import { createAnthropicLlmProvider } from './anthropic-llm-provider'
 import { createApp } from './app'
 import { createGeminiImageProvider } from './gemini-image-provider'
 
@@ -18,4 +19,8 @@ export default createApp({
           },
         })
       : createFakeImageProvider(),
+  llmProvider: (env) =>
+    env.ANTHROPIC_API_KEY
+      ? createAnthropicLlmProvider({ apiKey: env.ANTHROPIC_API_KEY })
+      : createFakeLlmProvider(),
 })

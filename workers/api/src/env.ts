@@ -15,6 +15,8 @@ declare global {
       APP_ACCESS_TOKEN: string
       /** Gemini の API キー（secret）。無ければ画像生成は Fake */
       GEMINI_API_KEY?: string
+      /** Anthropic の API キー（secret）。無ければ LLM は Fake */
+      ANTHROPIC_API_KEY?: string
       /** アップロード用署名 URL の HMAC 鍵（secret） */
       ASSET_URL_SECRET: string
       /** CORS で許可する apps/web のオリジン。カンマ区切り */
