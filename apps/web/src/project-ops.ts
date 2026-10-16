@@ -344,6 +344,36 @@ if (import.meta.vitest) {
     })
   })
 
+  describe('pagePatch', () => {
+    test('prefixes a page-rooted patch with the episode and page index', () => {
+      const page = firstPage()
+      expect(pagePatch(sample, page.id, [{ op: 'remove', path: '/panels/1' }])).toEqual([
+        { op: 'remove', path: '/episodes/0/pages/0/panels/1' },
+      ])
+      expect(() => pagePatch(sample, 'nope', [])).toThrow('page')
+    })
+
+    test('a Delete from the canvas comes back with Undo', () => {
+      const page = firstPage()
+      const store = storeOf(sample)
+      const panels = () => store.get().episodes[0]?.pages[0]?.panels ?? []
+      store.applyPatch(pagePatch(store.get(), page.id, [{ op: 'remove', path: '/panels/1' }]), {
+        source: 'user',
+        label: 'キャンバスの編集',
+      })
+      expect(panels().map((p) => p.id)).toEqual(['pn_1', 'pn_3', 'pn_4', 'pn_5', 'pn_6'])
+      store.applyPatch(
+        pagePatch(store.get(), page.id, [{ op: 'remove', path: '/panels/1/bubbles/0' }]),
+      )
+      expect(panels()[1]?.bubbles).toEqual([])
+      store.undo()
+      store.undo()
+      expect(panels()).toEqual(page.panels)
+      store.redo()
+      expect(panels()).toHaveLength(5)
+    })
+  })
+
   test('settingsPatch replaces only changed fields and the result is valid', () => {
     const project = createEmptyProject('t')
     const { settings } = project

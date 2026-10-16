@@ -160,43 +160,186 @@ test('the generate button calls onGenerate and is hidden while generating', asyn
   expect(onGenerate).toHaveBeenCalledWith('pn_4')
 })
 
-describe('zoom and pan', () => {
-  const base = fitView(project.settings.pageSize.w, project.settings.pageSize.h)
+const base = fitView(project.settings.pageSize.w, project.settings.pageSize.h)
 
-  /** base と同じ縦横比で 2px / mm になる大きさに固定する */
-  function layout(svg: SVGSVGElement) {
-    const width = base.w * 2
-    const height = base.h * 2
-    svg.getBoundingClientRect = () =>
-      ({ left: 0, top: 0, x: 0, y: 0, width, height, right: width, bottom: height }) as DOMRect
-  }
+/** base と同じ縦横比で 2px / mm になる大きさに固定する */
+function layout(svg: SVGSVGElement) {
+  const width = base.w * 2
+  const height = base.h * 2
+  svg.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, x: 0, y: 0, width, height, right: width, bottom: height }) as DOMRect
+}
 
-  const viewBox = (svg: SVGSVGElement) => must(svg.getAttribute('viewBox')).split(' ').map(Number)
+/** layout 後の、正規化ページ座標に対応する画面座標 */
+const clientAt = (nx: number, ny: number) => ({
+  x: (nx * project.settings.pageSize.w - base.x) * 2,
+  y: (ny * project.settings.pageSize.h - base.y) * 2,
+})
 
-  function pointer(
-    type: string,
-    init: { id: number; x: number; y: number; button?: number; pointerType?: string },
-  ) {
-    // jsdom の PointerEvent の有無に依存しないよう、MouseEvent に pointer の属性を足す
-    const e = new MouseEvent(type, {
-      bubbles: true,
-      cancelable: true,
-      button: init.button ?? 0,
-      clientX: init.x,
-      clientY: init.y,
-    })
-    Object.defineProperties(e, {
-      pointerId: { value: init.id },
-      pointerType: { value: init.pointerType ?? 'mouse' },
-    })
-    return e
-  }
+const viewBox = (svg: SVGSVGElement) => must(svg.getAttribute('viewBox')).split(' ').map(Number)
 
-  const fire = (target: EventTarget, e: Event) =>
+function pointer(
+  type: string,
+  init: { id: number; x: number; y: number; button?: number; pointerType?: string },
+) {
+  // jsdom の PointerEvent の有無に依存しないよう、MouseEvent に pointer の属性を足す
+  const e = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: init.button ?? 0,
+    clientX: init.x,
+    clientY: init.y,
+  })
+  Object.defineProperties(e, {
+    pointerId: { value: init.id },
+    pointerType: { value: init.pointerType ?? 'mouse' },
+  })
+  return e
+}
+
+const fire = (target: EventTarget, e: Event) =>
+  act(() => {
+    target.dispatchEvent(e)
+  })
+
+/** 画面座標 at でクリックする */
+function click(svg: SVGSVGElement, at: { x: number; y: number }) {
+  fire(svg, pointer('pointerdown', { id: 1, ...at }))
+  fire(svg, pointer('pointerup', { id: 1, ...at }))
+}
+
+const key = (svg: SVGSVGElement, init: KeyboardEventInit) => {
+  const e = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+  fire(svg, e)
+  return e
+}
+
+describe('selection', () => {
+  test('clicking a panel, a bubble and the background selects each', async () => {
+    const onSelect = vi.fn()
+    const svg = await render({ onSelect })
+    layout(svg)
+    click(svg, clientAt(0.75, 0.4))
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: 'panel', id: 'pn_2' })
+    click(svg, clientAt(0.85 * 0.48, 0.275 + 0.25 * 0.23))
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: 'bubble', id: 'bb_3' })
+    // 何も選んでいないときに背景を押しても、選択は変わらないので知らせない
+    click(svg, { x: -10, y: -10 })
+    expect(onSelect).toHaveBeenCalledTimes(2)
+  })
+
+  test('clicking the background with a selection selects nothing', async () => {
+    const onSelect = vi.fn()
+    const svg = await render({ onSelect, selection: { kind: 'bubble', id: 'bb_3' } })
+    layout(svg)
+    click(svg, { x: -10, y: -10 })
+    expect(onSelect).toHaveBeenCalledWith(null)
+  })
+
+  test('a drag and a Space pan do not select', async () => {
+    const onSelect = vi.fn()
+    const svg = await render({ onSelect })
+    layout(svg)
+    const from = clientAt(0.75, 0.4)
+    fire(svg, pointer('pointerdown', { id: 1, ...from }))
+    fire(svg, pointer('pointermove', { id: 1, x: from.x + 30, y: from.y }))
+    fire(svg, pointer('pointerup', { id: 1, x: from.x + 30, y: from.y }))
+    fire(svg, pointer('pointerover', { id: 1, ...from }))
+    fire(window, new KeyboardEvent('keydown', { code: 'Space', key: ' ', cancelable: true }))
+    click(svg, from)
+    fire(window, new KeyboardEvent('keyup', { code: 'Space', key: ' ' }))
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  test('hovering highlights the element under the cursor, but not the selected one', async () => {
+    const svg = await render({ selection: { kind: 'panel', id: 'pn_2' } })
+    layout(svg)
+    const highlighted = () =>
+      svg.querySelector('[data-layer="highlight"]')?.getAttribute('data-hovered-id') ?? null
+    fire(svg, pointer('pointermove', { id: 1, ...clientAt(0.5, 0.1) }))
+    expect(highlighted()).toBe('pn_1')
+    fire(svg, pointer('pointermove', { id: 1, ...clientAt(0.75, 0.4) }))
+    expect(highlighted()).toBeNull()
+    fire(svg, pointer('pointermove', { id: 1, ...clientAt(0.92, 0.22 * 0.26) }))
+    expect(highlighted()).toBe('bb_1')
+    expect(svg.querySelector('[data-layer="highlight"] path')).not.toBeNull()
+    // React の onPointerLeave は pointerout で判定する
+    fire(svg, pointer('pointerout', { id: 1, x: -10, y: -10 }))
+    expect(highlighted()).toBeNull()
+  })
+})
+
+describe('editing the selection from the keyboard', () => {
+  test('Delete emits a remove patch rooted at the page and clears the selection', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ onChange, onSelect, selection: { kind: 'panel', id: 'pn_2' } })
+    const e = key(svg, { key: 'Delete' })
+    expect(e.defaultPrevented).toBe(true)
+    expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/panels/1' }])
+    expect(onSelect).toHaveBeenCalledWith(null)
+  })
+
+  test('Backspace removes a bubble inside its panel', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ onChange, selection: { kind: 'bubble', id: 'bb_6' } })
+    key(svg, { key: 'Backspace' })
+    expect(onChange).toHaveBeenCalledWith([
+      { op: 'remove', path: '/panels/5/vectors/0/sourceFocusId' },
+      { op: 'remove', path: '/panels/5/bubbles/0' },
+    ])
+  })
+
+  test('arrow keys move by 0.01, Shift by 0.1, and stay inside the page', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ onChange, selection: { kind: 'panel', id: 'pn_2' } })
+    key(svg, { key: 'ArrowDown' })
+    expect(onChange).toHaveBeenLastCalledWith([
+      { op: 'replace', path: '/panels/1/rect/y', value: 0.285 },
+    ])
+    key(svg, { key: 'ArrowLeft', shiftKey: true })
+    expect(onChange).toHaveBeenLastCalledWith([
+      { op: 'replace', path: '/panels/1/rect/x', value: 0.4 },
+    ])
+    key(svg, { key: 'ArrowRight' })
+    expect(onChange).toHaveBeenCalledTimes(2)
+  })
+
+  test('a bubble moves with its tail', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ onChange, selection: { kind: 'bubble', id: 'bb_3' } })
+    key(svg, { key: 'ArrowUp' })
+    expect(onChange).toHaveBeenCalledWith([
+      { op: 'replace', path: '/panels/2/bubbles/0/pos/y', value: 0.24 },
+      { op: 'replace', path: '/panels/2/bubbles/0/tail/y', value: 0.37 },
+    ])
+  })
+
+  test('Escape clears the selection; keys from inner controls and without a selection do nothing', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ onChange, onSelect, onGenerate: () => {} })
+    key(svg, { key: 'Delete' })
+    key(svg, { key: 'ArrowRight' })
+    expect(onChange).not.toHaveBeenCalled()
+    const button = must(svg.querySelector('.ec-generate'))
     act(() => {
-      target.dispatchEvent(e)
+      button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))
     })
+    expect(onChange).not.toHaveBeenCalled()
+    key(svg, { key: 'Escape' })
+    expect(onSelect).not.toHaveBeenCalled()
+  })
 
+  test('Escape with a selection selects nothing', async () => {
+    const onSelect = vi.fn()
+    const svg = await render({ onSelect, selection: { kind: 'bubble', id: 'bb_1' } })
+    key(svg, { key: 'Escape' })
+    expect(onSelect).toHaveBeenCalledWith(null)
+  })
+})
+
+describe('zoom and pan', () => {
   test('starts fitted to the page', async () => {
     const svg = await render()
     expect(viewBox(svg)).toEqual([base.x, base.y, base.w, base.h])

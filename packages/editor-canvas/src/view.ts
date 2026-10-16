@@ -55,7 +55,7 @@ function scaleOf(view: View, box: ClientBox): number | null {
 }
 
 /** 画面座標をページ座標（mm）にする。要素の大きさが 0 なら null */
-function clientToPage(view: View, box: ClientBox, p: ClientPoint): ClientPoint | null {
+export function clientToPage(view: View, box: ClientBox, p: ClientPoint): ClientPoint | null {
   const s = scaleOf(view, box)
   if (s === null) return null
   const ox = (box.width - view.w * s) / 2
