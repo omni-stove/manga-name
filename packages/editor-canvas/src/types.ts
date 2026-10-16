@@ -4,6 +4,9 @@ export type Selection = { kind: 'panel' | 'bubble' | 'focus' | 'vector'; id: ID 
 
 export type Tool = 'select' | 'panel' | 'bubble' | 'focus' | 'vector' | 'scribble'
 
+/** `scribble` ツールで使うペンの色か消しゴム */
+export type ScribbleTool = 'ink' | 'red' | 'blue' | 'eraser'
+
 export interface Layers {
   reference: boolean
   art: boolean
@@ -20,6 +23,8 @@ export interface EditorCanvasProps {
   diagnosis: PageDiagnosis | null
   selection: Selection
   tool: Tool
+  /** `tool === 'scribble'` のときの色か消しゴム。既定は ink */
+  scribbleTool?: ScribbleTool
   layers: Layers
   /** 生成中のコマ。スピナーを重ねる */
   generating: Set<ID>

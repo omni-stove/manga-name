@@ -1285,7 +1285,7 @@
       "group": "G6",
       "title": "手描きメモ",
       "detail": "Pointer Events、間引き 0.002、polyline 即時描画、pointerup で Stroke Patch、消しゴム、3 色",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "15"
       ],
@@ -1300,7 +1300,9 @@
       ],
       "spec": [
         "workstreams/WS-20-scribble.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "53",
