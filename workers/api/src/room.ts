@@ -215,8 +215,16 @@ function createRoom(ctx: DurableObjectState, env: Env) {
           }
           case MESSAGE_AWARENESS: {
             const clients = new Map(Object.entries(attachment.clients))
+            // query-awareness への返信には他の接続から中継された ID も入るので、他の接続が持つ ID は自分のものにしない
+            const owned = new Set<string>()
+            for (const socket of ctx.getWebSockets()) {
+              if (socket === ws) continue
+              const other = socket.deserializeAttachment() as Attachment | null
+              for (const id of Object.keys(other?.clients ?? {})) owned.add(id)
+            }
             for (const entry of readAwarenessEntries(decoding.readVarUint8Array(decoder))) {
               const key = String(entry.clientId)
+              if (owned.has(key)) continue
               if (entry.removed) clients.delete(key)
               else if (clients.has(key) || clients.size < MAX_CLIENTS_PER_SOCKET) {
                 clients.set(key, entry.clock)
