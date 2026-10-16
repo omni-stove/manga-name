@@ -117,11 +117,7 @@ function PanelView({
           />
         </>
       ) : (
-        <Placeholder
-          panel={panel}
-          rect={rect}
-          error={asset !== undefined && 'error' in asset}
-        />
+        <Placeholder panel={panel} rect={rect} error={asset !== undefined && 'error' in asset} />
       )}
       <rect
         x={rect.x}
@@ -208,7 +204,7 @@ function GeneratingOverlay({ rect }: { rect: Box }) {
   const cy = rect.y + rect.h / 2
   const r = Math.min(12, Math.max(3, Math.min(rect.w, rect.h) * 0.12))
   return (
-    <g data-spinner="" role="status" aria-label="生成中">
+    <g data-spinner="" aria-label="生成中">
       <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} fill="#fff" opacity={0.6} />
       <circle
         cx={cx}

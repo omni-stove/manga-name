@@ -28,14 +28,16 @@ function withFixtureArts(page: Page): Page {
 }
 
 const resolveAsset = async (ref: string) =>
-  new URL(`../../../../docs/fixtures/art/${ref.replace(/^fixture:/, '')}.png`, import.meta.url)
-    .href
+  new URL(`../../../../docs/fixtures/art/${ref.replace(/^fixture:/, '')}.png`, import.meta.url).href
 
 /** page を root とした JSON Patch を当てる。プレイグラウンドで onChange を確かめるためだけのもの */
 function applyPatch(page: Page, patch: Patch): Page {
   const next = structuredClone(page) as unknown as Record<string, unknown>
   for (const op of patch) {
-    const keys = op.path.split('/').slice(1).map((k) => k.replace(/~1/g, '/').replace(/~0/g, '~'))
+    const keys = op.path
+      .split('/')
+      .slice(1)
+      .map((k) => k.replace(/~1/g, '/').replace(/~0/g, '~'))
     const last = keys.pop()
     if (last === undefined) continue
     let parent: unknown = next

@@ -38,11 +38,7 @@ function boxOf(el: Element): ClientBox {
  * Space はカーソルがキャンバス上にあるか、キャンバスにフォーカスがあるときだけ奪う。
  * ページの大きさが変わったら全体表示に戻す
  */
-export function useViewport(
-  svgRef: RefObject<SVGSVGElement | null>,
-  pageW: number,
-  pageH: number,
-) {
+export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: number, pageH: number) {
   const base = useMemo(() => fitView(pageW, pageH), [pageW, pageH])
   const [state, setState] = useState({ base, view: base })
   if (state.base !== base) setState({ base, view: base })
