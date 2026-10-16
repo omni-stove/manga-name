@@ -1,4 +1,4 @@
-import type { FocusKind, ID, Page, Patch, Point } from '@manga/schema'
+import type { FocusKind, ID, Page, Panel, Patch, Point } from '@manga/schema'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -46,7 +46,15 @@ type Pos = { x: number; y: number }
 
 type Gesture =
   | { kind: 'place'; pointerId: number; panelId: ID; pos: Point; client: Pos }
-  | { kind: 'move'; pointerId: number; focusId: ID; client: Pos; dragging: boolean }
+  | {
+      kind: 'move'
+      pointerId: number
+      focusId: ID
+      from: PagePoint
+      origin: Point
+      client: Pos
+      dragging: boolean
+    }
   | { kind: 'vector'; pointerId: number; from: PagePoint; client: Pos; dragging: boolean }
 
 function boxOf(el: Element): ClientBox {
@@ -80,6 +88,12 @@ export function useHintTool(opts: Options) {
     capture(e.currentTarget, e.pointerId)
     gesture.current = g
   }
+  /** 掴んだ点からの差分を焦点の元の位置に足す。中心をポインタに合わせない */
+  const movedPos = (g: Extract<Gesture, { kind: 'move' }>, panel: Panel, at: PagePoint): Point => {
+    const start = toPanelPoint(panel, opts.width, opts.height, g.from)
+    const now = toPanelPoint(panel, opts.width, opts.height, at)
+    return { x: g.origin.x + now.x - start.x, y: g.origin.y + now.y - start.y }
+  }
   const select = (sel: Selection) => {
     if (!sameSelection(sel, opts.selection)) opts.onSelect(sel)
   }
@@ -93,11 +107,14 @@ export function useHintTool(opts: Options) {
       const client = { x: e.clientX, y: e.clientY }
       if (opts.tool === 'focus') {
         const hit = hintAt(opts.page, opts.width, opts.height, at, tolerance)
-        if (hit?.kind === 'focus') {
+        const hitFocus = hit?.kind === 'focus' ? findFocus(opts.page, hit.id) : undefined
+        if (hit?.kind === 'focus' && hitFocus) {
           take(e, {
             kind: 'move',
             pointerId: e.pointerId,
             focusId: hit.id,
+            from: at,
+            origin: hitFocus.panel.focusPoints[hitFocus.index]?.pos ?? { x: 0, y: 0 },
             client,
             dragging: false,
           })
@@ -139,7 +156,7 @@ export function useHintTool(opts: Options) {
         setDraft({
           kind: 'focus',
           focusId: g.focusId,
-          pos: toPanelPoint(panel, opts.width, opts.height, at),
+          pos: movedPos(g, panel, at),
         })
         return
       }
@@ -175,7 +192,7 @@ export function useHintTool(opts: Options) {
       if (g.kind === 'move') {
         const panel = findFocus(opts.page, g.focusId)?.panel
         if (!panel) return
-        const pos = toPanelPoint(panel, opts.width, opts.height, at)
+        const pos = movedPos(g, panel, at)
         const patch = moveFocusPatch(opts.page, g.focusId, pos)
         if (patch.length > 0) opts.onChange(patch)
         return
