@@ -92,7 +92,11 @@ export function useHintTool(opts: Options) {
   const movedPos = (g: Extract<Gesture, { kind: 'move' }>, panel: Panel, at: PagePoint): Point => {
     const start = toPanelPoint(panel, opts.width, opts.height, g.from)
     const now = toPanelPoint(panel, opts.width, opts.height, at)
-    return { x: g.origin.x + now.x - start.x, y: g.origin.y + now.y - start.y }
+    const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
+    return {
+      x: clamp01(g.origin.x + now.x - start.x),
+      y: clamp01(g.origin.y + now.y - start.y),
+    }
   }
   const select = (sel: Selection) => {
     if (!sameSelection(sel, opts.selection)) opts.onSelect(sel)
