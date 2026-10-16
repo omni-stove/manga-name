@@ -3,7 +3,7 @@ import { createFakeImageProvider, type ImageProvider } from '@manga/ai'
 import { fixtures } from '@manga/schema'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createApp } from '../src/app'
-import { parseMonthlyLimit, sha256Hex } from '../src/usage'
+import { parseMonthlyLimit } from '../src/usage'
 import { DEBUG_USER_HEADER, RATE_LIMIT_PER_MINUTE } from '../src/user'
 
 const NOW = Date.UTC(2026, 9, 15, 12, 0, 0)
@@ -29,7 +29,7 @@ const app = createApp({ now: () => clock, imageProvider: () => provider })
 const get = (path: string, user = 'alice') =>
   app.request(path, { headers: { [DEBUG_USER_HEADER]: user } }, env)
 
-function generate(user: string | null = 'alice') {
+function generate(user = 'alice') {
   const page = fixtures.samplePage01.episodes[0]?.pages[0]
   const { settings, characters } = fixtures.samplePage01
   const form = new FormData()
@@ -42,31 +42,21 @@ function generate(user: string | null = 'alice') {
     '/v1/ai/panel-art',
     {
       method: 'POST',
-      headers: {
-        authorization: 'Bearer test-token',
-        ...(user === null ? {} : { [DEBUG_USER_HEADER]: user }),
-      },
+      headers: { [DEBUG_USER_HEADER]: user },
       body: form,
     },
     env,
   )
 }
 
-/** column = value の ai_usage 行を、created_at を at にして count 件入れる */
-async function seedUsage(
-  column: 'user_id' | 'token_hash',
-  value: string,
-  count: number,
-  at: number,
-) {
-  const tokenHash = column === 'token_hash' ? value : await sha256Hex('test-token')
-  const userId = column === 'user_id' ? value : null
+/** userId の ai_usage 行を、created_at を at にして count 件入れる */
+async function seedUsage(userId: string, count: number, at: number) {
   await env.DB.prepare(
-    `WITH RECURSIVE n (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?4)
-     INSERT INTO ai_usage (token_hash, user_id, kind, cost_units, created_at)
-     SELECT ?1, ?2, 'panel-art', 1, ?3 FROM n`,
+    `WITH RECURSIVE n (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?3)
+     INSERT INTO ai_usage (user_id, kind, cost_units, created_at)
+     SELECT ?1, 'panel-art', 1, ?2 FROM n`,
   )
-    .bind(tokenHash, userId, at, count)
+    .bind(userId, at, count)
     .run()
 }
 
@@ -123,9 +113,9 @@ describe('rate limit of 60 requests per minute per user', () => {
 
 describe('GET /v1/usage', () => {
   test('returns this month’s generations of the user and the limit', async () => {
-    await seedUsage('user_id', 'alice', 3, NOW - 3_600_000)
-    await seedUsage('user_id', 'alice', 5, Date.UTC(2026, 8, 30, 23, 59, 59))
-    await seedUsage('user_id', 'bob', 2, NOW - 3_600_000)
+    await seedUsage('alice', 3, NOW - 3_600_000)
+    await seedUsage('alice', 5, Date.UTC(2026, 8, 30, 23, 59, 59))
+    await seedUsage('bob', 2, NOW - 3_600_000)
     expect((await generate()).status).toBe(200)
 
     const res = await get('/v1/usage')
@@ -139,14 +129,14 @@ describe('GET /v1/usage', () => {
     })
   })
 
-  test('401 without X-Debug-User', async () => {
+  test('401 without a user', async () => {
     expect((await app.request('/v1/usage', {}, env)).status).toBe(401)
   })
 })
 
 describe('monthly generation limit', () => {
   test('a generation over the monthly limit is 402 and never reaches the provider', async () => {
-    await seedUsage('user_id', 'alice', monthlyLimit - 1, NOW - 3_600_000)
+    await seedUsage('alice', monthlyLimit - 1, NOW - 3_600_000)
     expect((await generate()).status).toBe(200)
     expect(provider.calls).toBe(1)
 
@@ -164,7 +154,7 @@ describe('monthly generation limit', () => {
   })
 
   test('the limit is per user and resets in the next month', async () => {
-    await seedUsage('user_id', 'alice', monthlyLimit, NOW - 3_600_000)
+    await seedUsage('alice', monthlyLimit, NOW - 3_600_000)
     expect((await generate()).status).toBe(402)
     expect((await generate('bob')).status).toBe(200)
 
@@ -172,13 +162,8 @@ describe('monthly generation limit', () => {
     expect((await generate()).status).toBe(200)
   })
 
-  test('without X-Debug-User the shared token is counted', async () => {
-    await seedUsage('token_hash', await sha256Hex('test-token'), monthlyLimit, NOW - 3_600_000)
-    expect((await generate(null)).status).toBe(402)
-  })
-
   test('402 takes precedence over the per-minute limit', async () => {
-    await seedUsage('user_id', 'alice', monthlyLimit, NOW - 1_000)
+    await seedUsage('alice', monthlyLimit, NOW - 1_000)
     expect((await generate()).status).toBe(402)
   })
 

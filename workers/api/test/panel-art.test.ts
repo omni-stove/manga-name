@@ -4,6 +4,7 @@ import { fixtures } from '@manga/schema'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createApp } from '../src/app'
 import { isDecodablePng } from '../src/png'
+import { DEBUG_USER_HEADER } from '../src/user'
 
 const page = fixtures.samplePage01.episodes[0]?.pages[0]
 const panel = page?.panels[0]
@@ -18,12 +19,16 @@ function panelArtBody() {
   return form
 }
 
-function post(app: ReturnType<typeof createApp>, token: string | null = 'test-token') {
+/** headers は認証のヘッダ。既定は開発時の X-Debug-User: alice */
+function post(
+  app: ReturnType<typeof createApp>,
+  headers: Record<string, string> = { [DEBUG_USER_HEADER]: 'alice' },
+) {
   return app.request(
     '/v1/ai/panel-art',
     {
       method: 'POST',
-      headers: token === null ? {} : { authorization: `Bearer ${token}` },
+      headers,
       body: panelArtBody(),
     },
     env,
@@ -31,14 +36,17 @@ function post(app: ReturnType<typeof createApp>, token: string | null = 'test-to
 }
 
 const usageRows = () =>
-  env.DB.prepare('SELECT token_hash, kind, cost_units FROM ai_usage').all<{
-    token_hash: string
+  env.DB.prepare('SELECT user_id, kind, cost_units FROM ai_usage').all<{
+    user_id: string
     kind: string
     cost_units: number
   }>()
 
 beforeEach(async () => {
-  await env.DB.exec('DELETE FROM ai_usage')
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM ai_usage'),
+    env.DB.prepare('DELETE FROM rate_limits'),
+  ])
 })
 
 describe('GET /v1/health', () => {
@@ -59,14 +67,13 @@ describe('POST /v1/ai/panel-art', () => {
 
     const { results } = await usageRows()
     expect(results).toHaveLength(1)
-    expect(results[0]).toMatchObject({ kind: 'panel-art', cost_units: 1 })
-    expect(results[0]?.token_hash).toMatch(/^[0-9a-f]{64}$/)
+    expect(results[0]).toEqual({ user_id: 'alice', kind: 'panel-art', cost_units: 1 })
   })
 
   test('401 without a token or with a wrong token', async () => {
     const app = createApp()
-    expect((await post(app, null)).status).toBe(401)
-    expect((await post(app, 'nope')).status).toBe(401)
+    expect((await post(app, {})).status).toBe(401)
+    expect((await post(app, { authorization: 'Bearer nope' })).status).toBe(401)
     expect((await usageRows()).results).toHaveLength(0)
   })
 
@@ -75,7 +82,7 @@ describe('POST /v1/ai/panel-art', () => {
     form.delete('layout')
     const res = await createApp().request(
       '/v1/ai/panel-art',
-      { method: 'POST', headers: { authorization: 'Bearer test-token' }, body: form },
+      { method: 'POST', headers: { [DEBUG_USER_HEADER]: 'alice' }, body: form },
       env,
     )
     expect(res.status).toBe(400)

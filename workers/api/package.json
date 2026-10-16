@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --var ENVIRONMENT:development",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -14,6 +14,7 @@
     "@manga/ai": "workspace:*",
     "@manga/schema": "workspace:*",
     "ai": "^7.0.141",
+    "better-auth": "^1.7.9",
     "hono": "^4.9.0",
     "lib0": "^0.2.114",
     "y-protocols": "^1.0.6",
