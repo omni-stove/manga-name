@@ -14,6 +14,7 @@ import { createImageProvider, readApiBaseUrl } from './image-provider'
 import { createProjectLibrary } from './project-library'
 import { createAppRouter } from './router'
 import { createTabSync } from './store/tab-sync'
+import { SyncStatusProvider } from './sync-status'
 import { AuthProvider } from './use-auth'
 import '@manga/ui/tokens.css'
 import '@manga/ui/base.css'
@@ -30,10 +31,11 @@ void auth.restore()
 
 const local = createStorage(defaultStorageKind())
 // 未ログインの間 getToken は null を返し、クラウドストレージはローカルだけで動く
-const storage =
+const cloud =
   baseUrl === ''
-    ? local
+    ? null
     : createCloudStorage({ baseUrl, local, getToken: auth.getToken, fetch: auth.fetch })
+const storage = cloud ?? local
 // 共同編集の範囲（docs/06-open-questions.md #11）が決まるまで本番では開かず、e2e のビルドだけ同じブラウザのタブ同士でつなぐ
 const library = createProjectLibrary(
   storage,
@@ -60,7 +62,9 @@ window.addEventListener('pagehide', () => void library.flushAll())
 createRoot(container).render(
   <StrictMode>
     <AuthProvider client={auth}>
-      <RouterProvider router={createAppRouter({ library, imageProvider, generation })} />
+      <SyncStatusProvider source={cloud}>
+        <RouterProvider router={createAppRouter({ library, imageProvider, generation })} />
+      </SyncStatusProvider>
     </AuthProvider>
   </StrictMode>,
 )

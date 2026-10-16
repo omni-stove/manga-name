@@ -1060,7 +1060,7 @@
       "group": "G4",
       "title": "アセット同期と同期状態",
       "detail": "upload と ref 書換、採用中優先、オフライン検知、リトライ、useSyncState",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "40",
         "36",
@@ -1077,7 +1077,9 @@
       ],
       "spec": [
         "workstreams/WS-15-cloud-storage.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "42",
