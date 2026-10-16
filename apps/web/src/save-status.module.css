@@ -6,3 +6,7 @@
 .status[data-status="error"] {
   color: var(--alert);
 }
+
+.status[data-status="conflict"] {
+  color: var(--alert);
+}

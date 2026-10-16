@@ -17,4 +17,6 @@ export default defineConfig({
   server: { port: 5173, strictPort: true },
   // in-source のテストブロックを本番ビルドから落とす
   define: { 'import.meta.vitest': 'undefined' },
+  // scripts/bundle-size.ts が初期ロードのチャンクを辿るのに使う
+  build: { manifest: true },
 })

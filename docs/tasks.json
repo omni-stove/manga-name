@@ -1062,7 +1062,7 @@
       "group": "G4",
       "title": "アセット同期と同期状態",
       "detail": "upload と ref 書換、採用中優先、オフライン検知、リトライ、useSyncState",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "40",
         "36",
@@ -1079,7 +1079,9 @@
       ],
       "spec": [
         "workstreams/WS-15-cloud-storage.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "42",
@@ -1437,7 +1439,7 @@
       "id": "58",
       "group": "G6",
       "title": "協業モード回帰",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "56",
         "22"
@@ -1452,13 +1454,15 @@
       "spec": [
         "workstreams/WS-19-collaboration.md",
         "workstreams/WS-21-e2e-hardening.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "59",
       "group": "G6",
       "title": "Lighthouse とバンドル監視",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "22"
       ],
@@ -1472,7 +1476,9 @@
       ],
       "spec": [
         "workstreams/WS-21-e2e-hardening.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "60",

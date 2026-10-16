@@ -34,6 +34,10 @@ run = "pnpm typecheck"
 description = "Vitest across all packages, then bats for the shell-facing scripts in tests/"
 run = ["pnpm test", "bats tests"]
 
+[perf]
+description = "Vitest with the wall-clock budgets (PERF=1). Kept out of test because shared CI runners make timings flaky"
+run = "PERF=1 pnpm exec vitest run"
+
 [test-watch]
 description = "Vitest in watch mode"
 run = "pnpm test:watch"

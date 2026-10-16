@@ -6,7 +6,15 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!docs", "!**/dist", "!**/target", "!pnpm-lock.yaml", "!**/routeTree.gen.ts"]
+    "includes": [
+      "**",
+      "!docs",
+      "!**/dist",
+      "!**/dist-collab",
+      "!**/target",
+      "!pnpm-lock.yaml",
+      "!**/routeTree.gen.ts"
+    ]
   },
   "formatter": {
     "enabled": true,

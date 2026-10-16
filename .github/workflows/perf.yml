@@ -1,0 +1,42 @@
+name: Perf
+
+# 所要時間の上限を測るテストは共有ランナーの CPU でぶれ、PR の CI に入れると無関係な変更で落ちる。
+# マージは止めず、毎晩 main で回して遅くなったことに気づけるようにする
+on:
+  schedule:
+    - cron: "30 18 * * *" # 03:30 JST
+  workflow_dispatch:
+
+concurrency:
+  group: perf
+  cancel-in-progress: true
+
+jobs:
+  perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
+      - name: Perf
+        run: PERF=1 pnpm exec vitest run
+
+      # ubuntu-latest に入っている Chrome で測る
+      - name: Lighthouse
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @manga/web lighthouse
+
+      - name: Upload Lighthouse report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: apps/web/dist/lighthouse/
+          retention-days: 14
