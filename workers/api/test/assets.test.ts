@@ -212,6 +212,48 @@ describe('GET and DELETE /v1/projects/:id/assets/:assetId', () => {
     expect((await call(path, { method: 'DELETE' })).status).toBe(404)
   })
 
+  test('a deleted asset cannot be uploaded again with the same URL', async () => {
+    const projectId = await createProject()
+    const { assetId, url } = await issue(projectId, 1024)
+    expect((await upload(url, pngOfSize(1024))).status).toBe(201)
+    const path = `/v1/projects/${projectId}/assets/${assetId}`
+    expect((await call(path, { method: 'DELETE' })).status).toBe(204)
+
+    expect((await upload(url, pngOfSize(1024))).status).toBe(409)
+    expect((await call(path)).status).toBe(404)
+    expect(await objectCount()).toBe(0)
+  })
+
+  test('an asset deleted while its body is being uploaded leaves no object behind', async () => {
+    const projectId = await createProject()
+    const { assetId, url } = await issue(projectId, 1024)
+    const png = pngOfSize(1024)
+    let release!: () => void
+    const released = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        controller.enqueue(png.subarray(0, 512))
+        await released
+        controller.enqueue(png.subarray(512))
+        controller.close()
+      },
+    })
+    const put = upload(url, body)
+    // 行は本体より先に入るので、行が見えたら PUT は本体を書いている途中
+    const rowExists = () =>
+      env.DB.prepare('SELECT 1 AS found FROM assets WHERE id = ?1').bind(assetId).first()
+    while ((await rowExists()) === null) await new Promise((r) => setTimeout(r, 5))
+    const path = `/v1/projects/${projectId}/assets/${assetId}`
+    expect((await call(path, { method: 'DELETE' })).status).toBe(204)
+    release()
+
+    expect((await put).status).toBe(404)
+    expect((await call(path)).status).toBe(404)
+    expect(await objectCount()).toBe(0)
+  })
+
   test('404 for an asset of another project of the same owner', async () => {
     const first = await createProject()
     const second = await createProject()

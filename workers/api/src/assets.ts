@@ -1,12 +1,12 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import {
+  assetIsLive,
   assetKey,
   deleteAsset,
   discardAsset,
   insertAsset,
   ownsProject,
-  projectExists,
   readAsset,
 } from './asset-store'
 import { readJson } from './body'
@@ -97,6 +97,7 @@ export function createAssetRoutes(now: () => number) {
       c.get('userId'),
       c.req.param('id'),
       c.req.param('assetId'),
+      now(),
     )
     if (key === null) return c.json({ error: 'not found' }, 404)
     await c.env.ASSETS.delete(key)
@@ -159,8 +160,8 @@ export function createUploadApp(now: () => number) {
       await discardAsset(c.env.DB, claims.assetId)
       return c.json({ error: `body must be exactly ${claims.size} bytes` }, 400)
     }
-    // 書いている間にプロジェクトが消されると、その削除は本体を消し漏らしている
-    if (!(await projectExists(c.env.DB, claims.projectId))) {
+    // 書いている間にアセットかプロジェクトが消されると、その削除は本体を消し漏らしている
+    if (!(await assetIsLive(c.env.DB, claims.assetId))) {
       await c.env.ASSETS.delete(key)
       return c.json({ error: 'not found' }, 404)
     }

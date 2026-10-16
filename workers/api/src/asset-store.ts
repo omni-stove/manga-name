@@ -16,7 +16,7 @@ export async function ownsProject(db: D1Database, ownerId: string, projectId: st
   return row !== null
 }
 
-/** owner のプロジェクトにあるアセットの key、mime、size。無ければ null */
+/** owner のプロジェクトにある、削除されていないアセットの key、mime、size。無ければ null */
 export function readAsset(
   db: D1Database,
   ownerId: string,
@@ -27,7 +27,7 @@ export function readAsset(
     .prepare(
       `SELECT a.key AS key, a.mime AS mime, a.size AS size FROM assets a
        JOIN projects p ON p.id = a.project_id
-       WHERE a.id = ?1 AND a.project_id = ?2 AND p.owner_id = ?3`,
+       WHERE a.id = ?1 AND a.project_id = ?2 AND a.deleted_at IS NULL AND p.owner_id = ?3`,
     )
     .bind(assetId, projectId, ownerId)
     .first<AssetRow>()
@@ -35,7 +35,7 @@ export function readAsset(
 
 /**
  * プロジェクトが残っていて同じ id の行が無ければ assets に 1 行入れる。
- * 入れたら inserted、id が使用済みなら exists、プロジェクトが無ければ no-project。
+ * 入れたら inserted、id が使用済み（削除済みを含む）なら exists、プロジェクトが無ければ no-project。
  */
 export async function insertAsset(
   db: D1Database,
@@ -62,7 +62,7 @@ export async function insertAsset(
 }
 
 /** プロジェクトが残っていれば true。所有者は問わない */
-export async function projectExists(db: D1Database, projectId: string) {
+async function projectExists(db: D1Database, projectId: string) {
   const row = await db
     .prepare('SELECT 1 AS found FROM projects WHERE id = ?1')
     .bind(projectId)
@@ -70,26 +70,42 @@ export async function projectExists(db: D1Database, projectId: string) {
   return row !== null
 }
 
-/** assets の行を owner の確認なしに消す。アップロードに失敗した行の取り消しに使う */
-export async function discardAsset(db: D1Database, assetId: string) {
-  await db.prepare('DELETE FROM assets WHERE id = ?1').bind(assetId).run()
+/** 削除されていないアセットの行が残っていれば true。所有者は問わない */
+export async function assetIsLive(db: D1Database, assetId: string) {
+  const row = await db
+    .prepare('SELECT 1 AS found FROM assets WHERE id = ?1 AND deleted_at IS NULL')
+    .bind(assetId)
+    .first<{ found: number }>()
+  return row !== null
 }
 
-/** owner のプロジェクトにあるアセットの行を消し、その key を返す。無ければ null */
+/**
+ * assets の行を owner の確認なしに消す。アップロードに失敗した行の取り消しに使う。
+ * 削除済みの行は残す。消すと、削除した id の署名 URL で PUT し直せてしまう
+ */
+export async function discardAsset(db: D1Database, assetId: string) {
+  await db.prepare('DELETE FROM assets WHERE id = ?1 AND deleted_at IS NULL').bind(assetId).run()
+}
+
+/**
+ * owner のプロジェクトにあるアセットに deleted_at を立て、その key を返す。
+ * 無いか削除済みなら null。
+ */
 export async function deleteAsset(
   db: D1Database,
   ownerId: string,
   projectId: string,
   assetId: string,
+  now: number,
 ): Promise<string | null> {
   const row = await db
     .prepare(
-      `DELETE FROM assets
-       WHERE id = ?1 AND project_id = ?2
+      `UPDATE assets SET deleted_at = ?4
+       WHERE id = ?1 AND project_id = ?2 AND deleted_at IS NULL
          AND EXISTS (SELECT 1 FROM projects WHERE id = ?2 AND owner_id = ?3)
        RETURNING key`,
     )
-    .bind(assetId, projectId, ownerId)
+    .bind(assetId, projectId, ownerId, now)
     .first<{ key: string }>()
   return row?.key ?? null
 }

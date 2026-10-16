@@ -1,11 +1,13 @@
--- 本体は R2 の key に置き、ここには所有の判定と GET の応答ヘッダに要る値だけを持つ
+-- 本体は R2 の key に置き、ここには所有の判定と GET の応答ヘッダに要る値だけを持つ。
+-- 削除は deleted_at を立てるだけで行を残す。行を消すと、署名 URL の期限内に同じ id で PUT し直せてしまう
 CREATE TABLE assets (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
   key TEXT NOT NULL,
   mime TEXT NOT NULL,
   size INTEGER NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  deleted_at INTEGER
 );
 
 CREATE INDEX assets_project ON assets (project_id);
