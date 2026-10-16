@@ -284,7 +284,10 @@ describe('editing the selection from the keyboard', () => {
     const onChange = vi.fn()
     const svg = await render({ onChange, selection: { kind: 'bubble', id: 'bb_6' } })
     key(svg, { key: 'Backspace' })
-    expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/panels/5/bubbles/0' }])
+    expect(onChange).toHaveBeenCalledWith([
+      { op: 'remove', path: '/panels/5/vectors/0/sourceFocusId' },
+      { op: 'remove', path: '/panels/5/bubbles/0' },
+    ])
   })
 
   test('arrow keys move by 0.01, Shift by 0.1, and stay inside the page', async () => {

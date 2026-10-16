@@ -97,6 +97,7 @@ if (import.meta.vitest) {
       { op: 'remove', path: '/panels/1' },
     ])
     expect(removePatch(page, { kind: 'bubble', id: 'bb_6' })).toEqual([
+      { op: 'remove', path: '/panels/5/vectors/0/sourceFocusId' },
       { op: 'remove', path: '/panels/5/bubbles/0' },
     ])
     expect(removePatch(page, null)).toEqual([])
