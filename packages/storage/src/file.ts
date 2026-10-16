@@ -96,6 +96,10 @@ export function createFileStorage(options: FileStorageOptions = {}): StorageAdap
       )
       return summaries.filter((s) => s !== undefined).sort(byUpdatedAtDesc)
     },
+    async hasProject(id) {
+      const { fs, baseDir } = await ready()
+      return fs.exists(projectFile(id), { baseDir })
+    },
     async loadProject(id) {
       const { fs, baseDir } = await ready()
       const file = projectFile(id)
