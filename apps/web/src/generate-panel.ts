@@ -197,7 +197,14 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       throw new Error('生成中にプロジェクトが削除されました')
   }
 
-  const run = async ({ store, projectId, pageId, panelId, instruction, signal }: GenerateRequest) => {
+  const run = async ({
+    store,
+    projectId,
+    pageId,
+    panelId,
+    instruction,
+    signal,
+  }: GenerateRequest) => {
     signal?.throwIfAborted()
     const project = store.get()
     const page = findPage(project, pageId)?.page
@@ -287,6 +294,12 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
           const { signal } = controller
           if (signal.aborted) {
             counts.canceled++
+            return
+          }
+          if (!(await library.isOpen(projectId, store))) {
+            controller.abort()
+            counts.canceled++
+            errors.push(new Error('生成中にプロジェクトが削除されました'))
             return
           }
           const { outcome, error } = await attempt({ store, projectId, pageId, panelId, signal })
