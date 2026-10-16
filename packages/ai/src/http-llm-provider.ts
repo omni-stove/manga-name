@@ -73,4 +73,35 @@ if (import.meta.vitest) {
     vi.stubGlobal('fetch', async () => Response.json({ pages: 'none' }))
     await expect(provider.proposeLayout(req)).rejects.toThrow()
   })
+
+  test('critique posts the page and diagnosis and validates the reply', async () => {
+    const page = fixtures.samplePage01.episodes[0]?.pages[0]
+    if (!page) throw new Error('fixture has no page')
+    const critiqueReq = {
+      page,
+      diagnosis: {
+        pageId: page.id,
+        readingOrderOk: true,
+        inferredOrder: [],
+        panels: [],
+        bubbleChain: [],
+        summary: { total: 0, ok: 0, weak: 0, miss: 0 },
+        issues: [],
+      },
+    }
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      expect(JSON.parse(init.body as string)).toEqual(critiqueReq)
+      return Response.json(aiFixtures.critique)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = createHttpLlmProvider({
+      baseUrl: 'https://api.example',
+      getToken: async () => 't',
+    })
+    expect(await provider.critique(critiqueReq)).toEqual(aiFixtures.critique)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example/v1/ai/critique')
+
+    vi.stubGlobal('fetch', async () => Response.json({ summary: 's', suggestions: [{}] }))
+    await expect(provider.critique(critiqueReq)).rejects.toThrow()
+  })
 }

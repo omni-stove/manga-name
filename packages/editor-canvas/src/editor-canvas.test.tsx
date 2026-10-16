@@ -653,3 +653,64 @@ describe('zoom and pan', () => {
     expect(svg.getAttribute('data-zoom')).toBe('2.000')
   })
 })
+
+describe('ghostPage', () => {
+  const ghostPage: Page = {
+    ...samplePage,
+    panels: samplePage.panels.map((panel, i) => {
+      if (i === 3) {
+        return {
+          ...panel,
+          focusPoints: panel.focusPoints.map((f, j) =>
+            j === 1 ? { ...f, pos: { x: 0.82, y: 0.72 } } : f,
+          ),
+        }
+      }
+      if (i === 4) {
+        return {
+          ...panel,
+          vectors: [
+            ...panel.vectors,
+            {
+              id: 'vc_ghost',
+              kind: 'speed',
+              from: { x: 0.9, y: 0.35 },
+              to: { x: 0.68, y: 0.47 },
+              strength: 'weak',
+            },
+          ],
+        }
+      }
+      if (i === 5) {
+        return {
+          ...panel,
+          bubbles: panel.bubbles.map((b) => ({ ...b, pos: { x: 0.8, y: 0.3 } })),
+        }
+      }
+      return panel
+    }),
+  }
+
+  test('draws nothing without ghostPage', async () => {
+    const svg = await render()
+    expect(svg.querySelector('[data-layer="ghost"]')).toBeNull()
+  })
+
+  test('draws the moved focus and bubble at both positions and the added vector', async () => {
+    const svg = await render({ ghostPage })
+    const layer = must(svg.querySelector('[data-layer="ghost"]'))
+    const focus = must(layer.querySelector('[data-ghost-focus-id="fp_4_e"]'))
+    expect(focus.querySelector('[data-ghost="before"]')).not.toBeNull()
+    expect(focus.querySelector('[data-ghost="after"]')).not.toBeNull()
+    const bubble = must(layer.querySelector('[data-ghost-bubble-id="bb_6"]'))
+    expect(bubble.querySelectorAll('path[data-ghost]')).toHaveLength(2)
+    expect(layer.querySelector('[data-ghost-vector-id="vc_ghost"]')).not.toBeNull()
+    expect(layer.querySelectorAll('[data-ghost-focus-id]')).toHaveLength(1)
+    expect(layer.querySelectorAll('[data-ghost-bubble-id]')).toHaveLength(1)
+  })
+
+  test('draws nothing for an unchanged page', async () => {
+    const svg = await render({ ghostPage: samplePage })
+    expect(svg.querySelector('[data-ghost]')).toBeNull()
+  })
+})

@@ -3,6 +3,7 @@ import { memo, useCallback, useId, useLayoutEffect, useMemo, useRef } from 'reac
 import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { BubbleToolLayer } from './bubble-tool-layer'
 import { DiagnosisLayer } from './diagnosis-layer'
+import { GhostLayer } from './ghost-layer'
 import { findFocus, findVector, focusRadius, toPagePoint } from './hint-ops'
 import { HintsLayer } from './hints-layer'
 import { panelBox } from './hit-test'
@@ -50,6 +51,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
  * `diagnosis` があり `layers.diagnosis` が立っていれば、視線経路、bubble chain、焦点ごとの診断ラベル、
  * ページ下の集計行と凡例を重ねる。そのとき焦点の素のラベルは診断ラベルに譲る。
+ * `ghostPage` があれば、AI の提案で動く焦点とフキダシ、増えるベクトルを元の位置と提案の位置の両方で重ねる。
  * 作業用の色は `@manga/ui/tokens.css` の変数を参照するので、使う側でそれを読み込んでおく
  */
 export function EditorCanvas(props: EditorCanvasProps) {
@@ -277,6 +279,9 @@ export function EditorCanvas(props: EditorCanvasProps) {
       )}
       {diagnosis !== null && (
         <DiagnosisLayer page={page} diagnosis={diagnosis} width={pageW} height={pageH} />
+      )}
+      {props.ghostPage && (
+        <GhostLayer page={page} ghost={props.ghostPage} width={pageW} height={pageH} />
       )}
       <Highlight page={page} width={pageW} height={pageH} target={hovered} />
       <PanelToolLayer

@@ -29,6 +29,11 @@ export interface EditorCanvasProps {
   characters: Character[]
   /** 視線誘導診断。null なら診断のレイヤーを描かない */
   diagnosis: PageDiagnosis | null
+  /**
+   * 提案を仮適用したページ。`page` と比べて動いた焦点とフキダシ、増えたベクトルを、
+   * 元の位置と提案の位置の両方で破線で重ねる。操作は受けない
+   */
+  ghostPage?: Page
   selection: Selection
   tool: Tool
   /** `tool === 'scribble'` のときの色か消しゴム。既定は ink */
