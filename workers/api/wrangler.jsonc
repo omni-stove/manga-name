@@ -15,11 +15,12 @@
     "bindings": [{ "name": "PROJECT_ROOMS", "class_name": "ProjectRoom" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProjectRoom"] }],
+  "images": { "binding": "IMAGES" },
   "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "manga-assets" }],
   "vars": {
     "WEB_ORIGINS": "http://localhost:5173",
     // 06-open-questions.md #9 が決まるまでの仮の値
     "MONTHLY_GENERATION_LIMIT": "300"
   }
-  // 秘密: wrangler secret put APP_ACCESS_TOKEN と ASSET_URL_SECRET（実プロバイダを足すときはその API キーも）
+  // 秘密: wrangler secret put APP_ACCESS_TOKEN、ASSET_URL_SECRET、GEMINI_API_KEY
 }

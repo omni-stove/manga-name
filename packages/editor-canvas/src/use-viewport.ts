@@ -78,7 +78,7 @@ export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: numb
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code !== 'Space' || isEditable(e.target)) return
       const svg = svgRef.current
-      const focused = svg !== null && svg.contains(document.activeElement)
+      const focused = svg?.contains(document.activeElement) ?? false
       if (!hovered.current && !focused && !spaceRef.current) return
       e.preventDefault()
       if (!spaceRef.current) setSpace(true)
