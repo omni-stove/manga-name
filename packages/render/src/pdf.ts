@@ -179,7 +179,7 @@ function groupSheets(targets: Numbered[], spread: boolean): Numbered[][] {
   for (const t of targets) {
     const last = groups.at(-1)
     const partner = last?.length === 1 && last[0] ? last[0] : undefined
-    if (partner && partner.number % 2 === 0 &&partner.number + 1 === t.number) last?.push(t)
+    if (partner && partner.number % 2 === 0 && partner.number + 1 === t.number) last?.push(t)
     else groups.push([t])
   }
   return groups
