@@ -1,0 +1,94 @@
+/*
+ * 色は「出力に出るものは墨、出ないものは色」で分ける。
+ * - paper / ink: PNG と PDF に出るもの。packages/render と同じ値で、テーマで変えない
+ * - guide: 選択、ガイド、コマ番号など、作業用で出力に出ないもの（青鉛筆の水色）
+ * - alert: 診断の warning、エラー、未入力など、直すべきもの（朱）
+ * - chrome: 紙の周りの UI。色を持たせず、ダークで変わるのはここだけ
+ * コンポーネントは役割の変数だけを参照し、--_ で始まる原色は参照しない。
+ */
+
+:root {
+  --_sumi-50: #f6f4f0;
+  --_sumi-100: #eeebe5;
+  --_sumi-200: #e1ddd5;
+  --_sumi-300: #ccc7bd;
+  --_sumi-500: #8a847a;
+  --_sumi-600: #6b665e;
+  --_sumi-700: #4a4640;
+  --_sumi-800: #2e2b27;
+  --_sumi-850: #262420;
+  --_sumi-900: #1d1b18;
+  --_sumi-950: #161512;
+
+  --paper: #fff;
+  --ink: #000;
+  --ink-muted: #666;
+  --note: #888;
+
+  --guide: #1a8fd6;
+  --guide-soft: #8fd0f2;
+  --guide-tint: color-mix(in srgb, var(--guide) 14%, transparent);
+  --on-guide: #fff;
+
+  --alert: #d9402b;
+  --alert-tint: color-mix(in srgb, var(--alert) 12%, transparent);
+  --on-alert: #fff;
+
+  --font-ui: system-ui, "Hiragino Sans", "BIZ UDPGothic", "Noto Sans JP", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-s: 0.25rem;
+  --radius-m: 0.5rem;
+  --radius-l: 0.75rem;
+
+  /* iPad の指で押せる最小の高さ */
+  --hit: 2.75rem;
+
+  color-scheme: light;
+  --surface-chrome: var(--_sumi-50);
+  --surface-desk: var(--_sumi-200);
+  --surface-raised: #fff;
+  --surface-sunken: var(--_sumi-100);
+  --surface-hover: color-mix(in srgb, var(--_sumi-900) 6%, transparent);
+  --text: var(--_sumi-900);
+  --text-muted: var(--_sumi-600);
+  --text-inverse: var(--_sumi-50);
+  --border: var(--_sumi-200);
+  --border-strong: var(--_sumi-300);
+  --paper-edge: var(--_sumi-300);
+  --shadow: 0 0.25rem 1rem color-mix(in srgb, var(--_sumi-950) 14%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-chrome: var(--_sumi-900);
+    --surface-desk: var(--_sumi-950);
+    --surface-raised: var(--_sumi-850);
+    --surface-sunken: var(--_sumi-800);
+    --surface-hover: color-mix(in srgb, var(--_sumi-50) 8%, transparent);
+    --text: var(--_sumi-100);
+    --text-muted: var(--_sumi-500);
+    --text-inverse: var(--_sumi-900);
+    --border: var(--_sumi-800);
+    --border-strong: var(--_sumi-700);
+    --paper-edge: var(--_sumi-600);
+    --shadow: 0 0.25rem 1rem color-mix(in srgb, #000 45%, transparent);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-chrome: var(--_sumi-900);
+  --surface-desk: var(--_sumi-950);
+  --surface-raised: var(--_sumi-850);
+  --surface-sunken: var(--_sumi-800);
+  --surface-hover: color-mix(in srgb, var(--_sumi-50) 8%, transparent);
+  --text: var(--_sumi-100);
+  --text-muted: var(--_sumi-500);
+  --text-inverse: var(--_sumi-900);
+  --border: var(--_sumi-800);
+  --border-strong: var(--_sumi-700);
+  --paper-edge: var(--_sumi-600);
+  --shadow: 0 0.25rem 1rem color-mix(in srgb, #000 45%, transparent);
+}

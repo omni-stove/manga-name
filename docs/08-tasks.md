@@ -33,7 +33,7 @@ AI エージェントに 1 つずつ渡す単位に切ったタスク一覧。�
 | `make tasks done <id>` | 完了にする。検証はしない |
 | `make tasks render` | タスクの定義を変えたあと、この文書を生成し直す |
 
-タスク総数 59。G0 と G1 は直列で、ここがクリティカルパス。G2 以降は依存が揃った順に並列に出せる。
+タスク総数 60。G0 と G1 は直列で、ここがクリティカルパス。G2 以降は依存が揃った順に並列に出せる。
 
 | 節目 | 条件 | 到達したら |
 |---|---|---|
@@ -79,6 +79,7 @@ graph LR
     T20["20 一括生成とキャンセル"]
     T21["21 描画性能"]
     T22["22 e2e 基盤とシナリオ 1, 2, 3"]
+    T60["60 UI 部品とテーマ"]
   end
   subgraph G3["G3 納品"]
     direction TB
@@ -224,6 +225,7 @@ graph LR
   T56 --> T58
   T22 --> T58
   T22 --> T59
+  T15 --> T60
 ```
 
 ## 全タスク一覧
@@ -264,6 +266,7 @@ graph LR
 | 20 | **一括生成とキャンセル**<br>ページ単位とエピソード単位、並列 3、AbortController | 13 | `apps/web` | - ページ一括で 6 コマが並列 3 で生成される<br>- 途中キャンセルで残りが止まり、届いた応答が捨てられる<br>- 未生成コマだけを対象にする既定と「生成済みも含める」 | [workstreams/WS-07-panel-art.md](workstreams/WS-07-panel-art.md) |
 | 21 | **描画性能**<br>memo、ドラッグ中の再描画範囲、画像のキャッシュ | 16, 17 | `packages/editor-canvas` | - 30 コマ 20 フキダシでドラッグ中 16ms / frame 以内。計測をテストに残す | [workstreams/WS-04-editor-canvas.md](workstreams/WS-04-editor-canvas.md) |
 | 22 | **e2e 基盤とシナリオ 1, 2, 3**<br>Playwright、CI 組込、Fake プロバイダでの生成と書き出し | 16, 17, 20 | `e2e`<br>`.github` | - CI の e2e job が green<br>- 失敗時にスクリーンショットとトレースが残る | [workstreams/WS-21-e2e-hardening.md](workstreams/WS-21-e2e-hardening.md) |
+| 60 | **UI 部品とテーマ**<br>packages/ui（トークン、ライト / ダーク、ストアを持たない部品）、apps/web と inspector の CSS Modules 化、canvas の作業色のトークン化 | 15 | `packages/ui`<br>`packages/inspector`<br>`packages/editor-canvas`<br>`apps/web` | - 色は tokens.css の役割変数だけを参照し、紙と墨はテーマで変わらない<br>- アプリ設定でシステム / ライト / ダークを切り替え、再読込後も保たれる<br>- @manga/ui はストアとスキーマに依存しない | [02-architecture.md](02-architecture.md) |
 
 ### G3 納品（依存が揃った順に並列）
 

@@ -1,0 +1,26 @@
+.create {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 28rem;
+}
+
+.dropZone {
+  /* fieldset の既定 min-inline-size: min-content が親より広がるのを防ぐ */
+  min-inline-size: 0;
+  margin: 0 0 1.5rem;
+  padding: 1rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-l);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.dropZone[data-dragging="true"] {
+  border-style: solid;
+  border-color: var(--guide);
+  background: var(--guide-tint);
+}
+
+.updated {
+  color: var(--text-muted);
+}

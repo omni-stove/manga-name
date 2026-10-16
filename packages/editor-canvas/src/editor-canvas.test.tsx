@@ -90,12 +90,12 @@ describe('drawing the fixture', () => {
     expect(first.textContent).toContain('ガラス結晶の森')
   })
 
-  test('the selected panel gets a blue frame', async () => {
+  test('the selected panel gets a guide-coloured frame', async () => {
     const svg = await render({ selection: { kind: 'panel', id: 'pn_2' } })
-    const strokes = [...svg.querySelectorAll('[data-panel-id="pn_2"] > rect')].map((r) =>
-      r.getAttribute('stroke'),
+    const frame = must(
+      svg.querySelector<SVGRectElement>('[data-panel-id="pn_2"] > rect[data-selected]'),
     )
-    expect(strokes).toContain('#2563eb')
+    expect(frame.style.stroke).toBe('var(--guide)')
   })
 })
 

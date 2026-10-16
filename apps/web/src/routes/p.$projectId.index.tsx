@@ -1,7 +1,9 @@
 import type { Episode, PageTemplate } from '@manga/schema'
+import { Button, Select } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
+import common from '../common.module.css'
 import { PageThumbnail } from '../page-thumbnail'
 import {
   addEpisodePatch,
@@ -13,6 +15,7 @@ import {
 } from '../project-ops'
 import type { ProjectStore } from '../store/project-store'
 import { useApplyPatch, useProject } from '../use-project'
+import styles from './pages.module.css'
 
 export const Route = createFileRoute('/p/$projectId/')({ component: PageList })
 
@@ -33,15 +36,16 @@ function PageList() {
     <>
       <h2>ページ一覧</h2>
       <form
-        className="toolbar"
+        className={common.toolbar}
         onSubmit={(e) => {
           e.preventDefault()
           apply('ページを追加', (p) => addPagePatch(p, template, targetEpisode?.id).patch)
         }}
       >
-        <label>
-          テンプレート{' '}
-          <select
+        {/* biome-ignore lint/a11y/noLabelWithoutControl: Select は label の内側に入る */}
+        <label className={styles.inline}>
+          テンプレート
+          <Select
             value={template}
             onChange={(e) => setTemplate(e.currentTarget.value as PageTemplate)}
           >
@@ -50,77 +54,90 @@ function PageList() {
                 {t.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {project.episodes.length > 1 && (
-          <label>
-            追加先{' '}
-            <select value={targetEpisode?.id} onChange={(e) => setEpisodeId(e.currentTarget.value)}>
+          // biome-ignore lint/a11y/noLabelWithoutControl: Select は label の内側に入る
+          <label className={styles.inline}>
+            追加先
+            <Select value={targetEpisode?.id} onChange={(e) => setEpisodeId(e.currentTarget.value)}>
               {project.episodes.map((episode) => (
                 <option key={episode.id} value={episode.id}>
                   {episode.title}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         )}
-        <button type="submit">ページを追加</button>
-        <button type="button" onClick={() => apply('エピソードを追加', addEpisodePatch)}>
-          エピソードを追加
-        </button>
+        <Button type="submit" variant="primary">
+          ページを追加
+        </Button>
+        <Button onClick={() => apply('エピソードを追加', addEpisodePatch)}>エピソードを追加</Button>
       </form>
       {error && (
-        <p className="error" role="alert">
+        <p className={common.error} role="alert">
           {error}
         </p>
       )}
-      {project.episodes.length === 0 && <p>まだページがありません。</p>}
+      {project.episodes.length === 0 && (
+        <p className={common.placeholder}>まだページがありません。</p>
+      )}
       {project.episodes.map((episode) => (
-        <article key={episode.id}>
-          <h3>{episode.title}</h3>
+        <article key={episode.id} className={styles.episode}>
+          <h3 className={styles.episodeTitle}>{episode.title}</h3>
           <EpisodeBatch episode={episode} projectId={projectId} store={store} />
-          {episode.pages.length === 0 && <p>ページがありません。</p>}
-          <ol className="cards">
+          {episode.pages.length === 0 && <p className={common.placeholder}>ページがありません。</p>}
+          <ol
+            className={`${common.cards} ${styles.pages}`}
+            data-direction={project.settings.direction}
+          >
             {episode.pages.map((page, index) => {
               const status = artStatus(page)
               return (
-                <li key={page.id}>
-                  <Link to="/p/$projectId/pages/$pageId" params={{ projectId, pageId: page.id }}>
+                <li key={page.id} className={common.card}>
+                  <Link
+                    to="/p/$projectId/pages/$pageId"
+                    params={{ projectId, pageId: page.id }}
+                    className={common.cardLink}
+                  >
                     <PageThumbnail page={page} pageSize={project.settings.pageSize} />
                     <strong>{index + 1} ページ</strong>
                   </Link>
-                  <small>
+                  <small className={styles.meta}>
                     コマ {page.panels.length} / 生成{' '}
-                    <span className="art-status" data-status={status}>
+                    <span className={styles.status} data-status={status}>
                       {status}
                     </span>
                   </small>
-                  <span className="card-actions">
-                    <button
-                      type="button"
+                  <span className={common.cardActions}>
+                    <Button
+                      size="small"
+                      variant="ghost"
                       aria-label="前へ"
                       disabled={index === 0}
                       onClick={() => apply('ページを移動', (p) => movePagePatch(p, page.id, -1))}
                     >
                       {earlier}
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="ghost"
                       aria-label="後ろへ"
                       disabled={index === episode.pages.length - 1}
                       onClick={() => apply('ページを移動', (p) => movePagePatch(p, page.id, 1))}
                     >
                       {later}
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="ghost"
                       onClick={() => {
                         if (!window.confirm(`${index + 1} ページを削除しますか？`)) return
                         apply('ページを削除', (p) => removePagePatch(p, page.id))
                       }}
                     >
                       削除
-                    </button>
+                    </Button>
                   </span>
                 </li>
               )
@@ -151,14 +168,10 @@ function EpisodeBatch({
     pageIds: episode.pages.map((page) => page.id),
   })
   return (
-    <div className="toolbar">
-      <button
-        type="button"
-        disabled={batch.running || episode.pages.length === 0}
-        onClick={batch.start}
-      >
+    <div className={common.toolbar}>
+      <Button disabled={batch.running || episode.pages.length === 0} onClick={batch.start}>
         {batch.running ? '生成中…' : '全部生成'}
-      </button>
+      </Button>
       <BatchOptions batch={batch} />
     </div>
   )

@@ -1,0 +1,103 @@
+.field {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.625rem 0;
+  min-width: 0;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.error {
+  font-size: 0.75rem;
+  color: var(--alert);
+}
+
+.group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.control {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+.control:focus-visible {
+  outline: none;
+  border-color: var(--guide);
+  box-shadow: 0 0 0 3px var(--guide-tint);
+}
+
+.control[aria-invalid="true"] {
+  outline: none;
+  border-color: var(--alert);
+  box-shadow: 0 0 0 3px var(--alert-tint);
+}
+
+.control::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* セリフや指示メモを書く欄なので、読み書きしやすい行間にする */
+textarea.control {
+  min-height: 4.5rem;
+  line-height: 1.7;
+  resize: vertical;
+}
+
+select.control {
+  appearance: none;
+  padding-right: 2rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 1rem) 55%,
+    calc(100% - 0.7rem) 55%;
+  background-size: 0.3rem 0.3rem;
+  background-repeat: no-repeat;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.checkbox input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--text);
+}
+
+@media (pointer: coarse) {
+  .control {
+    min-height: var(--hit);
+  }
+
+  .checkbox {
+    min-height: var(--hit);
+  }
+}

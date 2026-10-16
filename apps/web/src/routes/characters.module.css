@@ -1,0 +1,28 @@
+.cards {
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+}
+
+.form {
+  display: grid;
+}
+
+.form > button {
+  justify-self: start;
+}
+
+.usage {
+  color: var(--text-muted);
+}
+
+.addTitle {
+  margin: 2rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+.add {
+  max-width: 28rem;
+  padding: 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface-raised);
+}

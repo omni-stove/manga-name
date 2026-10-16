@@ -1,0 +1,43 @@
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.inline select {
+  width: auto;
+  color: var(--text);
+}
+
+.episode {
+  margin: 1.5rem 0 2rem;
+}
+
+.episodeTitle {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+/* 右綴じの本は 1 ページ目を右に置き、作品と同じ向きに並べる */
+.pages[data-direction="rtl"] {
+  direction: rtl;
+}
+
+.pages[data-direction="rtl"] > li {
+  direction: ltr;
+}
+
+.pages {
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+}
+
+.meta {
+  color: var(--text-muted);
+}
+
+.status[data-status="全部"] {
+  color: var(--text);
+  font-weight: 700;
+}

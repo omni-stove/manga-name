@@ -17,6 +17,7 @@
     "@manga/render": "workspace:*",
     "@manga/schema": "workspace:*",
     "@manga/storage": "workspace:*",
+    "@manga/ui": "workspace:*",
     "@tanstack/react-router": "^1.170.44",
     "immer": "^11.0.0",
     "pdfjs-dist": "^6.4.299",

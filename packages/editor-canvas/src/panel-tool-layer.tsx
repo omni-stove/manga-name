@@ -1,6 +1,6 @@
 import type { Panel } from '@manga/schema'
 import { panelBox } from './hit-test'
-import { FONT_FAMILY, SELECTED } from './page-layer'
+import { FONT_FAMILY, GUIDE } from './page-layer'
 import type { Handle, SplitAxis } from './panel-ops'
 import { type Draft, handlePoints } from './use-panel-tool'
 
@@ -50,9 +50,8 @@ export function PanelToolLayer({
           y={y * height}
           width={w * width}
           height={h * height}
-          fill={SELECTED}
+          style={{ fill: GUIDE, stroke: GUIDE }}
           fillOpacity={0.08}
-          stroke={SELECTED}
           strokeWidth={1.5}
           strokeDasharray="4 2"
           vectorEffect="non-scaling-stroke"
@@ -76,10 +75,9 @@ export function PanelToolLayer({
           width={handleSize}
           height={handleSize}
           fill="#fff"
-          stroke={SELECTED}
           strokeWidth={1}
           vectorEffect="non-scaling-stroke"
-          style={{ cursor: CURSORS[h.handle] }}
+          style={{ stroke: GUIDE, cursor: CURSORS[h.handle] }}
         />
       ))}
       <ToolButton x={bx} y={by} axis="vertical" label="左右に分割" onClick={onSplit} />
@@ -124,11 +122,11 @@ function ToolButton({
         onClick(axis)
       }}
     >
-      <rect x={x} y={y} width={BUTTON_W} height={BUTTON_H} rx={1} fill={SELECTED} />
+      <rect x={x} y={y} width={BUTTON_W} height={BUTTON_H} rx={1} style={{ fill: GUIDE }} />
       <text
         x={x + BUTTON_W / 2}
         y={y + BUTTON_H / 2}
-        fill="#fff"
+        style={{ fill: 'var(--on-guide)' }}
         fontFamily={FONT_FAMILY}
         fontSize={2.4}
         textAnchor="middle"

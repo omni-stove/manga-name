@@ -1,0 +1,56 @@
+/* アプリ全体の素の要素。部品化していない要素もテーマに沿うよう、ここで色だけ合わせる */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-ui);
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-chrome);
+  color: var(--text);
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+h1 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  margin: 0 0 1rem;
+}
+
+h2 {
+  font-size: 1.0625rem;
+  margin: 0 0 0.5rem;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--guide);
+  outline-offset: 2px;
+}
+
+[aria-invalid="true"] {
+  outline: 2px solid var(--alert);
+}
+
+::selection {
+  background: var(--guide-tint);
+}

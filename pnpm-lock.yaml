@@ -211,6 +211,9 @@ importers:
       '@manga/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@manga/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@tanstack/react-router':
         specifier: ^1.170.44
         version: 1.170.44(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -293,6 +296,9 @@ importers:
         specifier: workspace:*
         version: link:../schema
     devDependencies:
+      '@manga/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
@@ -326,6 +332,9 @@ importers:
       '@manga/schema':
         specifier: workspace:*
         version: link:../schema
+      '@manga/ui':
+        specifier: workspace:*
+        version: link:../ui
     devDependencies:
       '@types/react':
         specifier: ^19.3.0
@@ -414,6 +423,27 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.4(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(jsdom@27.4.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(msw@2.15.0(@types/node@26.6.5)(typescript@7.0.2))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
+  packages/ui:
+    devDependencies:
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      jsdom:
+        specifier: ^27.0.0
+        version: 27.4.0(@noble/hashes@2.4.0)(supports-color@10.2.2)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: ^8.3.4
+        version: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
       vitest:
         specifier: 'catalog:'
         version: 5.0.4(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(jsdom@27.4.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(msw@2.15.0(@types/node@26.6.5)(typescript@7.0.2))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))

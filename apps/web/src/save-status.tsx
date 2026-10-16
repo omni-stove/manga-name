@@ -1,4 +1,6 @@
+import { Button } from '@manga/ui'
 import { useStore } from 'zustand'
+import styles from './save-status.module.css'
 import type { SaveStatus, WebProjectStore } from './store/project-store'
 
 const LABEL: Record<SaveStatus, string> = {
@@ -15,15 +17,16 @@ export function SaveStatusIndicator({ store }: { store: WebProjectStore }) {
   return (
     <>
       <span
-        className={saveStatus === 'error' ? 'save-status error' : 'save-status'}
+        className={styles.status}
+        data-status={saveStatus}
         title={saveError instanceof Error ? saveError.message : undefined}
       >
         {LABEL[saveStatus]}
       </span>
       {saveStatus === 'error' && (
-        <button type="button" onClick={() => void store.flush()}>
+        <Button size="small" onClick={() => void store.flush()}>
           再保存
-        </button>
+        </Button>
       )}
     </>
   )

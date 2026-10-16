@@ -1,5 +1,8 @@
+import { Button } from '@manga/ui'
+import styles from './character-inspector.module.css'
 import { DEBOUNCE_MS, Group, TextField } from './fields'
 import { optionalString, replace } from './patch'
+import section from './section.module.css'
 import type { CharacterInspectorProps } from './types'
 import { useAssetUrls } from './use-asset-urls'
 
@@ -13,8 +16,8 @@ export function CharacterInspector({
   const urls = useAssetUrls(ref === undefined ? [] : [ref], resolveAsset)
   const url = ref === undefined ? undefined : urls.get(ref)
   return (
-    <div className="inspector-section" data-inspector="character">
-      <h3>{character.name || 'キャラクター'}</h3>
+    <div className={section.section} data-inspector="character">
+      <h3 className={section.title}>{character.name || 'キャラクター'}</h3>
       <TextField
         label="名前"
         value={character.name}
@@ -37,19 +40,23 @@ export function CharacterInspector({
       />
       <Group label="参照画像">
         {ref === undefined ? (
-          <span className="in-muted">なし</span>
+          <span className={section.muted}>なし</span>
         ) : url ? (
-          <img className="in-reference" src={url} alt={`${character.name} の参照画像`} />
+          <img className={styles.reference} src={url} alt={`${character.name} の参照画像`} />
         ) : (
-          <span className="in-muted">{url === null ? '読み込めません' : '読み込み中…'}</span>
+          <span className={section.muted}>{url === null ? '読み込めません' : '読み込み中…'}</span>
         )}
-        <button type="button" onClick={onPickReference}>
+        <Button size="small" onClick={onPickReference}>
           {ref === undefined ? '選ぶ' : '差し替え'}
-        </button>
+        </Button>
         {ref !== undefined && (
-          <button type="button" onClick={() => onChange([{ op: 'remove', path: '/referenceRef' }])}>
+          <Button
+            size="small"
+            variant="ghost"
+            onClick={() => onChange([{ op: 'remove', path: '/referenceRef' }])}
+          >
             外す
-          </button>
+          </Button>
         )}
       </Group>
       <TextField

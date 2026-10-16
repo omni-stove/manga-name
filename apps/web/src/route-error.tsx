@@ -1,4 +1,6 @@
+import { Button } from '@manga/ui'
 import { type ErrorComponentProps, Link, useRouter } from '@tanstack/react-router'
+import common from './common.module.css'
 
 /** loader の失敗（ストレージが開けない、保存内容がスキーマを通らない等）を出す。ルーターの既定のエラー画面 */
 export function RouteError({ error }: ErrorComponentProps) {
@@ -6,11 +8,9 @@ export function RouteError({ error }: ErrorComponentProps) {
   return (
     <section role="alert">
       <h1>読み込めませんでした</h1>
-      <p className="error">{errorMessage(error)}</p>
-      <p className="actions">
-        <button type="button" onClick={() => void router.invalidate()}>
-          再試行
-        </button>
+      <p className={common.error}>{errorMessage(error)}</p>
+      <p className={common.actions}>
+        <Button onClick={() => void router.invalidate()}>再試行</Button>
         <Link to="/">プロジェクト一覧へ</Link>
       </p>
     </section>

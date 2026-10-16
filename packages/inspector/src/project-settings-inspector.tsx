@@ -1,6 +1,7 @@
 import { ProjectSettingsSchema, type ReadingDirection } from '@manga/schema'
 import { NumberField, SelectField, TextField } from './fields'
 import { optionalString, replace } from './patch'
+import section from './section.module.css'
 import type { ProjectSettingsInspectorProps } from './types'
 
 const DIRECTIONS: readonly { value: ReadingDirection; label: string }[] = [
@@ -14,8 +15,8 @@ const isDpi = (n: number) => dpi.safeParse(n).success
 
 export function ProjectSettingsInspector({ settings, onChange }: ProjectSettingsInspectorProps) {
   return (
-    <div className="inspector-section" data-inspector="settings">
-      <h3>プロジェクト設定</h3>
+    <div className={section.section} data-inspector="settings">
+      <h3 className={section.title}>プロジェクト設定</h3>
       <SelectField
         label="読む方向"
         value={settings.direction}

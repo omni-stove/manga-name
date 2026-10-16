@@ -1,18 +1,9 @@
+import { Field, FieldGroup, Input, Select, TextArea } from '@manga/ui'
 import type { ReactNode } from 'react'
 import { useDraft } from './use-draft'
 
 /** text / note / appearance の複数行欄が Patch を出すまでの待ち */
 export const DEBOUNCE_MS = 300
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    // biome-ignore lint/a11y/noLabelWithoutControl: コントロールは children として渡され、label の内側に入る
-    <label className="in-field">
-      <span className="in-label">{label}</span>
-      {children}
-    </label>
-  )
-}
 
 interface TextFieldProps {
   label: string
@@ -51,7 +42,7 @@ export function TextField({
   return (
     <Field label={label}>
       {rows === undefined ? (
-        <input
+        <Input
           value={draft}
           placeholder={placeholder}
           list={list}
@@ -60,7 +51,7 @@ export function TextField({
           onBlur={flush}
         />
       ) : (
-        <textarea
+        <TextArea
           value={draft}
           rows={rows}
           placeholder={placeholder}
@@ -108,7 +99,7 @@ export function NumberField({
   const invalid = !Number.isFinite(n) || !isValid(n)
   return (
     <Field label={label}>
-      <input
+      <Input
         type="number"
         value={draft}
         min={min}
@@ -140,23 +131,18 @@ export function SelectField<T extends string>({
 }: SelectFieldProps<T>) {
   return (
     <Field label={label}>
-      <select value={value} onChange={(e) => onCommit(e.target.value as T)}>
+      <Select value={value} onChange={(e) => onCommit(e.target.value as T)}>
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
         ))}
-      </select>
+      </Select>
     </Field>
   )
 }
 
 /** ボタンなど、label で包めない内容を欄と同じ並びに置く */
 export function Group({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="in-field">
-      <span className="in-label">{label}</span>
-      <div className="in-group">{children}</div>
-    </div>
-  )
+  return <FieldGroup label={label}>{children}</FieldGroup>
 }

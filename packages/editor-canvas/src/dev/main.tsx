@@ -1,4 +1,6 @@
 import { fixtures, type ID, type Page, type Patch } from '@manga/schema'
+import '@manga/ui/tokens.css'
+import '@manga/ui/base.css'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { EditorCanvas } from '../editor-canvas'

@@ -1,0 +1,36 @@
+.list {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 10;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  max-width: min(24rem, calc(100vw - 2rem));
+}
+
+.toast {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.75rem 0.75rem 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-left: 0.25rem solid var(--text-muted);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 0.875rem;
+  white-space: pre-line;
+}
+
+.toast[data-kind="error"] {
+  border-left-color: var(--alert);
+}
+
+.message {
+  flex: 1;
+  padding-top: 0.125rem;
+}

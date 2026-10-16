@@ -12,7 +12,8 @@
     "test": "vitest run --config ../../vitest.config.ts"
   },
   "dependencies": {
-    "@manga/schema": "workspace:*"
+    "@manga/schema": "workspace:*",
+    "@manga/ui": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19.3.1"

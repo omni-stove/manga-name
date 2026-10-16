@@ -6,9 +6,12 @@ import {
   PanelSchema,
   type Patch,
 } from '@manga/schema'
+import { Button, Field, IconButton, TextArea } from '@manga/ui'
 import { useId, useMemo, useState } from 'react'
 import { DEBOUNCE_MS, NumberField, TextField } from './fields'
+import styles from './panel-inspector.module.css'
 import { optionalString, replace, swapOrder } from './patch'
+import section from './section.module.css'
 import type { PanelInspectorProps } from './types'
 import { useAssetUrls } from './use-asset-urls'
 
@@ -49,8 +52,8 @@ export function PanelInspector({
   const arts = [...panel.arts].reverse()
 
   return (
-    <div className="inspector-section" data-inspector="panel">
-      <h3>コマ {panel.order}</h3>
+    <div className={section.section} data-inspector="panel">
+      <h3 className={section.title}>コマ {panel.order}</h3>
       <NumberField
         label="読み順"
         value={panel.order}
@@ -80,30 +83,32 @@ export function PanelInspector({
         onCommit={(v) => onChange(optionalString('/note', panel.note, v))}
       />
       {diagnosis && (
-        <p className="in-hint" data-bubble-order-ok={diagnosis.bubbleOrderOk}>
+        <p className={styles.hint} data-bubble-order-ok={diagnosis.bubbleOrderOk}>
           {diagnosis.hint}
-          {!diagnosis.bubbleOrderOk && <small>フキダシの順が読み順と合っていません</small>}
+          {!diagnosis.bubbleOrderOk && (
+            <small className={styles.hintWarning}>フキダシの順が読み順と合っていません</small>
+          )}
         </p>
       )}
 
-      <h4>フキダシ</h4>
+      <h4 className={section.heading}>フキダシ</h4>
       {bubbles.length === 0 ? (
-        <p className="in-muted">フキダシはありません</p>
+        <p className={section.muted}>フキダシはありません</p>
       ) : (
-        <ol className="in-list">
+        <ol className={styles.bubbles}>
           {bubbles.map(({ bubble, index }, i) => {
             const prev = bubbles[i - 1]
             const next = bubbles[i + 1]
             return (
-              <li key={bubble.id} data-bubble-id={bubble.id}>
-                <span className="in-order">{bubble.order}</span>
-                <span className="in-ellipsis">
-                  {speakerOf(bubble) && <b>{speakerOf(bubble)} </b>}
+              <li key={bubble.id} className={styles.bubble} data-bubble-id={bubble.id}>
+                <span className={styles.order}>{bubble.order}</span>
+                <span className={styles.line}>
+                  {speakerOf(bubble) && <b className={styles.speaker}>{speakerOf(bubble)}</b>}
                   {bubble.text.split('\n')[0] || '（空）'}
                 </span>
-                <button
-                  type="button"
-                  aria-label="フキダシを前へ"
+                <IconButton
+                  size="small"
+                  label="フキダシを前へ"
                   disabled={!prev}
                   onClick={() =>
                     prev &&
@@ -117,10 +122,10 @@ export function PanelInspector({
                   }
                 >
                   ▲
-                </button>
-                <button
-                  type="button"
-                  aria-label="フキダシを後へ"
+                </IconButton>
+                <IconButton
+                  size="small"
+                  label="フキダシを後へ"
                   disabled={!next}
                   onClick={() =>
                     next &&
@@ -134,43 +139,41 @@ export function PanelInspector({
                   }
                 >
                   ▼
-                </button>
+                </IconButton>
               </li>
             )
           })}
         </ol>
       )}
 
-      <h4>生成</h4>
-      <div className="in-group">
-        <button type="button" disabled={generating} onClick={() => onGenerate()}>
+      <h4 className={section.heading}>生成</h4>
+      <div className={section.group}>
+        <Button variant="primary" disabled={generating} onClick={() => onGenerate()}>
           {generating ? '生成中…' : '生成'}
-        </button>
+        </Button>
       </div>
-      <label className="in-field">
-        <span className="in-label">修正指示</span>
-        <textarea
+      <Field label="修正指示">
+        <TextArea
           rows={3}
           value={instruction}
           placeholder="採用中の絵に対する直し方"
           onChange={(e) => setInstruction(e.target.value)}
         />
-      </label>
-      <div className="in-group">
-        <button
-          type="button"
+      </Field>
+      <div className={section.group}>
+        <Button
           disabled={generating || !current || instruction.trim() === ''}
           onClick={() => onGenerate(instruction.trim())}
         >
           修正して再生成
-        </button>
+        </Button>
       </div>
 
-      <h4>履歴</h4>
+      <h4 className={section.heading}>履歴</h4>
       {arts.length === 0 ? (
-        <p className="in-muted">まだ生成していません</p>
+        <p className={section.muted}>まだ生成していません</p>
       ) : (
-        <ol className="in-arts">
+        <ol className={styles.arts}>
           {arts.map((art) => (
             <ArtItem
               key={art.id}
@@ -201,19 +204,21 @@ function ArtItem({
   onSelect(): void
 }) {
   return (
-    <li data-art-id={art.id} data-current={current || undefined}>
-      <button type="button" className="in-thumb" aria-pressed={current} onClick={onSelect}>
+    <li className={styles.art} data-art-id={art.id} data-current={current || undefined}>
+      <button type="button" className={styles.thumb} aria-pressed={current} onClick={onSelect}>
         {url ? (
           <img src={url} alt={art.instruction ?? '生成した絵'} />
         ) : (
-          <span className="in-muted">{url === null ? '読み込めません' : '読み込み中…'}</span>
+          <span>{url === null ? '読み込めません' : '読み込み中…'}</span>
         )}
       </button>
-      <div className="in-art-meta">
-        <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
-        {current && <b>採用中</b>}
-        {art.instruction && <p>{art.instruction}</p>}
-        <details>
+      <div className={styles.meta}>
+        <span className={styles.metaHead}>
+          <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
+          {current && <b className={styles.badge}>採用中</b>}
+        </span>
+        {art.instruction && <p className={styles.instruction}>{art.instruction}</p>}
+        <details className={styles.prompt}>
           <summary>プロンプト</summary>
           <pre>{art.prompt}</pre>
         </details>

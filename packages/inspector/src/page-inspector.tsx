@@ -1,6 +1,9 @@
 import type { Page } from '@manga/schema'
+import { Button } from '@manga/ui'
 import { DEBOUNCE_MS, SelectField, TextField } from './fields'
+import styles from './page-inspector.module.css'
 import { optionalString, replace } from './patch'
+import section from './section.module.css'
 import type { PageInspectorProps } from './types'
 
 const SIDES: readonly { value: Page['side']; label: string }[] = [
@@ -17,8 +20,8 @@ export function PageInspector({
   onGenerateAll,
 }: PageInspectorProps) {
   return (
-    <div className="inspector-section" data-inspector="page">
-      <h3>ページ</h3>
+    <div className={section.section} data-inspector="page">
+      <h3 className={section.title}>ページ</h3>
       <SelectField
         label="見開き"
         value={page.side}
@@ -32,20 +35,22 @@ export function PageInspector({
         delayMs={DEBOUNCE_MS}
         onCommit={(v) => onChange(optionalString('/note', page.note, v))}
       />
-      <div className="in-group">
-        <button
-          type="button"
+      <div className={section.group}>
+        <Button
+          variant="primary"
           disabled={generating || page.panels.length === 0}
           onClick={onGenerateAll}
         >
           {generating ? '生成中…' : 'このページを全部生成'}
-        </button>
-        <span className="in-muted">コマ {page.panels.length}</span>
+        </Button>
+        <span className={section.muted}>コマ {page.panels.length}</span>
       </div>
       {diagnosis && (
-        <dl className="in-diagnosis">
+        <dl className={styles.diagnosis}>
           <dt>読み順</dt>
-          <dd>{diagnosis.readingOrderOk ? 'OK' : '配置と食い違い'}</dd>
+          <dd data-ok={diagnosis.readingOrderOk}>
+            {diagnosis.readingOrderOk ? 'OK' : '配置と食い違い'}
+          </dd>
           <dt>焦点</dt>
           <dd>
             {diagnosis.summary.total} 件: ok {diagnosis.summary.ok} / weak {diagnosis.summary.weak}{' '}
@@ -55,9 +60,13 @@ export function PageInspector({
             <>
               <dt>指摘</dt>
               <dd>
-                <ul>
+                <ul className={styles.issues}>
                   {diagnosis.issues.map((issue, i) => (
-                    <li key={`${issue.code}-${issue.panelId ?? ''}-${issue.focusPointId ?? i}`}>
+                    <li
+                      key={`${issue.code}-${issue.panelId ?? ''}-${issue.focusPointId ?? i}`}
+                      className={styles.issue}
+                      data-severity={issue.severity}
+                    >
                       [{issue.severity}] {issue.message}
                     </li>
                   ))}

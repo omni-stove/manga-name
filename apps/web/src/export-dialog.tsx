@@ -1,5 +1,6 @@
 import type { RenderOptions } from '@manga/render'
-import { useEffect, useRef, useState } from 'react'
+import { Button, Checkbox, Dialog, Field, Select } from '@manga/ui'
+import { useState } from 'react'
 
 export type ExportOptions = Pick<RenderOptions, 'notes' | 'panelNumbers'>
 
@@ -23,49 +24,38 @@ export function ExportDialog({
   onCancel(): void
   onExport(opts: ExportOptions): void
 }) {
-  const ref = useRef<HTMLDialogElement>(null)
   const [opts, setOpts] = useState(DEFAULT_EXPORT_OPTIONS)
-  useEffect(() => {
-    const dialog = ref.current
-    if (dialog && !dialog.open) dialog.showModal()
-  }, [])
   return (
-    <dialog ref={ref} className="export-dialog" onClose={onCancel}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          onExport(opts)
-        }}
-      >
-        <h2>このページを PNG で保存</h2>
-        <label className="in-field">
-          <span className="in-label">指示メモ</span>
-          <select
-            value={opts.notes}
-            onChange={(e) => setOpts({ ...opts, notes: e.target.value as ExportOptions['notes'] })}
-          >
-            {NOTES.map((n) => (
-              <option key={n.value} value={n.value}>
-                {n.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={opts.panelNumbers}
-            onChange={(e) => setOpts({ ...opts, panelNumbers: e.target.checked })}
-          />{' '}
-          コマ番号を入れる
-        </label>
-        <p className="actions">
-          <button type="button" onClick={onCancel}>
-            キャンセル
-          </button>
-          <button type="submit">保存</button>
-        </p>
-      </form>
-    </dialog>
+    <Dialog
+      title="このページを PNG で保存"
+      onClose={onCancel}
+      onSubmit={() => onExport(opts)}
+      actions={
+        <>
+          <Button onClick={onCancel}>キャンセル</Button>
+          <Button type="submit" variant="primary">
+            保存
+          </Button>
+        </>
+      }
+    >
+      <Field label="指示メモ">
+        <Select
+          value={opts.notes}
+          onChange={(e) => setOpts({ ...opts, notes: e.target.value as ExportOptions['notes'] })}
+        >
+          {NOTES.map((n) => (
+            <option key={n.value} value={n.value}>
+              {n.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Checkbox
+        label="コマ番号を入れる"
+        checked={opts.panelNumbers}
+        onChange={(e) => setOpts({ ...opts, panelNumbers: e.target.checked })}
+      />
+    </Dialog>
   )
 }

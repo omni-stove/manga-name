@@ -1,8 +1,10 @@
+import { Button } from '@manga/ui'
 import { createFileRoute, Link, notFound, Outlet, useParams } from '@tanstack/react-router'
 import { useStore } from 'zustand'
 import { downloadText, exportFileName, exportProjectJson } from '../project-file'
 import { SaveStatusIndicator } from '../save-status'
 import { useProject } from '../use-project'
+import styles from './project.module.css'
 
 export const Route = createFileRoute('/p/$projectId')({
   loader: async ({ context, params }) => {
@@ -21,9 +23,9 @@ function ProjectLayout() {
   const { canUndo, canRedo } = useStore(store.state)
   return (
     <section>
-      <header className="project-header">
-        <h1>{project.title || '無題'}</h1>
-        <nav className="tabs">
+      <header className={styles.header}>
+        <h1 className={styles.title}>{project.title || '無題'}</h1>
+        <nav className={styles.tabs}>
           <Link to="/p/$projectId" params={{ projectId }} activeOptions={{ exact: true }}>
             ページ
           </Link>
@@ -34,20 +36,20 @@ function ProjectLayout() {
             設定
           </Link>
         </nav>
-        <span className="toolbar-actions">
+        <span className={styles.actions}>
           <SaveStatusIndicator store={store} />
-          <button type="button" disabled={!canUndo} onClick={() => store.undo()}>
+          <Button size="small" variant="ghost" disabled={!canUndo} onClick={() => store.undo()}>
             Undo
-          </button>
-          <button type="button" disabled={!canRedo} onClick={() => store.redo()}>
+          </Button>
+          <Button size="small" variant="ghost" disabled={!canRedo} onClick={() => store.redo()}>
             Redo
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            size="small"
             onClick={() => downloadText(exportFileName(project), exportProjectJson(project))}
           >
             JSON 書き出し
-          </button>
+          </Button>
         </span>
       </header>
       <Outlet />

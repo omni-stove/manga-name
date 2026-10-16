@@ -1,6 +1,7 @@
 import type { Character } from '@manga/schema'
+import { Button, Field, Input } from '@manga/ui'
 import { createFileRoute, getRouteApi } from '@tanstack/react-router'
-import { Fragment, useId } from 'react'
+import common from '../common.module.css'
 import {
   addCharacterPatch,
   type CharacterFields,
@@ -9,6 +10,7 @@ import {
   updateCharacterPatch,
 } from '../project-ops'
 import { useApplyPatch, useProject } from '../use-project'
+import styles from './characters.module.css'
 
 export const Route = createFileRoute('/p/$projectId/characters')({ component: CharacterList })
 
@@ -22,14 +24,16 @@ function CharacterList() {
     <>
       <h2>キャラクター一覧</h2>
       {error && (
-        <p className="error" role="alert">
+        <p className={common.error} role="alert">
           {error}
         </p>
       )}
-      {project.characters.length === 0 && <p>まだキャラクターがいません。</p>}
-      <ul className="cards">
+      {project.characters.length === 0 && (
+        <p className={common.placeholder}>まだキャラクターがいません。</p>
+      )}
+      <ul className={`${common.cards} ${styles.cards}`}>
         {project.characters.map((character) => (
-          <li key={character.id}>
+          <li key={character.id} className={common.card}>
             <CharacterForm
               // 保存後に入力欄を保存済みの値へ戻すため、内容が変わったら作り直す
               key={JSON.stringify(character)}
@@ -39,27 +43,30 @@ function CharacterList() {
                 apply('キャラクターを編集', (p) => updateCharacterPatch(p, character.id, fields))
               }
             />
-            <small>使用コマ {characterUsage(project, character.id)}</small>
-            <span className="card-actions">
-              <button
-                type="button"
+            <small className={styles.usage}>使用コマ {characterUsage(project, character.id)}</small>
+            <span className={common.cardActions}>
+              <Button
+                size="small"
+                variant="ghost"
                 onClick={() => {
                   if (!window.confirm(`${character.name} を削除しますか？`)) return
                   apply('キャラクターを削除', (p) => removeCharacterPatch(p, character.id))
                 }}
               >
                 削除
-              </button>
+              </Button>
             </span>
           </li>
         ))}
       </ul>
-      <h3>キャラクターを追加</h3>
-      <CharacterForm
-        submitLabel="追加"
-        resetOnSuccess
-        onSubmit={(fields) => apply('キャラクターを追加', () => addCharacterPatch(fields).patch)}
-      />
+      <h3 className={styles.addTitle}>キャラクターを追加</h3>
+      <div className={styles.add}>
+        <CharacterForm
+          submitLabel="追加"
+          resetOnSuccess
+          onSubmit={(fields) => apply('キャラクターを追加', () => addCharacterPatch(fields).patch)}
+        />
+      </div>
     </>
   )
 }
@@ -83,10 +90,9 @@ function CharacterForm({
   /** 反映できたら true */
   onSubmit(fields: CharacterFields): boolean
 }) {
-  const id = useId()
   return (
     <form
-      className="fields"
+      className={styles.form}
       onSubmit={(e) => {
         e.preventDefault()
         const form = e.currentTarget
@@ -102,18 +108,17 @@ function CharacterForm({
       }}
     >
       {FIELDS.map((field) => (
-        <Fragment key={field.name}>
-          <label htmlFor={`${id}-${field.name}`}>{field.label}</label>
-          <input
-            id={`${id}-${field.name}`}
+        <Field key={field.name} label={field.label}>
+          <Input
             name={field.name}
             required={field.required}
             defaultValue={initial?.[field.name] ?? ''}
           />
-        </Fragment>
+        </Field>
       ))}
-      <span />
-      <button type="submit">{submitLabel}</button>
+      <Button type="submit" size="small" variant="primary">
+        {submitLabel}
+      </Button>
     </form>
   )
 }

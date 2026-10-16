@@ -17,7 +17,7 @@ graph BT
   render["@manga/render"] --> schema
   ai["@manga/ai"] --> schema
   canvas["@manga/editor-canvas"] --> schema
-  inspector["@manga/inspector"] --> schema
+  inspector["@manga/inspector"] --> schema & ui
   diagnosis["@manga/diagnosis"] --> schema
   storage["@manga/storage"] --> schema
   ui["@manga/ui"]

@@ -1,0 +1,150 @@
+.hint {
+  margin: 0.625rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--guide);
+  border-radius: var(--radius-s);
+  background: var(--guide-tint);
+  line-height: 1.6;
+}
+
+.hint[data-bubble-order-ok="false"] {
+  border-left-color: var(--alert);
+  background: var(--alert-tint);
+}
+
+.hintWarning {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--alert);
+  font-weight: 600;
+}
+
+.bubbles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.125rem;
+}
+
+.bubble {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.25rem 0.25rem 0.25rem 0.5rem;
+  border-radius: var(--radius-s);
+}
+
+.bubble:hover {
+  background: var(--surface-hover);
+}
+
+.order {
+  min-width: 1.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.speaker {
+  margin-right: 0.375rem;
+  font-weight: 700;
+}
+
+.arts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.art {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+
+.art[data-current] {
+  border-color: var(--guide);
+  background: var(--guide-tint);
+}
+
+/* 生成した絵は紙の上のものなので、テーマに関わらず白地に置く */
+.thumb {
+  flex: none;
+  width: 6rem;
+  height: 6rem;
+  padding: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius-s);
+  background: var(--paper);
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.thumb img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.meta {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 0.25rem;
+}
+
+.metaHead {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.badge {
+  padding: 0 0.375rem;
+  border-radius: var(--radius-s);
+  background: var(--guide);
+  color: var(--on-guide);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.instruction {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.prompt summary {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.prompt pre {
+  margin: 0.25rem 0 0;
+  padding: 0.5rem;
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
