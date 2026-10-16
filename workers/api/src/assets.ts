@@ -1,12 +1,12 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { canEdit, projectRole } from './access'
 import {
   assetIsLive,
   assetKey,
   deleteAsset,
   discardAsset,
   insertAsset,
-  ownsProject,
   readAsset,
 } from './asset-store'
 import { readJson } from './body'
@@ -36,7 +36,8 @@ const UploadQuerySchema = z.object({
 })
 
 /**
- * `/v1/projects/:id/assets` 以下。requireUser の後ろに置き、他人のプロジェクトのアセットは 404 にする。
+ * `/v1/projects/:id/assets` 以下。requireUser の後ろに置き、参加していないプロジェクトのアセットは 404 にする。
+ * GET は参加者なら誰でも、upload-url と DELETE は owner と editor だけができ、他は 403。
  * アップロードは upload-url が返す署名 URL（createUploadApp）に PUT する。
  */
 export function createAssetRoutes(now: () => number) {
@@ -49,9 +50,9 @@ export function createAssetRoutes(now: () => number) {
     const parsed = UploadUrlSchema.safeParse(body.value)
     if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
     if (parsed.data.size > MAX_ASSET_BYTES) return c.json({ error: 'asset exceeds 20MB' }, 413)
-    if (!(await ownsProject(c.env.DB, c.get('userId'), projectId))) {
-      return c.json({ error: 'not found' }, 404)
-    }
+    const role = await projectRole(c.env.DB, c.get('userId'), projectId)
+    if (role === null) return c.json({ error: 'not found' }, 404)
+    if (!canEdit(role)) return c.json({ error: 'this role cannot add assets' }, 403)
     if (!c.env.ASSET_URL_SECRET) return c.json({ error: 'asset uploads are not configured' }, 500)
 
     const claims: UploadClaims = {
@@ -72,12 +73,10 @@ export function createAssetRoutes(now: () => number) {
   })
 
   app.get('/:id/assets/:assetId', async (c) => {
-    const asset = await readAsset(
-      c.env.DB,
-      c.get('userId'),
-      c.req.param('id'),
-      c.req.param('assetId'),
-    )
+    const projectId = c.req.param('id')
+    const asset =
+      (await projectRole(c.env.DB, c.get('userId'), projectId)) !== null &&
+      (await readAsset(c.env.DB, projectId, c.req.param('assetId')))
     // 行はアップロード前に入るので、本体がまだ無いこともある
     const object = asset && (await c.env.ASSETS.get(asset.key))
     if (!asset || !object) return c.json({ error: 'not found' }, 404)
@@ -92,13 +91,11 @@ export function createAssetRoutes(now: () => number) {
   })
 
   app.delete('/:id/assets/:assetId', async (c) => {
-    const key = await deleteAsset(
-      c.env.DB,
-      c.get('userId'),
-      c.req.param('id'),
-      c.req.param('assetId'),
-      now(),
-    )
+    const projectId = c.req.param('id')
+    const role = await projectRole(c.env.DB, c.get('userId'), projectId)
+    if (role === null) return c.json({ error: 'not found' }, 404)
+    if (!canEdit(role)) return c.json({ error: 'this role cannot delete assets' }, 403)
+    const key = await deleteAsset(c.env.DB, projectId, c.req.param('assetId'), now())
     if (key === null) return c.json({ error: 'not found' }, 404)
     await c.env.ASSETS.delete(key)
     return c.body(null, 204)

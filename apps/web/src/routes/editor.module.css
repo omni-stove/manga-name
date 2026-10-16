@@ -79,13 +79,19 @@
   font-weight: var(--weight-medium);
 }
 
-.inspector > details {
+.inspectorFields {
+  display: contents;
+}
+
+.inspector > details,
+.inspectorFields > details {
   margin-top: var(--space-12);
   padding-top: var(--space-12);
   border-top: 1px solid var(--border);
 }
 
-.inspector > details > summary {
+.inspector > details > summary,
+.inspectorFields > details > summary {
   cursor: pointer;
   font-weight: var(--weight-bold);
 }

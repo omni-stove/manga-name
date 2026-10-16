@@ -96,14 +96,20 @@ describe('GET /v1/projects', () => {
     const res = await call('/v1/projects')
     expect(res.status).toBe(200)
     const { projects } = (await res.json()) as {
-      projects: { id: string; title: string; updatedAt: string }[]
+      projects: { id: string; title: string; updatedAt: string; role: string }[]
     }
     expect(projects).toHaveLength(2)
-    expect(projects).toContainEqual({ id: first.project.id, title: 'one edited', updatedAt })
+    expect(projects).toContainEqual({
+      id: first.project.id,
+      title: 'one edited',
+      updatedAt,
+      role: 'owner',
+    })
     expect(projects).toContainEqual({
       id: second.project.id,
       title: 'two',
       updatedAt: second.project.updatedAt,
+      role: 'owner',
     })
   })
 })

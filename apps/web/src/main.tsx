@@ -8,6 +8,7 @@ import { createPanelGeneration } from './generate-panel'
 import { createImageProvider, readApiBaseUrl } from './image-provider'
 import { createProjectLibrary } from './project-library'
 import { createAppRouter } from './router'
+import { createSharingClient } from './sharing'
 import { AuthProvider } from './use-auth'
 import '@manga/ui/tokens.css'
 import '@manga/ui/base.css'
@@ -24,11 +25,21 @@ void auth.restore()
 
 const local = createStorage(defaultStorageKind())
 // 未ログインの間 getToken は null を返し、クラウドストレージはローカルだけで動く
-const storage =
+const cloud =
   baseUrl === ''
-    ? local
+    ? null
     : createCloudStorage({ baseUrl, local, getToken: auth.getToken, fetch: auth.fetch })
-const library = createProjectLibrary(storage)
+const storage = cloud ?? local
+const sharing = createSharingClient({
+  baseUrl,
+  fetch: auth.fetch,
+  // CloudStorage はクラウドの id を同期の URL（/v1/projects/<id>/sync）でだけ外に出す
+  cloudId: async (id) => {
+    const url = (await cloud?.syncUrl(id)) ?? null
+    return url === null ? null : decodeURIComponent(new URL(url).pathname.split('/').at(-2) ?? '')
+  },
+})
+const library = createProjectLibrary(storage, { roleOf: sharing.role })
 const imageProvider = createImageProvider({ baseUrl, getToken: auth.getToken })
 const generation = createPanelGeneration({ library, imageProvider })
 
@@ -41,7 +52,7 @@ window.addEventListener('pagehide', () => void library.flushAll())
 createRoot(container).render(
   <StrictMode>
     <AuthProvider client={auth}>
-      <RouterProvider router={createAppRouter({ library, imageProvider, generation })} />
+      <RouterProvider router={createAppRouter({ library, imageProvider, generation, sharing })} />
     </AuthProvider>
   </StrictMode>,
 )

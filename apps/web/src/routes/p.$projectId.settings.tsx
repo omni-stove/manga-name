@@ -4,6 +4,7 @@ import { createFileRoute, getRouteApi } from '@tanstack/react-router'
 import { useId } from 'react'
 import common from '../common.module.css'
 import { settingsPatch } from '../project-ops'
+import { SharingPanel } from '../sharing-panel'
 import { useApplyPatch, useProject } from '../use-project'
 import styles from './project-settings.module.css'
 
@@ -15,7 +16,10 @@ const projectRoute = getRouteApi('/p/$projectId')
 const toNumber = (text: string) => (text.trim() === '' ? Number.NaN : Number(text))
 
 function ProjectSettingsPage() {
+  const { projectId } = Route.useParams()
+  const { library, sharing } = Route.useRouteContext()
   const { store } = projectRoute.useLoaderData()
+  const role = library.role(projectId) ?? 'owner'
   const project = useProject(store)
   const { apply, error } = useApplyPatch(store)
   const id = useId()
@@ -104,7 +108,7 @@ function ProjectSettingsPage() {
           defaultValue={style.negative ?? ''}
         />
 
-        <Button type="submit" variant="primary">
+        <Button type="submit" variant="primary" disabled={role !== 'owner' && role !== 'editor'}>
           保存
         </Button>
       </form>
@@ -113,6 +117,8 @@ function ProjectSettingsPage() {
           {error}
         </p>
       )}
+      <h2>共有</h2>
+      <SharingPanel projectId={projectId} sharing={sharing} />
     </>
   )
 }

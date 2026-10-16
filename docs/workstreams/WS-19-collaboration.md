@@ -9,7 +9,7 @@ Phase 4 / 開発中の依存: DOC のみ / 統合時: WS-06, WS-13 / パッケ�
 - Yjs。`Project` を `Y.Map` / `Y.Array` にマッピングする。`ProjectStore.applyPatch` の実装を Yjs トランザクションに差し替える。呼び出し側は変わらない。
 - Durable Object を 1 プロジェクト 1 インスタンスとして `y-websocket` 相当のプロトコルで同期。永続化は DO storage、スナップショットを定期的に D1 の `doc` に書く。
 - Presence: 誰がどのページのどの要素を選択しているかをカーソル色で表示。
-- 権限: owner / editor / viewer / commenter。招待はメール。commenter は手描きメモ（WS-20）とコメントだけ書ける。
+- 権限: owner / editor / viewer / commenter。招待は owner がメールアドレスとロールを指定して作る招待リンク。アプリはメールを送らず、そのメールアドレスで Google ログインした人だけが受け取れる。commenter は手描きメモ（WS-20）とコメントだけ書ける。
 - オフライン編集は Yjs の性質で自然にマージされる。WS-15 の 409 分岐は不要になる。
 
 ## 受け入れ条件

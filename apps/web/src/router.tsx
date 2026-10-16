@@ -9,6 +9,7 @@ import type { ImageProvider } from './image-provider'
 import type { ProjectLibrary } from './project-library'
 import { RouteError } from './route-error'
 import { routeTree } from './routeTree.gen'
+import type { SharingClient } from './sharing'
 
 /** 各ルートの loader と画面が `context` から使う依存 */
 export interface RouterContext {
@@ -17,6 +18,8 @@ export interface RouterContext {
   imageProvider: ImageProvider
   /** コマの生成と進行状況。画面を離れても生成が続くよう、ルーターより長く生きる */
   generation: PanelGeneration
+  /** プロジェクトの参加者と招待 */
+  sharing: SharingClient
 }
 
 /** アプリのルーター。`history` を省くとブラウザ履歴を使う */
@@ -46,6 +49,7 @@ if (import.meta.vitest) {
   const { createPanelGeneration } = await import('./generate-panel')
   const { createImageProvider } = await import('./image-provider')
   const { createProjectLibrary } = await import('./project-library')
+  const { createSharingClient } = await import('./sharing')
   const { addPagePatch } = await import('./project-ops')
   const { createFakeSyncServer } = await import('./store/fake-sync-server')
   // fake-indexeddb の exports は ./auto に types を付けていないので、副作用 import の型解決は諦める
@@ -55,7 +59,12 @@ if (import.meta.vitest) {
   const render = async (library: ProjectLibrary, path: string) => {
     const imageProvider = createImageProvider({ baseUrl: '', getToken: async () => null })
     const router = createAppRouter(
-      { library, imageProvider, generation: createPanelGeneration({ library, imageProvider }) },
+      {
+        library,
+        imageProvider,
+        generation: createPanelGeneration({ library, imageProvider }),
+        sharing: createSharingClient({ baseUrl: '', fetch, cloudId: async () => null }),
+      },
       createMemoryHistory({ initialEntries: [path] }),
     )
     await router.load()

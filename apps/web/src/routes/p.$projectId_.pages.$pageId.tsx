@@ -38,6 +38,7 @@ import { findPage, pagePatch } from '../project-ops'
 import { firstFile, referencePatch, toReferenceImage } from '../reference-image'
 import { errorMessage } from '../route-error'
 import { SaveStatusIndicator } from '../save-status'
+import { ROLE_LABELS } from '../sharing'
 import type { Peer } from '../store/presence'
 import { toasts } from '../toasts'
 import { useAssetResolver } from '../use-asset-resolver'
@@ -121,6 +122,12 @@ function Editor() {
   const { apply, error } = useApplyPatch(store)
   const resolveAsset = useAssetResolver(library.resolveAsset)
   const peers = usePeers(collab)
+  const role = library.role(projectId) ?? 'owner'
+  const canEdit = role === 'owner' || role === 'editor'
+  // commenter は手描きメモだけ書けるので、選択と手描き以外のツールを出さない
+  const tools = canEdit
+    ? TOOLS
+    : TOOLS.filter((t) => t.value === 'select' || (role === 'commenter' && t.value === 'scribble'))
   const [tool, setTool] = useState<Tool>('select')
   const [scribbleTool, setScribbleTool] = useState<ScribbleTool>('ink')
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
@@ -195,10 +202,11 @@ function Editor() {
         </Link>
         <span className={styles.pageNumber}>{pageIndex + 1} ページ</span>
         <CollaborationBar collab={collab} project={project} />
+        {!canEdit && <span className={common.placeholder}>{ROLE_LABELS[role]}</span>}
         <SegmentedControl
           label="ツール"
           value={tool}
-          options={TOOLS}
+          options={tools}
           onChange={(t) => setTool(t)}
         />
         {tool === 'scribble' && (
@@ -286,6 +294,7 @@ function Editor() {
               onSelect={setSelection}
             />
           </details>
+          <fieldset disabled={!canEdit} className={styles.inspectorFields}>
           <SelectionInspector
             page={page}
             pageId={pageId}
@@ -341,6 +350,7 @@ function Editor() {
               }
             />
           </details>
+          </fieldset>
         </aside>
       </div>
     </section>

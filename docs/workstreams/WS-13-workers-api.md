@@ -13,14 +13,22 @@ WS-03 の AI プロキシに、プロジェクトの永続化とアセットを�
 
 ## エンドポイント
 ```
-GET    /v1/projects                         一覧（owner のみ）
+GET    /v1/projects                         一覧（owner と参加者。自分の role 付き）
 POST   /v1/projects                         作成 { title }
 GET    /v1/projects/:id                     Project JSON
-PUT    /v1/projects/:id                     Project JSON 全体を保存。If-Match で updated_at 楽観ロック
-DELETE /v1/projects/:id
+PUT    /v1/projects/:id                     Project JSON 全体を保存。If-Match で updated_at 楽観ロック。viewer は 403、commenter は scribbles 以外の変更が 403
+DELETE /v1/projects/:id                     owner は削除、参加者は自分の参加を外す
+GET    /v1/projects/:id/sync                WebSocket（WS-19）
+GET    /v1/projects/:id/members             { role, members, invites（owner のみ） }
+POST   /v1/projects/:id/invites             { email, role } -> { id, email, role, expiresAt, token }（owner のみ）
+DELETE /v1/projects/:id/invites/:inviteId   （owner のみ）
+PUT    /v1/projects/:id/members/:userId     { role }（owner のみ）
+DELETE /v1/projects/:id/members/:userId     owner、または自分
+GET    /v1/invites/:token                   招待の中身
+POST   /v1/invites/:token/accept            ログイン中のメールアドレスが招待先と同じなら参加
 POST   /v1/projects/:id/assets/upload-url   { mime, size } -> { assetId, url }  R2 署名付き PUT URL
 GET    /v1/projects/:id/assets/:assetId     R2 からストリーム（または署名付き GET URL にリダイレクト）
-DELETE /v1/projects/:id/assets/:assetId
+DELETE /v1/projects/:id/assets/:assetId   upload-url とともに owner と editor のみ
 GET    /v1/usage                            当月の生成回数と上限
 ```
 

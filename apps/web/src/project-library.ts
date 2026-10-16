@@ -3,8 +3,10 @@ import type { ProjectSummary, StorageAdapter, YDocStore } from '@manga/storage'
 import { Awareness } from 'y-protocols/awareness'
 import * as Y from 'yjs'
 import type { StoreApi } from 'zustand/vanilla'
+import type { ProjectRole } from './sharing'
 import { createPresence, type Presence } from './store/presence'
 import { createProjectStore, type ProjectStore, type WebProjectStore } from './store/project-store'
+import { restrictStore } from './store/restricted-store'
 import { createSyncProvider, type SyncProviderState } from './store/sync-provider'
 import { createYjsProjectStore } from './store/yjs-project-store'
 
@@ -16,6 +18,8 @@ export interface ProjectLibrary {
   list(): Promise<ProjectSummary[]>
   /** ProjectStore を開く。同じ id には同じ store を返す。保存されていなければ undefined */
   open(id: ID): Promise<WebProjectStore | undefined>
+  /** open 済みのプロジェクトでの自分のロール。open していなければ undefined */
+  role(id: ID): ProjectRole | undefined
   /** open 済みのプロジェクトの共同編集の接続と presence。共同編集で開いていなければ undefined */
   collaboration(id: ID): Collaboration | undefined
   /** 空のプロジェクトを作って保存する */
@@ -65,6 +69,8 @@ interface ProjectLibraryOptions {
   now?: () => string
   /** 指定すると、プロジェクトを Yjs の ProjectStore で開き、同期サーバにつなぐ */
   collaboration?: CollaborationOptions
+  /** プロジェクトでの自分のロール。open した store の変更をロールで制限する。既定は常に owner */
+  roleOf?: (id: ID) => Promise<ProjectRole>
 }
 
 interface Session extends Collaboration {
@@ -111,10 +117,11 @@ export function createProjectLibrary(
   storage: StorageAdapter,
   options: ProjectLibraryOptions = {},
 ): ProjectLibrary {
-  const { debounceMs, now = () => new Date().toISOString(), collaboration } = options
+  const { debounceMs, now = () => new Date().toISOString(), collaboration, roleOf } = options
   // Promise を持つのは、同じ id を並行して開いたときに store を 2 つ作らないため
   const opened = new Map<ID, Promise<WebProjectStore | undefined>>()
   const sessions = new Map<ID, Session>()
+  const roles = new Map<ID, ProjectRole>()
 
   const openCollaborative = async (
     id: ID,
@@ -184,12 +191,18 @@ export function createProjectLibrary(
   const load = async (id: ID) => {
     try {
       const project = await storage.loadProject(id)
-      if (collaboration) return await openCollaborative(id, project, collaboration)
-      return createProjectStore(project, {
+      // 読み込みの後に引くのは、クラウドにしか無いプロジェクトはクラウドの id との対応が読み込みで作られるため
+      const role = (await roleOf?.(id)) ?? 'owner'
+      roles.set(id, role)
+      if (collaboration) {
+        return restrictStore(await openCollaborative(id, project, collaboration), role)
+      }
+      const store = createProjectStore(project, {
         saveProject: (p) => storage.saveProject(p),
         debounceMs,
         now,
       })
+      return restrictStore(store, role)
     } catch (error) {
       // loadProject は「無い」と「壊れている」を同じく throw するので、無いときだけ undefined にする
       if (!(await exists(id))) return undefined
@@ -214,6 +227,7 @@ export function createProjectLibrary(
       }
       return store
     },
+    role: (id) => roles.get(id),
     collaboration: (id) => sessions.get(id),
     async isOpen(id, store) {
       return (await opened.get(id)?.catch(() => undefined)) === store
@@ -250,6 +264,7 @@ export function createProjectLibrary(
       await session?.flush()
       await storage.deleteProject(id)
       await collaboration?.ydocs.delete(id)
+      roles.delete(id)
       // 待つ間に open(id) が呼ばれると、まだ消えていないプロジェクトの store が opened に入る
       opened.delete(id)
     },

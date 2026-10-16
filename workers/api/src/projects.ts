@@ -1,18 +1,13 @@
 import { createEmptyProject, type Project, parseProject } from '@manga/schema'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { canEdit, changesOnlyScribbles, projectRole } from './access'
 import { deleteAssetObjects } from './asset-store'
 import { createAssetRoutes } from './assets'
 import { readJson } from './body'
-import {
-  deleteProject,
-  insertProject,
-  listProjects,
-  projectExists,
-  readProject,
-  saveProject,
-} from './project-store'
-import { PROJECT_ID_HEADER } from './room'
+import { createMemberRoutes, removeMember } from './members'
+import { deleteProject, insertProject, listProjects, readProject, saveProject } from './project-store'
+import { PROJECT_ID_HEADER, ROLE_HEADER, USER_ID_HEADER } from './room'
 import { requireUser, type UserEnv } from './user'
 
 /** 1 Project JSON の上限（バイト） */
@@ -36,10 +31,13 @@ const readProjectJson = (request: Request) =>
   readJson(request, MAX_PROJECT_BYTES, 'project exceeds 5MB')
 
 /**
- * `/v1/projects` 以下。X-Debug-User ヘッダのユーザーを owner とし、他人のプロジェクトは 404 にする。
+ * `/v1/projects` 以下。作ったユーザーを owner とし、参加していないプロジェクトは 404 にする。
+ * 一覧は参加しているプロジェクトも自分の role 付きで返す。
  * GET / PUT は ETag に updated_at を載せ、PUT は If-Match が一致しないと 409。
- * `GET /:id/sync` は WebSocket を ProjectRoom（y-websocket プロトコル）につなぐ。
- * `/:id/assets` 以下も同じ認証とレート制限の下に置く。now は現在時刻（Unix ミリ秒）。
+ * PUT は owner と editor、commenter はページの scribbles だけを変える PUT を通し、それ以外は 403。
+ * DELETE は owner ならプロジェクトを消し、参加者なら自分の参加を外す。
+ * `GET /:id/sync` は WebSocket を ProjectRoom（y-websocket プロトコル）にロール付きでつなぐ。
+ * `/:id/assets` と参加者・招待（createMemberRoutes）も同じ認証とレート制限の下に置く。now は現在時刻（Unix ミリ秒）。
  */
 export function createProjectsApp(now: () => number = Date.now) {
   const app = new Hono<UserEnv>()
@@ -65,7 +63,9 @@ export function createProjectsApp(now: () => number = Date.now) {
   })
 
   app.get('/:id', async (c) => {
-    const found = await readProject(c.env.DB, c.get('userId'), c.req.param('id'))
+    const id = c.req.param('id')
+    const found =
+      (await projectRole(c.env.DB, c.get('userId'), id)) && (await readProject(c.env.DB, id))
     if (!found) return c.json({ error: 'not found' }, 404)
     return c.body(found.doc, 200, {
       'content-type': 'application/json; charset=utf-8',
@@ -80,6 +80,10 @@ export function createProjectsApp(now: () => number = Date.now) {
     const expected = parseIfMatch(ifMatch)
     if (expected === null) return c.json({ error: 'If-Match must be a strong ETag' }, 400)
 
+    const role = await projectRole(c.env.DB, c.get('userId'), id)
+    if (role === null) return c.json({ error: 'not found' }, 404)
+    if (role === 'viewer') return c.json({ error: 'viewers cannot change the project' }, 403)
+
     const body = await readProjectJson(c.req.raw)
     if (!body.ok) return c.json({ error: body.error }, body.status)
     let project: Project
@@ -90,7 +94,14 @@ export function createProjectsApp(now: () => number = Date.now) {
     }
     if (project.id !== id) return c.json({ error: 'project id does not match the URL' }, 400)
 
-    const result = await saveProject(c.env.DB, c.get('userId'), project, expected, now())
+    if (!canEdit(role)) {
+      // 版が If-Match と違えば saveProject が 409 にする。違う版と比べると他人の変更まで commenter の変更に数えてしまう
+      const saved = await readProject(c.env.DB, id)
+      if (saved && saved.updatedAt === expected && !changesOnlyScribbles(saved.doc, project)) {
+        return c.json({ error: 'commenters can only change scribbles' }, 403)
+      }
+    }
+    const result = await saveProject(c.env.DB, project, expected, now())
     switch (result.status) {
       case 'saved':
         return c.json({ updatedAt: result.updatedAt }, 200, { etag: etag(result.updatedAt) })
@@ -110,18 +121,27 @@ export function createProjectsApp(now: () => number = Date.now) {
       return c.json({ error: 'expected a WebSocket upgrade' }, 426)
     }
     const id = c.req.param('id')
-    if (!(await projectExists(c.env.DB, c.get('userId'), id))) {
-      return c.json({ error: 'not found' }, 404)
-    }
+    const userId = c.get('userId')
+    const role = await projectRole(c.env.DB, userId, id)
+    if (role === null) return c.json({ error: 'not found' }, 404)
     const headers = new Headers(c.req.raw.headers)
     headers.set(PROJECT_ID_HEADER, id)
+    headers.set(USER_ID_HEADER, userId)
+    headers.set(ROLE_HEADER, role)
     const room = c.env.PROJECT_ROOMS.get(c.env.PROJECT_ROOMS.idFromName(id))
     return room.fetch(c.req.url, { headers })
   })
 
   app.delete('/:id', async (c) => {
     const id = c.req.param('id')
-    const removed = await deleteProject(c.env.DB, c.get('userId'), id)
+    const userId = c.get('userId')
+    const role = await projectRole(c.env.DB, userId, id)
+    if (role === null) return c.json({ error: 'not found' }, 404)
+    if (role !== 'owner') {
+      await removeMember(c.env, id, userId)
+      return c.body(null, 204)
+    }
+    const removed = await deleteProject(c.env.DB, userId, id)
     if (!removed) return c.json({ error: 'not found' }, 404)
     try {
       await c.env.PROJECT_ROOMS.get(c.env.PROJECT_ROOMS.idFromName(id)).purge()
@@ -135,6 +155,7 @@ export function createProjectsApp(now: () => number = Date.now) {
   })
 
   app.route('/', createAssetRoutes(now))
+  app.route('/', createMemberRoutes(now))
 
   return app
 }
