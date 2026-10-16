@@ -383,7 +383,10 @@ describe('panel tool', () => {
         value: expect.objectContaining({ order: 7, rect: { x: 0.2, y: 0.3, w: 0.3, h: 0.205 } }),
       },
     ])
-    expect(onSelect).toHaveBeenCalledWith({ kind: 'panel', id: (patch[0] as { value: Panel }).value.id })
+    expect(onSelect).toHaveBeenCalledWith({
+      kind: 'panel',
+      id: (patch[0] as { value: Panel }).value.id,
+    })
     expect(svg.querySelector('[data-draft]')).toBeNull()
   })
 
