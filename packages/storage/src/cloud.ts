@@ -230,6 +230,14 @@ type Fetched = { status: 'ok'; project: Project; etag: string } | { status: 'not
 
 type PushOutcome = 'done' | 'retry' | 'failed'
 
+/** 1 回の送信で起きたこと */
+interface PushAttempt {
+  /** 同期済みで送るものが無いとして早く終えず、送信に入った */
+  sending: boolean
+  /** upload-url が 413 を返した */
+  overQuota: boolean
+}
+
 interface PushState {
   timer?: ReturnType<typeof setTimeout>
   /** 実行中の送信。送信は 1 プロジェクトにつき 1 本だけ走らせる */
@@ -292,7 +300,8 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
   const failed = new Set<ID>()
   /** 手元に無い、または送れない型のアセットの ref。送り直しても変わらないので覚えておく */
   const unsendable = new Set<string>()
-  let quotaExceeded = false
+  /** upload-url が 413 を返したプロジェクト。そのプロジェクトの送信が 413 を受けずに終わるまで残す */
+  const overQuota = new Set<ID>()
   let conflict = false
   let disposed = false
   let status: SyncStatus = { state: 'synced', quotaExceeded: false }
@@ -309,6 +318,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
         : pushes.size > 0 || failed.size > 0
           ? 'pending'
           : 'synced'
+    const quotaExceeded = overQuota.size > 0
     if (state === status.state && quotaExceeded === status.quotaExceeded) return
     status = { state, quotaExceeded }
     for (const listener of listeners) listener()
@@ -428,7 +438,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
    * refs のうち未アップロードのものを順に送り、1 件ごとに link に記録する。
    * 'retry' は時間をおけば送れる失敗で、それまでに送れた分は link に残る
    */
-  async function uploadRefs(localId: ID, link: CloudLink, refs: string[]) {
+  async function uploadRefs(localId: ID, link: CloudLink, refs: string[], attempt: PushAttempt) {
     let uploaded = 0
     for (const ref of refs) {
       if (!needsUpload(ref, link)) continue
@@ -447,16 +457,13 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       const result = await uploadBlob(link.cloudId, blob)
       if (result.status === 'retry') return { link, outcome: 'retry' as const, uploaded }
       if (result.status === 'quota') {
-        quotaExceeded = true
-        notify()
+        attempt.overQuota = true
         break
       }
       if (result.status === 'rejected') {
         unsendable.add(ref)
         continue
       }
-      quotaExceeded = false
-      notify()
       cacheAsset(result.ref, blob)
       link = { ...link, assets: { ...link.assets, [ref]: result.ref } }
       await links.set(localId, link)
@@ -466,13 +473,22 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
   }
 
   /** 前回の送信で送り切れなかったアセットがあるか。上限超過のあいだは次の保存まで送らない */
-  const hasUnsentAssets = (project: Project, link: CloudLink | undefined) => {
-    if (quotaExceeded) return false
+  const hasUnsentAssets = (project: Project, localId: ID, link: CloudLink | undefined) => {
+    if (overQuota.has(localId)) return false
     const { first, later } = assetRefsByPriority(project)
     return [...first, ...later].some((r) => needsUpload(r, link))
   }
 
   async function push(localId: ID): Promise<PushOutcome> {
+    const attempt: PushAttempt = { sending: false, overQuota: false }
+    const outcome = await sendProject(localId, attempt)
+    if (attempt.overQuota) overQuota.add(localId)
+    // 何も送らずに終えた送信は、上限超過が解けたかどうかを確かめていない
+    else if (attempt.sending && outcome === 'done') overQuota.delete(localId)
+    return outcome
+  }
+
+  async function sendProject(localId: ID, attempt: PushAttempt): Promise<PushOutcome> {
     let project: Project
     try {
       project = await local.loadProject(localId)
@@ -481,8 +497,9 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       return 'done'
     }
     let link = await links.get(localId)
-    if (link?.syncedUpdatedAt === project.updatedAt && !hasUnsentAssets(project, link))
+    if (link?.syncedUpdatedAt === project.updatedAt && !hasUnsentAssets(project, localId, link))
       return 'done'
+    attempt.sending = true
     const refs = assetRefsByPriority(project)
 
     let laterSent = false
@@ -490,7 +507,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     const sendLater = async (): Promise<PushOutcome | undefined> => {
       if (laterSent || !link) return 'done'
       laterSent = true
-      const later = await uploadRefs(localId, link, refs.later)
+      const later = await uploadRefs(localId, link, refs.later, attempt)
       link = later.link
       if (later.uploaded > 0) {
         // ref を書き換えた本文がまだ PUT されていないので、次の送信で送り直させる
@@ -501,16 +518,22 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       return later.uploaded === 0 ? 'done' : undefined
     }
 
-    for (let attempt = 0; attempt < MAX_PUTS_PER_PUSH; attempt++) {
+    for (let puts = 0; puts < MAX_PUTS_PER_PUSH; puts++) {
       if (!link) {
         const created = await createRemote(localId, project.title)
         if (created === null) return 'retry'
         link = created
       }
       // 他の端末が開いたときに表示できるよう、画面に出る画像は PUT より先に送る
-      const first = await uploadRefs(localId, link, refs.first)
+      const first = await uploadRefs(localId, link, refs.first, attempt)
       link = first.link
       if (first.outcome === 'retry') return 'retry'
+      if (link.syncedUpdatedAt === project.updatedAt && first.uploaded === 0) {
+        // 前回と同じ本文を PUT すると etag だけが進み、送信待ちの他の端末の PUT が 409 になって複製が作られる
+        const outcome = await sendLater()
+        if (outcome) return outcome
+        continue
+      }
       const body = toCloud(project, link)
       const res = await request(`/${encodeURIComponent(link.cloudId)}`, {
         method: 'PUT',
@@ -721,7 +744,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       await keepCloudCopy(remote.project)
       await links.set(id, { ...link, etag: remote.etag })
     }
-    if (localChanged || hasUnsentAssets(localProject, link)) schedule(id, debounceMs)
+    if (localChanged || hasUnsentAssets(localProject, id, link)) schedule(id, debounceMs)
     return localProject
   }
 
@@ -774,6 +797,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       await local.deleteProject(id)
       await links.delete(id)
       failed.delete(id)
+      overQuota.delete(id)
       notify()
       if (cloudId !== undefined) {
         for (const ref of assetCache.keys()) {
