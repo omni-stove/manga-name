@@ -95,6 +95,6 @@ WS ごとにディレクトリを 1 つ足すだけで取り込まれる。`apps
 | `make tasks show <id>` | 依存、範囲、完了条件、仕様を表示する |
 | `make tasks start <id>` | 着手にする。依存が未完了なら拒否。決定待ちは `ARGS="--decided"` |
 | `make tasks done <id>` | 完了にする。検証はしない |
-| `make tasks render` | `docs/tasks.json` から `docs/08-tasks.md` を生成し直す |
+| `make tasks render` | タスクの定義を変えたあと、`docs/tasks.json` から `docs/08-tasks.md` を生成し直す |
 
-`docs/08-tasks.md` は生成物なので手で編集しない。状態は `docs/tasks.json` に入る。
+`docs/08-tasks.md` は生成物なので手で編集しない。着手・完了の状態は `docs/tasks.json` にだけ入り、`08-tasks.md` には出ない。`start` と `done` が書き換えるのは `tasks.json` だけで、進捗は `make tasks next` で見る。
