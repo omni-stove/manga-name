@@ -142,12 +142,15 @@ export function EditorCanvas(props: EditorCanvasProps) {
       onPointerUp={(e) => {
         viewport.handlers.onPointerUp(e)
         panelTool.handlers.onPointerUp(e)
-        pointer.onPointerUp(e)
+        // 押している間にツールが切り替わっても、各フックの状態が取り残されないよう両方に渡す
+        selection.handlers.onPointerUp(e)
+        scribble.handlers.onPointerUp(e)
       }}
       onPointerCancel={(e) => {
         viewport.handlers.onPointerCancel(e)
         panelTool.handlers.onPointerCancel(e)
-        pointer.onPointerCancel(e)
+        selection.handlers.onPointerCancel()
+        scribble.handlers.onPointerCancel(e)
       }}
       onKeyDown={(e) => {
         if (!panelTool.handlers.onKeyDown(e)) selection.handlers.onKeyDown(e)
