@@ -16,12 +16,14 @@ pnpm --filter @manga/ai typecheck
 | `ImageProvider`, `LlmProvider` | プロバイダの interface |
 | `PanelArtRequest`, `PanelArtResponse`, `LayoutProposalRequest`, `LayoutProposalResponse`, `CritiqueRequest`, `CritiqueResponse` | 入出力の型。応答の型は `@manga/schema` の再 export |
 | `prompts.panelArt(req)` | 画像生成プロンプト `{ prompt, negative }` |
+| `prompts.proposeLayout(req)`, `LlmPrompt`, `JsonSchema` | レイアウト提案のプロンプト `{ system, user, schema }` |
 | `createFakeImageProvider` | コマ番号を描いた灰色の矩形 PNG を返す |
 | `createFakeLlmProvider`, `aiFixtures` | `docs/fixtures/ai/` の固定応答を返す |
+| `createHttpImageProvider`, `createHttpLlmProvider`, `HttpProviderOptions` | Workers のプロキシを叩くプロバイダ |
 | `placeholderPng(order, size)`, `placeholderSize(panel, settings)` | 灰色の矩形 PNG の生成。他パッケージが未生成コマの代替に使える |
 | `findPanel(page, panelId)` | Panel の検索。無ければ throw |
 
-`createHttpImageProvider` / `createHttpLlmProvider` と `prompts.proposeLayout` / `prompts.critique` は Workers ルートのタスクで足す。
+`prompts.critique` と Workers の `/v1/ai/critique` ルートは critique のタスクで足す。それまで `createHttpLlmProvider().critique` は 404 で throw する。
 
 ## prompts.panelArt
 
@@ -38,6 +40,19 @@ WS-03 の順に要素を改行で連結し、空の要素は飛ばす。
 9. 固定の末尾
 
 `negative` は `settings.style.negative`。無ければ空文字。
+
+## prompts.proposeLayout
+
+- `system` は出力規則（ID の `tmp_` 接頭辞、0..1 座標、`settings.direction` に沿った読み順、セリフの抜き出しと `speakerId`、
+  `note` へのト書き、`camera` の推定、空の `arts`）と、`@manga/schema` の `layoutProposalJsonSchema()` を JSON にしたもの。
+- `user` はキャラの `id` / `name` / `shortName`、ページ数の目安（`pageCount`。無ければ脚本次第）、1 ページ 3〜6 コマの目安、脚本。
+- `schema` は `layoutProposalJsonSchema()`。構造化出力に対応したプロバイダにはこれを渡す。
+  JSON Schema は参照整合を表さないので、応答は必ず `LayoutProposalResponseSchema` で検証する。
+
+## HTTP プロバイダ
+
+`createHttpLlmProvider({ baseUrl, getToken })` は `POST /v1/ai/propose-layout` に `LayoutProposalRequest` を JSON で送り、
+応答を `LayoutProposalResponseSchema` で検証して返す。トークン無し、HTTP エラー（502 を含む）、検証に通らない応答は throw する。
 
 ## モック
 

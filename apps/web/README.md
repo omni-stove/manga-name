@@ -30,10 +30,23 @@ pnpm --filter @manga/web test
 - `user` と `ai` の変更は履歴に積み、Undo / Redo できる（既定 200 ステップ）。`remote` は履歴に積まない。
 - 変更は 500ms debounce で `saveProject` に流す。保存状態は `store.state` の `saveStatus` に出る。React からは `useStore(store.state, selector)` で読む。
 
-## 仮データ
+`src/store/yjs-project-store.ts` の `createYjsProjectStore(project, { saveProject, doc })` は同じ `ProjectStore` を Yjs で実装する（`docs/workstreams/WS-19-collaboration.md`）。
 
-ProjectStore と StorageAdapter が配線されるまで、各画面は `src/placeholder.ts` からフィクスチャ 1 件を読む。
+- Project は Y.Doc の `project` に Y.Map / Y.Array として置く。変換は `src/store/yjs-mapping.ts`。
+- `applyPatch` は検証してから Yjs のトランザクションとして適用する。Undo / Redo は `Y.UndoManager` で、この store が入れた変更だけを戻す。
+- `doc` に他のクライアントの更新が届くと `project` が変わり、購読者に通知される。同期プロバイダはまだ無い。
+- 両実装は `src/store/project-store.suite.ts` の同じテストを通る。
+
+## プロジェクトの読み書き
+
+`src/main.tsx` が IndexedDB の StorageAdapter から `createProjectLibrary`（`src/project-library.ts`）を作り、ルーターの `context.library` に渡す。
+
+- `/` の loader が `library.flushAll()` で debounce 待ちの変更を書いてから `library.list()` を読む。作成、削除、JSON のインポート（ファイル選択かドロップ）はここで行う。
+- `/p/$projectId` とエディタの loader が `library.open(id)` で ProjectStore を開く。同じ id には同じ store を返すので、タブを移っても履歴と未保存の変更が残る。
+- 画面の操作は `src/project-ops.ts` で JSON Patch を作り、`applyPatch` に入れる。Undo / Redo はプロジェクトのヘッダにある。
+- JSON の書き出しは `src/project-file.ts`。アセットは ref のまま書き、中身は含めない。インポートは書き出した JSON と、`{ "project": ... }` で包んだ `docs/fixtures` の形式の両方を読む。id が既存と重なるときは新しい id を振る。
+- タブを隠す・閉じるときに `library.flushAll()` で debounce 待ちの変更を書く。
 
 ## テスト
 
-in-source（`import.meta.vitest`）。`src/router.tsx` で各ルートをメモリ履歴で描画して見出しを検証する。
+in-source（`import.meta.vitest`）。`src/router.tsx` で各ルートをメモリ履歴で描画して見出しを検証し、fake-indexeddb で開き直して復元されることを確かめる。
