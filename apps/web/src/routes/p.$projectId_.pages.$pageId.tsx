@@ -17,6 +17,7 @@ import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-rout
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
+import { CollaborationBar, PeerBadge, peerColor, usePeers } from '../collaboration-view'
 import { ExportDialog, type ExportOptions } from '../export-dialog'
 import { downloadBlob, exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
@@ -35,6 +36,7 @@ import { findPage, pagePatch } from '../project-ops'
 import { firstFile, referencePatch, toReferenceImage } from '../reference-image'
 import { errorMessage } from '../route-error'
 import { SaveStatusIndicator } from '../save-status'
+import type { Peer } from '../store/presence'
 import { toasts } from '../toasts'
 import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
@@ -44,7 +46,7 @@ export const Route = createFileRoute('/p/$projectId_/pages/$pageId')({
   loader: async ({ context, params }) => {
     const store = await context.library.open(params.projectId)
     if (!store || !findPage(store.get(), params.pageId)) throw notFound()
-    return { store }
+    return { store, collab: context.library.collaboration(params.projectId) }
   },
   component: Editor,
   notFoundComponent: PageNotFound,
@@ -99,7 +101,7 @@ function hasElement(page: Page, selection: Selection): boolean {
 
 function Editor() {
   const { projectId, pageId } = Route.useParams()
-  const { store } = Route.useLoaderData()
+  const { store, collab } = Route.useLoaderData()
   const { library, generation } = Route.useRouteContext()
   const project = useProject(store)
   const { canUndo, canRedo } = useStore(store.state)
@@ -107,6 +109,7 @@ function Editor() {
   const generating = generatingPanels(generatingState, projectId)
   const { apply, error } = useApplyPatch(store)
   const resolveAsset = useAssetResolver(library.resolveAsset)
+  const peers = usePeers(collab)
   const [tool, setTool] = useState<Tool>('select')
   const [scribbleTool, setScribbleTool] = useState<ScribbleTool>('ink')
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
@@ -135,6 +138,14 @@ function Editor() {
     pageIds: [pageId],
   })
   const found = findPage(project, pageId)
+  // presence は早期 return より前に送るので、page を待たずに今ある要素の選択だけを選ぶ
+  const selectedId = found && hasElement(found.page, selected) ? selected?.id : undefined
+
+  useEffect(() => {
+    collab?.presence.setLocation({ pageId, selection: selectedId ? [selectedId] : [] })
+  }, [collab, pageId, selectedId])
+  useEffect(() => () => collab?.presence.setLocation({ pageId: null, selection: [] }), [collab])
+
   // 開いている間に Undo や別タブの操作でページが消えることがある
   if (!found) return <PageNotFound />
   const { page, pageIndex } = found
@@ -166,6 +177,7 @@ function Editor() {
           ← {project.title || '無題'}
         </Link>
         <span>{pageIndex + 1} ページ</span>
+        <CollaborationBar collab={collab} project={project} />
         <fieldset className="tool-group">
           <legend>ツール</legend>
           {TOOLS.map((t) => (
@@ -270,7 +282,12 @@ function Editor() {
           <h2>インスペクタ</h2>
           <details open>
             <summary>要素（{page.panels.length}）</summary>
-            <ElementOutline page={page} selection={selection} onSelect={setSelection} />
+            <ElementOutline
+              page={page}
+              selection={selection}
+              peers={peers.filter((peer) => peer.pageId === page.id)}
+              onSelect={setSelection}
+            />
           </details>
           <SelectionInspector
             page={page}
@@ -331,53 +348,72 @@ function Editor() {
   )
 }
 
-/** ページのコマとフキダシを読み順に並べたリスト。押すとキャンバスと同じ選択になる */
+/** ページのコマとフキダシを読み順に並べたリスト。押すとキャンバスと同じ選択になり、他のクライアントが選んでいるものはその人のカーソル色で囲む */
 function ElementOutline({
   page,
   selection,
+  peers,
   onSelect,
 }: {
   page: Page
   selection: Selection
+  peers: Peer[]
   onSelect(sel: Selection): void
 }) {
   const isSelected = (kind: 'panel' | 'bubble', id: ID) =>
     selection?.kind === kind && selection.id === id
+  const peersOn = (id: ID) => peers.filter((peer) => peer.selection.includes(id))
+  const peerProps = (by: Peer[]) => ({
+    'data-peer-selected': by.length > 0,
+    style: by[0] ? peerColor(by[0].color) : undefined,
+  })
+  const badges = (by: Peer[]) =>
+    by.map((peer) => <PeerBadge key={peer.clientId} name={peer.name} color={peer.color} />)
   if (page.panels.length === 0) return <p className="placeholder">コマがありません</p>
   return (
     <ul className="outline">
       {[...page.panels]
         .sort((a, b) => a.order - b.order)
-        .map((panel) => (
-          <li key={panel.id}>
-            <button
-              type="button"
-              aria-current={isSelected('panel', panel.id) || undefined}
-              onClick={() => onSelect({ kind: 'panel', id: panel.id })}
-            >
-              コマ {panel.order}
-              {panel.camera && ` [${panel.camera}]`}
-            </button>
-            {panel.bubbles.length > 0 && (
-              <ul>
-                {[...panel.bubbles]
-                  .sort((a, b) => a.order - b.order)
-                  .map((bubble) => (
-                    <li key={bubble.id}>
-                      <button
-                        type="button"
-                        className="in-ellipsis"
-                        aria-current={isSelected('bubble', bubble.id) || undefined}
-                        onClick={() => onSelect({ kind: 'bubble', id: bubble.id })}
-                      >
-                        フキダシ {bubble.order} {bubble.text || '（空）'}
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </li>
-        ))}
+        .map((panel) => {
+          const by = peersOn(panel.id)
+          return (
+            <li key={panel.id}>
+              <button
+                type="button"
+                aria-current={isSelected('panel', panel.id) || undefined}
+                {...peerProps(by)}
+                onClick={() => onSelect({ kind: 'panel', id: panel.id })}
+              >
+                コマ {panel.order}
+                {panel.camera && ` [${panel.camera}]`}
+              </button>
+              {badges(by)}
+              {panel.bubbles.length > 0 && (
+                <ul>
+                  {[...panel.bubbles]
+                    .sort((a, b) => a.order - b.order)
+                    .map((bubble) => {
+                      const byBubble = peersOn(bubble.id)
+                      return (
+                        <li key={bubble.id}>
+                          <button
+                            type="button"
+                            className="in-ellipsis"
+                            aria-current={isSelected('bubble', bubble.id) || undefined}
+                            {...peerProps(byBubble)}
+                            onClick={() => onSelect({ kind: 'bubble', id: bubble.id })}
+                          >
+                            フキダシ {bubble.order} {bubble.text || '（空）'}
+                          </button>
+                          {badges(byBubble)}
+                        </li>
+                      )
+                    })}
+                </ul>
+              )}
+            </li>
+          )
+        })}
     </ul>
   )
 }

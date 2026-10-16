@@ -1378,7 +1378,7 @@
       "id": "56",
       "group": "G6",
       "title": "クライアント接続と presence",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "54",
         "55"
@@ -1394,7 +1394,9 @@
       ],
       "spec": [
         "workstreams/WS-19-collaboration.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "57",
