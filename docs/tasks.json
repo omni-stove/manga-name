@@ -1179,7 +1179,7 @@
       "id": "46",
       "group": "G5",
       "title": "ネイティブダイアログ、最近開いたファイル、メニュー、ウィンドウ復元、トークン保存",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "45",
         "39"
@@ -1196,7 +1196,9 @@
       "spec": [
         "workstreams/WS-17-desktop-shell.md",
         "workstreams/WS-14-auth.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "47",

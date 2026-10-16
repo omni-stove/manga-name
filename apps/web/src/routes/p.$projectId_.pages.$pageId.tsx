@@ -21,7 +21,7 @@ import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { CollaborationBar, PeerBadge, peerColor, usePeers } from '../collaboration-view'
 import common from '../common.module.css'
 import { ExportDialog, type ExportSettings } from '../export-dialog'
-import { downloadBlob, exportFileName, pageExporter } from '../export-page'
+import { exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
 import { generatingPanels, usesReference } from '../generate-panel'
 import {
@@ -37,6 +37,7 @@ import type { ProjectLibrary } from '../project-library'
 import { findPage, pagePatch } from '../project-ops'
 import { firstFile, referencePatch, toReferenceImage } from '../reference-image'
 import { errorMessage } from '../route-error'
+import { saveFile } from '../save-file'
 import { SaveStatusIndicator } from '../save-status'
 import type { Peer } from '../store/presence'
 import { toasts } from '../toasts'
@@ -173,7 +174,7 @@ function Editor() {
       page.reference ? usesReference(referenceOptOut, projectId, panelId) : undefined,
     set: (panelId, use) => generation.setUseReference(projectId, panelId, use),
   }
-  // ダイアログは先に閉じ、描いている間も編集できるようにする。終わればダウンロードが始まる
+  // ダイアログは先に閉じ、描いている間も編集できるようにする。終わればダウンロードか保存先の選択が始まる
   const exportPages = async ({ format, from, to, dpi, ...opts }: ExportSettings) => {
     const total = to - from + 1
     setExporting({ done: 0, total })
@@ -191,7 +192,9 @@ function Editor() {
       const blob = await pageExporter.run(job, (done) => setExporting({ done, total }))
       const numbers = Array.from({ length: total }, (_, i) => from + i)
       const ext = format === 'pdf' ? 'pdf' : total === 1 ? 'png' : 'zip'
-      downloadBlob(blob, exportFileName(project.title, numbers, ext))
+      await saveFile(blob, exportFileName(project.title, numbers, ext), [
+        { name: ext.toUpperCase(), extensions: [ext] },
+      ])
     } catch (e) {
       toasts.push(`書き出しに失敗しました: ${errorMessage(e)}`)
     } finally {
