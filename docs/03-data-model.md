@@ -293,7 +293,18 @@ function renderPage(page: Page, ctx: RenderContext, opts: RenderOptions): Promis
 /** 生成に渡す配置図。コマ枠内を対象にし、フキダシ領域を白、それ以外を薄灰で塗った PNG */
 function renderLayoutPng(page: Page, panelId: ID, opts: { width: number }): Promise<Blob>;
 /** エピソードの全ページを PDF に束ねる */
-function exportPdf(project: Project, episodeId: ID, opts: RenderOptions & { pages: 'all' | ID[]; spread: boolean }): Promise<Blob>;
+function exportPdf(
+  project: Project,
+  episodeId: ID,
+  opts: RenderOptions & {
+    pages: 'all' | ID[];
+    spread: boolean;
+    /** StorageAdapter.loadAsset を渡す。採用中の PanelArt を読むのに使う */
+    loadAsset(ref: string): Promise<Blob>;
+    /** 1 ページ描き終えるごとに呼ぶ。done は描き終えたページ数、total は対象のページ数 */
+    onProgress?(done: number, total: number): void;
+  },
+): Promise<Blob>;
 ```
 
 ## AI プロバイダ

@@ -1,5 +1,5 @@
 /** 1 枚のキャンバス。描き終えたら toPng で PNG にする */
-interface Surface {
+export interface Surface {
   ctx: CanvasRenderingContext2D
   width: number
   height: number
