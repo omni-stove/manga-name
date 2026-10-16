@@ -17,6 +17,9 @@ POST /v1/ai/propose-layout    LayoutProposalRequest -> LayoutProposalResponse
 - `note` には脚本のト書きを、`camera` は推定を入れさせる。
 - キャラは `characters` の `name` と `shortName` を渡し、`speakerId` を引かせる。
 
+## 実プロバイダ（06-open-questions.md #4 の決定）
+- Anthropic Claude Haiku 5.5（`claude-haiku-5-5`）。構造化出力に応答スキーマの JSON Schema を渡す。
+
 ## フロー
 1. エピソード画面の「脚本から下書き」ボタン。
 2. モーダルで脚本（複数行）、ページ数の目安、トーンのヒントを入力。

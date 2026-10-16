@@ -13,6 +13,9 @@ POST /v1/ai/critique          CritiqueRequest -> CritiqueResponse
 ## プロンプト方針
 - `PageDiagnosis` の Issue を箇条書きで渡し、修正は必ず JSON Patch で返させる。Patch は焦点の `pos` 変更、Vector 追加、Bubble の `pos` 変更に限定し、Panel の矩形は触らせない。
 
+## 実プロバイダ（06-open-questions.md #4 の決定）
+- Anthropic Claude Haiku 5.5（`claude-haiku-5-5`）。構造化出力に応答スキーマの JSON Schema を渡す。
+
 ## フロー
 1. エディタの Issue 一覧に「AI に相談」ボタン。
 2. `CritiqueRequest { page, diagnosis }` を送る。
