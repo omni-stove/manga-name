@@ -410,6 +410,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     | { status: 'ok'; ref: string }
     | { status: 'retry' }
     | { status: 'quota' }
+    | { status: 'missing' }
     | { status: 'rejected' }
 
   /** 署名 URL で 1 件アップロードする。ネットワークの失敗は TypeError のまま throw する */
@@ -421,6 +422,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     })
     if (res === null || isTransient(res)) return { status: 'retry' }
     if (res.status === 413) return { status: 'quota' }
+    if (res.status === 404) return { status: 'missing' }
     if (!res.ok) {
       onError(await unexpected(res, 'POST upload-url'))
       return { status: 'rejected' }
@@ -469,6 +471,8 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
         attempt.overQuota = true
         break
       }
+      // クラウドのプロジェクトが消えている。続く PUT の 404 が link を作り直すので ref は unsendable にしない
+      if (result.status === 'missing') break
       if (result.status === 'rejected') {
         unsendable.add(ref)
         continue
