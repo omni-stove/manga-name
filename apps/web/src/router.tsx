@@ -13,7 +13,7 @@ import { routeTree } from './routeTree.gen'
 /** 各ルートの loader と画面が `context` から使う依存 */
 export interface RouterContext {
   library: ProjectLibrary
-  /** 生成に使う ImageProvider。`createImageProvider()` で設定から作る */
+  /** 生成に使う ImageProvider。`createImageProvider()` で API の URL とログインから作る */
   imageProvider: ImageProvider
   /** コマの生成と進行状況。画面を離れても生成が続くよう、ルーターより長く生きる */
   generation: PanelGeneration
@@ -53,7 +53,7 @@ if (import.meta.vitest) {
   await import('fake-indexeddb/auto')
 
   const render = async (library: ProjectLibrary, path: string) => {
-    const imageProvider = createImageProvider({ baseUrl: '', token: '' })
+    const imageProvider = createImageProvider({ baseUrl: '', getToken: async () => null })
     const router = createAppRouter(
       { library, imageProvider, generation: createPanelGeneration({ library, imageProvider }) },
       createMemoryHistory({ initialEntries: [path] }),
