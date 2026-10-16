@@ -23,8 +23,7 @@ export interface CloudLink {
 }
 
 const hasUnsentBody = (link: CloudLink | undefined) =>
-  !!link?.sentAssets &&
-  Object.keys(link.assets ?? {}).length > Object.keys(link.sentAssets).length
+  !!link?.sentAssets && Object.keys(link.assets ?? {}).length > Object.keys(link.sentAssets).length
 
 /** ローカルの id ごとの CloudLink の置き場。リロードをまたいで残る必要がある */
 export interface CloudLinkStore {
