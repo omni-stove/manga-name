@@ -1,6 +1,7 @@
-import type { PageTemplate } from '@manga/schema'
+import type { Episode, PageTemplate } from '@manga/schema'
 import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
+import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { PageThumbnail } from '../page-thumbnail'
 import {
   addEpisodePatch,
@@ -10,6 +11,7 @@ import {
   PAGE_TEMPLATES,
   removePagePatch,
 } from '../project-ops'
+import type { ProjectStore } from '../store/project-store'
 import { useApplyPatch, useProject } from '../use-project'
 
 export const Route = createFileRoute('/p/$projectId/')({ component: PageList })
@@ -76,6 +78,7 @@ function PageList() {
       {project.episodes.map((episode) => (
         <article key={episode.id}>
           <h3>{episode.title}</h3>
+          <EpisodeBatch episode={episode} projectId={projectId} store={store} />
           {episode.pages.length === 0 && <p>ページがありません。</p>}
           <ol className="cards">
             {episode.pages.map((page, index) => {
@@ -126,5 +129,37 @@ function PageList() {
         </article>
       ))}
     </>
+  )
+}
+
+/** エピソードのページを全部まとめて生成する */
+function EpisodeBatch({
+  episode,
+  projectId,
+  store,
+}: {
+  episode: Episode
+  projectId: string
+  store: ProjectStore
+}) {
+  const { generation } = Route.useRouteContext()
+  const batch = useBatchGeneration({
+    generation,
+    store,
+    projectId,
+    scope: `episode/${episode.id}`,
+    pageIds: episode.pages.map((page) => page.id),
+  })
+  return (
+    <div className="toolbar">
+      <button
+        type="button"
+        disabled={batch.running || episode.pages.length === 0}
+        onClick={batch.start}
+      >
+        {batch.running ? '生成中…' : '全部生成'}
+      </button>
+      <BatchOptions batch={batch} />
+    </div>
   )
 }

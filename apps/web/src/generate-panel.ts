@@ -22,9 +22,11 @@ import { toasts } from './toasts'
 interface GeneratingState {
   /** 生成中のコマ。import で同じ JSON を読むとコマの id が重なるので、projectId とのキーで持つ。`generatingPanels` で取り出す */
   panels: Set<string>
+  /** 一括生成が走っている範囲。キーは panels と同じく projectId との組で、`batchRunning` で引く */
+  batches: Set<string>
 }
 
-const generatingKey = (projectId: ID, panelId: ID) => `${projectId}/${panelId}`
+const generatingKey = (projectId: ID, id: string) => `${projectId}/${id}`
 
 /** プロジェクト 1 つ分の生成中のコマの id。EditorCanvas と Inspector にそのまま渡す */
 export function generatingPanels(state: GeneratingState, projectId: ID): Set<ID> {
@@ -34,6 +36,11 @@ export function generatingPanels(state: GeneratingState, projectId: ID): Set<ID>
   )
 }
 
+/** 一括生成の範囲が走っているか。`scope` は `generateAll` に渡したもの */
+export function batchRunning(state: GeneratingState, projectId: ID, scope: string): boolean {
+  return state.batches.has(generatingKey(projectId, scope))
+}
+
 interface GenerateRequest {
   store: ProjectStore
   projectId: ID
@@ -41,14 +48,37 @@ interface GenerateRequest {
   panelId: ID
   /** 採用中の絵への修正指示。あれば再生成として `previous` と `parentId` を付ける */
   instruction?: string
+  /** 中止されたら残りの手順を止め、後から届いた応答は捨てる */
+  signal?: AbortSignal
 }
 
-/** `busy` は同じコマが生成中で何もしなかった。`failed` は通知を出して Patch を入れなかった */
-type GenerateOutcome = 'done' | 'busy' | 'failed'
+/**
+ * `busy` は同じコマが生成中で何もしなかった。`failed` は通知を出して Patch を入れなかった。
+ * `canceled` は signal で中止され、通知も Patch も出さなかった
+ */
+type GenerateOutcome = 'done' | 'busy' | 'failed' | 'canceled'
+
+interface BatchRequest {
+  store: ProjectStore
+  projectId: ID
+  /** 走っている一括生成を見分けるキー。`page/<id>` や `episode/<id>`。同じ範囲の二重起動は断る */
+  scope: string
+  /** 対象のページ。並びの順にコマへ分解する */
+  pageIds: readonly ID[]
+  /** false なら絵の無いコマだけを生成する */
+  includeGenerated: boolean
+}
+
+/** 範囲がすでに走っていれば `busy`。それ以外はコマごとの結果の件数 */
+type BatchOutcome = 'busy' | Record<GenerateOutcome, number>
 
 export interface PanelGeneration {
   readonly generating: StoreApi<GeneratingState>
   generate(req: GenerateRequest): Promise<GenerateOutcome>
+  /** 範囲のコマを同時 `batchConcurrency` 本で生成する。失敗はまとめて 1 回通知する */
+  generateAll(req: BatchRequest): Promise<BatchOutcome>
+  /** 走っている一括生成を止める。生成中のコマの応答は捨て、まだのコマは始めない */
+  cancel(projectId: ID, scope: string): void
 }
 
 export interface PanelGenerationDeps {
@@ -59,6 +89,8 @@ export interface PanelGenerationDeps {
   now?(): string
   /** ImageProvider に渡す配置図の長辺 px。既定 1024 */
   layoutLongSide?: number
+  /** 一括生成の同時実行数。既定 3 */
+  batchConcurrency?: number
 }
 
 /** コマに登場するキャラ。フキダシの speakerId と焦点の characterId を登場順に、重複なく集める */
@@ -75,6 +107,33 @@ function layoutWidth(panel: Panel, settings: ProjectSettings, longSide: number):
   const { pageSize } = settings
   const aspect = (panel.rect.h * pageSize.h) / (panel.rect.w * pageSize.w)
   return Math.round(aspect > 1 ? longSide / aspect : longSide)
+}
+
+/** ImageProvider は signal を受け取らないので、中止されたら応答を待たずに捨てる */
+function abortable<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return promise
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason)
+    if (signal.aborted) return onAbort()
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+  })
+}
+
+/** `limit` 本の作業者で `items` を先頭から順に処理する */
+async function runPool<T>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const item = items[next++] as T
+      await task(item)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
 }
 
 /** 生成結果を `arts` に積んで採用する Patch。親の絵が生成中に消えていれば `parentId` を外す */
@@ -103,15 +162,20 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     notify = (message) => toasts.push(message),
     now = () => new Date().toISOString(),
     layoutLongSide = 1024,
+    batchConcurrency = 3,
   } = deps
-  const generating = createStore<GeneratingState>()(() => ({ panels: new Set() }))
+  const generating = createStore<GeneratingState>()(() => ({
+    panels: new Set(),
+    batches: new Set(),
+  }))
+  const batchControllers = new Map<string, AbortController>()
 
-  const setGenerating = (key: string, on: boolean) =>
+  const toggle = (field: keyof GeneratingState, key: string, on: boolean) =>
     generating.setState((s) => {
-      const panels = new Set(s.panels)
-      if (on) panels.add(key)
-      else panels.delete(key)
-      return { panels }
+      const keys = new Set(s[field])
+      if (on) keys.add(key)
+      else keys.delete(key)
+      return field === 'panels' ? { panels: keys } : { batches: keys }
     })
 
   const loadCharacterRefs = async (panel: Panel, characters: readonly Character[]) =>
@@ -133,7 +197,8 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       throw new Error('生成中にプロジェクトが削除されました')
   }
 
-  const run = async ({ store, projectId, pageId, panelId, instruction }: GenerateRequest) => {
+  const run = async ({ store, projectId, pageId, panelId, instruction, signal }: GenerateRequest) => {
+    signal?.throwIfAborted()
     const project = store.get()
     const page = findPage(project, pageId)?.page
     const panel = page && findPanel(page, panelId)?.panel
@@ -154,10 +219,13 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       ...(characterRefs.length > 0 && { characterRefs }),
       ...(previous && { previous: { art: previous.art, instruction: previous.instruction } }),
     }
-    const res = await imageProvider.generatePanelArt(req)
+    const res = await abortable(imageProvider.generatePanelArt(req), signal)
+    signal?.throwIfAborted()
     await assertOpen(store, projectId)
     const ref = await library.putAsset(projectId, res.image, `art-${panelId}`)
     await assertOpen(store, projectId)
+    // putAsset の間に中止されても、Patch を入れなければ利用者には見えない。アセットは残る
+    signal?.throwIfAborted()
     const art: PanelArt = {
       id: newId(),
       ref,
@@ -173,21 +241,68 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     })
   }
 
+  /** 通知はせず、失敗なら理由を返す */
+  const attempt = async (
+    req: GenerateRequest,
+  ): Promise<{ outcome: GenerateOutcome; error?: unknown }> => {
+    const key = generatingKey(req.projectId, req.panelId)
+    if (generating.getState().panels.has(key)) return { outcome: 'busy' }
+    toggle('panels', key, true)
+    try {
+      await run(req)
+      return { outcome: 'done' }
+    } catch (error) {
+      return req.signal?.aborted ? { outcome: 'canceled' } : { outcome: 'failed', error }
+    } finally {
+      toggle('panels', key, false)
+    }
+  }
+
+  const batchTargets = (project: Project, pageIds: readonly ID[], includeGenerated: boolean) =>
+    pageIds.flatMap((pageId) =>
+      (findPage(project, pageId)?.page.panels ?? [])
+        .filter((panel) => includeGenerated || panel.artId === undefined)
+        .toSorted((a, b) => a.order - b.order)
+        .map((panel) => ({ pageId, panelId: panel.id })),
+    )
+
   return {
     generating,
     async generate(req) {
-      const key = generatingKey(req.projectId, req.panelId)
-      if (generating.getState().panels.has(key)) return 'busy'
-      setGenerating(key, true)
+      const { outcome, error } = await attempt(req)
+      if (outcome === 'failed') notify(`コマの生成に失敗しました: ${errorMessage(error)}`)
+      return outcome
+    },
+    async generateAll({ store, projectId, scope, pageIds, includeGenerated }) {
+      const key = generatingKey(projectId, scope)
+      if (batchControllers.has(key)) return 'busy'
+      const controller = new AbortController()
+      batchControllers.set(key, controller)
+      toggle('batches', key, true)
+      const counts: Record<GenerateOutcome, number> = { done: 0, busy: 0, failed: 0, canceled: 0 }
+      const errors: unknown[] = []
       try {
-        await run(req)
-        return 'done'
-      } catch (e) {
-        notify(`コマの生成に失敗しました: ${errorMessage(e)}`)
-        return 'failed'
+        const targets = batchTargets(store.get(), pageIds, includeGenerated)
+        await runPool(targets, batchConcurrency, async ({ pageId, panelId }) => {
+          const { signal } = controller
+          if (signal.aborted) {
+            counts.canceled++
+            return
+          }
+          const { outcome, error } = await attempt({ store, projectId, pageId, panelId, signal })
+          counts[outcome]++
+          if (outcome === 'failed') errors.push(error)
+        })
       } finally {
-        setGenerating(key, false)
+        batchControllers.delete(key)
+        toggle('batches', key, false)
       }
+      if (errors.length > 0)
+        notify(`コマ ${errors.length} 件の生成に失敗しました: ${errorMessage(errors[0])}`)
+      return counts
+    },
+    cancel(projectId, scope) {
+      batchControllers.get(generatingKey(projectId, scope))?.abort()
     },
   }
 }
