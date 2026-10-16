@@ -31,6 +31,14 @@ export function findPage(project: Project, pageId: ID): PageLocation | undefined
   return undefined
 }
 
+/** page を root とした JSON Patch を Project root 基準に付け替える。無いページなら throw */
+export function pagePatch(project: Project, pageId: ID, patch: Patch): Patch {
+  const found = findPage(project, pageId)
+  if (!found) throw new Error(`page ${pageId} is not in project ${project.id}`)
+  const prefix = `/episodes/${found.episodeIndex}/pages/${found.pageIndex}`
+  return patch.map((op) => ({ ...op, path: `${prefix}${op.path}` }))
+}
+
 type ArtStatus = '未生成' | '一部' | '全部'
 
 /** ページ内のコマのうち、現在の絵が選ばれているものの割合で 3 段階に分ける。コマが無いページは未生成 */

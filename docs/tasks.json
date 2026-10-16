@@ -336,7 +336,7 @@
       "group": "G1",
       "title": "エディタ画面の配線",
       "detail": "EditorCanvas + layers + resolveAsset + ImageProvider の DI",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "09",
         "10"
@@ -350,7 +350,9 @@
       ],
       "spec": [
         "workstreams/WS-06-app-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "12",

@@ -2,6 +2,7 @@ import { createStorage, defaultStorageKind } from '@manga/storage'
 import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { createImageProvider } from './image-provider'
 import { createProjectLibrary } from './project-library'
 import { createAppRouter } from './router'
 import './styles.css'
@@ -19,6 +20,6 @@ window.addEventListener('pagehide', () => void library.flushAll())
 
 createRoot(container).render(
   <StrictMode>
-    <RouterProvider router={createAppRouter({ library })} />
+    <RouterProvider router={createAppRouter({ library, imageProvider: createImageProvider() })} />
   </StrictMode>,
 )

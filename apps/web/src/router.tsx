@@ -4,6 +4,7 @@ import {
   type RouterHistory,
   RouterProvider,
 } from '@tanstack/react-router'
+import type { ImageProvider } from './image-provider'
 import type { ProjectLibrary } from './project-library'
 import { RouteError } from './route-error'
 import { routeTree } from './routeTree.gen'
@@ -11,6 +12,8 @@ import { routeTree } from './routeTree.gen'
 /** 各ルートの loader と画面が `context` から使う依存 */
 export interface RouterContext {
   library: ProjectLibrary
+  /** 生成に使う ImageProvider。`createImageProvider()` で設定から作る */
+  imageProvider: ImageProvider
 }
 
 /** アプリのルーター。`history` を省くとブラウザ履歴を使う */
@@ -35,6 +38,7 @@ if (import.meta.vitest) {
   const { renderToString } = await import('react-dom/server')
   const { fixtures } = await import('@manga/schema')
   const { createIndexedDbStorage, createMemoryStorage } = await import('@manga/storage')
+  const { createImageProvider } = await import('./image-provider')
   const { createProjectLibrary } = await import('./project-library')
   const { addPagePatch } = await import('./project-ops')
   // fake-indexeddb の exports は ./auto に types を付けていないので、副作用 import の型解決は諦める
@@ -42,7 +46,10 @@ if (import.meta.vitest) {
   await import('fake-indexeddb/auto')
 
   const render = async (library: ProjectLibrary, path: string) => {
-    const router = createAppRouter({ library }, createMemoryHistory({ initialEntries: [path] }))
+    const router = createAppRouter(
+      { library, imageProvider: createImageProvider({ baseUrl: '', token: '' }) },
+      createMemoryHistory({ initialEntries: [path] }),
+    )
     await router.load()
     return renderToString(<RouterProvider router={router} />)
   }
