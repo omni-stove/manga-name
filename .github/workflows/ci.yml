@@ -1,5 +1,9 @@
 name: CI
 
+# 共通 ci.yml の lint ジョブは依存の install を伴うが、Biome は standalone バイナリで動くので、lint は
+# checkout と Biome だけの自前ジョブにする (run-lint: false)。typecheck と knip は node_modules が要るので
+# test ジョブに置く。ci-gate.yml を呼ぶジョブ名は、必須チェック名 "ci / CI Gate" を保つため ci にする。
+
 on:
   push:
     branches: [main]
@@ -10,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
+  checks:
     uses: omni-stove/.github/.github/workflows/ci.yml@main
     permissions:
       contents: read
@@ -19,15 +23,69 @@ jobs:
       id-token: write
       actions: read
     with:
-      node-version: "26"
-      # Biome is the standalone binary from its GitHub release, not the mise tool.
-      lint-command: 'curl -fsSL -o "$RUNNER_TEMP/biome" https://github.com/biomejs/biome/releases/download/@biomejs/biome@2.5.15/biome-linux-x64 && chmod +x "$RUNNER_TEMP/biome" && "$RUNNER_TEMP/biome" ci . && pnpm --silent knip'
-      typecheck-command: 'pnpm typecheck'
-      test-command: 'pnpm test && pnpm dlx bats@1 tests'
-      run-test: true
+      run-lint: false
+      run-test: false
+      gate: false
       run-review: true
       review-provider: "claude"
+    secrets: inherit
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Lint
+        env:
+          BIOME_VERSION: "2.5.15"
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/biome" "https://github.com/biomejs/biome/releases/download/@biomejs/biome@${BIOME_VERSION}/biome-linux-x64"
+          chmod +x "$RUNNER_TEMP/biome"
+          "$RUNNER_TEMP/biome" ci .
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Knip
+        run: pnpm --silent knip
+
+      - name: Test
+        run: pnpm test && pnpm dlx bats@1 tests
+
+  ci:
+    needs: [checks, lint, test]
+    if: always()
+    uses: omni-stove/.github/.github/workflows/ci-gate.yml@main
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    with:
+      results: ${{ toJSON(needs) }}
+      conflicted: ${{ needs.checks.outputs.conflicted }}
+      review-comments: ${{ needs.checks.outputs.review-comments }}
+      review-result: ${{ needs.checks.outputs.review-result }}
       run-fix: true
       fix-provider: "claude"
       regen-command: 'pnpm install --lockfile-only --no-frozen-lockfile'
+      node-version: "26"
     secrets: inherit
