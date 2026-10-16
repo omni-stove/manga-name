@@ -20,6 +20,8 @@ export interface ProjectLibrary {
   flushAll(): Promise<void>
   /** PanelArt.ref を表示用 URL にする。呼び出し側が URL.revokeObjectURL で解放する。無ければ throw */
   resolveAsset(ref: string): Promise<string>
+  /** 画像を保存して ref を返す */
+  putAsset(projectId: ID, blob: Blob, hint?: string): Promise<string>
 }
 
 interface ProjectLibraryOptions {
@@ -103,6 +105,7 @@ export function createProjectLibrary(
       await Promise.all(stores.map((s) => s?.flush()))
     },
     resolveAsset: (ref) => storage.resolveAsset(ref),
+    putAsset: (projectId, blob, hint) => storage.putAsset(projectId, blob, hint),
   }
 }
 

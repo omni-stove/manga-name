@@ -359,7 +359,7 @@
       "group": "G1",
       "title": "Inspector と右ペイン",
       "detail": "Panel / Bubble / Character / Page / ProjectSettings の各フォームと生成セクション（ボタン、修正指示、履歴）。エディタ右ペインに配線",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "11"
       ],
@@ -376,7 +376,9 @@
       ],
       "spec": [
         "workstreams/WS-05-inspector.md"
-      ]
+      ],
+      "startedAt": "2026-10-16",
+      "doneAt": "2026-10-16"
     },
     {
       "id": "13",

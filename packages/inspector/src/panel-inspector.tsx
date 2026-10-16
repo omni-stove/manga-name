@@ -1,0 +1,230 @@
+import {
+  type Bubble,
+  currentArt,
+  type ID,
+  type PanelArt,
+  PanelSchema,
+  type Patch,
+} from '@manga/schema'
+import { useId, useMemo, useState } from 'react'
+import { DEBOUNCE_MS, NumberField, TextField } from './fields'
+import { optionalString, replace, swapOrder } from './patch'
+import type { PanelInspectorProps } from './types'
+import { useAssetUrls } from './use-asset-urls'
+
+const CAMERA_SUGGESTIONS = ['ロング', 'ミドル', 'バストアップ', 'アップ', 'アオリ', '俯瞰']
+
+const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
+
+/** `arts` の中から選ぶ。`artId` が無ければ add、あれば replace */
+function selectArtPatch(artId: ID | undefined, next: ID): Patch {
+  if (artId === next) return []
+  return [{ op: artId === undefined ? 'add' : 'replace', path: '/artId', value: next }]
+}
+
+const byOrder = (bubbles: readonly Bubble[]) =>
+  bubbles
+    .map((bubble, index) => ({ bubble, index }))
+    .sort((a, b) => a.bubble.order - b.bubble.order)
+
+const formatDate = (iso: string) => new Date(iso).toLocaleString('ja-JP')
+
+export function PanelInspector({
+  panel,
+  characters,
+  diagnosis,
+  generating = false,
+  onChange,
+  onGenerate,
+  resolveAsset,
+}: PanelInspectorProps) {
+  const cameraListId = useId()
+  const [instruction, setInstruction] = useState('')
+  const refs = useMemo(() => panel.arts.map((a) => a.ref), [panel.arts])
+  const urls = useAssetUrls(refs, resolveAsset)
+  const current = currentArt(panel)
+  const bubbles = byOrder(panel.bubbles)
+  const speakerOf = (bubble: Bubble) =>
+    characters.find((c) => c.id === bubble.speakerId)?.shortName ?? ''
+  // 新しい版を上に出す
+  const arts = [...panel.arts].reverse()
+
+  return (
+    <div className="inspector-section" data-inspector="panel">
+      <h3>コマ {panel.order}</h3>
+      <NumberField
+        label="読み順"
+        value={panel.order}
+        min={1}
+        step={1}
+        isValid={isOrder}
+        onCommit={(n) => onChange(replace('/order', n))}
+      />
+      <TextField
+        label="カメラ"
+        value={panel.camera ?? ''}
+        list={cameraListId}
+        placeholder="ロング、アオリ、俯瞰…"
+        onCommit={(v) => onChange(optionalString('/camera', panel.camera, v))}
+      />
+      <datalist id={cameraListId}>
+        {CAMERA_SUGGESTIONS.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
+      <TextField
+        label="指示メモ"
+        value={panel.note ?? ''}
+        rows={4}
+        delayMs={DEBOUNCE_MS}
+        onCommit={(v) => onChange(optionalString('/note', panel.note, v))}
+      />
+      {diagnosis && (
+        <p className="in-hint" data-bubble-order-ok={diagnosis.bubbleOrderOk}>
+          {diagnosis.hint}
+          {!diagnosis.bubbleOrderOk && <small>フキダシの順が読み順と合っていません</small>}
+        </p>
+      )}
+
+      <h4>フキダシ</h4>
+      {bubbles.length === 0 ? (
+        <p className="in-muted">フキダシはありません</p>
+      ) : (
+        <ol className="in-list">
+          {bubbles.map(({ bubble, index }, i) => {
+            const prev = bubbles[i - 1]
+            const next = bubbles[i + 1]
+            return (
+              <li key={bubble.id} data-bubble-id={bubble.id}>
+                <span className="in-order">{bubble.order}</span>
+                <span className="in-ellipsis">
+                  {speakerOf(bubble) && <b>{speakerOf(bubble)} </b>}
+                  {bubble.text.split('\n')[0] || '（空）'}
+                </span>
+                <button
+                  type="button"
+                  aria-label="フキダシを前へ"
+                  disabled={!prev}
+                  onClick={() =>
+                    prev &&
+                    onChange(
+                      swapOrder(
+                        '/bubbles',
+                        { index, order: bubble.order },
+                        { index: prev.index, order: prev.bubble.order },
+                      ),
+                    )
+                  }
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  aria-label="フキダシを後へ"
+                  disabled={!next}
+                  onClick={() =>
+                    next &&
+                    onChange(
+                      swapOrder(
+                        '/bubbles',
+                        { index, order: bubble.order },
+                        { index: next.index, order: next.bubble.order },
+                      ),
+                    )
+                  }
+                >
+                  ▼
+                </button>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+
+      <h4>生成</h4>
+      <div className="in-group">
+        <button type="button" disabled={generating} onClick={() => onGenerate()}>
+          {generating ? '生成中…' : '生成'}
+        </button>
+      </div>
+      <label className="in-field">
+        <span className="in-label">修正指示</span>
+        <textarea
+          rows={3}
+          value={instruction}
+          placeholder="採用中の絵に対する直し方"
+          onChange={(e) => setInstruction(e.target.value)}
+        />
+      </label>
+      <div className="in-group">
+        <button
+          type="button"
+          disabled={generating || !current || instruction.trim() === ''}
+          onClick={() => onGenerate(instruction.trim())}
+        >
+          修正して再生成
+        </button>
+      </div>
+
+      <h4>履歴</h4>
+      {arts.length === 0 ? (
+        <p className="in-muted">まだ生成していません</p>
+      ) : (
+        <ol className="in-arts">
+          {arts.map((art) => (
+            <ArtItem
+              key={art.id}
+              art={art}
+              url={urls.get(art.ref)}
+              current={art.id === panel.artId}
+              onSelect={() => onChange(selectArtPatch(panel.artId, art.id))}
+            />
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
+
+function ArtItem({
+  art,
+  url,
+  current,
+  onSelect,
+}: {
+  art: PanelArt
+  url: string | null | undefined
+  current: boolean
+  onSelect(): void
+}) {
+  return (
+    <li data-art-id={art.id} data-current={current || undefined}>
+      <button type="button" className="in-thumb" aria-pressed={current} onClick={onSelect}>
+        {url ? (
+          <img src={url} alt={art.instruction ?? '生成した絵'} />
+        ) : (
+          <span className="in-muted">{url === null ? '読み込めません' : '読み込み中…'}</span>
+        )}
+      </button>
+      <div className="in-art-meta">
+        <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
+        {current && <b>採用中</b>}
+        {art.instruction && <p>{art.instruction}</p>}
+        <details>
+          <summary>プロンプト</summary>
+          <pre>{art.prompt}</pre>
+        </details>
+      </div>
+    </li>
+  )
+}
+
+if (import.meta.vitest) {
+  const { expect, test } = import.meta.vitest
+
+  test('selectArtPatch adds when nothing is selected, replaces otherwise, and skips the same art', () => {
+    expect(selectArtPatch(undefined, 'a')).toEqual([{ op: 'add', path: '/artId', value: 'a' }])
+    expect(selectArtPatch('a', 'b')).toEqual([{ op: 'replace', path: '/artId', value: 'b' }])
+    expect(selectArtPatch('a', 'a')).toEqual([])
+  })
+}
