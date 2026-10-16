@@ -1,9 +1,8 @@
 name: CI
 
-# lint は Biome の standalone バイナリだけで済むので、依存の install を伴う共通 ci.yml の lint ジョブは
-# 使わず (run-lint: false)、checkout と Biome だけの自前ジョブにする。typecheck と knip は node_modules が
-# 要るので test ジョブに移す。共通 ci.yml はコンフリクト判定と Code Review だけに使い、結果は
-# ci-gate.yml で集約する。必須チェックは "ci / CI Gate" のまま。
+# 共通 ci.yml の lint ジョブは依存の install を伴うが、Biome は standalone バイナリで動くので、lint は
+# checkout と Biome だけの自前ジョブにする (run-lint: false)。typecheck と knip は node_modules が要るので
+# test ジョブに置く。ci-gate.yml を呼ぶジョブ名は、必須チェック名 "ci / CI Gate" を保つため ci にする。
 
 on:
   push:
