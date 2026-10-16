@@ -3,8 +3,10 @@ import { useId, useMemo, useRef } from 'react'
 import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { panelBox } from './hit-test'
 import { PageLayer } from './page-layer'
+import { PanelToolLayer } from './panel-tool-layer'
 import type { EditorCanvasProps, Selection } from './types'
 import { useAssetUrls } from './use-asset-urls'
+import { usePanelTool } from './use-panel-tool'
 import { sameSelection, useSelection } from './use-selection'
 import { useViewport } from './use-viewport'
 import { zoomOf } from './view'
@@ -21,7 +23,9 @@ const HOVER = '#93c5fd'
  * 1 ページを SVG で描くキャンバス。ユーザー単位はページの mm（`settings.pageSize`）で、
  * ズームとパンは viewBox で表す。ページの外側は灰色。
  * クリックで選択、ホバーで強調、Delete で削除、矢印キーで 0.01 刻みの移動。
- * Patch はページ root 基準で `onChange` に出し、Undo / Redo は持たない。
+ * `panel` ツールではドラッグでコマを作り、選択中のコマをハンドルでリサイズ、ボタンで分割、
+ * Shift + クリックで結合する。端は他のコマとページの端に 0.01 以内で吸い付く。
+ * Patch はページ root 基準で `onChange` に 1 操作 1 回出し、Undo / Redo は持たない。
  * 焦点、ベクトル、診断、参考画像、手描きのレイヤーは枠だけ置き、中身は後のタスクで足す
  */
 export function EditorCanvas(props: EditorCanvasProps) {
@@ -41,7 +45,21 @@ export function EditorCanvas(props: EditorCanvasProps) {
     onChange: props.onChange,
     onSelect: props.onSelect,
   })
-  const hovered = sameSelection(selection.hovered, props.selection) ? null : selection.hovered
+  const panelTool = usePanelTool({
+    page,
+    width: pageW,
+    height: pageH,
+    view,
+    tool: props.tool,
+    direction: settings.direction,
+    selection: props.selection,
+    onChange: props.onChange,
+    onSelect: props.onSelect,
+  })
+  const hovered =
+    panelTool.draft !== null || sameSelection(selection.hovered, props.selection)
+      ? null
+      : selection.hovered
 
   const refs = useMemo(
     () =>
@@ -59,9 +77,11 @@ export function EditorCanvas(props: EditorCanvasProps) {
     ? 'grabbing'
     : spaceHeld
       ? 'grab'
-      : selection.hovered !== null
-        ? 'pointer'
-        : undefined
+      : props.tool === 'panel'
+        ? 'crosshair'
+        : selection.hovered !== null
+          ? 'pointer'
+          : undefined
 
   return (
     <svg
@@ -88,21 +108,27 @@ export function EditorCanvas(props: EditorCanvasProps) {
       }}
       onPointerDown={(e) => {
         viewport.handlers.onPointerDown(e)
+        panelTool.handlers.onPointerDown(e)
         selection.handlers.onPointerDown(e)
       }}
       onPointerMove={(e) => {
         viewport.handlers.onPointerMove(e)
+        panelTool.handlers.onPointerMove(e)
         selection.handlers.onPointerMove(e)
       }}
       onPointerUp={(e) => {
         viewport.handlers.onPointerUp(e)
+        panelTool.handlers.onPointerUp(e)
         selection.handlers.onPointerUp(e)
       }}
       onPointerCancel={(e) => {
         viewport.handlers.onPointerCancel(e)
+        panelTool.handlers.onPointerCancel(e)
         selection.handlers.onPointerCancel()
       }}
-      onKeyDown={selection.handlers.onKeyDown}
+      onKeyDown={(e) => {
+        if (!panelTool.handlers.onKeyDown(e)) selection.handlers.onKeyDown(e)
+      }}
     >
       <title>ページ</title>
       <style>{STYLE}</style>
@@ -123,6 +149,14 @@ export function EditorCanvas(props: EditorCanvasProps) {
       {layers.hints && <g data-layer="hints" />}
       {layers.diagnosis && props.diagnosis !== null && <g data-layer="diagnosis" />}
       <Highlight page={page} width={pageW} height={pageH} target={hovered} />
+      <PanelToolLayer
+        selected={panelTool.selected}
+        draft={panelTool.draft}
+        width={pageW}
+        height={pageH}
+        handleSize={panelTool.handleSize}
+        onSplit={panelTool.split}
+      />
     </svg>
   )
 }

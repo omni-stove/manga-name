@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtures, type Page } from '@manga/schema'
+import { fixtures, type Page, type Panel, type Patch } from '@manga/schema'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -180,13 +180,21 @@ const viewBox = (svg: SVGSVGElement) => must(svg.getAttribute('viewBox')).split(
 
 function pointer(
   type: string,
-  init: { id: number; x: number; y: number; button?: number; pointerType?: string },
+  init: {
+    id: number
+    x: number
+    y: number
+    button?: number
+    pointerType?: string
+    shiftKey?: boolean
+  },
 ) {
   // jsdom の PointerEvent の有無に依存しないよう、MouseEvent に pointer の属性を足す
   const e = new MouseEvent(type, {
     bubbles: true,
     cancelable: true,
     button: init.button ?? 0,
+    shiftKey: init.shiftKey ?? false,
     clientX: init.x,
     clientY: init.y,
   })
@@ -336,6 +344,179 @@ describe('editing the selection from the keyboard', () => {
     const svg = await render({ onSelect, selection: { kind: 'bubble', id: 'bb_1' } })
     key(svg, { key: 'Escape' })
     expect(onSelect).toHaveBeenCalledWith(null)
+  })
+})
+
+/** 画面座標 from から to へドラッグする。途中の 1 点も通る */
+function drag(
+  svg: SVGSVGElement,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  opts: { release?: boolean } = {},
+) {
+  fire(svg, pointer('pointerdown', { id: 1, ...from }))
+  fire(svg, pointer('pointermove', { id: 1, x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }))
+  fire(svg, pointer('pointermove', { id: 1, ...to }))
+  if (opts.release ?? true) fire(svg, pointer('pointerup', { id: 1, ...to }))
+}
+
+const patchOf = (onChange: ReturnType<typeof vi.fn>) => onChange.mock.calls[0]?.[0] as Patch
+
+describe('panel tool', () => {
+  test('a drag creates one snapped panel on pointerup and selects it', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ tool: 'panel', onChange, onSelect })
+    layout(svg)
+    const to = clientAt(0.495, 0.497)
+    drag(svg, clientAt(0.2, 0.3), to, { release: false })
+    expect(svg.querySelector('[data-draft="new"]')).not.toBeNull()
+    expect(onChange).not.toHaveBeenCalled()
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    const patch = patchOf(onChange)
+    // 右端は pn_2 の左端 0.5、下端は pn_2 / pn_3 の下端 0.505 へ吸い付く
+    expect(patch).toEqual([
+      {
+        op: 'add',
+        path: '/panels/6',
+        value: expect.objectContaining({ order: 7, rect: { x: 0.2, y: 0.3, w: 0.3, h: 0.205 } }),
+      },
+    ])
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'panel', id: (patch[0]?.value as Panel).id })
+    expect(svg.querySelector('[data-draft]')).toBeNull()
+  })
+
+  test('a click still selects, and the select tool does not create panels', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ tool: 'panel', onChange, onSelect })
+    layout(svg)
+    click(svg, clientAt(0.75, 0.4))
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'panel', id: 'pn_2' })
+    expect(onChange).not.toHaveBeenCalled()
+
+    const select = await render({ tool: 'select', onChange })
+    layout(select)
+    drag(select, clientAt(0.2, 0.3), clientAt(0.4, 0.45))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  test('a handle drag resizes with one patch and snaps to the neighbour', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      tool: 'panel',
+      onChange,
+      selection: { kind: 'panel', id: 'pn_2' },
+    })
+    layout(svg)
+    expect(svg.querySelectorAll('[data-handle]')).toHaveLength(8)
+    // pn_2 の左辺の中点から、pn_3 の右端 0.48 の 0.005 手前まで
+    drag(svg, clientAt(0.5, 0.39), clientAt(0.485, 0.39), { release: false })
+    expect(svg.querySelector('[data-draft="pn_2"]')).not.toBeNull()
+    expect(onChange).not.toHaveBeenCalled()
+    fire(svg, pointer('pointerup', { id: 1, ...clientAt(0.485, 0.39) }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(patchOf(onChange)).toEqual([
+      { op: 'replace', path: '/panels/1/rect', value: { x: 0.48, y: 0.275, w: 0.52, h: 0.23 } },
+    ])
+  })
+
+  test('the split button splits with one patch and renumbers orders rtl', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      tool: 'panel',
+      onChange,
+      selection: { kind: 'panel', id: 'pn_2' },
+    })
+    const button = must(svg.querySelector('[data-split="vertical"]'))
+    act(() => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(patchOf(onChange)).toEqual([
+      {
+        op: 'replace',
+        path: '/panels/1',
+        value: expect.objectContaining({
+          id: 'pn_2',
+          order: 2,
+          rect: { x: 0.76, y: 0.275, w: 0.24, h: 0.23 },
+        }),
+      },
+      {
+        op: 'add',
+        path: '/panels/2',
+        value: expect.objectContaining({ order: 3, rect: { x: 0.5, y: 0.275, w: 0.24, h: 0.23 } }),
+      },
+      { op: 'replace', path: '/panels/3/order', value: 4 },
+      { op: 'replace', path: '/panels/4/order', value: 5 },
+      { op: 'replace', path: '/panels/5/order', value: 6 },
+      { op: 'replace', path: '/panels/6/order', value: 7 },
+    ])
+  })
+
+  test('Shift + click on another panel merges with one patch', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({
+      tool: 'panel',
+      onChange,
+      onSelect,
+      selection: { kind: 'panel', id: 'pn_5' },
+    })
+    layout(svg)
+    const at = clientAt(0.2, 0.95)
+    fire(svg, pointer('pointerdown', { id: 1, ...at, shiftKey: true }))
+    fire(svg, pointer('pointerup', { id: 1, ...at, shiftKey: true }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(patchOf(onChange)).toEqual([
+      {
+        op: 'replace',
+        path: '/panels/4',
+        value: expect.objectContaining({
+          id: 'pn_5',
+          order: 5,
+          rect: { x: 0, y: 0.835, w: 1, h: 0.165 },
+        }),
+      },
+      { op: 'remove', path: '/panels/5' },
+    ])
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  test('a merge that would cover another panel emits nothing', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      tool: 'panel',
+      onChange,
+      selection: { kind: 'panel', id: 'pn_2' },
+    })
+    layout(svg)
+    const at = clientAt(0.2, 0.95)
+    fire(svg, pointer('pointerdown', { id: 1, ...at, shiftKey: true }))
+    fire(svg, pointer('pointerup', { id: 1, ...at, shiftKey: true }))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  test('Escape cancels a drag without a patch or a deselect', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({
+      tool: 'panel',
+      onChange,
+      onSelect,
+      selection: { kind: 'panel', id: 'pn_2' },
+    })
+    layout(svg)
+    const to = clientAt(0.4, 0.45)
+    drag(svg, clientAt(0.1, 0.1), to, { release: false })
+    expect(svg.querySelector('[data-draft="new"]')).not.toBeNull()
+    key(svg, { key: 'Escape' })
+    expect(svg.querySelector('[data-draft]')).toBeNull()
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(onChange).not.toHaveBeenCalled()
+    expect(onSelect).not.toHaveBeenCalled()
   })
 })
 
