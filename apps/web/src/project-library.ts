@@ -101,10 +101,12 @@ export function createProjectLibrary(
       return imported
     },
     async remove(id) {
-      const store = await opened.get(id)?.catch(() => undefined)
+      const pending = opened.get(id)
+      // flush を待つ間に isOpen が true を返すと、生成の書き込みが flush の後に保存されて復活する
+      opened.delete(id)
+      const store = await pending?.catch(() => undefined)
       // 先に書き切らないと、debounce 中の保存が削除の後に走ってプロジェクトが復活する
       await store?.flush()
-      opened.delete(id)
       await storage.deleteProject(id)
     },
     async flushAll() {

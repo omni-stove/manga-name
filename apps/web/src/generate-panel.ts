@@ -119,7 +119,8 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
 
   // 待つ間にプロジェクトが削除されると、書き込みが消したプロジェクトを復活させる
   const assertOpen = async (store: ProjectStore, projectId: ID) => {
-    if (!(await library.isOpen(projectId, store))) throw new Error('生成中にプロジェクトが削除されました')
+    if (!(await library.isOpen(projectId, store)))
+      throw new Error('生成中にプロジェクトが削除されました')
   }
 
   const run = async ({ store, projectId, pageId, panelId, instruction }: GenerateRequest) => {
