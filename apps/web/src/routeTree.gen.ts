@@ -11,12 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as NewRouteImport } from './routes/new'
-import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as PProjectIdRouteImport } from './routes/p.$projectId'
 import { Route as PProjectIdIndexRouteImport } from './routes/p.$projectId.index'
 import { Route as PProjectIdCharactersRouteImport } from './routes/p.$projectId.characters'
-import { Route as PProjectIdSettingsRouteImport } from './routes/p.$projectId.settings'
 import { Route as PProjectIdEpisodesEpisodeIdRouteImport } from './routes/p.$projectId.episodes.$episodeId'
 import { Route as PProjectIdPagesPageIdRouteImport } from './routes/p.$projectId_.pages.$pageId'
 
@@ -28,11 +26,6 @@ const IndexRoute = IndexRouteImport.update({
 const NewRoute = NewRouteImport.update({
   id: '/new',
   path: '/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
@@ -55,11 +48,6 @@ const PProjectIdCharactersRoute = PProjectIdCharactersRouteImport.update({
   path: '/characters',
   getParentRoute: () => PProjectIdRoute,
 } as any)
-const PProjectIdSettingsRoute = PProjectIdSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => PProjectIdRoute,
-} as any)
 const PProjectIdEpisodesEpisodeIdRoute =
   PProjectIdEpisodesEpisodeIdRouteImport.update({
     id: '/episodes/$episodeId',
@@ -75,11 +63,9 @@ const PProjectIdPagesPageIdRoute = PProjectIdPagesPageIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/new': typeof NewRoute
-  '/settings': typeof SettingsRoute
   '/invite/$token': typeof InviteTokenRoute
   '/p/$projectId': typeof PProjectIdRouteWithChildren
   '/p/$projectId/characters': typeof PProjectIdCharactersRoute
-  '/p/$projectId/settings': typeof PProjectIdSettingsRoute
   '/p/$projectId/': typeof PProjectIdIndexRoute
   '/p/$projectId/episodes/$episodeId': typeof PProjectIdEpisodesEpisodeIdRoute
   '/p/$projectId/pages/$pageId': typeof PProjectIdPagesPageIdRoute
@@ -87,10 +73,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/new': typeof NewRoute
-  '/settings': typeof SettingsRoute
   '/invite/$token': typeof InviteTokenRoute
   '/p/$projectId/characters': typeof PProjectIdCharactersRoute
-  '/p/$projectId/settings': typeof PProjectIdSettingsRoute
   '/p/$projectId': typeof PProjectIdIndexRoute
   '/p/$projectId/episodes/$episodeId': typeof PProjectIdEpisodesEpisodeIdRoute
   '/p/$projectId/pages/$pageId': typeof PProjectIdPagesPageIdRoute
@@ -99,11 +83,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/new': typeof NewRoute
-  '/settings': typeof SettingsRoute
   '/invite/$token': typeof InviteTokenRoute
   '/p/$projectId': typeof PProjectIdRouteWithChildren
   '/p/$projectId/characters': typeof PProjectIdCharactersRoute
-  '/p/$projectId/settings': typeof PProjectIdSettingsRoute
   '/p/$projectId/': typeof PProjectIdIndexRoute
   '/p/$projectId/episodes/$episodeId': typeof PProjectIdEpisodesEpisodeIdRoute
   '/p/$projectId_/pages/$pageId': typeof PProjectIdPagesPageIdRoute
@@ -113,11 +95,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/new'
-    | '/settings'
     | '/invite/$token'
     | '/p/$projectId'
     | '/p/$projectId/characters'
-    | '/p/$projectId/settings'
     | '/p/$projectId/'
     | '/p/$projectId/episodes/$episodeId'
     | '/p/$projectId/pages/$pageId'
@@ -125,10 +105,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/new'
-    | '/settings'
     | '/invite/$token'
     | '/p/$projectId/characters'
-    | '/p/$projectId/settings'
     | '/p/$projectId'
     | '/p/$projectId/episodes/$episodeId'
     | '/p/$projectId/pages/$pageId'
@@ -136,11 +114,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/new'
-    | '/settings'
     | '/invite/$token'
     | '/p/$projectId'
     | '/p/$projectId/characters'
-    | '/p/$projectId/settings'
     | '/p/$projectId/'
     | '/p/$projectId/episodes/$episodeId'
     | '/p/$projectId_/pages/$pageId'
@@ -149,7 +125,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   NewRoute: typeof NewRoute
-  SettingsRoute: typeof SettingsRoute
   InviteTokenRoute: typeof InviteTokenRoute
   PProjectIdRoute: typeof PProjectIdRouteWithChildren
   PProjectIdPagesPageIdRoute: typeof PProjectIdPagesPageIdRoute
@@ -169,13 +144,6 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/new'
       preLoaderRoute: typeof NewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite/$token': {
@@ -206,13 +174,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PProjectIdCharactersRouteImport
       parentRoute: typeof PProjectIdRoute
     }
-    '/p/$projectId/settings': {
-      id: '/p/$projectId/settings'
-      path: '/settings'
-      fullPath: '/p/$projectId/settings'
-      preLoaderRoute: typeof PProjectIdSettingsRouteImport
-      parentRoute: typeof PProjectIdRoute
-    }
     '/p/$projectId/episodes/$episodeId': {
       id: '/p/$projectId/episodes/$episodeId'
       path: '/episodes/$episodeId'
@@ -232,14 +193,12 @@ declare module '@tanstack/react-router' {
 
 interface PProjectIdRouteChildren {
   PProjectIdCharactersRoute: typeof PProjectIdCharactersRoute
-  PProjectIdSettingsRoute: typeof PProjectIdSettingsRoute
   PProjectIdIndexRoute: typeof PProjectIdIndexRoute
   PProjectIdEpisodesEpisodeIdRoute: typeof PProjectIdEpisodesEpisodeIdRoute
 }
 
 const PProjectIdRouteChildren: PProjectIdRouteChildren = {
   PProjectIdCharactersRoute: PProjectIdCharactersRoute,
-  PProjectIdSettingsRoute: PProjectIdSettingsRoute,
   PProjectIdIndexRoute: PProjectIdIndexRoute,
   PProjectIdEpisodesEpisodeIdRoute: PProjectIdEpisodesEpisodeIdRoute,
 }
@@ -251,7 +210,6 @@ const PProjectIdRouteWithChildren = PProjectIdRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   NewRoute: NewRoute,
-  SettingsRoute: SettingsRoute,
   InviteTokenRoute: InviteTokenRoute,
   PProjectIdRoute: PProjectIdRouteWithChildren,
   PProjectIdPagesPageIdRoute: PProjectIdPagesPageIdRoute,

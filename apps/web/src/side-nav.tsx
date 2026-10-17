@@ -1,6 +1,7 @@
 import { Button, IconButton, Typography, XStack, YStack } from '@manga/ui'
 import { Link, type LinkProps, useMatch } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
+import { useOpenedProject } from './settings-dialog'
 import styles from './side-nav.module.css'
 import type { WebProjectStore } from './store/project-store'
 import { useAuth } from './use-auth'
@@ -8,14 +9,13 @@ import { useProject } from './use-project'
 
 /**
  * 画面の左に縦に並べるナビゲーション。プロジェクト一覧、開いているプロジェクトのエピソード・キャラクター・設定、
- * アプリ設定とアカウントを並べる。既定はアイコンだけの細い帯に畳んでおき、上端のボタンで名前付きの幅に開く。
+ * アプリ設定とアカウントを並べる。設定は画面を移らず、今の画面の上にダイアログで開く。既定はアイコンだけの細い帯に畳んでおき、上端のボタンで名前付きの幅に開く。
  * 開閉はブラウザに覚えておき、次に開いたときも同じ幅にする
  */
 export function SideNav() {
-  const project = useMatch({ from: '/p/$projectId', shouldThrow: false })
+  const opened = useOpenedProject()
   const editor = useMatch({ from: '/p/$projectId_/pages/$pageId', shouldThrow: false })
   const episode = useMatch({ from: '/p/$projectId/episodes/$episodeId', shouldThrow: false })
-  const opened = project ?? editor
   const [expanded, setExpanded] = useExpanded()
   const collapsed = !expanded
   return (
@@ -48,16 +48,22 @@ export function SideNav() {
           label="プロジェクト一覧"
         />
       </YStack>
-      {opened?.loaderData && (
+      {opened && (
         <ProjectItems
-          projectId={opened.params.projectId}
-          store={opened.loaderData.store}
+          projectId={opened.projectId}
+          store={opened.store}
           collapsed={collapsed}
           inEpisodes={editor !== undefined || episode !== undefined}
         />
       )}
       <YStack as="ul" gap={2} className={styles.footer}>
-        <NavItem to="/settings" icon={<GearIcon />} label="アプリ設定" />
+        <NavItem
+          to="."
+          search={(prev) => ({ ...prev, settings: 'app' })}
+          replace
+          icon={<GearIcon />}
+          label="アプリ設定"
+        />
         {!collapsed && <Account />}
       </YStack>
     </YStack>
@@ -98,8 +104,9 @@ function ProjectItems({
         label="キャラクター"
       />
       <NavItem
-        to="/p/$projectId/settings"
-        params={{ projectId }}
+        to="."
+        search={(prev) => ({ ...prev, settings: 'project' })}
+        replace
         icon={<SlidersIcon />}
         label="設定"
       />
@@ -140,7 +147,10 @@ function NavItem({
   icon,
   label,
   ...link
-}: Pick<LinkProps, 'to' | 'params' | 'activeOptions'> & { icon: ReactNode; label: string }) {
+}: Pick<LinkProps, 'to' | 'params' | 'search' | 'replace' | 'activeOptions'> & {
+  icon: ReactNode
+  label: string
+}) {
   return (
     <li>
       <Link {...link} className={styles.item} title={label}>
