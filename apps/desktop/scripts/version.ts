@@ -38,7 +38,8 @@ if (command === 'set') {
   if (arg) versions.push({ file: 'tag', version: arg.replace(/^v/, '') })
   const [first] = versions
   if (versions.some((entry) => entry.version !== first?.version)) {
-    for (const entry of versions) console.error(`${String(entry.version).padStart(12)}  ${entry.file}`)
+    for (const entry of versions)
+      console.error(`${String(entry.version).padStart(12)}  ${entry.file}`)
     console.error('version が一致しない')
     process.exit(1)
   }

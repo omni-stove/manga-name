@@ -1,6 +1,7 @@
 name: Desktop
 
-# 署名と配布はまだ決めていないので、両 OS で tauri build が通ることだけを確かめ、成果物は上げない。
+# 配布はタグ push の desktop-release.yml が担い、PR には署名用の証明書も updater の秘密鍵もないので、
+# 両 OS で tauri build が通ることだけを確かめ、成果物は上げない。
 # Desktop は apps/web とそれが使う packages を同梱するので、その変更でも走らせる。
 on:
   push:

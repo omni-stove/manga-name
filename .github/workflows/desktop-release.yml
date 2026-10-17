@@ -32,6 +32,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
       # タグと apps/desktop の version がずれたままインストーラに載らないよう、ビルド前に止める
       - name: Version check
         run: node apps/desktop/scripts/version.ts check "$GITHUB_REF_NAME"
