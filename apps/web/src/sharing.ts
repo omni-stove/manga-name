@@ -1,4 +1,4 @@
-import type { ID } from '@manga/schema'
+import { type ID, readApiError } from '@manga/schema'
 
 /** workers/api の ProjectRole。owner はプロジェクトを作った人 */
 export type ProjectRole = 'owner' | 'editor' | 'commenter' | 'viewer'
@@ -82,11 +82,6 @@ const ROLES_KEY = 'manga.project-roles'
 /** 招待リンクの、apps/web 側のパス */
 const invitePath = (token: string) => `/invite/${encodeURIComponent(token)}`
 
-async function failure(res: Response, what: string) {
-  const body = (await res.json().catch(() => null)) as { error?: string } | null
-  return new Error(`${what}: ${res.status} ${body?.error ?? res.statusText}`)
-}
-
 /** workers/api の参加者と招待の API（`/v1/projects/:id/members` ほか、`/v1/invites/:token`）のクライアント */
 export function createSharingClient(opts: SharingClientOptions): SharingClient {
   const baseUrl = opts.baseUrl.replace(/\/+$/, '')
@@ -121,7 +116,7 @@ export function createSharingClient(opts: SharingClientOptions): SharingClient {
   }
 
   const expectOk = async (res: Response, what: string) => {
-    if (!res.ok) throw await failure(res, what)
+    if (!res.ok) throw await readApiError(res, what)
   }
 
   const members = async (localId: ID): Promise<Members | null> => {
@@ -255,8 +250,11 @@ if (import.meta.vitest) {
     })
 
     test('members is null when signed out or the project is gone', async () => {
-      for (const status of [401, 404]) {
-        const { client } = setup(() => json({ error: 'x' }, status))
+      for (const [status, code] of [
+        [401, 'unauthorized'],
+        [404, 'not_found'],
+      ] as const) {
+        const { client } = setup(() => json({ code }, status))
         expect(await client.members('local')).toBeNull()
         expect(await client.role('local')).toBe('owner')
       }
@@ -274,9 +272,13 @@ if (import.meta.vitest) {
         { storage },
       )
       expect(await offline.client.role('local')).toBe('viewer')
-      const failing = setup(() => json({ error: 'boom' }, 500), { storage: memoryStorage() })
+      const failing = setup(() => json({ code: 'internal_error' }, 500), {
+        storage: memoryStorage(),
+      })
       expect(await failing.client.role('local')).toBe('owner')
-      await expect(failing.client.members('local')).rejects.toThrow('GET members: 500 boom')
+      await expect(failing.client.members('local')).rejects.toThrow(
+        'GET members: 500 internal_error',
+      )
     })
 
     test('a broken or unwritable role store does not break role', async () => {
@@ -361,9 +363,7 @@ if (import.meta.vitest) {
       const expired = setup(() => json({}, 404))
       await expect(expired.client.acceptInvite('t')).rejects.toThrow('期限が切れています')
       const failing = setup(() => new Response('oops', { status: 500, statusText: 'Server Error' }))
-      await expect(failing.client.acceptInvite('t')).rejects.toThrow(
-        'POST accept invite: 500 Server Error',
-      )
+      await expect(failing.client.acceptInvite('t')).rejects.toThrow('POST accept invite: 500 oops')
     })
   })
 }

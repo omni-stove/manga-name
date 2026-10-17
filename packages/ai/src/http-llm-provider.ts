@@ -2,6 +2,7 @@ import {
   CritiqueResponseSchema,
   LayoutProposalResponseSchema,
   PagePlanResponseSchema,
+  readApiError,
 } from '@manga/schema'
 import { type HttpProviderOptions, SignInRequiredError } from './http-image-provider'
 import type { LlmProvider } from './provider'
@@ -9,7 +10,7 @@ import type { LlmProvider } from './provider'
 /**
  * Workers のプロキシ `POST /v1/ai/plan-pages`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique` に JSON を送る LlmProvider。
  * 応答は `@manga/schema` で検証して返す。トークン無しと 401 は SignInRequiredError、
- * ほかの HTTP エラーと検証に通らない応答は Error を throw する。
+ * ほかの HTTP エラーは readApiError の Error（多くは ApiError）を、検証に通らない応答は Error を throw する。
  */
 export function createHttpLlmProvider(opts: HttpProviderOptions): LlmProvider {
   const baseUrl = opts.baseUrl.replace(/\/+$/, '')
@@ -24,7 +25,7 @@ export function createHttpLlmProvider(opts: HttpProviderOptions): LlmProvider {
       body: JSON.stringify(body),
     })
     if (res.status === 401) throw new SignInRequiredError()
-    if (!res.ok) throw new Error(`${path} request failed: ${res.status}`)
+    if (!res.ok) throw await readApiError(res, `POST ${path}`)
     return res.json()
   }
 

@@ -1,4 +1,5 @@
 import { createMiddleware } from 'hono/factory'
+import { ApiException } from './api-error'
 import { sessionUserId } from './auth'
 import type { Env } from './env'
 
@@ -58,10 +59,10 @@ async function hitRateLimit(db: D1Database, userId: string, now: number): Promis
 export function requireUser(now: () => number) {
   return createMiddleware<UserEnv>(async (c, next) => {
     const userId = await authenticate(c.env, c.req.raw.headers)
-    if (userId === null) return c.json({ error: 'unauthorized' }, 401)
+    if (userId === null) throw new ApiException('unauthorized')
     const retryAfter = await hitRateLimit(c.env.DB, userId, now())
     if (retryAfter !== null) {
-      return c.json({ error: 'rate limit exceeded' }, 429, { 'retry-after': String(retryAfter) })
+      throw new ApiException('rate_limited', { headers: { 'retry-after': String(retryAfter) } })
     }
     c.set('userId', userId)
     await next()

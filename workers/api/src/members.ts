@@ -1,6 +1,7 @@
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { MEMBER_ROLES, type ProjectRole, projectRole, userEmail } from './access'
+import { ApiException, parseOrThrow } from './api-error'
 import { readJson } from './body'
 import type { Env } from './env'
 import { hashToken, newToken } from './token'
@@ -60,7 +61,7 @@ export function createMemberRoutes(now: () => number) {
   app.get('/:id/members', async (c) => {
     const id = c.req.param('id')
     const role = await projectRole(c.env.DB, c.get('userId'), id)
-    if (role === null) return c.json({ error: 'not found' }, 404)
+    if (role === null) throw new ApiException('not_found')
     const { results } = await c.env.DB.prepare(
       `SELECT p.owner_id AS userId, 'owner' AS role, u.email AS email, u.name AS name, 0 AS rank, 0 AS created_at
        FROM projects p LEFT JOIN auth_users u ON u.id = p.owner_id WHERE p.id = ?1
@@ -89,29 +90,24 @@ export function createMemberRoutes(now: () => number) {
     })
   })
 
-  /** owner でなければその応答、owner なら null */
-  const denyUnlessOwner = async (c: Context<UserEnv>, projectId: string) => {
+  /** 参加していなければ not_found、owner でなければ owner_only を throw する */
+  const requireOwner = async (c: Context<UserEnv>, projectId: string) => {
     const role = await projectRole(c.env.DB, c.get('userId'), projectId)
-    if (role === null) return c.json({ error: 'not found' }, 404)
-    if (role !== 'owner') return c.json({ error: 'only the owner can manage members' }, 403)
-    return null
+    if (role === null) throw new ApiException('not_found')
+    if (role !== 'owner') throw new ApiException('owner_only')
   }
 
   app.post('/:id/invites', async (c) => {
-    const denied = await denyUnlessOwner(c, c.req.param('id'))
-    if (denied) return denied
-    const body = await readJson(c.req.raw, 1024, 'request body is too large')
-    if (!body.ok) return c.json({ error: body.error }, body.status)
-    const parsed = InviteSchema.safeParse(body.value)
-    if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
+    await requireOwner(c, c.req.param('id'))
+    const data = parseOrThrow(InviteSchema, await readJson(c.req.raw, 1024))
 
     const projectId = c.req.param('id')
-    const email = normalizeEmail(parsed.data.email)
+    const email = normalizeEmail(data.email)
     const token = newToken()
     const invite = {
       id: crypto.randomUUID(),
       email,
-      role: parsed.data.role,
+      role: data.role,
       expiresAt: now() + INVITE_TTL_MS,
     }
     await c.env.DB.batch([
@@ -136,32 +132,27 @@ export function createMemberRoutes(now: () => number) {
   })
 
   app.delete('/:id/invites/:inviteId', async (c) => {
-    const denied = await denyUnlessOwner(c, c.req.param('id'))
-    if (denied) return denied
+    await requireOwner(c, c.req.param('id'))
     const { meta } = await c.env.DB.prepare(
       'DELETE FROM project_invites WHERE id = ?1 AND project_id = ?2',
     )
       .bind(c.req.param('inviteId'), c.req.param('id'))
       .run()
-    if (meta.changes !== 1) return c.json({ error: 'not found' }, 404)
+    if (meta.changes !== 1) throw new ApiException('not_found')
     return c.body(null, 204)
   })
 
   app.put('/:id/members/:userId', async (c) => {
-    const denied = await denyUnlessOwner(c, c.req.param('id'))
-    if (denied) return denied
-    const body = await readJson(c.req.raw, 1024, 'request body is too large')
-    if (!body.ok) return c.json({ error: body.error }, body.status)
-    const parsed = RoleSchema.safeParse(body.value)
-    if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
+    await requireOwner(c, c.req.param('id'))
+    const { role } = parseOrThrow(RoleSchema, await readJson(c.req.raw, 1024))
     const projectId = c.req.param('id')
     const userId = c.req.param('userId')
     const { meta } = await c.env.DB.prepare(
       'UPDATE project_members SET role = ?3 WHERE project_id = ?1 AND user_id = ?2',
     )
-      .bind(projectId, userId, parsed.data.role)
+      .bind(projectId, userId, role)
       .run()
-    if (meta.changes !== 1) return c.json({ error: 'not found' }, 404)
+    if (meta.changes !== 1) throw new ApiException('not_found')
     await revokeSync(c.env, projectId, userId)
     return c.body(null, 204)
   })
@@ -170,12 +161,11 @@ export function createMemberRoutes(now: () => number) {
     const projectId = c.req.param('id')
     const userId = c.req.param('userId')
     if (userId !== c.get('userId')) {
-      const denied = await denyUnlessOwner(c, c.req.param('id'))
-      if (denied) return denied
+      await requireOwner(c, c.req.param('id'))
     } else if ((await projectRole(c.env.DB, userId, projectId)) === null) {
-      return c.json({ error: 'not found' }, 404)
+      throw new ApiException('not_found')
     }
-    if (!(await removeMember(c.env, projectId, userId))) return c.json({ error: 'not found' }, 404)
+    if (!(await removeMember(c.env, projectId, userId))) throw new ApiException('not_found')
     return c.body(null, 204)
   })
 
@@ -211,18 +201,18 @@ export function createInviteApp(now: () => number) {
 
   app.get('/:token', async (c) => {
     const invite = await findInvite(c.env, c.req.param('token'))
-    if (!invite) return c.json({ error: 'not found' }, 404)
+    if (!invite) throw new ApiException('not_found')
     const { id: _, ...rest } = invite
     return c.json({ ...rest, expiresAt: new Date(invite.expiresAt).toISOString() })
   })
 
   app.post('/:token/accept', async (c) => {
     const invite = await findInvite(c.env, c.req.param('token'))
-    if (!invite) return c.json({ error: 'not found' }, 404)
+    if (!invite) throw new ApiException('not_found')
     const userId = c.get('userId')
     const email = await userEmail(c.env, userId)
     if (email === null || normalizeEmail(email) !== invite.email) {
-      return c.json({ error: 'this invite is for another email address' }, 403)
+      throw new ApiException('invite_email_mismatch')
     }
     const current = await projectRole(c.env.DB, userId, invite.projectId)
     await c.env.DB.batch([

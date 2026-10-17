@@ -1,3 +1,5 @@
+import { paraglideVitePlugin } from '@inlang/paraglide-js'
+import { compilerOptions } from '@manga/i18n/compiler-options'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
@@ -12,6 +14,8 @@ export default defineConfig({
       semicolons: false,
     }),
     react(),
+    // messages/*.json を変えたら dev サーバーのまま作り直すため。install 時の生成だけだと古いまま残る
+    paraglideVitePlugin(compilerOptions),
   ],
   // apps/desktop の devUrl がこのポートを指すので、塞がっていても別のポートに逃げない
   server: { port: 5173, strictPort: true },

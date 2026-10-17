@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // scripts は node で直接走らせるので、.ts の拡張子付きで import する
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src", "scripts", "compiler-options.ts"]
+}
