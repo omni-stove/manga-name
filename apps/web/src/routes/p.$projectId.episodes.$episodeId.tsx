@@ -1,5 +1,5 @@
 import { type Episode, type PageTemplate, pageCharacterIds } from '@manga/schema'
-import { Button, Select, Typography, XStack, YStack } from '@manga/ui'
+import { Button, Input, Select, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
@@ -13,6 +13,7 @@ import {
   movePagePatch,
   PAGE_TEMPLATES,
   removePagePatch,
+  renameEpisodePatch,
 } from '../project-ops'
 import { ScriptDraftDialog } from '../script-draft-dialog'
 import type { ProjectStore } from '../store/project-store'
@@ -48,7 +49,7 @@ function EpisodePages() {
         <Link to="/p/$projectId" params={{ projectId }}>
           エピソード一覧
         </Link>
-        <Typography variant="heading">{episode.title}</Typography>
+        <EpisodeTitle episode={episode} apply={apply} />
       </XStack>
       {error && (
         <Typography tone="alert" role="alert">
@@ -182,6 +183,66 @@ function EpisodePages() {
         })}
       </ol>
     </YStack>
+  )
+}
+
+/** 話の名前の見出し。「名前を変更」で入力欄に替わり、保存すると Undo で戻せる変更として反映する */
+function EpisodeTitle({
+  episode,
+  apply,
+}: {
+  episode: Episode
+  apply: ReturnType<typeof useApplyPatch>['apply']
+}) {
+  const [editing, setEditing] = useState(false)
+  const [title, setTitle] = useState(episode.title)
+  if (!editing) {
+    return (
+      <>
+        <Typography variant="heading">{episode.title}</Typography>
+        <Button
+          size="small"
+          variant="ghost"
+          onClick={() => {
+            setTitle(episode.title)
+            setEditing(true)
+          }}
+        >
+          名前を変更
+        </Button>
+      </>
+    )
+  }
+  return (
+    <XStack
+      as="form"
+      wrap
+      gap={8}
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (apply('話の名前を変更', (p) => renameEpisodePatch(p, episode.id, title)))
+          setEditing(false)
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setEditing(false)
+      }}
+    >
+      <Input
+        label="話の名前"
+        hideLabel
+        required
+        value={title}
+        onChange={(e) => setTitle(e.currentTarget.value)}
+        // 「名前を変更」を押した直後に打ち始められるようにする
+        autoFocus
+      />
+      <Button type="submit" size="small" variant="primary">
+        保存
+      </Button>
+      <Button size="small" variant="ghost" onClick={() => setEditing(false)}>
+        キャンセル
+      </Button>
+    </XStack>
   )
 }
 
