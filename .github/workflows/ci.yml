@@ -40,7 +40,7 @@ jobs:
       pull-requests: read
     outputs:
       lint: ${{ github.event_name != 'pull_request' || steps.exclude.outputs.lint == 'true' }}
-      typecheck: ${{ github.event_name != 'pull_request' || steps.exclude.outputs.typecheck == 'true' || steps.include.outputs.workflow == 'true' }}
+      typecheck: ${{ github.event_name != 'pull_request' || steps.exclude.outputs.typecheck == 'true' }}
       test: ${{ github.event_name != 'pull_request' || steps.exclude.outputs.test == 'true' || steps.include.outputs.workflow == 'true' }}
       test-workers: ${{ github.event_name != 'pull_request' || steps.include.outputs.test-workers == 'true' || steps.include.outputs.workflow == 'true' }}
     steps:
@@ -52,8 +52,8 @@ jobs:
           # 否定パターンを除外として効かせるため、ファイルが全パターンに合うときだけ数える
           predicate-quantifier: every
           # lint: Biome が見ないファイル（biome.json の files.includes で外したものと、扱わない拡張子）
-          # typecheck: tsc も knip も読まないファイル
-          # test: typecheck の除外に加え、ルートの vitest が外している workers/
+          # typecheck: tsc も knip も読まないファイル（knip は .github/workflows の run: からバイナリを拾う）
+          # test: typecheck の除外に加え、vitest と vite build が読まない .github/ と、ルートの vitest が外している workers/
           filters: |
             lint:
               - "!docs/**"
@@ -67,7 +67,6 @@ jobs:
             typecheck: &typecheck
               - "!**/*.md"
               - "!apps/desktop/src-tauri/**"
-              - "!.github/**"
               - "!.claude/**"
               - "!.agents/**"
               - "!.mise/**"
@@ -75,6 +74,7 @@ jobs:
               - "!Makefile"
             test:
               - *typecheck
+              - "!.github/**"
               - "!workers/**"
 
       # test-workers: workers/api と、それが import するパッケージ（packages/schema と packages/ai は docs/fixtures を読む）
