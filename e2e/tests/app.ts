@@ -22,18 +22,19 @@ export const RENDER_SNAPSHOT_ARTS = fileURLToPath(
   new URL('../../packages/render/src/__snapshots__/page-arts.png', import.meta.url),
 )
 
-/** 一覧からプロジェクトを作り、1 話目を足して開く */
+/** 一覧の新規作成からプロジェクトを作り、1 話目を足して開く */
 export async function createProject(page: Page, title: string): Promise<void> {
   await page.goto('/')
-  await page.getByLabel('タイトル').fill(title)
   await page.getByRole('button', { name: '新規作成' }).click()
+  await page.getByLabel('タイトル').fill(title)
+  await page.getByRole('button', { name: '作成', exact: true }).click()
   await page.getByRole('button', { name: 'エピソードを追加' }).click()
   await expect(page.getByRole('button', { name: 'ページを追加' })).toBeVisible()
 }
 
-/** 一覧のファイル選択からプロジェクト JSON を読み込み、FIXTURE_PROJECT の 1 話目を開く */
+/** 新規作成ページのファイル選択からプロジェクト JSON を読み込み、FIXTURE_PROJECT の 1 話目を開く */
 export async function importProject(page: Page, file: string): Promise<void> {
-  await page.goto('/')
+  await page.goto('/new')
   await page.locator('input[type="file"]').setInputFiles(file)
   await openEpisode(page, FIXTURE_EPISODE)
 }

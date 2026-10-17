@@ -1,10 +1,8 @@
-import { Button, Input, Typography, XStack, YStack } from '@manga/ui'
+import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router'
-import { type DragEvent, useState } from 'react'
+import { useState } from 'react'
 import common from '../common.module.css'
-import { parseProjectFile } from '../project-file'
 import { errorMessage } from '../route-error'
-import styles from './projects.module.css'
 
 export const Route = createFileRoute('/')({
   loader: async ({ context }) => {
@@ -22,9 +20,8 @@ function ProjectList() {
   const navigate = useNavigate()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
-  const [dragging, setDragging] = useState(false)
 
-  /** 失敗は画面に出す。並行して走らせないよう、実行中はボタンを止める */
+  /** 失敗は画面に出す。削除を並行して走らせないよう、実行中はボタンを止める */
   const run = async (task: () => Promise<void>) => {
     setBusy(true)
     setError(undefined)
@@ -37,66 +34,14 @@ function ProjectList() {
     }
   }
 
-  const importFile = (file: File) =>
-    run(async () => {
-      const project = await library.import(parseProjectFile(await file.text()))
-      await navigate({ to: '/p/$projectId', params: { projectId: project.id } })
-    })
-
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file) void importFile(file)
-  }
-
   return (
     <YStack as="section" gap={16}>
-      <Typography variant="title">プロジェクト一覧</Typography>
-      <form
-        className={styles.create}
-        onSubmit={(e) => {
-          e.preventDefault()
-          const title = String(new FormData(e.currentTarget).get('title') ?? '').trim()
-          void run(async () => {
-            const project = await library.create(title || '無題')
-            await navigate({ to: '/p/$projectId', params: { projectId: project.id } })
-          })
-        }}
-      >
-        <XStack align="stretch">
-          <Input name="title" placeholder="タイトル" label="タイトル" hideLabel />
-          <Button type="submit" variant="primary" disabled={busy}>
-            新規作成
-          </Button>
-        </XStack>
-      </form>
-      <fieldset
-        className={styles.dropZone}
-        data-dragging={dragging}
-        onDragOver={(e) => {
-          e.preventDefault()
-          setDragging(true)
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-      >
-        <label>
-          JSON をここにドロップするか、ファイルを選んで読み込む{' '}
-          <input
-            type="file"
-            accept="application/json,.json"
-            disabled={busy}
-            onChange={(e) => {
-              const input = e.currentTarget
-              const file = input.files?.[0]
-              // 同じファイルを選び直しても change が起きるよう空にする
-              input.value = ''
-              if (file) void importFile(file)
-            }}
-          />
-        </label>
-      </fieldset>
+      <XStack wrap gap={12}>
+        <Typography variant="title">プロジェクト一覧</Typography>
+        <Button variant="primary" onClick={() => void navigate({ to: '/new' })}>
+          新規作成
+        </Button>
+      </XStack>
       {error && (
         <Typography tone="alert" role="alert">
           {error}

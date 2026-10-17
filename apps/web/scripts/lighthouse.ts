@@ -27,7 +27,7 @@ try {
   if (!base) throw new Error('preview の URL が取れない')
 
   // プロジェクトは IndexedDB にしかないので、同じブラウザで読み込んでから測り、Lighthouse には消させない
-  await page.goto(base)
+  await page.goto(new URL('new', base).href)
   const input = await page.waitForSelector('input[type="file"]')
   await input?.uploadFile(FIXTURE)
   await page.locator('::-p-text(エピソードを追加)').wait()
