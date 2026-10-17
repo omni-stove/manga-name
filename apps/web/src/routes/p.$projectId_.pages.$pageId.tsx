@@ -36,6 +36,8 @@ import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { CollaborationBar, PeerBadge, peerColor, usePeers } from '../collaboration-view'
 import common from '../common.module.css'
+import { previewPage } from '../critique'
+import { CritiquePanel } from '../critique-panel'
 import { ExportDialog, type ExportSettings } from '../export-dialog'
 import { exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
@@ -155,7 +157,7 @@ function issueTarget(page: Page, issue: Issue): Selection {
 function Editor() {
   const { projectId, pageId } = Route.useParams()
   const { store, collab } = Route.useLoaderData()
-  const { library, generation } = Route.useRouteContext()
+  const { library, generation, llmProvider } = Route.useRouteContext()
   const project = useProject(store)
   const { canUndo, canRedo } = useStore(store.state)
   const generatingState = useStore(generation.generating)
@@ -207,6 +209,12 @@ function Editor() {
   const diagnosis = useMemo(
     () => (foundPage ? diagnosePage(foundPage, project.settings) : null),
     [foundPage, project.settings],
+  )
+  // 提案の Patch だけを持ち、ゴーストは今のページに当てて作る。ホバー中に編集されても古いページを描かない
+  const [preview, setPreview] = useState<Patch | null>(null)
+  const ghostPage = useMemo(
+    () => (foundPage && preview ? previewPage(foundPage, preview) : undefined),
+    [foundPage, preview],
   )
 
   useEffect(() => {
@@ -349,6 +357,7 @@ function Editor() {
             settings={project.settings}
             characters={project.characters}
             diagnosis={diagnosis}
+            ghostPage={ghostPage}
             selection={selection}
             tool={tool}
             scribbleTool={scribbleTool}
@@ -441,6 +450,18 @@ function Editor() {
                   const target = issueTarget(page, issue)
                   if (target) setSelection(target)
                 }}
+              />
+              <CritiquePanel
+                key={pageId}
+                store={store}
+                page={page}
+                pageId={pageId}
+                diagnosis={diagnosis}
+                llmProvider={llmProvider}
+                canEdit={canEdit}
+                generating={generating}
+                onPreview={setPreview}
+                onGenerate={generate}
               />
             </details>
           )}

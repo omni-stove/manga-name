@@ -17,7 +17,7 @@ export interface RouterContext {
   library: ProjectLibrary
   /** 生成に使う ImageProvider。`createImageProvider()` で API の URL とログインから作る */
   imageProvider: ImageProvider
-  /** 「脚本から下書き」に使う LlmProvider。`createLlmProvider()` で API の URL とログインから作る */
+  /** 「脚本から下書き」と「AI に相談」に使う LlmProvider。`createLlmProvider()` で API の URL とログインから作る */
   llmProvider: LlmProvider
   /** コマの生成と進行状況。画面を離れても生成が続くよう、ルーターより長く生きる */
   generation: PanelGeneration

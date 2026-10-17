@@ -7,11 +7,15 @@ import {
   PROVIDER_HEADER,
 } from '@manga/ai'
 import {
+  CritiqueResponseSchema,
   LayoutProposalResponseSchema,
+  PageDiagnosisSchema,
+  PageSchema,
   PanelArtRequestSchema,
   ProjectBaseSchema,
 } from '@manga/schema'
 import { type Context, Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
 import { createUploadApp } from './assets'
@@ -37,6 +41,11 @@ const MAX_ATTEMPTS = 2
 const MAX_SCRIPT_LENGTH = 20_000
 /** ページ数の目安の上限 */
 const MAX_PAGE_COUNT = 64
+/**
+ * critique の本文の上限。ページの JSON は手描きの線や絵の履歴で際限なく膨らむので、
+ * LLM に渡すトークン数を抑えるため本文の大きさで切る。Web は線と絵を外して送る
+ */
+const MAX_CRITIQUE_BODY_BYTES = 256 * 1024
 
 /** `GET /v1/usage`。当月の生成回数と上限 */
 function createUsageApp(now: () => number) {
@@ -73,6 +82,14 @@ const LayoutProposalRequestSchema = z.object({
   pageCount: z.number().int().min(1).max(MAX_PAGE_COUNT).optional(),
 })
 
+/** `@manga/ai` の CritiqueRequest。診断は同じページのものに限る */
+const CritiqueRequestSchema = z
+  .object({ page: PageSchema, diagnosis: PageDiagnosisSchema })
+  .refine((req) => req.diagnosis.pageId === req.page.id, {
+    message: 'diagnosis.pageId does not match page.id',
+    path: ['diagnosis', 'pageId'],
+  })
+
 export interface AppOptions {
   /** 画像生成プロバイダ。実プロバイダの API キーは env にだけ置くので env を受け取る。既定は Fake */
   imageProvider?: (env: Env) => ImageProvider
@@ -105,7 +122,7 @@ async function retryUntilValid<T>(
 const isFile = (v: unknown): v is File => typeof v !== 'string' && v !== null && v !== undefined
 
 /**
- * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/propose-layout`、
+ * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique`、
  * `/v1/projects` の CRUD とアセットと参加者、招待リンクの受け口 `/v1/invites/:token`、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
  * `/v1/health`、`/v1/auth/*`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
  * CORS は WEB_ORIGINS と tauri://localhost だけに許す。
@@ -256,6 +273,37 @@ export function createApp(options: AppOptions = {}) {
     }
     return c.json(value)
   })
+
+  // 提案の Patch が許された操作だけかはここで見ない。拒否した提案も警告つきで利用者に見せるため、Web が適用の前に検査する
+  app.post(
+    '/v1/ai/critique',
+    bodyLimit({
+      maxSize: MAX_CRITIQUE_BODY_BYTES,
+      onError: (c) => c.json({ error: 'body is too large' }, 413),
+    }),
+    async (c) => {
+      const body: unknown = await c.req.json().catch(() => undefined)
+      if (body === undefined) return c.json({ error: 'body is not valid JSON' }, 400)
+      const parsed = CritiqueRequestSchema.safeParse(body)
+      if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
+
+      const usageId = await reserve(c, 'critique')
+      if (usageId instanceof Response) return usageId
+      const provider = createLlm(c.env)
+
+      const { value, attempts } = await retryUntilValid(async () => {
+        // proposeLayout と同じく、実プロバイダの応答は LLM の出力そのままなので検証し直す
+        const result = CritiqueResponseSchema.safeParse(await provider.critique(parsed.data))
+        return result.success ? result.data : undefined
+      })
+      await settleUsage(c.env.DB, usageId, attempts)
+
+      if (value === undefined) {
+        return c.json({ error: 'llm provider returned an invalid critique' }, 502)
+      }
+      return c.json(value)
+    },
+  )
 
   return app
 }
