@@ -136,6 +136,7 @@ const PanelBaseSchema = z.object({
   focusPoints: z.array(FocusPointSchema),
   vectors: z.array(VectorSchema),
   sweep: SweepSchema.optional(),
+  cast: z.array(IdSchema).optional(),
 })
 
 export const PanelSchema = PanelBaseSchema.superRefine((panel, ctx) => {
@@ -223,6 +224,11 @@ export const ProjectSchema = ProjectBaseSchema.superRefine((project, ctx) => {
             )
           }
         })
+        panel.cast?.forEach((id, ci) => {
+          if (!characterIds.has(id)) {
+            addIssue(ctx, [...base, 'cast', ci], `cast ${id} is not in characters`)
+          }
+        })
       })
     })
   })
@@ -307,16 +313,18 @@ if (import.meta.vitest) {
       expect(issuePaths(project)).toContain(panelPath(0, 'vectors.0.targetFocusId'))
     })
 
-    test('Bubble.speakerId and FocusPoint.characterId must be in characters', async () => {
+    test('Bubble.speakerId, FocusPoint.characterId and Panel.cast must be in characters', async () => {
       const project = await loadFixture()
       const bubble = panel(project, 5).bubbles[0]
       const focus = panel(project, 0).focusPoints[1]
       if (!bubble || !focus) throw new Error('fixture is missing the expected bubble or focus')
       bubble.speakerId = 'chr_missing'
       focus.characterId = 'chr_missing'
+      panel(project, 2).cast = ['chr_missing']
       const paths = issuePaths(project)
       expect(paths).toContain(panelPath(5, 'bubbles.0.speakerId'))
       expect(paths).toContain(panelPath(0, 'focusPoints.1.characterId'))
+      expect(paths).toContain(panelPath(2, 'cast.0'))
     })
 
     test('Panel.order and Bubble.order must be unique', async () => {

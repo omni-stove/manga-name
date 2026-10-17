@@ -66,6 +66,51 @@ const inputLabelled = (container: HTMLElement, label: string) => {
 }
 
 describe('PanelInspector', () => {
+  test('lists the cast with why each character is in it and adds or removes only cast entries', async () => {
+    const onChange = vi.fn<(patch: Patch) => void>()
+    const focused = must(samplePanel.focusPoints.find((f) => f.characterId)?.characterId)
+    const extra = { id: 'chr_extra', name: '通行人', shortName: '通' }
+    const { container } = await render(
+      <PanelInspector
+        panel={samplePanel}
+        characters={[...project.characters, extra]}
+        onChange={onChange}
+        onGenerate={() => {}}
+        resolveAsset={resolveAsset}
+      />,
+    )
+    const item = must(container.querySelector(`[data-cast-id="${focused}"]`))
+    expect(item.textContent).toContain('焦点')
+    expect(item.querySelector('button')).toBeNull()
+
+    const select = must(
+      container.querySelector<HTMLSelectElement>('select[aria-label="登場キャラを追加"]'),
+    )
+    await act(async () => {
+      select.value = extra.id
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(onChange).toHaveBeenCalledWith([{ op: 'add', path: '/cast', value: [extra.id] }])
+  })
+
+  test('a character added to the cast can be removed', async () => {
+    const onChange = vi.fn<(patch: Patch) => void>()
+    const extra = { id: 'chr_extra', name: '通行人', shortName: '通' }
+    const { container } = await render(
+      <PanelInspector
+        panel={{ ...samplePanel, cast: [extra.id] }}
+        characters={[...project.characters, extra]}
+        onChange={onChange}
+        onGenerate={() => {}}
+        resolveAsset={resolveAsset}
+      />,
+    )
+    await act(async () =>
+      must(container.querySelector<HTMLElement>(`[data-cast-id="${extra.id}"] button`)).click(),
+    )
+    expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/cast' }])
+  })
+
   test('switching among three arts emits replace /artId and highlights the current one', async () => {
     const onChange = vi.fn<(patch: Patch) => void>()
     const { container } = await render(

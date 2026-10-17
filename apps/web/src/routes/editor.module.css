@@ -163,3 +163,13 @@
     min-height: var(--hit);
   }
 }
+
+.pageCast {
+  list-style: none;
+  margin: var(--space-8) 0;
+  padding: 0;
+}
+
+.pageCastMeta {
+  color: var(--text-muted);
+}

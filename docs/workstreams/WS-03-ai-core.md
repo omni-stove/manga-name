@@ -26,7 +26,7 @@ export const prompts: {
 1. `settings.style.prompt`
 2. `camera`（あれば「camera: <camera>」）
 3. `note`
-4. コマに登場するキャラ。`bubbles[].speakerId` と `focusPoints[].characterId` から集め、`name` と `appearance` を「<name>: <appearance>」で列挙
+4. コマに登場するキャラ。`cast`、`bubbles[].speakerId`、`focusPoints[].characterId` の順に集め（`panelCharacterIds`）、`name` と `appearance` を「<name>: <appearance>」で列挙
 5. `focusPoints` の `label` を `weight` 降順に列挙
 6. `vectors` を「<kind> from <source label or 位置> to <target label or 位置>」で列挙
 7. `hint`

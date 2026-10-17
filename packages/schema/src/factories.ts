@@ -2,6 +2,7 @@ import { newId } from './id'
 import {
   type Bubble,
   BubbleSchema,
+  type ID,
   type Page,
   PageSchema,
   type Panel,
@@ -100,6 +101,19 @@ export function currentArt(panel: Panel): PanelArt | undefined {
   return panel.arts.find((a) => a.id === panel.artId)
 }
 
+/**
+ * コマに登場するキャラの id。`cast`、フキダシの `speakerId`、焦点の `characterId` の順に、重複なく集める。
+ * 台詞も焦点も無いキャラは `cast` でしか拾えない
+ */
+export function panelCharacterIds(panel: Panel): ID[] {
+  const ids = [
+    ...(panel.cast ?? []),
+    ...panel.bubbles.map((b) => b.speakerId),
+    ...panel.focusPoints.map((f) => f.characterId),
+  ].filter((id): id is ID => id !== undefined)
+  return [...new Set(ids)]
+}
+
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
 
@@ -177,5 +191,24 @@ if (import.meta.vitest) {
     expect(currentArt(panel)).toBeUndefined()
     panel.artId = 'a1'
     expect(currentArt(panel)).toBe(art)
+  })
+
+  test('panelCharacterIds lists cast, speakers and focus characters once, in that order', () => {
+    const panel = emptyPanel(1, { x: 0, y: 0, w: 1, h: 1 })
+    expect(panelCharacterIds(panel)).toEqual([])
+    panel.bubbles.push(
+      createBubble({ pos: { x: 0, y: 0 }, speakerId: 'b' }),
+      createBubble({ pos: { x: 0, y: 0 } }),
+    )
+    panel.focusPoints.push({
+      id: 'f',
+      kind: 'face',
+      label: 'a',
+      pos: { x: 0, y: 0 },
+      weight: 1,
+      characterId: 'a',
+    })
+    panel.cast = ['c', 'a']
+    expect(panelCharacterIds(panel)).toEqual(['c', 'a', 'b'])
   })
 }
