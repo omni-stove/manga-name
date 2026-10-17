@@ -36,6 +36,18 @@ export function parsePageCount(text: string): number | undefined | null {
   return Number.isInteger(n) && n >= 1 && n <= MAX_PAGE_COUNT ? n : null
 }
 
+/** ページ数の欄に一押しで入れる、商業誌の 1 回分の目安。`pages` は MAX_PAGE_COUNT 以下 */
+export const PAGE_COUNT_GUIDES: readonly { label: string; pages: number; hint: string }[] = [
+  { label: '週刊連載', pages: 19, hint: '週刊少年誌の 1 話はおよそ 16〜20 ページ' },
+  { label: '月刊連載', pages: 32, hint: '月刊誌の 1 話はおよそ 30〜45 ページ' },
+  { label: '読切', pages: 31, hint: '新人賞や読切は 31 ページや 45 ページの枠が多い' },
+  {
+    label: '初回増ページ（半分）',
+    pages: 24,
+    hint: '週刊の第 1 話は 45〜55 ページ前後。上限を超えるので、脚本を前後に分けて 2 回作る',
+  },
+]
+
 const withTone = (tone: string, text: string) => {
   const t = tone.trim()
   return t === '' ? text : `（全体のトーン: ${t}）\n${text}`
@@ -212,6 +224,10 @@ if (import.meta.vitest) {
     expect(parsePageCount('1.5')).toBeNull()
     expect(parsePageCount(String(MAX_PAGE_COUNT + 1))).toBeNull()
     expect(parsePageCount('x')).toBeNull()
+  })
+
+  test('every page count guide is accepted by the page count field', () => {
+    for (const g of PAGE_COUNT_GUIDES) expect(parsePageCount(String(g.pages))).toBe(g.pages)
   })
 
   test('the largest plan fits the per-minute limit of 10 requests with the plan request', () => {
