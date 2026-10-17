@@ -1,0 +1,42 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-width, 20rem);
+  min-height: 0;
+  padding-top: var(--space-12);
+  background: var(--surface-raised);
+  font-size: var(--text-m);
+}
+
+.sidebar[data-side="left"] {
+  border-right: 1px solid var(--border);
+}
+
+.sidebar[data-side="right"] {
+  border-left: 1px solid var(--border);
+}
+
+.sidebar[data-collapsed] {
+  width: calc(var(--hit) + 2 * var(--space-6));
+}
+
+.header {
+  padding: 0 var(--space-16);
+}
+
+.sidebar[data-collapsed] .header {
+  padding: 0 var(--space-6);
+}
+
+/* 見出しを残して中身だけをスクロールさせる */
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--space-16) var(--space-32);
+}
+
+.icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}

@@ -26,7 +26,7 @@
 .body {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24rem;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 0;
 }
 
@@ -37,12 +37,8 @@
   background: var(--surface-desk);
 }
 
-.inspector {
-  overflow: auto;
-  padding: var(--space-12) var(--space-16) var(--space-32);
-  border-left: 1px solid var(--border);
-  background: var(--surface-raised);
-  font-size: var(--text-m);
+.inspectorSidebar {
+  --sidebar-width: 24rem;
 }
 
 .section {
@@ -126,8 +122,8 @@
 
 /* iPad 横向きではインスペクタを詰め、キャンバスの幅を残す */
 @media (max-width: 1180px) {
-  .body {
-    grid-template-columns: minmax(0, 1fr) 20rem;
+  .inspectorSidebar {
+    --sidebar-width: 20rem;
   }
 }
 
