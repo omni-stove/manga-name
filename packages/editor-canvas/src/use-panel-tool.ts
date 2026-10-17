@@ -113,21 +113,24 @@ function boxOf(el: Element): ClientBox {
 
 /**
  * `panel` ツールの操作。何も無いところやコマの上のドラッグで矩形のコマを作り、作ったコマを選ぶ。
- * 選択中のコマはハンドルのドラッグでリサイズし、Shift を押しながら別のコマを押すとそのコマと結合する。
+ * 選択中のコマはハンドルのドラッグでリサイズし、`toggleMerge` の後か Shift を押しながら別のコマを押すと
+ * そのコマと結合する。
  * 多角形のコマは頂点のドラッグで頂点を動かし、矩形のコマも Alt を押しながら隅を引けば頂点を動かす。
  * 縦横の分割は `split` で行う。`startCut` の後か Alt を押しながらのドラッグで線を引くと、
  * 選択中のコマをその線で割る（縦横に近い線はそろえる）。ドラッグ中は `draft` を描くだけで、
  * Patch は pointerup で 1 回だけ出す。形の変わったコマのフキダシは、overflow でない限り新しい枠に収める。
- * 動かずに離したときは何もせず、クリックの選択は useSelection に任せる。Escape でドラッグと線の分割を取り消す
+ * 動かずに離したときは何もせず、クリックの選択は useSelection に任せる。Escape でドラッグと線の分割、結合を取り消す
  */
 export function usePanelTool(opts: Options) {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [cutFor, setCutFor] = useState<ID | null>(null)
+  const [mergeFor, setMergeFor] = useState<ID | null>(null)
   const gesture = useRef<Gesture | null>(null)
   const active = opts.tool === 'panel'
   const selectedId = opts.selection?.kind === 'panel' ? opts.selection.id : undefined
   const selected = active ? opts.page.panels.find((p) => p.id === selectedId) : undefined
   const cutting = selected !== undefined && cutFor === selected.id
+  const merging = selected !== undefined && mergeFor === selected.id
   const handleSize = opts.view.w * HANDLE_RATIO
   const commit = (patch: Patch) => {
     if (patch.length > 0) opts.onChange(fitBubblesPatch(patch, { w: opts.width, h: opts.height }))
@@ -164,13 +167,21 @@ export function usePanelTool(opts: Options) {
       if (at === null) return
       const client = { x: e.clientX, y: e.clientY }
       if (selected) {
+        // 結合モードでは隣のコマとの境目を押しても、選択中のコマのハンドルより結合を優先する
+        if (e.shiftKey || merging) {
+          const target = panelAt(opts.page, opts.width, opts.height, at.mm)
+          if (target && target.id !== selected.id) {
+            take(e, { kind: 'merge', pointerId: e.pointerId, targetId: target.id, client })
+            return
+          }
+        }
         const handle = handleAt(panelBox(selected, opts.width, opts.height), at.mm, handleSize)
         const vertex = selected.shape
           ? vertexAt(panelPolygon(selected, opts.width, opts.height), at.mm, handleSize)
           : e.altKey && handle !== undefined
             ? CORNER_INDEX[handle]
             : undefined
-        if (vertex !== undefined && !cutting) {
+        if (vertex !== undefined && !cutting && !merging) {
           take(e, { kind: 'vertex', pointerId: e.pointerId, panelId: selected.id, index: vertex })
           setDraft({ kind: 'outline', outline: panelOutline(selected), panelId: selected.id })
           return
@@ -196,13 +207,6 @@ export function usePanelTool(opts: Options) {
           })
           setDraft({ kind: 'outline', outline: panelOutline(selected), panelId: selected.id })
           return
-        }
-        if (e.shiftKey) {
-          const target = panelAt(opts.page, opts.width, opts.height, at.mm)
-          if (target && target.id !== selected.id) {
-            take(e, { kind: 'merge', pointerId: e.pointerId, targetId: target.id, client })
-            return
-          }
         }
       }
       capture(e.currentTarget, e.pointerId)
@@ -258,6 +262,8 @@ export function usePanelTool(opts: Options) {
       if (g.kind === 'merge') {
         if (selectedId === undefined) return
         const patch = mergePanelsPatch(opts.page, selectedId, g.targetId, opts.direction)
+        // 結合できない相手なら、モードを残して別のコマを選び直せるようにする
+        if (patch.length > 0) setMergeFor(null)
         commit(patch)
         return
       }
@@ -291,12 +297,13 @@ export function usePanelTool(opts: Options) {
     onPointerCancel(e: ReactPointerEvent<SVGSVGElement>) {
       if (gesture.current?.pointerId === e.pointerId) end()
     },
-    /** ドラッグ中か線の分割中の Escape を取り消しとして受けたら true。そのときは選択解除をさせない */
+    /** ドラッグ中か線の分割中か結合中の Escape を取り消しとして受けたら true。そのときは選択解除をさせない */
     onKeyDown(e: ReactKeyboardEvent<SVGSVGElement>): boolean {
-      if (e.key !== 'Escape' || (gesture.current === null && !cutting)) return false
+      if (e.key !== 'Escape' || (gesture.current === null && !cutting && !merging)) return false
       e.preventDefault()
       end()
       setCutFor(null)
+      setMergeFor(null)
       return true
     },
   }
@@ -309,15 +316,26 @@ export function usePanelTool(opts: Options) {
   }
 
   /** 選択中のコマを線で割るモードの切り替え。次のドラッグで引いた線で割る */
-  const toggleCut = () => setCutFor(cutting || !selected ? null : selected.id)
+  const toggleCut = () => {
+    setMergeFor(null)
+    setCutFor(cutting || !selected ? null : selected.id)
+  }
+
+  /** 選択中のコマと次に押したコマを結合するモードの切り替え */
+  const toggleMerge = () => {
+    setCutFor(null)
+    setMergeFor(merging || !selected ? null : selected.id)
+  }
 
   return {
     draft: active ? draft : null,
     selected,
     handleSize,
     cutting,
+    merging,
     split,
     toggleCut,
+    toggleMerge,
     handlers,
   }
 }

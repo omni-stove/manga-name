@@ -15,14 +15,19 @@ const CURSORS: Record<Handle, string> = {
   se: 'nwse-resize',
 }
 
-const BUTTON_W = 14
 const BUTTON_H = 5
-/** 分割ボタンをコマの左下から離す距離。左下のハンドルと掴む範囲が重ならないようにする */
+const BUTTON_FONT_SIZE = 2.4
+/** ボタンの文字の左右の余白 */
+const BUTTON_PAD = 1
+const BUTTON_GAP = 1.5
+/** コマの右下に出る「生成」ボタン（page-layer の GenerateButton）の幅と余白。分割と結合のボタンはここへ入れない */
+const GENERATE_SPACE = 12 + 1.5 + BUTTON_GAP
+/** 分割と結合のボタンをコマの左下から離す距離。左下のハンドルと掴む範囲が重ならないようにする */
 const BUTTON_INSET = 4
 
 /**
  * `panel` ツールの UI。ドラッグ中は作成、リサイズ、頂点の移動の後の輪郭か、分割線がコマを横切る区間を
- * 破線で描く。それ以外は選択中のコマにリサイズのハンドル、多角形なら頂点のハンドル、分割ボタンを出す
+ * 破線で描く。それ以外は選択中のコマにリサイズのハンドル、多角形なら頂点のハンドル、分割と結合のボタンを出す
  */
 export function PanelToolLayer({
   selected,
@@ -31,8 +36,10 @@ export function PanelToolLayer({
   height,
   handleSize,
   cutting,
+  merging,
   onSplit,
   onToggleCut,
+  onToggleMerge,
 }: {
   selected: Panel | undefined
   draft: Draft | null
@@ -42,8 +49,11 @@ export function PanelToolLayer({
   handleSize: number
   /** 線で割るモードの最中か */
   cutting: boolean
+  /** 次に押したコマと結合するモードの最中か */
+  merging: boolean
   onSplit(axis: SplitAxis): void
   onToggleCut(): void
+  onToggleMerge(): void
 }) {
   if (draft?.kind === 'cut') {
     const chord = selected && cutChord(selected, draft.cut)
@@ -85,9 +95,26 @@ export function PanelToolLayer({
   }
   if (!selected) return null
   const box = panelBox(selected, width, height)
-  const bx = box.x + BUTTON_INSET
-  const by = box.y + box.h - BUTTON_H - BUTTON_INSET
+  const left = box.x + BUTTON_INSET
+  const right = Math.max(left, box.x + box.w - GENERATE_SPACE)
+  const bottom = box.y + box.h - BUTTON_H - BUTTON_INSET
   const vertices = selected.shape ? panelPolygon(selected, width, height) : []
+  // 押下中に文字が変わっても後ろのボタンが動かないよう、幅は長い方の文字に合わせる。
+  // 1 行に収まらなければ上の行へ折り返す
+  const buttons = [
+    { labels: ['左右に分割'] },
+    { labels: ['上下に分割'] },
+    { labels: ['線で分割', '線を引いて分割'] },
+    { labels: ['結合', '結合先を選ぶ'] },
+  ].reduce<Slot[]>((acc, { labels }) => {
+    const w = buttonWidth(labels)
+    const prev = acc.at(-1)
+    if (!prev) return [{ x: left, y: bottom, w }]
+    const x = prev.x + prev.w + BUTTON_GAP
+    if (x + w <= right) return [...acc, { x, y: prev.y, w }]
+    return [...acc, { x: left, y: prev.y - BUTTON_H - BUTTON_GAP, w }]
+  }, [])
+  const [vertical, horizontal, cut, merge] = buttons as [Slot, Slot, Slot, Slot]
   return (
     <g data-layer="panel-tool">
       {handlePoints(box).map((h) => (
@@ -116,34 +143,47 @@ export function PanelToolLayer({
         />
       ))}
       <ToolButton
-        x={bx}
-        y={by}
+        {...vertical}
         label="左右に分割"
         data={{ 'data-split': 'vertical' }}
         onClick={() => onSplit('vertical')}
       />
       <ToolButton
-        x={bx + BUTTON_W + 1.5}
-        y={by}
+        {...horizontal}
         label="上下に分割"
         data={{ 'data-split': 'horizontal' }}
         onClick={() => onSplit('horizontal')}
       />
       <ToolButton
-        x={bx + (BUTTON_W + 1.5) * 2}
-        y={by}
+        {...cut}
         label={cutting ? '線を引いて分割' : '線で分割'}
         ariaLabel={cutting ? '線で分割するのをやめる' : 'コマを線で分割'}
         pressed={cutting}
         data={{ 'data-cut': '' }}
         onClick={onToggleCut}
       />
+      <ToolButton
+        {...merge}
+        label={merging ? '結合先を選ぶ' : '結合'}
+        ariaLabel={merging ? '結合するのをやめる' : 'コマを別のコマと結合'}
+        pressed={merging}
+        data={{ 'data-merge': '' }}
+        onClick={onToggleMerge}
+      />
     </g>
   )
 }
 
+type Slot = { x: number; y: number; w: number }
+
+/** labels のどれを出しても収まるボタンの幅。日本語の文字は 1 文字を 1em とみなす */
+function buttonWidth(labels: readonly string[]): number {
+  return Math.max(...labels.map((l) => l.length)) * BUTTON_FONT_SIZE + BUTTON_PAD * 2
+}
+
 function ToolButton({
   x,
+  w,
   y,
   label,
   ariaLabel,
@@ -152,6 +192,7 @@ function ToolButton({
   onClick,
 }: {
   x: number
+  w: number
   y: number
   label: string
   /** 省略時は「コマを{label}」 */
@@ -182,18 +223,20 @@ function ToolButton({
       <rect
         x={x}
         y={y}
-        width={BUTTON_W}
+        width={w}
         height={BUTTON_H}
         rx={1}
-        style={{ fill: GUIDE }}
-        fillOpacity={pressed ? 0.6 : 1}
+        // 押下中は白地に枠と文字を GUIDE で描き、押していないボタンと見分ける
+        style={pressed ? { fill: '#fff', stroke: GUIDE } : { fill: GUIDE }}
+        strokeWidth={1.5}
+        vectorEffect="non-scaling-stroke"
       />
       <text
-        x={x + BUTTON_W / 2}
+        x={x + w / 2}
         y={y + BUTTON_H / 2}
-        style={{ fill: 'var(--on-guide)' }}
+        style={{ fill: pressed ? GUIDE : 'var(--on-guide)' }}
         fontFamily={FONT_FAMILY}
-        fontSize={2.4}
+        fontSize={BUTTON_FONT_SIZE}
         textAnchor="middle"
         dominantBaseline="central"
       >

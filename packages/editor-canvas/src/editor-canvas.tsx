@@ -23,6 +23,7 @@ import { zoomOf } from './view'
 const STYLE = `
 .ec-generate { opacity: 0; pointer-events: none; transition: opacity 120ms; }
 .ec-overlay:hover .ec-generate, .ec-generate:focus-visible { opacity: 1; pointer-events: auto; }
+[data-layer="panel-tool"] [role="button"]:focus:not(:focus-visible) { outline: none; }
 `
 
 const HOVER = 'var(--guide-soft)'
@@ -40,7 +41,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * ズームとパンは viewBox で表す。ページの外側は作業台の色（`--surface-desk`）。
  * クリックで選択、ホバーで強調、Delete で削除、矢印キーで 0.01 刻みの移動。
  * `panel` ツールではドラッグでコマを作り、選択中のコマをハンドルでリサイズ、ボタンで縦横に分割、
- * 「線で分割」か Alt + ドラッグで引いた斜めの線で分割、Shift + クリックで結合する。多角形のコマは
+ * 「線で分割」か Alt + ドラッグで引いた斜めの線で分割、「結合」か Shift + クリックで押したコマと結合する。多角形のコマは
  * 頂点をドラッグで動かし、矩形のコマも Alt + 隅のドラッグで頂点を動かせる。
  * 端は他のコマとページの端に 0.01 以内で吸い付き、頂点は他のコマの頂点にも吸い付く。
  * `bubble` ツールではコマのクリックでフキダシを作り、ドラッグで移動、隅のハンドルでリサイズ、
@@ -293,8 +294,10 @@ export function EditorCanvas(props: EditorCanvasProps) {
         height={pageH}
         handleSize={panelTool.handleSize}
         cutting={panelTool.cutting}
+        merging={panelTool.merging}
         onSplit={panelTool.split}
         onToggleCut={panelTool.toggleCut}
+        onToggleMerge={panelTool.toggleMerge}
       />
       <BubbleToolLayer
         selected={bubbleTool.selected}
