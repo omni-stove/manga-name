@@ -12,6 +12,7 @@ import {
   type Point,
   type ProjectSettings,
   panelOutline,
+  polygonArea,
   type ReadingDirection,
 } from '@manga/schema'
 import { type Focus, panelFoci } from './focus'
@@ -164,8 +165,16 @@ const overlapIssues = (panels: readonly Panel[]): Issue[] => {
       const b = panels[j]
       if (!a || !b) continue
       // 斜めに割ったコマは囲む矩形どうしが重なるので、輪郭どうしの共通部分で見る
-      const { w, h } = boundsOf(intersectPolygons(panelOutline(a), convexHull(panelOutline(b))))
-      if (w >= OVERLAP_MIN - EPSILON && h >= OVERLAP_MIN - EPSILON) {
+      const common = intersectPolygons(panelOutline(a), convexHull(panelOutline(b)))
+      const { w, h } = boundsOf(common)
+      // 辺を共有するだけの接し方は共通部分が線分になり、囲む矩形だけでは斜めの線分を重なりと誤る。
+      // 囲む矩形が OVERLAP_MIN 四方の正方形のとき面積 ÷ 対角線が最小になるので、その値を厚みの下限にする
+      const thickness = Math.hypot(w, h) > 0 ? polygonArea(common) / Math.hypot(w, h) : 0
+      if (
+        w >= OVERLAP_MIN - EPSILON &&
+        h >= OVERLAP_MIN - EPSILON &&
+        thickness >= OVERLAP_MIN / Math.SQRT2 - EPSILON
+      ) {
         issues.push({
           severity: 'error',
           code: 'OVERLAP',
