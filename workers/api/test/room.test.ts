@@ -11,6 +11,7 @@ import { createApp } from '../src/app'
 import { readYDocSnapshot } from '../src/project-store'
 import { CLOSE_PROJECT_DELETED, restoreDoc } from '../src/room'
 import { createRoomStorage } from '../src/room-storage'
+import { SYNC_TICKET_TTL_MS } from '../src/sync-ticket'
 import { DEBUG_USER_HEADER } from '../src/user'
 
 const app = createApp()
@@ -141,11 +142,35 @@ async function createProject(user = 'alice') {
   return (await res.json()) as Project
 }
 
+async function issueTicket(id: string, user: string | null = 'alice', target = app) {
+  return target.request(
+    `/v1/projects/${id}/sync-ticket`,
+    { method: 'POST', headers: user === null ? {} : { [DEBUG_USER_HEADER]: user } },
+    env,
+  )
+}
+
+async function ticketFor(id: string, user = 'alice', target = app) {
+  const res = await issueTicket(id, user, target)
+  expect(res.status).toBe(201)
+  return ((await res.json()) as { ticket: string }).ticket
+}
+
+/** ブラウザの WebSocket と同じく、認証のヘッダを付けずにチケットだけでつなぐ */
+function upgradeWithTicket(id: string, ticket: string, target = app) {
+  return target.request(
+    `${syncPath(id)}?ticket=${encodeURIComponent(ticket)}`,
+    { headers: { upgrade: 'websocket' } },
+    env,
+  )
+}
+
 const room = (id: string) => env.PROJECT_ROOMS.get(env.PROJECT_ROOMS.idFromName(id))
 
 beforeEach(async () => {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM rate_limits'),
+    env.DB.prepare('DELETE FROM sync_tickets'),
     env.DB.prepare('DELETE FROM assets'),
     env.DB.prepare('DELETE FROM project_ydoc_chunks'),
     env.DB.prepare('DELETE FROM project_doc_chunks'),
@@ -240,6 +265,59 @@ describe('GET /v1/projects/:id/sync', () => {
     )
     ws.send('hello')
     expect(await closed).toBe(1003)
+  })
+})
+
+describe('sync tickets', () => {
+  test('a ticket connects without any auth header', async () => {
+    const project = await createProject()
+    const res = await upgradeWithTicket(project.id, await ticketFor(project.id))
+    expect(res.status).toBe(101)
+    res.webSocket?.accept()
+    res.webSocket?.close()
+  })
+
+  test('a ticket can be used only once', async () => {
+    const project = await createProject()
+    const ticket = await ticketFor(project.id)
+    const first = await upgradeWithTicket(project.id, ticket)
+    expect(first.status).toBe(101)
+    first.webSocket?.accept()
+    first.webSocket?.close()
+    expect((await upgradeWithTicket(project.id, ticket)).status).toBe(401)
+  })
+
+  test('401 after the ticket expires', async () => {
+    let clock = Date.now()
+    const timed = createApp({ now: () => clock })
+    const project = await createProject()
+    const ticket = await ticketFor(project.id, 'alice', timed)
+    clock += SYNC_TICKET_TTL_MS
+    expect((await upgradeWithTicket(project.id, ticket, timed)).status).toBe(401)
+  })
+
+  test('401 for an unknown ticket or one issued for another project', async () => {
+    const mine = await createProject()
+    const theirs = await createProject('bob')
+    expect((await upgradeWithTicket(mine.id, 'unknown')).status).toBe(401)
+    expect((await upgradeWithTicket(theirs.id, await ticketFor(mine.id))).status).toBe(401)
+  })
+
+  test('issuing needs a user who takes part in the project', async () => {
+    const project = await createProject()
+    expect((await issueTicket(project.id, null)).status).toBe(401)
+    expect((await issueTicket(project.id, 'bob')).status).toBe(404)
+    expect((await issueTicket('missing')).status).toBe(404)
+  })
+
+  test('the ticket is stored only as a hash', async () => {
+    const project = await createProject()
+    const ticket = await ticketFor(project.id)
+    const rows = await env.DB.prepare('SELECT token_hash FROM sync_tickets').all<{
+      token_hash: string
+    }>()
+    expect(rows.results).toHaveLength(1)
+    expect(rows.results[0]?.token_hash).not.toBe(ticket)
   })
 })
 

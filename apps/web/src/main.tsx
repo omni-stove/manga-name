@@ -48,11 +48,7 @@ const storage = cloud ?? local
 const sharing = createSharingClient({
   baseUrl,
   fetch: auth.fetch,
-  // CloudStorage はクラウドの id を同期の URL（/v1/projects/<id>/sync）でだけ外に出す
-  cloudId: async (id) => {
-    const url = (await cloud?.syncUrl(id)) ?? null
-    return url === null ? null : decodeURIComponent(new URL(url).pathname.split('/').at(-2) ?? '')
-  },
+  cloudId: async (id) => (await cloud?.cloudId(id)) ?? null,
 })
 // 本番の同期サーバにつなぐのは別タスクなので、e2e のビルドだけ同じブラウザのタブ同士でつなぐ
 const library = createProjectLibrary(storage, {
