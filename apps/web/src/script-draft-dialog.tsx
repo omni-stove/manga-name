@@ -265,7 +265,7 @@ export function ScriptDraftDialog({
         </p>
       )}
       {phase.kind === 'failed' && (
-        <FailureAlert failure="提案を作れませんでした" error={phase.error} />
+        <FailureAlert failure="提案を作れませんでした" error={phase.error} signInButton={false} />
       )}
     </Dialog>
   )

@@ -20,15 +20,24 @@ export function SignInButton(props: Omit<ButtonProps, 'onClick' | 'children'>) {
 
 /**
  * 「<failure>: <理由>」のエラー表示。未ログインのせいなら、その場でログインできるボタンを添える。
- * サーバ側でセッションが失効してもクライアントはログイン中のままなので、ログイン中でもボタンを出す
+ * サーバ側でセッションが失効してもクライアントはログイン中のままなので、ログイン中でもボタンを出す。
+ * ログインはページごと遷移するので、未保存の入力がある画面は `signInButton={false}` でボタンを省く
  */
-export function FailureAlert({ failure, error }: { failure: string; error: unknown }) {
+export function FailureAlert({
+  failure,
+  error,
+  signInButton = true,
+}: {
+  failure: string
+  error: unknown
+  signInButton?: boolean
+}) {
   return (
     <p className={`${common.error} ${common.actions}`} role="alert">
       <span>
         {failure}: {errorMessage(error)}
       </span>
-      {needsSignIn(error) && <SignInButton size="small" variant="primary" />}
+      {signInButton && needsSignIn(error) && <SignInButton size="small" variant="primary" />}
     </p>
   )
 }
