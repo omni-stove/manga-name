@@ -60,7 +60,9 @@ function isApplied(page: Page, patch: Patch): boolean {
     const vector = VECTOR_PATH.exec(op.path)
     if (vector && op.op === 'add') {
       const value = JSON.stringify(op.value)
-      return page.panels[Number(vector[1])]?.vectors.some((v) => JSON.stringify(v) === value) ?? false
+      return (
+        page.panels[Number(vector[1])]?.vectors.some((v) => JSON.stringify(v) === value) ?? false
+      )
     }
     const pos = POS_PATH.exec(op.path)
     if (!pos || op.op !== 'replace') return false
@@ -216,6 +218,24 @@ if (import.meta.vitest) {
     const suggestion = aiFixtures.critique.suggestions[1] as Suggestion
     applySuggestion(store, pageId, suggestion)
     expect(() => applySuggestion(store, pageId, suggestion)).toThrow('もう適用')
+  })
+
+  test('既存の id で中身の違うベクトルの追加は適用済みにせず、拒否する', () => {
+    const index = page.panels.findIndex((p) => p.vectors.length > 0)
+    const existing = page.panels[index]?.vectors[0]
+    expect(existing).toBeDefined()
+    if (!existing) return
+    const suggestion: Suggestion = {
+      message: '既存の id でベクトルを足す',
+      patch: [
+        {
+          op: 'add',
+          path: `/panels/${index}/vectors/-`,
+          value: { ...existing, to: { x: existing.from.x, y: existing.from.y } },
+        },
+      ],
+    }
+    expect(suggestionState(page, suggestion).kind).toBe('rejected')
   })
 
   test('touchedPanelIds lists the panels a patch touches', () => {
