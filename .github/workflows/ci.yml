@@ -77,7 +77,7 @@ jobs:
               - *typecheck
               - "!workers/**"
 
-      # test-workers: workers/api と、それが import するパッケージ（packages/ai は docs/fixtures/ai を読む）
+      # test-workers: workers/api と、それが import するパッケージ（packages/schema と packages/ai は docs/fixtures を読む）
       - uses: dorny/paths-filter@v3
         id: include
         if: github.event_name == 'pull_request'
@@ -88,7 +88,7 @@ jobs:
               - "packages/schema/**"
               - "packages/ai/**"
               - "packages/diagnosis/**"
-              - "docs/fixtures/ai/**"
+              - "docs/fixtures/**"
               - "package.json"
               - "pnpm-lock.yaml"
               - "pnpm-workspace.yaml"
