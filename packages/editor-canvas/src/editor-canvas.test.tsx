@@ -667,6 +667,62 @@ describe('panel tool', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
+  test('"結合" then a click on another panel merges, and the mode ends', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({
+      tool: 'panel',
+      onChange,
+      onSelect,
+      selection: { kind: 'panel', id: 'pn_5' },
+    })
+    layout(svg)
+    const button = must(svg.querySelector('[data-merge]'))
+    act(() => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    const at = clientAt(0.2, 0.95)
+    fire(svg, pointer('pointerdown', { id: 1, ...at }))
+    fire(svg, pointer('pointerup', { id: 1, ...at }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(patchOf(onChange)).toEqual([
+      {
+        op: 'replace',
+        path: '/panels/4',
+        value: expect.objectContaining({ id: 'pn_5', rect: { x: 0, y: 0.835, w: 1, h: 0.165 } }),
+      },
+      { op: 'remove', path: '/panels/5' },
+    ])
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(must(svg.querySelector('[data-merge]')).getAttribute('aria-pressed')).toBe('false')
+  })
+
+  test('"結合" stays on after a refused merge, and Escape cancels it', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({
+      tool: 'panel',
+      onChange,
+      onSelect,
+      selection: { kind: 'panel', id: 'pn_2' },
+    })
+    layout(svg)
+    act(() => {
+      must(svg.querySelector('[data-merge]')).dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      )
+    })
+    const at = clientAt(0.2, 0.95)
+    fire(svg, pointer('pointerdown', { id: 1, ...at }))
+    fire(svg, pointer('pointerup', { id: 1, ...at }))
+    expect(onChange).not.toHaveBeenCalled()
+    expect(must(svg.querySelector('[data-merge]')).getAttribute('aria-pressed')).toBe('true')
+    key(svg, { key: 'Escape' })
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(must(svg.querySelector('[data-merge]')).getAttribute('aria-pressed')).toBe('false')
+  })
+
   test('a merge that would cover another panel emits nothing', async () => {
     const onChange = vi.fn()
     const svg = await render({
