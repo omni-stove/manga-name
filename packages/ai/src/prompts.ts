@@ -7,6 +7,7 @@ import {
   type PageDiagnosis,
   type Panel,
   type Point,
+  pageCharacterIds,
   pagePlanJsonSchema,
   panelCharacterIds,
   StrengthSchema,
@@ -17,6 +18,7 @@ import {
   type CritiqueRequest,
   findPanel,
   type LayoutProposalRequest,
+  type PageArtRequest,
   type PagePlanRequest,
   type PanelArtRequest,
 } from './provider'
@@ -61,21 +63,24 @@ function panelCharacters(panel: Panel, characters: Character[]): Character[] {
   return panelCharacterIds(panel).flatMap((id) => characters.filter((c) => c.id === id))
 }
 
-/**
- * 画像生成プロンプト。parts の順に要素を改行で連結し、空の要素は飛ばす。
- * negative は settings.style.negative（無ければ空文字）。
- */
-function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: string } {
-  const { settings, characters } = req.project
-  const panel = findPanel(req.page, req.panelId)
+const describeCharacter = (c: Character) => (c.appearance ? `${c.name}: ${c.appearance}` : c.name)
 
+/**
+ * コマの中身を表す行。カメラ、指示メモ、登場キャラ、焦点（重い順）、誘導線、ヒント。空の行も含む。
+ * `appearance` が false なら登場キャラは名前だけにする
+ */
+function panelContent(
+  panel: Panel,
+  characters: Character[],
+  hint: string | undefined,
+  appearance: boolean,
+): (string | undefined)[] {
   const focusByWeight = [...panel.focusPoints].sort((a, b) => b.weight - a.weight)
-  const parts: (string | undefined)[] = [
-    settings.style.prompt,
+  return [
     panel.camera && `camera: ${panel.camera}`,
     panel.note,
     panelCharacters(panel, characters)
-      .map((c) => (c.appearance ? `${c.name}: ${c.appearance}` : c.name))
+      .map((c) => (appearance ? describeCharacter(c) : c.name))
       .join('; '),
     focusByWeight.map((f) => f.label).join('; '),
     panel.vectors
@@ -84,13 +89,70 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
           `${v.kind} from ${endpointLabel(panel, v.sourceFocusId, v.from)} to ${endpointLabel(panel, v.targetFocusId, v.to)}`,
       )
       .join('; '),
-    req.hint,
-    req.instruction && `revise the previous image: ${req.instruction}`,
-    PANEL_ART_TAIL,
+    hint,
   ]
+}
+
+const joinLines = (parts: (string | undefined)[]) =>
+  parts.filter((p): p is string => Boolean(p)).join('\n')
+
+/**
+ * 画像生成プロンプト。parts の順に要素を改行で連結し、空の要素は飛ばす。
+ * negative は settings.style.negative（無ければ空文字）。
+ */
+function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: string } {
+  const { settings, characters } = req.project
+  const panel = findPanel(req.page, req.panelId)
 
   return {
-    prompt: parts.filter((p): p is string => Boolean(p)).join('\n'),
+    prompt: joinLines([
+      settings.style.prompt,
+      ...panelContent(panel, characters, req.hint, true),
+      req.instruction && `revise the previous image: ${req.instruction}`,
+      PANEL_ART_TAIL,
+    ]),
+    negative: settings.style.negative ?? '',
+  }
+}
+
+export type PageArtPromptRequest = Omit<
+  PageArtRequest,
+  'layoutPng' | 'referencePng' | 'characterRefs'
+>
+
+/** ページ全体の生成の説明。配置図のどこが何かと、コマの枠を動かさないこと */
+const PAGE_ART_HEAD =
+  'one whole manga page drawn to the layout image: each grey area is a panel and the black lines are its border. Draw every panel inside its border and keep the gutters between panels white.'
+
+const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from + size).toFixed(2)}`
+
+/**
+ * ページ全体の画像生成プロンプト。スタイル、配置図の説明、ページの登場キャラの外見、
+ * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで）、固定の末尾を改行で連結する。
+ * negative は panelArt と同じ。
+ */
+function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string } {
+  const { settings, characters } = req.project
+  const cast = pageCharacterIds(req.page).flatMap((id) => characters.filter((c) => c.id === id))
+  const panels = [...req.page.panels]
+    .sort((a, b) => a.order - b.order)
+    .map((panel) => {
+      const { x, y, w, h } = panel.rect
+      const content = panelContent(panel, characters, req.hints?.[panel.id], false)
+        .filter((p): p is string => Boolean(p))
+        .join('; ')
+      const where = `panel ${panel.order} (x ${formatSpan(x, w)}, y ${formatSpan(y, h)})`
+      return content ? `${where}: ${content}` : where
+    })
+
+  return {
+    prompt: joinLines([
+      settings.style.prompt,
+      PAGE_ART_HEAD,
+      cast.length > 0 ? `characters: ${cast.map(describeCharacter).join('; ')}` : undefined,
+      ...panels,
+      PANEL_ART_TAIL,
+    ]),
     negative: settings.style.negative ?? '',
   }
 }
@@ -351,13 +413,82 @@ function critique(req: CritiqueRequest): LlmPrompt {
   return { system, user, schema }
 }
 
-export const prompts = { panelArt, characterArt, planPages, proposeLayout, critique }
+export const prompts = { panelArt, pageArt, characterArt, planPages, proposeLayout, critique }
 
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
   const { fixtures } = await import('@manga/schema')
 
   const project = fixtures.samplePage01
+
+  test('panelArt joins the style, the panel content with appearances, and the tail', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const { prompt, negative } = prompts.panelArt({
+      project,
+      page,
+      panelId: 'pn_1',
+      hint: 'ヒント',
+      instruction: '明るく',
+    })
+    const lines = prompt.split('\n')
+    expect(lines[0]).toBe(project.settings.style.prompt)
+    expect(lines).toContain('ヒント')
+    expect(lines).toContain('revise the previous image: 明るく')
+    expect(lines.at(-1)).toBe(PANEL_ART_TAIL)
+    expect(negative).toBe(project.settings.style.negative ?? '')
+  })
+
+  test('pageArt lists the cast once and one line per panel in reading order with its span', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const panel = page.panels.find((p) => p.order === 1) as Panel
+    const { prompt, negative } = prompts.pageArt({
+      project,
+      page: { ...page, panels: [...page.panels].reverse() },
+      hints: { [panel.id]: 'ヒント' },
+    })
+    const lines = prompt.split('\n')
+    expect(lines.slice(0, 2)).toEqual([project.settings.style.prompt, PAGE_ART_HEAD])
+    expect(lines.filter((l) => l.startsWith('characters: '))).toHaveLength(1)
+    const panelLines = lines.filter((l) => l.startsWith('panel '))
+    expect(panelLines.map((l) => Number(l.split(' ')[1]))).toEqual(
+      page.panels.map((p) => p.order).sort((a, b) => a - b),
+    )
+    const { x, y, w, h } = panel.rect
+    expect(panelLines[0]).toContain(
+      `panel 1 (x ${x.toFixed(2)}-${(x + w).toFixed(2)}, y ${y.toFixed(2)}-${(y + h).toFixed(2)}): `,
+    )
+    expect(panelLines[0]?.endsWith('; ヒント')).toBe(true)
+    expect(lines.at(-1)).toBe(PANEL_ART_TAIL)
+    expect(negative).toBe(project.settings.style.negative ?? '')
+  })
+
+  test('pageArt leaves out the cast line and the colon for a bare page', () => {
+    const bare: Page = {
+      id: 'pg',
+      side: 'single',
+      scribbles: [],
+      panels: [
+        {
+          id: 'pn',
+          order: 1,
+          rect: { x: 0, y: 0, w: 1, h: 1 },
+          bubbles: [],
+          focusPoints: [],
+          vectors: [],
+          arts: [],
+        },
+      ],
+    }
+    const { prompt } = prompts.pageArt({
+      project: { settings: { ...project.settings, style: { prompt: '' } }, characters: [] },
+      page: bare,
+    })
+    expect(prompt.split('\n')).toEqual([
+      PAGE_ART_HEAD,
+      'panel 1 (x 0.00-1.00, y 0.00-1.00)',
+      PANEL_ART_TAIL,
+    ])
+  })
 
   test('characterArt joins the style, the name with the appearance, and the fixed tail', () => {
     const character = { id: 'c', name: 'エル', shortName: 'L', appearance: '銀髪、黒いコート' }

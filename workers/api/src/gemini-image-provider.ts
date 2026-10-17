@@ -1,11 +1,11 @@
-import { findPanel, type ImageProvider, prompts } from '@manga/ai'
-import type { Panel, ProjectSettings } from '@manga/schema'
+import { findPanel, type ImageProvider, type PanelArtRequest, prompts } from '@manga/ai'
+import type { Character } from '@manga/schema'
 
 const GEMINI_IMAGE_MODEL = 'gemini-nano-banana-2.1'
 
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`
 
-/** imageConfig.aspectRatio が受け付ける比。コマの比はここから最も近いものに丸める */
+/** imageConfig.aspectRatio が受け付ける比。コマやページの比はここから最も近いものに丸める */
 const ASPECT_RATIOS = [
   [1, 1],
   [2, 3],
@@ -31,11 +31,12 @@ interface GenerateContentResponse {
   candidates?: { content?: { parts?: { inlineData?: { mimeType?: string; data?: string } }[] } }[]
 }
 
-/** コマの実寸の幅 / 高さに最も近い aspectRatio。比の対数の差で比べる */
-function aspectRatio(panel: Panel, settings: ProjectSettings): string {
-  const target = Math.log(
-    (panel.rect.w * settings.pageSize.w) / (panel.rect.h * settings.pageSize.h),
-  )
+/** 1 回に渡せるキャラの参照画像の上限。Gemini は参照画像を計 14 枚、うちキャラを 4 枚まで受ける */
+const MAX_CHARACTER_REFS = 4
+
+/** 実寸の幅 / 高さに最も近い aspectRatio。比の対数の差で比べる */
+function aspectRatio(width: number, height: number): string {
+  const target = Math.log(width / height)
   const [w, h] = ASPECT_RATIOS.reduce((best, r) =>
     Math.abs(Math.log(r[0] / r[1]) - target) < Math.abs(Math.log(best[0] / best[1]) - target)
       ? r
@@ -77,9 +78,27 @@ const CHARACTER_ASPECT_RATIO = '3:4'
 const withNegative = ({ prompt, negative }: { prompt: string; negative: string }) =>
   negative ? `${prompt}\navoid: ${negative}` : prompt
 
+/** キャラ参照の parts。直前のテキスト part にキャラ名を置く。居ないキャラは飛ばし、先頭から MAX_CHARACTER_REFS 人まで */
+async function characterParts(
+  refs: PanelArtRequest['characterRefs'],
+  characters: readonly Character[],
+): Promise<Part[]> {
+  const known = (refs ?? []).flatMap((ref) => {
+    const character = characters.find((c) => c.id === ref.characterId)
+    return character ? [{ name: character.name, image: ref.image }] : []
+  })
+  const parts = await Promise.all(
+    known
+      .slice(0, MAX_CHARACTER_REFS)
+      .map(async ({ name, image }): Promise<Part[]> => [{ text: name }, await imagePart(image)]),
+  )
+  return parts.flat()
+}
+
 /**
  * Gemini `gemini-nano-banana-2.1` の generateContent で 1K の画像を 1 枚生成する ImageProvider。
- * コマの parts は配置図、参照画像、キャラ参照（直前のテキスト part にキャラ名）、前回の絵、プロンプトの順。
+ * コマの parts は配置図、参照画像、キャラ参照（直前のテキスト part にキャラ名）、前回の絵、プロンプトの順。比はコマの実寸に最も近いもの。
+ * ページの parts は前回の絵が無いほかは同じで、比は判型に最も近いもの。キャラ参照はどちらも先頭の 4 人まで。
  * キャラの参照画像の parts はプロンプトだけで、比は 3:4。
  * negative は「avoid: 」としてプロンプトの末尾に足し、足した後の文を prompt として返す。
  * 応答の画像が PNG でなければ toPng で変換する。画像が無ければ空の Blob を返し、PNG かどうかの判定と再試行は呼び出し側に任せる。HTTP エラーは throw する。
@@ -116,16 +135,28 @@ export function createGeminiImageProvider(opts: GeminiImageProviderOptions): Ima
       )
       const panel = findPanel(req.page, req.panelId)
 
+      const { pageSize } = req.project.settings
+
       const parts: Part[] = [await imagePart(req.layoutPng)]
       if (req.referencePng) parts.push(await imagePart(req.referencePng))
-      for (const ref of req.characterRefs ?? []) {
-        const character = req.project.characters.find((c) => c.id === ref.characterId)
-        if (!character) continue
-        parts.push({ text: character.name }, await imagePart(ref.image))
-      }
+      parts.push(...(await characterParts(req.characterRefs, req.project.characters)))
       if (req.previous) parts.push(await imagePart(req.previous.art))
       parts.push({ text: prompt })
-      return generate(parts, aspectRatio(panel, req.project.settings), prompt)
+      return generate(
+        parts,
+        aspectRatio(panel.rect.w * pageSize.w, panel.rect.h * pageSize.h),
+        prompt,
+      )
+    },
+    async generatePageArt(req) {
+      const prompt = withNegative(prompts.pageArt(req))
+      const { pageSize } = req.project.settings
+
+      const parts: Part[] = [await imagePart(req.layoutPng)]
+      if (req.referencePng) parts.push(await imagePart(req.referencePng))
+      parts.push(...(await characterParts(req.characterRefs, req.project.characters)))
+      parts.push({ text: prompt })
+      return generate(parts, aspectRatio(pageSize.w, pageSize.h), prompt)
     },
     async generateCharacterArt(req) {
       const prompt = withNegative(prompts.characterArt(req))

@@ -154,6 +154,26 @@ describe('monthly generation limit', () => {
     expect(usage.remaining).toBe(0)
   })
 
+  test('a whole page counts as one generation however many panels it has', async () => {
+    const page = fixtures.samplePage01.episodes[0]?.pages[0]
+    const { settings, characters } = fixtures.samplePage01
+    await seedUsage('alice', monthlyLimit - 1, NOW - 3_600_000)
+    const pageArt = () => {
+      const form = new FormData()
+      form.set('json', JSON.stringify({ project: { settings, characters }, page }))
+      form.set('layout', new Blob(['layout'], { type: 'image/png' }), 'layout.png')
+      return app.request(
+        '/v1/ai/page-art',
+        { method: 'POST', headers: { [DEBUG_USER_HEADER]: 'alice' }, body: form },
+        env,
+      )
+    }
+    expect(page?.panels.length).toBeGreaterThan(1)
+    expect((await pageArt()).status).toBe(200)
+    expect(await usageCount()).toBe(monthlyLimit)
+    expect((await pageArt()).status).toBe(402)
+  })
+
   test('the limit is per user and resets in the next month', async () => {
     await seedUsage('alice', monthlyLimit, NOW - 3_600_000)
     expect((await generate()).status).toBe(402)

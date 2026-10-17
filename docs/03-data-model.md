@@ -308,6 +308,10 @@ interface RenderOptions {
 function renderPage(page: Page, ctx: RenderContext, opts: RenderOptions): Promise<Blob>;
 /** 生成に渡す配置図。コマ枠内を対象にし、フキダシ領域を白、それ以外を薄灰で塗った PNG */
 function renderLayoutPng(page: Page, panelId: ID, opts: { width: number }): Promise<Blob>;
+/** ページ全体の生成に渡す配置図。白地にコマの内側を薄灰、フキダシ領域を白、コマ枠を黒で描いた PNG */
+function renderPageLayoutPng(page: Page, opts: { width: number }): Promise<Blob>;
+/** ページ全体の絵を各コマを囲む rect で切り抜く。切り抜きがそのコマの PanelArt になる */
+function cropPanelArts(page: Page, image: Blob): Promise<{ panelId: ID; image: Blob }[]>;
 /** エピソードの全ページを PDF に束ねる */
 function exportPdf(
   project: Project,
@@ -341,8 +345,21 @@ interface PanelArtRequest {
   /** 再生成時。前回の絵と修正指示 */
   previous?: { art: Blob; instruction: string };
 }
+/** ページ 1 枚分の絵を 1 回で作る。修正指示つきの再生成はコマ単位だけ */
+interface PageArtRequest {
+  project: Pick<Project, 'settings' | 'characters'>;
+  page: Page;
+  /** render.renderPageLayoutPng の出力 */
+  layoutPng: Blob;
+  /** コマごとの診断のヒント。キーは Panel.id。省略可 */
+  hints?: Record<ID, string>;
+  /** Page.reference をページ丸ごと。省略可 */
+  referencePng?: Blob;
+  /** ページに登場するキャラの参照画像。出るコマの多い順。省略可 */
+  characterRefs?: { characterId: ID; image: Blob }[];
+}
 interface PanelArtResponse {
-  image: Blob;                          // PNG
+  image: Blob;                          // PNG。generatePageArt ではページ全体
   provider: string;
   prompt: string;
 }
@@ -379,6 +396,8 @@ interface CritiqueResponse {
 
 interface ImageProvider {
   generatePanelArt(req: PanelArtRequest): Promise<PanelArtResponse>;
+  generatePageArt(req: PageArtRequest): Promise<PanelArtResponse>;
+  generateCharacterArt(req: CharacterArtRequest): Promise<PanelArtResponse>;
 }
 interface LlmProvider {
   planPages(req: PagePlanRequest): Promise<PagePlanResponse>;

@@ -148,6 +148,75 @@ describe('POST /v1/ai/panel-art', () => {
   })
 })
 
+describe('POST /v1/ai/page-art', () => {
+  const request = (app: ReturnType<typeof createApp>, form: FormData) =>
+    app.request(
+      '/v1/ai/page-art',
+      { method: 'POST', headers: { [DEBUG_USER_HEADER]: 'alice' }, body: form },
+      env,
+    )
+  const pageArtBody = (json: unknown = { project: { settings, characters }, page }) => {
+    const form = new FormData()
+    form.set('json', JSON.stringify(json))
+    form.set('layout', new Blob(['layout'], { type: 'image/png' }), 'layout.png')
+    return form
+  }
+
+  test('returns the whole page from the fake provider and records one generation', async () => {
+    const res = await request(createApp(), pageArtBody())
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/png')
+    expect(decodeURIComponent(res.headers.get('x-ai-prompt') ?? '')).toContain('panel 6 (')
+    expect(isDecodablePng(new Uint8Array(await res.arrayBuffer()))).toBe(true)
+    expect((await usageRows()).results).toEqual([
+      { user_id: 'alice', kind: 'page-art', cost_units: 1 },
+    ])
+  })
+
+  test('passes the hints, the reference and the character refs to the provider once', async () => {
+    const fake = createFakeImageProvider()
+    const seen: Parameters<ImageProvider['generatePageArt']>[0][] = []
+    const recording: ImageProvider = {
+      ...fake,
+      async generatePageArt(req) {
+        seen.push(req)
+        return fake.generatePageArt(req)
+      },
+    }
+    const form = pageArtBody({
+      project: { settings, characters },
+      page,
+      hints: { [panel.id]: 'ヒント' },
+    })
+    form.set('reference', new Blob(['ref'], { type: 'image/png' }), 'reference.png')
+    form.set('character_chr_e', new Blob(['e'], { type: 'image/png' }), 'chr_e.png')
+    const res = await request(createApp({ imageProvider: () => recording }), form)
+    expect(res.status).toBe(200)
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.hints).toEqual({ [panel.id]: 'ヒント' })
+    expect(await seen[0]?.referencePng?.text()).toBe('ref')
+    expect(seen[0]?.characterRefs?.map((r) => r.characterId)).toEqual(['chr_e'])
+  })
+
+  test('400 without a page, and nothing is recorded', async () => {
+    const res = await request(createApp(), pageArtBody({ project: { settings, characters } }))
+    expect(res.status).toBe(400)
+    expect((await usageRows()).results).toHaveLength(0)
+  })
+
+  test('502 after the retry still returns an invalid image', async () => {
+    const broken: ImageProvider = {
+      ...createFakeImageProvider(),
+      async generatePageArt() {
+        return { image: new Blob(['not a png']), provider: 'broken', prompt: 'p' }
+      },
+    }
+    const res = await request(createApp({ imageProvider: () => broken }), pageArtBody())
+    expect(res.status).toBe(502)
+    expect((await usageRows()).results[0]?.cost_units).toBe(2)
+  })
+})
+
 describe('POST /v1/ai/character-art', () => {
   const character = { id: 'c1', name: 'エル', shortName: 'L', appearance: '銀髪' }
   const request = (app: ReturnType<typeof createApp>, body: unknown) =>

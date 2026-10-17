@@ -4,6 +4,7 @@ import type {
   ID,
   LayoutProposalResponse,
   Page,
+  PageArtRequest,
   PageDiagnosis,
   PagePlanResponse,
   PanelArtRequest,
@@ -14,6 +15,7 @@ export type {
   CharacterArtRequest,
   CritiqueResponse,
   LayoutProposalResponse,
+  PageArtRequest,
   PagePlanResponse,
   PanelArtRequest,
 }
@@ -44,6 +46,8 @@ export interface CritiqueRequest {
 
 export interface ImageProvider {
   generatePanelArt(req: PanelArtRequest): Promise<PanelArtResponse>
+  /** ページ 1 枚分の絵を 1 回で作る。image はページ全体で、コマへの切り抜きは呼び出し側がする */
+  generatePageArt(req: PageArtRequest): Promise<PanelArtResponse>
   /** キャラの参照画像を名前と外見から 1 枚作る。縦長の全身 */
   generateCharacterArt(req: CharacterArtRequest): Promise<PanelArtResponse>
 }

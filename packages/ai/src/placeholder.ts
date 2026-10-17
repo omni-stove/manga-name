@@ -1,9 +1,18 @@
-import type { Panel, ProjectSettings } from '@manga/schema'
+import {
+  type Page,
+  type Panel,
+  type Point,
+  type ProjectSettings,
+  panelOutline,
+} from '@manga/schema'
 import { encodeGrayPng } from './png'
 
 const GRAY = 0xc0
 const INK = 0x40
 const LONG_SIDE = 512
+/** ページ全体の代わりの画像の長辺。切り抜いた 1 コマが LONG_SIDE の矩形と見比べられる大きさにする */
+const PAGE_LONG_SIDE = 1024
+const PAPER = 0xff
 
 /** 5x7 のビットマップ数字。上の行から、1 が点灯 */
 const DIGITS: Record<string, number[]> = {
@@ -72,6 +81,10 @@ export function placeholderPng(
   order: number,
   size: { w: number; h: number },
 ): Uint8Array<ArrayBuffer> {
+  return encodeGrayPng(size.w, size.h, placeholderPixels(order, size))
+}
+
+function placeholderPixels(order: number, size: { w: number; h: number }): Uint8Array {
   const r = createRaster(size.w, size.h)
   const border = Math.max(2, Math.round(Math.min(size.w, size.h) / 64))
   r.fill(0, 0, size.w, border)
@@ -95,7 +108,51 @@ export function placeholderPng(
     }
   }
   r.text(digits, x0, y0, scale)
-  return encodeGrayPng(size.w, size.h, r.pixels)
+  return r.pixels
+}
+
+/** 点 p が多角形 outline の内側か。偶奇規則 */
+function inside(outline: readonly Point[], p: Point): boolean {
+  let hit = false
+  for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) {
+    const a = outline[i] as Point
+    const b = outline[j] as Point
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) {
+      hit = !hit
+    }
+  }
+  return hit
+}
+
+/**
+ * ページ全体の生成画像の代わり。白地の各コマの輪郭の内側に、コマを囲む矩形の寸法で描いた placeholderPng の画素を置く。
+ * 長辺 1024px で判型の縦横比。コマの rect で切り抜くと、そのコマの placeholderPng とほぼ同じ絵になる
+ */
+export function placeholderPagePng(page: Page, settings: ProjectSettings): Uint8Array<ArrayBuffer> {
+  const aspect = settings.pageSize.w / settings.pageSize.h
+  const width = aspect >= 1 ? PAGE_LONG_SIDE : Math.max(1, Math.round(PAGE_LONG_SIDE * aspect))
+  const height = aspect >= 1 ? Math.max(1, Math.round(PAGE_LONG_SIDE / aspect)) : PAGE_LONG_SIDE
+  const pixels = new Uint8Array(width * height).fill(PAPER)
+  for (const panel of page.panels) {
+    const x0 = Math.round(panel.rect.x * width)
+    const y0 = Math.round(panel.rect.y * height)
+    const w = Math.max(1, Math.round((panel.rect.x + panel.rect.w) * width) - x0)
+    const h = Math.max(1, Math.round((panel.rect.y + panel.rect.h) * height) - y0)
+    const art = placeholderPixels(panel.order, { w, h })
+    const outline = panel.shape && panelOutline(panel)
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const px = x0 + x
+        const py = y0 + y
+        if (px >= width || py >= height) continue
+        if (outline && !inside(outline, { x: (px + 0.5) / width, y: (py + 0.5) / height })) {
+          continue
+        }
+        pixels[py * width + px] = art[y * w + x] as number
+      }
+    }
+  }
+  return encodeGrayPng(width, height, pixels)
 }
 
 if (import.meta.vitest) {
@@ -147,6 +204,43 @@ if (import.meta.vitest) {
     for (let x = 27; x < 37; x++) expect(png.at(x, 9)).toBe(INK)
     expect(png.at(31, 15)).toBe(GRAY)
     expect(png.at(32, 16)).toBe(GRAY)
+  })
+
+  test('placeholderPagePng puts each panel placeholder at its rect on white paper', async () => {
+    const sample = fixtures.samplePage01.episodes[0]?.pages[0] as Page
+    const png = await decode(placeholderPagePng(sample, settings))
+    expect(png.height).toBe(1024)
+    expect(png.width).toBe(Math.round((1024 * settings.pageSize.w) / settings.pageSize.h))
+    for (const p of sample.panels) {
+      // 矩形の左上の角は placeholderPng の枠線
+      const x = Math.round(p.rect.x * png.width)
+      const y = Math.round(p.rect.y * png.height)
+      expect(png.at(x, y), p.id).toBe(INK)
+    }
+    // pn_3 と pn_2 の間の隙間は紙の白
+    expect(png.at(Math.round(0.49 * png.width), Math.round(0.39 * png.height))).toBe(PAPER)
+  })
+
+  test('placeholderPagePng leaves the outside of a shaped panel white', async () => {
+    const triangle: Page = {
+      id: 'pg',
+      side: 'single',
+      scribbles: [],
+      panels: [
+        {
+          ...panel,
+          rect: { x: 0, y: 0, w: 1, h: 1 },
+          shape: [
+            { x: 0, y: 0 },
+            { x: 1, y: 0 },
+            { x: 0, y: 1 },
+          ],
+        },
+      ],
+    }
+    const png = await decode(placeholderPagePng(triangle, page(100, 100)))
+    expect(png.at(10, 50)).not.toBe(PAPER)
+    expect(png.at(1000, 1000)).toBe(PAPER)
   })
 
   test('placeholderPng is byte-for-byte deterministic and differs by order', () => {

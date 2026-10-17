@@ -15,6 +15,22 @@ export const PanelArtRequestSchema = z.object({
   previous: z.object({ art: blob, instruction: z.string() }).optional(),
 })
 
+/**
+ * ページ 1 枚分の絵を 1 回で作る要求。返った絵は Web が各コマの rect で切り抜いて PanelArt にする。
+ * 修正指示つきの再生成はコマ単位（PanelArtRequest）でだけ受ける
+ */
+export const PageArtRequestSchema = z.object({
+  project: ProjectBaseSchema.pick({ settings: true, characters: true }),
+  page: PageSchema,
+  /** render.renderPageLayoutPng の出力 */
+  layoutPng: blob,
+  /** コマごとの診断のヒント。キーは Panel.id */
+  hints: z.record(IdSchema, z.string()).optional(),
+  /** Page.reference をページ丸ごと */
+  referencePng: blob.optional(),
+  characterRefs: z.array(z.object({ characterId: IdSchema, image: blob })).optional(),
+})
+
 /** キャラの参照画像を外見から作る要求。画風は settings.style から取る */
 export const CharacterArtRequestSchema = z.object({
   project: ProjectBaseSchema.pick({ settings: true }),
@@ -47,6 +63,7 @@ export const CritiqueResponseSchema = z.object({
 })
 
 export type PanelArtRequest = z.infer<typeof PanelArtRequestSchema>
+export type PageArtRequest = z.infer<typeof PageArtRequestSchema>
 export type CharacterArtRequest = z.infer<typeof CharacterArtRequestSchema>
 export type LayoutProposalResponse = z.infer<typeof LayoutProposalResponseSchema>
 export type PagePlan = z.infer<typeof PagePlanSchema>
@@ -103,5 +120,24 @@ if (import.meta.vitest) {
     }
     expect(PanelArtRequestSchema.safeParse({ ...base, layoutPng: new Blob() }).success).toBe(true)
     expect(PanelArtRequestSchema.safeParse({ ...base, layoutPng: 'png' }).success).toBe(false)
+  })
+
+  test('PageArtRequestSchema takes hints keyed by panel id and no previous art', () => {
+    const base = {
+      project: {
+        settings: {
+          direction: 'rtl',
+          pageSize: { w: 182, h: 257, unit: 'mm' },
+          dpi: 300,
+          style: { prompt: 'p' },
+        },
+        characters: [],
+      },
+      page: { id: 'pg', side: 'single', panels: [], scribbles: [] },
+      layoutPng: new Blob(),
+    }
+    expect(PageArtRequestSchema.parse({ ...base, hints: { pn: 'h' } }).hints).toEqual({ pn: 'h' })
+    expect(PageArtRequestSchema.safeParse({ ...base, hints: { pn: 1 } }).success).toBe(false)
+    expect(PageArtRequestSchema.parse({ ...base, previous: {} })).not.toHaveProperty('previous')
   })
 }

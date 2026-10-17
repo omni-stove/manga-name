@@ -16,7 +16,7 @@
 | ファイル | Cloudflare R2 | 生成画像、参照画像、PDF |
 | 共同編集 | Durable Objects + Yjs | |
 | 認証 | Better Auth（workers/api 上、Google OAuth） | ユーザーとセッションは D1。`06-open-questions.md` 参照 |
-| 画像生成 | 外部 API。プロバイダ抽象の裏に置く | 参照画像入力が必須。コマ単位で呼ぶ |
+| 画像生成 | 外部 API。プロバイダ抽象の裏に置く | 参照画像入力が必須。一括生成はページ単位、1 コマの生成と修正はコマ単位で呼ぶ |
 | LLM | 外部 API。プロバイダ抽象の裏に置く | 脚本からの下書きと診断の言語化 |
 | PDF | pdf-lib | レンダラが描いたページ画像を並べる |
 | モノレポ | pnpm workspaces。Turborepo は不採用 | パッケージ単位の build を持たず apps と Vitest がソースを直接読むため、タスク順序もキャッシュも不要 |
@@ -109,13 +109,27 @@ graph BT
 ### 生成（コマ 1 つ）
 
 ```
-「生成」ボタン（コマ、ページ、エピソードのいずれか。コマ単位に分解して並列に呼ぶ）
+コマの「生成」「修正して再生成」ボタン
   -> render.renderLayoutPng(page, panelId)   コマ枠とフキダシ領域を白抜きした配置図
   -> ai.prompts.panelArt(...)                note、camera、キャラ外見、焦点、誘導線、診断ヒント、スタイルから文章を組む
   -> ai.createHttpImageProvider(opts).generatePanelArt   Workers 経由で外部 API。参照画像、前回の絵、修正指示を添付
   -> storage.putAsset(image)                 ref を得る
   -> applyPatch([ add Panel.arts[], replace Panel.artId ], { source: 'ai' })
 ```
+
+### 生成（ページ、エピソードの一括）
+
+```
+「このページを全部生成」などの一括ボタン（エピソードはページに分解して並列に呼ぶ）
+  -> render.renderPageLayoutPng(page)        ページ全体のコマ枠とフキダシ領域を白抜きした配置図
+  -> ai.prompts.pageArt(...)                 コマごとの読み順とページ内の範囲、note、camera、登場キャラ、焦点、誘導線、診断ヒント、スタイル
+  -> ai.createHttpImageProvider(opts).generatePageArt    Workers 経由で外部 API を 1 回。ページの参考画像とキャラの参照画像を添付
+  -> render.cropPanelArts(page, image)       コマの枠の矩形で切り抜く
+  -> storage.putAsset(crop)                  コマごとに ref を得る
+  -> applyPatch([ コマごとに add Panel.arts[], replace Panel.artId ], { source: 'ai' })   1 回の Undo で戻る
+```
+
+利用量はページ 1 回の生成を 1 回と数える。
 
 生成は store の外で行い、結果だけを Patch で入れる。Undo で生成前に戻せる。アセットは残る。
 

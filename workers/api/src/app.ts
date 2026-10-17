@@ -3,6 +3,7 @@ import {
   createFakeLlmProvider,
   type ImageProvider,
   type LlmProvider,
+  type PanelArtResponse,
   PROMPT_HEADER,
   PROVIDER_HEADER,
 } from '@manga/ai'
@@ -10,6 +11,7 @@ import {
   CharacterArtRequestSchema,
   CritiqueResponseSchema,
   LayoutProposalResponseSchema,
+  PageArtRequestSchema,
   PageDiagnosisSchema,
   PagePlanResponseSchema,
   PageSchema,
@@ -79,6 +81,13 @@ const PanelArtJsonSchema = PanelArtRequestSchema.omit({
   previous: true,
 }).extend({ previous: z.object({ instruction: z.string() }).optional() })
 
+/** page-art の multipart の json 部。PageArtRequest から Blob を除いたもの */
+const PageArtJsonSchema = PageArtRequestSchema.omit({
+  layoutPng: true,
+  referencePng: true,
+  characterRefs: true,
+})
+
 /** `@manga/ai` の LayoutProposalRequest と PagePlanRequest */
 const LayoutProposalRequestSchema = z.object({
   project: ProjectBaseSchema.pick({ settings: true, characters: true }),
@@ -126,7 +135,40 @@ async function retryUntilValid<T>(
 const isFile = (v: unknown): v is File => typeof v !== 'string' && v !== null && v !== undefined
 
 /**
- * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique`、
+ * 画像生成の multipart を読む。json 部を schema で検証し、layout と reference と character_<id> を取り出す。
+ * 欠けや不正は 400 の応答を返す
+ */
+async function readImageForm<S extends z.ZodType>(c: Context<UserEnv>, schema: S) {
+  const form = await c.req.formData().catch(() => null)
+  const rawJson = form?.get('json')
+  const layout = form?.get('layout')
+  if (!form || typeof rawJson !== 'string' || !isFile(layout)) {
+    return c.json({ error: 'json and layout are required' }, 400)
+  }
+  let parsed: z.ZodSafeParseResult<z.infer<S>>
+  try {
+    parsed = schema.safeParse(JSON.parse(rawJson))
+  } catch {
+    return c.json({ error: 'json is not valid JSON' }, 400)
+  }
+  if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
+  const reference = form.get('reference')
+  const characterRefs = [...form.entries()].flatMap(([key, value]) =>
+    key.startsWith('character_') && isFile(value)
+      ? [{ characterId: key.slice('character_'.length), image: value }]
+      : [],
+  )
+  return {
+    form,
+    json: parsed.data,
+    layoutPng: layout,
+    referencePng: isFile(reference) ? reference : undefined,
+    characterRefs: characterRefs.length > 0 ? characterRefs : undefined,
+  }
+}
+
+/**
+ * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/page-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique`、
  * `/v1/projects` の CRUD とアセットと参加者、招待リンクの受け口 `/v1/invites/:token`、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
  * `/v1/health`、`/v1/auth/*`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
  * CORS は WEB_ORIGINS と tauri://localhost だけに許す。
@@ -197,47 +239,18 @@ export function createApp(options: AppOptions = {}) {
 
   app.use('/v1/ai/*', requireUser(now))
 
-  app.post('/v1/ai/panel-art', async (c) => {
-    const form = await c.req.formData().catch(() => null)
-    const rawJson = form?.get('json')
-    const layout = form?.get('layout')
-    if (!form || typeof rawJson !== 'string' || !isFile(layout)) {
-      return c.json({ error: 'json and layout are required' }, 400)
-    }
-    let parsed: z.ZodSafeParseResult<z.infer<typeof PanelArtJsonSchema>>
-    try {
-      parsed = PanelArtJsonSchema.safeParse(JSON.parse(rawJson))
-    } catch {
-      return c.json({ error: 'json is not valid JSON' }, 400)
-    }
-    if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
-    const { previous, ...rest } = parsed.data
-
-    const referencePng = form.get('reference')
-    const previousArt = form.get('previous')
-    if (previous && !isFile(previousArt)) {
-      return c.json({ error: 'previous image is required with previous.instruction' }, 400)
-    }
-    const characterRefs = [...form.entries()].flatMap(([key, value]) =>
-      key.startsWith('character_') && isFile(value)
-        ? [{ characterId: key.slice('character_'.length), image: value }]
-        : [],
-    )
-    const usageId = await reserve(c, 'panel-art')
+  /** 画像を返す生成の共通の後半。1 回予約し、PNG として読めるまで再試行して、プロバイダを呼んだ回数を記録する */
+  const respondImage = async (
+    c: Context<UserEnv>,
+    kind: string,
+    call: (provider: ImageProvider) => Promise<PanelArtResponse>,
+  ) => {
+    const usageId = await reserve(c, kind)
     if (usageId instanceof Response) return usageId
     const provider = createImage(c.env)
 
     const { value, attempts } = await retryUntilValid(async () => {
-      const res = await provider.generatePanelArt({
-        ...rest,
-        layoutPng: layout,
-        referencePng: isFile(referencePng) ? referencePng : undefined,
-        characterRefs: characterRefs.length > 0 ? characterRefs : undefined,
-        previous:
-          previous && isFile(previousArt)
-            ? { art: previousArt, instruction: previous.instruction }
-            : undefined,
-      })
+      const res = await call(provider)
       const bytes = new Uint8Array(await res.image.arrayBuffer())
       return isDecodablePng(bytes) ? { res, bytes } : undefined
     })
@@ -251,6 +264,37 @@ export function createApp(options: AppOptions = {}) {
       [PROVIDER_HEADER]: value.res.provider,
       [PROMPT_HEADER]: encodeURIComponent(value.res.prompt),
     })
+  }
+
+  app.post('/v1/ai/panel-art', async (c) => {
+    const read = await readImageForm(c, PanelArtJsonSchema)
+    if (read instanceof Response) return read
+    const { form, json, ...images } = read
+    const { previous, ...rest } = json
+    const previousArt = form.get('previous')
+    if (previous && !isFile(previousArt)) {
+      return c.json({ error: 'previous image is required with previous.instruction' }, 400)
+    }
+    return respondImage(c, 'panel-art', (provider) =>
+      provider.generatePanelArt({
+        ...rest,
+        ...images,
+        previous:
+          previous && isFile(previousArt)
+            ? { art: previousArt, instruction: previous.instruction }
+            : undefined,
+      }),
+    )
+  })
+
+  // ページ 1 枚を 1 回の生成として数える。コマへの切り抜きは Web がする
+  app.post('/v1/ai/page-art', async (c) => {
+    const read = await readImageForm(c, PageArtJsonSchema)
+    if (read instanceof Response) return read
+    const { json, layoutPng, referencePng, characterRefs } = read
+    return respondImage(c, 'page-art', (provider) =>
+      provider.generatePageArt({ ...json, layoutPng, referencePng, characterRefs }),
+    )
   })
 
   app.post('/v1/ai/character-art', async (c) => {
@@ -258,25 +302,9 @@ export function createApp(options: AppOptions = {}) {
     if (body === undefined) return c.json({ error: 'body is not valid JSON' }, 400)
     const parsed = CharacterArtRequestSchema.safeParse(body)
     if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
-    const usageId = await reserve(c, 'character-art')
-    if (usageId instanceof Response) return usageId
-    const provider = createImage(c.env)
-
-    const { value, attempts } = await retryUntilValid(async () => {
-      const res = await provider.generateCharacterArt(parsed.data)
-      const bytes = new Uint8Array(await res.image.arrayBuffer())
-      return isDecodablePng(bytes) ? { res, bytes } : undefined
-    })
-    await settleUsage(c.env.DB, usageId, attempts)
-
-    if (value === undefined) {
-      return c.json({ error: 'image provider returned an invalid image' }, 502)
-    }
-    return c.body(value.bytes, 200, {
-      'content-type': 'image/png',
-      [PROVIDER_HEADER]: value.res.provider,
-      [PROMPT_HEADER]: encodeURIComponent(value.res.prompt),
-    })
+    return respondImage(c, 'character-art', (provider) =>
+      provider.generateCharacterArt(parsed.data),
+    )
   })
 
   app.post('/v1/ai/plan-pages', async (c) => {

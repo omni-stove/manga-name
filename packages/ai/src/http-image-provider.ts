@@ -1,3 +1,4 @@
+import type { ID } from '@manga/schema'
 import { prompts } from './prompts'
 import type { ImageProvider } from './provider'
 
@@ -21,9 +22,9 @@ export const PROVIDER_HEADER = 'x-ai-provider'
 export const PROMPT_HEADER = 'x-ai-prompt'
 
 /**
- * Workers のプロキシ `POST /v1/ai/panel-art` と `POST /v1/ai/character-art` を叩く ImageProvider。
+ * Workers のプロキシ `POST /v1/ai/panel-art`、`POST /v1/ai/page-art`、`POST /v1/ai/character-art` を叩く ImageProvider。
  * panel-art の multipart は json（Blob を除いた PanelArtRequest）/ layout / reference / character_<id> / previous で組み立て、
- * character-art は CharacterArtRequest を JSON で送る。
+ * page-art も同じ形で previous が無い。character-art は CharacterArtRequest を JSON で送る。
  * トークン無しと 401 は SignInRequiredError、ほかの HTTP エラーは Error を throw する。
  */
 export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvider {
@@ -47,24 +48,36 @@ export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvide
     }
   }
 
+  const imageForm = (
+    json: unknown,
+    req: {
+      layoutPng: Blob
+      referencePng?: Blob
+      characterRefs?: { characterId: ID; image: Blob }[]
+    },
+  ) => {
+    const form = new FormData()
+    form.set('json', JSON.stringify(json))
+    form.set('layout', req.layoutPng, 'layout.png')
+    if (req.referencePng) form.set('reference', req.referencePng, 'reference.png')
+    for (const ref of req.characterRefs ?? []) {
+      form.set(`character_${ref.characterId}`, ref.image, `${ref.characterId}.png`)
+    }
+    return form
+  }
+
   return {
     async generatePanelArt(req) {
-      const form = new FormData()
-      form.set(
-        'json',
-        JSON.stringify({
+      const form = imageForm(
+        {
           project: req.project,
           page: req.page,
           panelId: req.panelId,
           hint: req.hint,
           previous: req.previous && { instruction: req.previous.instruction },
-        }),
+        },
+        req,
       )
-      form.set('layout', req.layoutPng, 'layout.png')
-      if (req.referencePng) form.set('reference', req.referencePng, 'reference.png')
-      for (const ref of req.characterRefs ?? []) {
-        form.set(`character_${ref.characterId}`, ref.image, `${ref.characterId}.png`)
-      }
       if (req.previous) form.set('previous', req.previous.art, 'previous.png')
 
       const res = await post('/v1/ai/panel-art', { body: form })
@@ -74,6 +87,11 @@ export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvide
         prompt:
           res.prompt ?? prompts.panelArt({ ...req, instruction: req.previous?.instruction }).prompt,
       }
+    },
+    async generatePageArt(req) {
+      const form = imageForm({ project: req.project, page: req.page, hints: req.hints }, req)
+      const res = await post('/v1/ai/page-art', { body: form })
+      return { ...res, prompt: res.prompt ?? prompts.pageArt(req).prompt }
     },
     async generateCharacterArt(req) {
       const res = await post('/v1/ai/character-art', {
@@ -137,6 +155,35 @@ if (import.meta.vitest) {
     expect(res.provider).toBe('real')
     expect(res.prompt).toBe('絵')
     expect(new Uint8Array(await res.image.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
+  })
+
+  test('generatePageArt posts the page, hints and images without a previous art', async () => {
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const form = init.body as FormData
+      expect([...form.keys()].sort()).toEqual(['character_c1', 'json', 'layout', 'reference'])
+      const json = JSON.parse(form.get('json') as string)
+      expect(json).toEqual({ project: req.project, page, hints: { [panel.id]: 'h' } })
+      expect(await fileText(form.get('layout'))).toBe('l')
+      return new Response(new Uint8Array([4]), { headers: { [PROVIDER_HEADER]: 'real' } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const pageReq = {
+      project: req.project,
+      page,
+      layoutPng: new Blob(['l']),
+      hints: { [panel.id]: 'h' },
+      referencePng: new Blob(['r']),
+      characterRefs: [{ characterId: 'c1', image: new Blob(['c']) }],
+    }
+    const res = await createHttpImageProvider({
+      baseUrl: 'https://api.example',
+      getToken: async () => 'tok',
+    }).generatePageArt(pageReq)
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example/v1/ai/page-art')
+    expect(res.provider).toBe('real')
+    expect(res.prompt).toBe(prompts.pageArt(pageReq).prompt)
   })
 
   test('generateCharacterArt posts the request as JSON with the bearer token', async () => {
