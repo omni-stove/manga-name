@@ -40,6 +40,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * 1 ページを SVG で描くキャンバス。ユーザー単位はページの mm（`settings.pageSize`）で、
  * ズームとパンは viewBox で表す。ページの外側は作業台の色（`--surface-desk`）。
  * クリックで選択、ホバーで強調、Delete で削除、矢印キーで 0.01 刻みの移動。
+ * `panel` ツールと手描きの最中を除き、要素の無いところ（作業台とコマの外）のドラッグでページを動かす。
  * `panel` ツールではドラッグでコマを作り、選択中のコマをハンドルでリサイズ、ボタンで縦横に分割、
  * 「線で分割」か Alt + ドラッグで引いた斜めの線で分割、「結合」か Shift + クリックで押したコマと結合する。多角形のコマは
  * 頂点をドラッグで動かし、矩形のコマも Alt + 隅のドラッグで頂点を動かせる。
@@ -203,6 +204,10 @@ export function EditorCanvas(props: EditorCanvasProps) {
         bubbleTool.handlers.onPointerDown(e)
         hintTool.handlers.onPointerDown(e)
         pointer.onPointerDown(e)
+        // panel ツールは何も無いところのドラッグでコマを作り、手描きはどこからでも線を引くので、パンに回さない
+        if (props.tool !== 'panel' && !scribbling && selection.hitAt(e) === null) {
+          viewport.panFromPress(e)
+        }
       }}
       onPointerMove={(e) => {
         viewport.handlers.onPointerMove(e)
