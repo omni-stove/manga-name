@@ -1146,7 +1146,7 @@
       "id": "44",
       "group": "G4",
       "title": "実 LLM で critique 検証",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "43",
         "34"
@@ -1159,7 +1159,9 @@
       ],
       "spec": [
         "workstreams/WS-16-critique.md"
-      ]
+      ],
+      "startedAt": "2026-10-17",
+      "doneAt": "2026-10-17"
     },
     {
       "id": "45",
