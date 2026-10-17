@@ -20,6 +20,21 @@ export const LayoutProposalResponseSchema = z.object({
   rationale: z.string(),
 })
 
+/** 「脚本から下書き」の前段で作る 1 ページ分の割り振り */
+export const PagePlanSchema = z.object({
+  /** このページで起きること。Page.note になる */
+  note: z.string().min(1),
+  /** このページに出るキャラ（Character.id）。Page.cast になる */
+  cast: z.array(IdSchema),
+  /** このページに割り振った脚本の抜き書き。コマ割りを作るときに LLM へ渡す */
+  script: z.string(),
+})
+
+export const PagePlanResponseSchema = z.object({
+  pages: z.array(PagePlanSchema).min(1),
+  rationale: z.string(),
+})
+
 export const CritiqueResponseSchema = z.object({
   summary: z.string(),
   suggestions: z.array(z.object({ message: z.string(), patch: PatchSchema })),
@@ -27,6 +42,8 @@ export const CritiqueResponseSchema = z.object({
 
 export type PanelArtRequest = z.infer<typeof PanelArtRequestSchema>
 export type LayoutProposalResponse = z.infer<typeof LayoutProposalResponseSchema>
+export type PagePlan = z.infer<typeof PagePlanSchema>
+export type PagePlanResponse = z.infer<typeof PagePlanResponseSchema>
 export type CritiqueResponse = z.infer<typeof CritiqueResponseSchema>
 
 if (import.meta.vitest) {
@@ -41,6 +58,15 @@ if (import.meta.vitest) {
     expect(LayoutProposalResponseSchema.safeParse({ pages: [bad], rationale: 'r' }).success).toBe(
       false,
     )
+  })
+
+  test('PagePlanResponseSchema needs at least one page with a non-empty note', () => {
+    const plan = { note: 'n', cast: [], script: 's' }
+    expect(PagePlanResponseSchema.parse({ pages: [plan], rationale: 'r' }).pages).toHaveLength(1)
+    expect(PagePlanResponseSchema.safeParse({ pages: [], rationale: 'r' }).success).toBe(false)
+    expect(
+      PagePlanResponseSchema.safeParse({ pages: [{ ...plan, note: '' }], rationale: 'r' }).success,
+    ).toBe(false)
   })
 
   test('CritiqueResponseSchema requires a Patch per suggestion', () => {

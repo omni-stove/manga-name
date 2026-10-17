@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 3 as const
+export const SCHEMA_VERSION = 4 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -179,6 +179,7 @@ const PageBaseSchema = z.object({
   reference: ReferenceImageSchema.optional(),
   scribbles: z.array(StrokeSchema),
   note: z.string().optional(),
+  cast: z.array(IdSchema).optional(),
 })
 
 export const PageSchema = PageBaseSchema.superRefine((page, ctx) => {
@@ -206,6 +207,15 @@ export const ProjectSchema = ProjectBaseSchema.superRefine((project, ctx) => {
   const characterIds = new Set(project.characters.map((c) => c.id))
   project.episodes.forEach((episode, ei) => {
     episode.pages.forEach((page, pi) => {
+      page.cast?.forEach((id, ci) => {
+        if (!characterIds.has(id)) {
+          addIssue(
+            ctx,
+            ['episodes', ei, 'pages', pi, 'cast', ci],
+            `cast ${id} is not in characters`,
+          )
+        }
+      })
       page.panels.forEach((panel, ni) => {
         const base: Path = ['episodes', ei, 'pages', pi, 'panels', ni]
         panel.bubbles.forEach((b, bi) => {
@@ -315,7 +325,7 @@ if (import.meta.vitest) {
       expect(issuePaths(project)).toContain(panelPath(0, 'vectors.0.targetFocusId'))
     })
 
-    test('Bubble.speakerId, FocusPoint.characterId and Panel.cast must be in characters', async () => {
+    test('Bubble.speakerId, FocusPoint.characterId, Panel.cast and Page.cast must be in characters', async () => {
       const project = await loadFixture()
       const bubble = panel(project, 5).bubbles[0]
       const focus = panel(project, 0).focusPoints[1]
@@ -323,10 +333,15 @@ if (import.meta.vitest) {
       bubble.speakerId = 'chr_missing'
       focus.characterId = 'chr_missing'
       panel(project, 2).cast = ['chr_missing']
+      const page = project.episodes[0]?.pages[0]
+      if (!page) throw new Error('fixture has no page')
+      page.cast = ['chr_e', 'chr_missing']
       const paths = issuePaths(project)
       expect(paths).toContain(panelPath(5, 'bubbles.0.speakerId'))
       expect(paths).toContain(panelPath(0, 'focusPoints.1.characterId'))
       expect(paths).toContain(panelPath(2, 'cast.0'))
+      expect(paths).toContain('episodes.0.pages.0.cast.1')
+      expect(paths).not.toContain('episodes.0.pages.0.cast.0')
     })
 
     test('Panel.order and Bubble.order must be unique', async () => {

@@ -26,7 +26,7 @@ interface Rect  { x: number; y: number; w: number; h: number }
 type ReadingDirection = 'rtl' | 'ltr';   // rtl = 右綴じ縦書き（既定）
 
 interface Project {
-  schemaVersion: 3;
+  schemaVersion: 4;
   id: ID;
   title: string;
   createdAt: ISODate;
@@ -76,7 +76,10 @@ interface Page {
   /** 参考画像。生成の参照にだけ使い、出力には出ない */
   reference?: ReferenceImage;
   scribbles: Stroke[];
+  /** このページで起きること。「脚本から下書き」はページごとの話の流れをここに入れる */
   note?: string;
+  /** 登場キャラ（Character.id）。コマの登場キャラは書かなくてもページの登場キャラに数える */
+  cast?: ID[];
 }
 
 interface Panel {

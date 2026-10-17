@@ -1,9 +1,11 @@
 {
-  "$comment": "createFakeLlmProvider().proposeLayout の固定応答。脚本の内容に関わらずこの 1 ページ案を返す。ID は仮で、arts は空。",
+  "$comment": "createFakeLlmProvider().proposeLayout の固定応答。脚本の内容に関わらずこの 1 ページ案を返し、ページ数の指定があればこのページを繰り返してその枚数にする。ID は仮で、arts は空。",
   "pages": [
     {
       "id": "tmp_pg_1",
       "side": "right",
+      "note": "結晶の森の奥へ E が歩いていき、足元の何かに気づく。",
+      "cast": ["chr_e"],
       "scribbles": [],
       "panels": [
         {

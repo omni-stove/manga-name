@@ -1,4 +1,4 @@
-import type { Patch } from '@manga/schema'
+import type { ID, Patch } from '@manga/schema'
 
 export const replace = (path: string, value: unknown): Patch => [{ op: 'replace', path, value }]
 
@@ -25,6 +25,20 @@ export function swapOrder(
   ]
 }
 
+/** コマかページの `cast` に足す。`cast` が無ければ配列ごと add */
+export function addCastPatch(cast: readonly ID[] | undefined, id: ID): Patch {
+  if (cast === undefined) return [{ op: 'add', path: '/cast', value: [id] }]
+  if (cast.includes(id)) return []
+  return [{ op: 'add', path: '/cast/-', value: id }]
+}
+
+/** コマかページの `cast` から外す。最後の 1 人なら `cast` ごと消す */
+export function removeCastPatch(cast: readonly ID[] | undefined, id: ID): Patch {
+  const index = cast?.indexOf(id) ?? -1
+  if (cast === undefined || index < 0) return []
+  return [{ op: 'remove', path: cast.length === 1 ? '/cast' : `/cast/${index}` }]
+}
+
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
@@ -42,5 +56,18 @@ if (import.meta.vitest) {
       { op: 'replace', path: '/bubbles/2/order', value: 3 },
       { op: 'replace', path: '/bubbles/0/order', value: 1 },
     ])
+  })
+
+  test('addCastPatch creates the array first and skips a character already in it', () => {
+    expect(addCastPatch(undefined, 'a')).toEqual([{ op: 'add', path: '/cast', value: ['a'] }])
+    expect(addCastPatch(['a'], 'b')).toEqual([{ op: 'add', path: '/cast/-', value: 'b' }])
+    expect(addCastPatch(['a'], 'a')).toEqual([])
+  })
+
+  test('removeCastPatch removes by index and drops the array with the last character', () => {
+    expect(removeCastPatch(['a', 'b'], 'b')).toEqual([{ op: 'remove', path: '/cast/1' }])
+    expect(removeCastPatch(['a'], 'a')).toEqual([{ op: 'remove', path: '/cast' }])
+    expect(removeCastPatch(['a'], 'b')).toEqual([])
+    expect(removeCastPatch(undefined, 'a')).toEqual([])
   })
 }

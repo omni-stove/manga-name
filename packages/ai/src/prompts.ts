@@ -7,6 +7,7 @@ import {
   type PageDiagnosis,
   type Panel,
   type Point,
+  pagePlanJsonSchema,
   panelCharacterIds,
   StrengthSchema,
   VectorKindSchema,
@@ -15,6 +16,7 @@ import {
   type CritiqueRequest,
   findPanel,
   type LayoutProposalRequest,
+  type PagePlanRequest,
   type PanelArtRequest,
 } from './provider'
 
@@ -94,7 +96,7 @@ const PANELS_PER_PAGE = { min: 3, max: 6 }
 
 /**
  * レイアウト提案のプロンプト。system に出力規則と JSON Schema、user にキャラ一覧、
- * ページ数とコマ数の目安、脚本を入れる。
+ * ページ数（指定があればその枚数ちょうど）、コマ数の目安、脚本を入れる。
  */
 function proposeLayout(req: LayoutProposalRequest): LlmPrompt {
   const { settings, characters } = req.project
@@ -115,7 +117,9 @@ function proposeLayout(req: LayoutProposalRequest): LlmPrompt {
     `- ${readingOrder}`,
     '- Copy each line of dialogue from the script into bubbles[].text as written, in its original language. Use shape "narration" for narration, "thought" for inner voice, "shout" for shouting, and "normal" otherwise.',
     '- Set bubbles[].speakerId to the id of the speaking character from the character list. Omit it for narration or when the speaker is unknown.',
-    '- Set cast to the ids of every character from the character list who is visible in the panel, including those who do not speak. Omit it when no listed character is visible.',
+    '- Set the panel cast to the ids of every character from the character list who is visible in the panel, including those who do not speak. Omit it when no listed character is visible.',
+    '- Set the page note to what happens on that page, in one to three sentences in the original language of the script, so that reading the page notes in order tells the whole story.',
+    '- Set the page cast to the ids of every character from the character list who appears on the page. Omit it when no listed character appears.',
     '- Put the stage directions of the script into the panel note, in the original language. Set camera to the shot you infer, such as ロング, ミドル, アップ, アオリ, 俯瞰.',
     '- arts and scribbles are empty arrays. Omit artId, sweep, shape, reference, and bubbles[].overflow.',
     '- rationale briefly explains how the script was split into pages and panels.',
@@ -124,14 +128,54 @@ function proposeLayout(req: LayoutProposalRequest): LlmPrompt {
   ].join('\n')
 
   const user = [
+    ...characterList(characters),
+    req.pageCount === undefined
+      ? 'Pages: as many as the script needs.'
+      : `Pages: exactly ${req.pageCount}. Pace the script over all of them, giving the key scenes more room.`,
+    `Panels per page: ${PANELS_PER_PAGE.min} to ${PANELS_PER_PAGE.max}.`,
+    'Script:',
+    req.script,
+  ].join('\n')
+
+  return { system, user, schema }
+}
+
+function characterList(characters: Character[]): string[] {
+  return [
     'Characters:',
     ...(characters.length > 0
       ? characters.map((c) => `- id: ${c.id}, name: ${c.name}, shortName: ${c.shortName}`)
       : ['- (none)']),
+  ]
+}
+
+/**
+ * ページ割りのプロンプト。コマ割りの前段で、脚本をページに割り振り、ページごとの流れ、登場キャラ、
+ * 脚本の抜き書きだけを返させる。system に出力規則と JSON Schema、user にキャラ一覧、ページ数、脚本を入れる。
+ */
+function planPages(req: PagePlanRequest): LlmPrompt {
+  const { characters } = req.project
+  const schema = pagePlanJsonSchema()
+
+  const system = [
+    'You are a manga story editor. Before any panel is drawn, split the script into pages and decide what happens on each page.',
+    'Reply with one JSON object that conforms to the JSON Schema below, and nothing else.',
+    'Rules:',
+    '- pages are in reading order. Every part of the script goes to exactly one page, in order, without gaps or overlaps.',
+    '- note says what happens on the page in one to three sentences, in the original language of the script, so that reading the notes in order tells the whole story.',
+    '- cast is the ids of every character from the character list who appears on the page, including those who do not speak. Use an empty array when none appears.',
+    '- script is the part of the script that goes on the page, copied as written, with its dialogue and stage directions.',
+    '- Give the key scenes more room and keep quiet transitions short. Start a page with a reveal rather than ending one with it, so that the page turn hides it.',
+    '- rationale briefly explains how the script was paced over the pages.',
+    'JSON Schema:',
+    JSON.stringify(schema),
+  ].join('\n')
+
+  const user = [
+    ...characterList(characters),
     req.pageCount === undefined
       ? 'Pages: as many as the script needs.'
-      : `Pages: about ${req.pageCount}.`,
-    `Panels per page: ${PANELS_PER_PAGE.min} to ${PANELS_PER_PAGE.max}.`,
+      : `Pages: exactly ${req.pageCount}.`,
     'Script:',
     req.script,
   ].join('\n')
@@ -283,7 +327,7 @@ function critique(req: CritiqueRequest): LlmPrompt {
   return { system, user, schema }
 }
 
-export const prompts = { panelArt, proposeLayout, critique }
+export const prompts = { panelArt, planPages, proposeLayout, critique }
 
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
@@ -299,6 +343,32 @@ if (import.meta.vitest) {
     expect(system).toContain('right to left')
   })
 
+  test('planPages embeds the page plan JSON Schema and lists characters, the page count and the script', () => {
+    const { system, user, schema } = prompts.planPages({
+      project: {
+        settings: project.settings,
+        characters: [{ id: 'chr_e', name: 'エリ', shortName: 'E' }],
+      },
+      script: 'E「こんにちは」\n森を歩く。',
+      pageCount: 2,
+    })
+    expect(schema).toEqual(pagePlanJsonSchema())
+    expect(system).toContain(`JSON Schema:\n${JSON.stringify(pagePlanJsonSchema())}`)
+    expect(user).toBe(
+      [
+        'Characters:',
+        '- id: chr_e, name: エリ, shortName: E',
+        'Pages: exactly 2.',
+        'Script:',
+        'E「こんにちは」',
+        '森を歩く。',
+      ].join('\n'),
+    )
+    expect(
+      prompts.planPages({ project: { ...project, characters: [] }, script: 's' }).user,
+    ).toContain('- (none)\nPages: as many as the script needs.')
+  })
+
   test('proposeLayout lists characters, the page count and the script', () => {
     const { user } = prompts.proposeLayout({
       project: {
@@ -312,7 +382,7 @@ if (import.meta.vitest) {
       [
         'Characters:',
         '- id: chr_e, name: エリ, shortName: E',
-        'Pages: about 2.',
+        'Pages: exactly 2. Pace the script over all of them, giving the key scenes more room.',
         'Panels per page: 3 to 6.',
         'Script:',
         'E「こんにちは」',

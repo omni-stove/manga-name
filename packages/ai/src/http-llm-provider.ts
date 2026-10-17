@@ -1,9 +1,13 @@
-import { CritiqueResponseSchema, LayoutProposalResponseSchema } from '@manga/schema'
+import {
+  CritiqueResponseSchema,
+  LayoutProposalResponseSchema,
+  PagePlanResponseSchema,
+} from '@manga/schema'
 import { type HttpProviderOptions, SignInRequiredError } from './http-image-provider'
 import type { LlmProvider } from './provider'
 
 /**
- * Workers のプロキシ `POST /v1/ai/propose-layout` と `POST /v1/ai/critique` に JSON を送る LlmProvider。
+ * Workers のプロキシ `POST /v1/ai/plan-pages`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique` に JSON を送る LlmProvider。
  * 応答は `@manga/schema` で検証して返す。トークン無しと 401 は SignInRequiredError、
  * ほかの HTTP エラーと検証に通らない応答は Error を throw する。
  */
@@ -25,6 +29,9 @@ export function createHttpLlmProvider(opts: HttpProviderOptions): LlmProvider {
   }
 
   return {
+    async planPages(req) {
+      return PagePlanResponseSchema.parse(await postJson('/v1/ai/plan-pages', req))
+    },
     async proposeLayout(req) {
       return LayoutProposalResponseSchema.parse(await postJson('/v1/ai/propose-layout', req))
     },
@@ -77,6 +84,23 @@ if (import.meta.vitest) {
 
     vi.stubGlobal('fetch', async () => Response.json({ pages: 'none' }))
     await expect(provider.proposeLayout(req)).rejects.toThrow()
+  })
+
+  test('planPages posts to plan-pages and validates the reply', async () => {
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      expect(JSON.parse(init.body as string)).toEqual(req)
+      return Response.json(aiFixtures.pagePlan)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = createHttpLlmProvider({
+      baseUrl: 'https://api.example',
+      getToken: async () => 't',
+    })
+    expect(await provider.planPages(req)).toEqual(aiFixtures.pagePlan)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example/v1/ai/plan-pages')
+
+    vi.stubGlobal('fetch', async () => Response.json({ pages: [], rationale: 'r' }))
+    await expect(provider.planPages(req)).rejects.toThrow()
   })
 
   test('critique posts the page and diagnosis and validates the reply', async () => {
