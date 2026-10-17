@@ -624,7 +624,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
   function schedule(id: ID, delay: number) {
     if (disposed) return
     const state = stateOf(id)
-    if (state.running) {
+    if (state.running !== undefined) {
       state.again = true
       return
     }
@@ -637,7 +637,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     const state = stateOf(id)
     clearTimeout(state.timer)
     state.timer = undefined
-    if (state.running) {
+    if (state.running !== undefined) {
       state.again = true
       return state.running
     }

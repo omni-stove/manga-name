@@ -9,9 +9,12 @@
     "build": "pnpm icons && tauri build",
     "tauri": "tauri",
     "version:check": "node scripts/version.ts check",
-    "version:set": "node scripts/version.ts set"
+    "version:set": "node scripts/version.ts set",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.9.6"
+    "@tauri-apps/cli": "^2.9.6",
+    "@types/node": "^26.6.5",
+    "typescript": "catalog:"
   }
 }

@@ -185,3 +185,185 @@ export function createSharingClient(opts: SharingClientOptions): SharingClient {
     },
   }
 }
+
+if (import.meta.vitest) {
+  const { describe, expect, test, vi } = import.meta.vitest
+
+  const memoryStorage = (): Storage => {
+    const items = new Map<string, string>()
+    return {
+      get length() {
+        return items.size
+      },
+      clear: () => items.clear(),
+      getItem: (key) => items.get(key) ?? null,
+      key: (i) => [...items.keys()][i] ?? null,
+      removeItem: (key) => void items.delete(key),
+      setItem: (key, value) => void items.set(key, value),
+    }
+  }
+
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    })
+
+  const members: Members = {
+    role: 'editor',
+    members: [{ userId: 'u1', role: 'editor', email: 'a@example.com', name: 'A' }],
+    invites: [],
+  }
+
+  const setup = (
+    respond: (url: string, init: RequestInit) => Response | Promise<Response>,
+    overrides: Partial<SharingClientOptions> = {},
+  ) => {
+    const fetch = vi.fn((input: RequestInfo | URL, init: RequestInit = {}) =>
+      Promise.resolve(respond(String(input), init)),
+    )
+    const storage = overrides.storage ?? memoryStorage()
+    const client = createSharingClient({
+      baseUrl: 'https://api.test/',
+      fetch: fetch as typeof globalThis.fetch,
+      cloudId: async (localId) => (localId === 'local' ? 'cloud 1' : null),
+      appOrigin: 'https://app.test',
+      ...overrides,
+      storage,
+    })
+    return { client, fetch, storage }
+  }
+
+  describe('createSharingClient', () => {
+    test('members reads the cloud project and role uses it', async () => {
+      const { client, fetch } = setup(() => json(members))
+      expect(await client.members('local')).toEqual(members)
+      expect(await client.role('local')).toBe('editor')
+      expect(fetch).toHaveBeenCalledWith('https://api.test/v1/projects/cloud%201/members', {
+        headers: undefined,
+      })
+    })
+
+    test('a project that is not in the cloud, or no API, is owned without asking the API', async () => {
+      const { client, fetch } = setup(() => json(members))
+      expect(await client.members('other')).toBeNull()
+      expect(await client.role('other')).toBe('owner')
+      const noApi = setup(() => json(members), { baseUrl: '' })
+      expect(await noApi.client.role('local')).toBe('owner')
+      expect(fetch).not.toHaveBeenCalled()
+      expect(noApi.fetch).not.toHaveBeenCalled()
+    })
+
+    test('members is null when signed out or the project is gone', async () => {
+      for (const status of [401, 404]) {
+        const { client } = setup(() => json({ error: 'x' }, status))
+        expect(await client.members('local')).toBeNull()
+        expect(await client.role('local')).toBe('owner')
+      }
+    })
+
+    test('role falls back to the last role it got, then to owner', async () => {
+      const storage = memoryStorage()
+      const online = setup(() => json({ ...members, role: 'viewer' }), { storage })
+      expect(await online.client.role('local')).toBe('viewer')
+
+      const offline = setup(
+        () => {
+          throw new TypeError('network')
+        },
+        { storage },
+      )
+      expect(await offline.client.role('local')).toBe('viewer')
+      const failing = setup(() => json({ error: 'boom' }, 500), { storage: memoryStorage() })
+      expect(await failing.client.role('local')).toBe('owner')
+      await expect(failing.client.members('local')).rejects.toThrow('GET members: 500 boom')
+    })
+
+    test('a broken or unwritable role store does not break role', async () => {
+      const storage = memoryStorage()
+      storage.setItem('manga.project-roles', '{')
+      const broken = setup(() => json(members), { storage })
+      expect(await broken.client.role('local')).toBe('editor')
+
+      const full = memoryStorage()
+      full.setItem = () => {
+        throw new DOMException('quota', 'QuotaExceededError')
+      }
+      const unwritable = setup(() => json(members), { storage: full })
+      expect(await unwritable.client.role('local')).toBe('editor')
+    })
+
+    test('invite posts the email and role and links to the app', async () => {
+      const invite = { id: 'i1', email: 'b@example.com', role: 'commenter', expiresAt: 'x' }
+      const { client, fetch } = setup(() => json({ ...invite, token: 'a/b' }))
+      expect(await client.invite('local', 'b@example.com', 'commenter')).toEqual({
+        invite,
+        url: 'https://app.test/invite/a%2Fb',
+      })
+      expect(fetch).toHaveBeenCalledWith('https://api.test/v1/projects/cloud%201/invites', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'b@example.com', role: 'commenter' }),
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    test('changes to a project that is not in the cloud throw before calling the API', async () => {
+      const { client, fetch } = setup(() => json({}))
+      await expect(client.invite('other', 'b@example.com', 'viewer')).rejects.toThrow(
+        'まだクラウドにありません',
+      )
+      await expect(client.removeMember('other', 'u1')).rejects.toThrow()
+      expect(fetch).not.toHaveBeenCalled()
+    })
+
+    test('revokeInvite, setRole and removeMember call their endpoints and report failures', async () => {
+      const { client, fetch } = setup((_url, init) =>
+        init.method === 'PUT' ? json({}, 403) : new Response(null, { status: 204 }),
+      )
+      await client.revokeInvite('local', 'i/1')
+      await client.removeMember('local', 'u1')
+      await expect(client.setRole('local', 'u1', 'viewer')).rejects.toThrow('PUT member: 403')
+      expect(fetch.mock.calls.map(([url, init]) => `${init?.method} ${url}`)).toEqual([
+        'DELETE https://api.test/v1/projects/cloud%201/invites/i%2F1',
+        'DELETE https://api.test/v1/projects/cloud%201/members/u1',
+        'PUT https://api.test/v1/projects/cloud%201/members/u1',
+      ])
+      expect(fetch.mock.calls[2]?.[1]?.body).toBe(JSON.stringify({ role: 'viewer' }))
+    })
+
+    test('previewInvite is null for an unknown token', async () => {
+      const preview = { email: 'b@example.com', role: 'viewer', projectId: 'c', projectTitle: 'T' }
+      const { client } = setup((url) => (url.endsWith('/known') ? json(preview) : json({}, 404)))
+      expect(await client.previewInvite('known')).toEqual(preview)
+      expect(await client.previewInvite('gone')).toBeNull()
+    })
+
+    test('acceptInvite returns the cloud id and remembers the role under it', async () => {
+      const storage = memoryStorage()
+      const accepted = setup(() => json({ projectId: 'c1', role: 'commenter' }), { storage })
+      expect(await accepted.client.acceptInvite('t')).toBe('c1')
+      expect(accepted.fetch).toHaveBeenCalledWith('https://api.test/v1/invites/t/accept', {
+        method: 'POST',
+        headers: undefined,
+      })
+      const offline = setup(
+        () => {
+          throw new TypeError('network')
+        },
+        { storage, cloudId: async () => 'c1' },
+      )
+      expect(await offline.client.role('c1')).toBe('commenter')
+    })
+
+    test('acceptInvite explains a wrong account and an expired invite', async () => {
+      const wrong = setup(() => json({}, 403))
+      await expect(wrong.client.acceptInvite('t')).rejects.toThrow('別のメールアドレス')
+      const expired = setup(() => json({}, 404))
+      await expect(expired.client.acceptInvite('t')).rejects.toThrow('期限が切れています')
+      const failing = setup(() => new Response('oops', { status: 500, statusText: 'Server Error' }))
+      await expect(failing.client.acceptInvite('t')).rejects.toThrow(
+        'POST accept invite: 500 Server Error',
+      )
+    })
+  })
+}

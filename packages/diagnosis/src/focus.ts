@@ -34,3 +34,49 @@ export const panelFoci = (panel: Panel): Focus[] => [
       weight: BUBBLE_WEIGHT,
     })),
 ]
+
+if (import.meta.vitest) {
+  const { expect, test } = import.meta.vitest
+
+  const bubble = (id: string, order: number, x: number) =>
+    ({
+      id,
+      order,
+      text: 'secret line',
+      shape: 'normal',
+      pos: { x, y: 0.5 },
+      size: { w: 0.1, h: 0.1 },
+    }) as const
+
+  const panel = {
+    id: 'pn',
+    order: 1,
+    rect: { x: 0, y: 0, w: 1, h: 1 },
+    bubbles: [bubble('bb_2', 2, 0.2), bubble('bb_1', 1, 0.8)],
+    focusPoints: [
+      {
+        id: 'fp',
+        kind: 'face',
+        label: 'E',
+        pos: { x: 0.5, y: 0.5 },
+        weight: 0.7,
+        characterId: 'chr',
+      },
+    ],
+    vectors: [],
+    arts: [],
+  } satisfies Panel
+
+  test('focus points come first, then bubbles in order with the fixed weight and label', () => {
+    expect(panelFoci(panel)).toEqual([
+      { id: 'fp', kind: 'face', label: 'E', pos: { x: 0.5, y: 0.5 }, weight: 0.7 },
+      { id: 'bb_1', kind: 'bubble', label: 'フキダシ', pos: { x: 0.8, y: 0.5 }, weight: 0.4 },
+      { id: 'bb_2', kind: 'bubble', label: 'フキダシ', pos: { x: 0.2, y: 0.5 }, weight: 0.4 },
+    ])
+  })
+
+  test('does not reorder the bubbles of the input', () => {
+    panelFoci(panel)
+    expect(panel.bubbles.map((b) => b.id)).toEqual(['bb_2', 'bb_1'])
+  })
+}

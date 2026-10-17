@@ -15,8 +15,13 @@ description = "Pull skill-kit and re-sync this repo"
 run = "skill-kit code update"
 
 [lint]
-description = "Biome lint and format check, then knip for unused files, exports and dependencies"
-run = ["biome check .", "pnpm --silent knip"]
+description = "Biome lint and format check, knip for unused files, exports and dependencies, then actionlint for the workflows"
+run = ["biome check .", "pnpm --silent knip", "actionlint"]
+
+[lint-rust]
+description = "rustfmt check and clippy for apps/desktop/src-tauri. Kept out of lint because clippy compiles Tauri"
+dir = "apps/desktop/src-tauri"
+run = ["cargo fmt --check", "cargo clippy --all-targets -- -D warnings"]
 
 [lint-fix]
 description = "Biome lint and format with auto-fix"
@@ -33,6 +38,10 @@ run = "pnpm typecheck"
 [test]
 description = "Vitest across all packages"
 run = "pnpm test"
+
+[coverage]
+description = "Vitest with coverage; HTML reports go to coverage/ and workers/*/coverage/"
+run = ["pnpm exec vitest run --coverage", "pnpm --filter \"./workers/*\" test --coverage"]
 
 [perf]
 description = "Vitest with the wall-clock budgets (PERF=1). Kept out of test because shared CI runners make timings flaky"

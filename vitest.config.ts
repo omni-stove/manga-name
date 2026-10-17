@@ -10,5 +10,11 @@ export default defineConfig({
     // `packages/*/src` のように cwd を固定しないのは、各パッケージから
     // `vitest run --config ../../vitest.config.ts` で同じ設定を使うため。
     includeSource: ['**/src/**/*.{ts,tsx}'],
+    coverage: {
+      provider: 'v8',
+      include: ['**/src/**/*.{ts,tsx}'],
+      exclude: ['**/*.stories.tsx', '**/src/dev/**', '**/*.gen.ts'],
+      reporter: ['text-summary', 'html'],
+    },
   },
 })

@@ -10,7 +10,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "typecheck": "pnpm -r --parallel --aggregate-output run typecheck",
+    "typecheck": "tsc --noEmit && pnpm -r --parallel --aggregate-output run typecheck",
     "test": "vitest run && pnpm --filter \"./workers/*\" test",
     "test:watch": "vitest",
     "check": "mise run check"
@@ -18,6 +18,8 @@
   "devDependencies": {
     "knip": "^6.41.0",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "catalog:"
   }
 }

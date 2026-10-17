@@ -25,6 +25,7 @@
     "@cloudflare/vitest-plugin": "^1.4.3",
     "@cloudflare/workers-types": "^4.20251001.0",
     "@manga/diagnosis": "workspace:*",
+    "@vitest/coverage-istanbul": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wrangler": "^4.151.0"

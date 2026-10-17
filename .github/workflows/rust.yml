@@ -1,0 +1,60 @@
+name: Rust
+
+# Desktop のビルド（desktop.yml）は apps/web の変更でも走るが、Rust の lint は src-tauri の変更でしか結果が変わらない
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/src-tauri/**"
+      - ".github/workflows/rust.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/src-tauri/**"
+      - ".github/workflows/rust.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: rust-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format
+        working-directory: apps/desktop/src-tauri
+        run: cargo fmt --check
+
+      # generate_context! がコンパイル時に icons/ を読むが、icons/ はコミットせず tauri icon で作る
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
+      - name: Icons
+        run: pnpm --filter @manga/desktop icons
+
+      # Tauri の Linux 版が描画に使う WebKitGTK などを、clippy がクレートをビルドする時に要る
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Clippy
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets -- -D warnings

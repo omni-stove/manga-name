@@ -159,3 +159,102 @@ export function encodeGrayPng(
   }
   return out
 }
+
+if (import.meta.vitest) {
+  const { expect, test } = import.meta.vitest
+
+  /** 署名の後ろを chunk に分ける */
+  const chunksOf = (png: Uint8Array) => {
+    const view = new DataView(png.buffer, png.byteOffset, png.byteLength)
+    const out: { type: string; data: Uint8Array; crc: number }[] = []
+    for (let i = 8; i < png.length; ) {
+      const length = view.getUint32(i)
+      const type = new TextDecoder().decode(png.subarray(i + 4, i + 8))
+      out.push({
+        type,
+        data: png.subarray(i + 8, i + 8 + length),
+        crc: view.getUint32(i + 8 + length),
+      })
+      i += 12 + length
+    }
+    return out
+  }
+
+  // 自前の deflate を自前で解くと誤りが打ち消し合うので、実行環境の inflate で解く
+  const inflate = async (data: Uint8Array) => {
+    const stream = new Blob([data as Uint8Array<ArrayBuffer>])
+      .stream()
+      .pipeThrough(new DecompressionStream('deflate'))
+    return new Uint8Array(await new Response(stream).arrayBuffer())
+  }
+
+  /** IDAT を解いて、行頭のフィルタ種別を除いた画素列にする */
+  const decode = async (png: Uint8Array) => {
+    const chunks = chunksOf(png)
+    const ihdr = chunks.find((c) => c.type === 'IHDR')?.data as Uint8Array
+    const view = new DataView(ihdr.buffer, ihdr.byteOffset, ihdr.byteLength)
+    const width = view.getUint32(0)
+    const height = view.getUint32(4)
+    const raw = await inflate(chunks.find((c) => c.type === 'IDAT')?.data as Uint8Array)
+    const filters = new Set<number>()
+    const pixels = new Uint8Array(width * height)
+    for (let y = 0; y < height; y++) {
+      filters.add(raw[y * (width + 1)] as number)
+      pixels.set(raw.subarray(y * (width + 1) + 1, (y + 1) * (width + 1)), y * width)
+    }
+    return { width, height, depthAndColor: [ihdr[8], ihdr[9]], filters, pixels, raw }
+  }
+
+  test('writes the signature, then IHDR, IDAT and IEND with valid CRCs', () => {
+    const png = encodeGrayPng(2, 1, Uint8Array.from([0, 255]))
+    expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    const chunks = chunksOf(png)
+    expect(chunks.map((c) => c.type)).toEqual(['IHDR', 'IDAT', 'IEND'])
+    // IEND の CRC は中身が空なので常にこの値になる
+    expect(chunks[2]?.crc).toBe(0xae426082)
+    for (const c of chunks) {
+      const input = new Uint8Array(4 + c.data.length)
+      input.set(new TextEncoder().encode(c.type))
+      input.set(c.data, 4)
+      expect(c.crc).toBe(crc32(input))
+    }
+  })
+
+  test('the IHDR says 8 bit grayscale and the pixels round-trip through inflate', async () => {
+    const pixels = Uint8Array.from({ length: 7 * 5 }, (_, i) => (i * 37) % 256)
+    const decoded = await decode(encodeGrayPng(7, 5, pixels))
+    expect([decoded.width, decoded.height]).toEqual([7, 5])
+    expect(decoded.depthAndColor).toEqual([8, 0])
+    expect(decoded.filters).toEqual(new Set([0]))
+    expect(decoded.pixels).toEqual(pixels)
+  })
+
+  test('runs longer than one match, and every length code, round-trip', async () => {
+    // 1..600 の長さの連続を順に並べ、長さ符号の境目と 258 を超える連続を全部通す
+    const runs: number[] = []
+    for (let n = 1; n <= 600; n++) for (let k = 0; k < n; k++) runs.push(n % 2 === 0 ? 0x40 : 0xc0)
+    const pixels = Uint8Array.from(runs)
+    const decoded = await decode(encodeGrayPng(pixels.length, 1, pixels))
+    expect(decoded.pixels).toEqual(pixels)
+  })
+
+  test('a flat image compresses far below its raw size', () => {
+    const png = encodeGrayPng(512, 512, new Uint8Array(512 * 512).fill(0xc0))
+    expect(png.length).toBeLessThan((512 * 513) / 20)
+  })
+
+  test('crc32 and adler32 match their published check values', () => {
+    const ascii = (t: string) => new TextEncoder().encode(t)
+    expect(crc32(ascii('123456789'))).toBe(0xcbf43926)
+    expect(adler32(ascii('Wikipedia'))).toBe(0x11e60398)
+  })
+
+  test('the same input always gives the same bytes', () => {
+    const pixels = Uint8Array.from({ length: 64 }, (_, i) => i * 4)
+    expect(encodeGrayPng(8, 8, pixels)).toEqual(encodeGrayPng(8, 8, pixels))
+  })
+
+  test('throws when pixels do not match width * height', () => {
+    expect(() => encodeGrayPng(2, 2, new Uint8Array(3))).toThrow('width * height')
+  })
+}

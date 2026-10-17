@@ -17,7 +17,9 @@ allowBuilds:
 catalog:
   typescript: ^7.0.2
   vitest: ^5.0.4
-  # vitest と同じバージョンでないと browser mode が起動しない
+  # vitest と同じバージョンでないと browser mode とカバレッジが起動しない
+  '@vitest/coverage-v8': 5.0.4
+  '@vitest/coverage-istanbul': 5.0.4
   '@vitest/browser-playwright': ^5.0.4
 
 minimumReleaseAgeExclude:

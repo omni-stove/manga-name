@@ -227,3 +227,176 @@ export function createVectorPatch(
   const i = page.panels.indexOf(panel)
   return { patch: [{ op: 'add', path: `/panels/${i}/vectors/-`, value: vector }], id: vector.id }
 }
+
+if (import.meta.vitest) {
+  const { describe, expect, test } = import.meta.vitest
+  const { fixtures } = await import('@manga/schema')
+  const page = fixtures.samplePage01.episodes[0]?.pages[0] as Page
+  const W = 182
+  const H = 257
+  const panel = (id: string) => page.panels.find((p) => p.id === id) as Panel
+  /** コマ panelId のコマ内座標をページ座標にする */
+  const at = (panelId: string, x: number, y: number) => toPagePoint(panel(panelId), W, H, { x, y })
+
+  test('hintTolerance is a fixed share of the view width', () => {
+    expect(hintTolerance({ x: 0, y: 0, w: 100, h: 50 })).toBeCloseTo(1.2)
+    expect(hintTolerance({ x: 0, y: 0, w: 50, h: 50 })).toBeCloseTo(0.6)
+  })
+
+  test('toPanelPoint inverts toPagePoint, rounds, and clamps points outside the panel', () => {
+    const pn2 = panel('pn_2')
+    const corner = toPagePoint(pn2, W, H, { x: 0, y: 1 })
+    expect(corner.x).toBeCloseTo(91)
+    expect(corner.y).toBeCloseTo(0.505 * H)
+    expect(toPanelPoint(pn2, W, H, toPagePoint(pn2, W, H, { x: 0.3, y: 0.7 }))).toEqual({
+      x: 0.3,
+      y: 0.7,
+    })
+    expect(toPanelPoint(pn2, W, H, { x: 0, y: H })).toEqual({ x: 0, y: 1 })
+    const flat = { ...pn2, rect: { ...pn2.rect, w: 0, h: 0 } }
+    expect(toPanelPoint(flat, W, H, { x: 120, y: 90 })).toEqual({ x: 0, y: 0 })
+  })
+
+  test('findFocus and findVector return indexes from the page root, or undefined', () => {
+    expect(findFocus(page, 'fp_2_vial')).toEqual({ panel: panel('pn_2'), panelIndex: 1, index: 1 })
+    expect(findVector(page, 'vc_4_c')).toEqual({ panel: panel('pn_4'), panelIndex: 3, index: 2 })
+    expect(findFocus(page, 'vc_4_c')).toBeUndefined()
+    expect(findVector(page, 'missing')).toBeUndefined()
+  })
+
+  describe('hintAt', () => {
+    test('picks a focus within its radius, even on the end of a vector', () => {
+      // vc_1_a の終点 (0.31, 0.78) は半径 2mm の fp_1_e の中
+      expect(hintAt(page, W, H, at('pn_1', 0.31, 0.78), 0.5)).toEqual({
+        kind: 'focus',
+        id: 'fp_1_e',
+      })
+      // 半径 5mm の fp_1_forest の縁の内側
+      const c = at('pn_1', 0.65, 0.35)
+      expect(hintAt(page, W, H, { x: c.x + 4.9, y: c.y }, 0.5)).toEqual({
+        kind: 'focus',
+        id: 'fp_1_forest',
+      })
+    })
+
+    test('a small focus is still caught within the tolerance', () => {
+      const c = at('pn_1', 0.3, 0.78)
+      const p = { x: c.x, y: c.y - 3 }
+      expect(hintAt(page, W, H, p, 2)?.kind).not.toBe('focus')
+      expect(hintAt(page, W, H, p, 3.1)).toEqual({ kind: 'focus', id: 'fp_1_e' })
+    })
+
+    test('picks a vector within the tolerance of its segment', () => {
+      const mid = at('pn_1', 0.365, 0.78)
+      expect(hintAt(page, W, H, { x: mid.x, y: mid.y + 0.9 }, 1)).toEqual({
+        kind: 'vector',
+        id: 'vc_1_a',
+      })
+      expect(hintAt(page, W, H, { x: mid.x, y: mid.y + 1.1 }, 1)).toBeNull()
+    })
+
+    test('returns null away from every hint', () => {
+      expect(hintAt(page, W, H, at('pn_1', 0.1, 0.1), 1)).toBeNull()
+      expect(hintAt(page, W, H, { x: -10, y: -10 }, 1)).toBeNull()
+    })
+  })
+
+  test('createFocusPatch appends a default focus with a clamped, rounded position', () => {
+    const created = createFocusPatch(page, 'pn_2', { x: 1.2, y: 1 / 3 }, 'sfx')
+    expect(created?.patch).toEqual([
+      {
+        op: 'add',
+        path: '/panels/1/focusPoints/-',
+        value: { id: created?.id, kind: 'sfx', label: '', pos: { x: 1, y: 0.333 }, weight: 0.5 },
+      },
+    ])
+    expect(createFocusPatch(page, 'missing', { x: 0, y: 0 }, 'face')).toBeNull()
+  })
+
+  test('shiftLinked moves only the ends linked to the focus, and keeps the others as is', () => {
+    const vector = panel('pn_1').vectors[2] as Vector
+    expect(shiftLinked(vector, 'fp_1_e', 0.1, -0.1)).toEqual({
+      from: { x: 0.43, y: 0.6 },
+      to: vector.to,
+    })
+    expect(shiftLinked(vector, 'fp_1_e', 0.1, -0.1).to).toBe(vector.to)
+    expect(shiftLinked(vector, 'fp_1_forest', 0.5, 0.7).to).toEqual({ x: 1, y: 1 })
+    const unlinked = shiftLinked(vector, 'other', 0.1, 0.1)
+    expect(unlinked.from).toBe(vector.from)
+    expect(unlinked.to).toBe(vector.to)
+  })
+
+  describe('moveFocusPatch', () => {
+    test('moves the focus and the ends of the vectors linked to it', () => {
+      expect(moveFocusPatch(page, 'fp_2_e', { x: 0.8, y: 0.35 })).toEqual([
+        { op: 'replace', path: '/panels/1/focusPoints/0/pos', value: { x: 0.8, y: 0.35 } },
+        { op: 'replace', path: '/panels/1/vectors/0/from', value: { x: 0.77, y: 0.38 } },
+        { op: 'replace', path: '/panels/1/vectors/1/to', value: { x: 0.83, y: 0.33 } },
+        { op: 'replace', path: '/panels/1/vectors/2/to', value: { x: 0.83, y: 0.38 } },
+      ])
+    })
+
+    test('clamps into the panel, and is empty when nothing moves or the focus is missing', () => {
+      expect(moveFocusPatch(page, 'fp_5_e', { x: 1.5, y: -1 })).toEqual([
+        { op: 'replace', path: '/panels/4/focusPoints/0/pos', value: { x: 1, y: 0 } },
+      ])
+      expect(moveFocusPatch(page, 'fp_5_e', { x: 0.62, y: 0.5 })).toEqual([])
+      expect(moveFocusPatch(page, 'missing', { x: 0.5, y: 0.5 })).toEqual([])
+    })
+  })
+
+  describe('createVectorPatch', () => {
+    const addedVector = (created: { patch: Patch } | null) => {
+      if (!created) throw new Error('no patch')
+      return (created.patch[0] as { value: Vector }).value
+    }
+
+    test('links both ends to the foci under them', () => {
+      const created = createVectorPatch(page, W, H, at('pn_2', 0.75, 0.3), at('pn_2', 0.45, 0.5), 1)
+      expect(created?.patch).toEqual([
+        {
+          op: 'add',
+          path: '/panels/1/vectors/-',
+          value: {
+            id: created?.id,
+            kind: 'gaze',
+            from: { x: 0.75, y: 0.3 },
+            to: { x: 0.45, y: 0.5 },
+            strength: 'strong',
+            sourceFocusId: 'fp_2_e',
+            targetFocusId: 'fp_2_vial',
+          },
+        },
+      ])
+    })
+
+    test('links the end to a bubble, and leaves a free start unlinked', () => {
+      const created = createVectorPatch(page, W, H, at('pn_3', 0.2, 0.8), at('pn_3', 0.85, 0.25), 1)
+      const value = addedVector(created)
+      expect(value.targetFocusId).toBe('bb_3')
+      expect(value).not.toHaveProperty('sourceFocusId')
+    })
+
+    test('drops the source link when both ends are on the same focus', () => {
+      const created = createVectorPatch(page, W, H, at('pn_4', 0.42, 0.3), at('pn_4', 0.47, 0.3), 1)
+      const value = addedVector(created)
+      expect(value.targetFocusId).toBe('fp_4_mask')
+      expect(value).not.toHaveProperty('sourceFocusId')
+    })
+
+    test('keeps the end inside the start panel', () => {
+      const created = createVectorPatch(page, W, H, at('pn_3', 0.2, 0.8), { x: W, y: 0 }, 1)
+      expect(created?.patch[0]).toMatchObject({
+        path: '/panels/2/vectors/-',
+        value: { from: { x: 0.2, y: 0.8 }, to: { x: 1, y: 0 } },
+      })
+    })
+
+    test('is null when the start is outside every panel or the vector has no length', () => {
+      const gap = { x: 0.3 * W, y: 0.268 * H }
+      expect(createVectorPatch(page, W, H, gap, at('pn_1', 0.5, 0.5), 1)).toBeNull()
+      const p = at('pn_3', 0.2, 0.8)
+      expect(createVectorPatch(page, W, H, p, p, 1)).toBeNull()
+    })
+  })
+}
