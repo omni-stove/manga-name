@@ -39,3 +39,27 @@ export const CloseCallsOnDismiss: Story = {
     await expect(args.onDismiss).toHaveBeenCalledWith(2)
   },
 }
+
+const retry = fn()
+
+export const WithAction: Story = {
+  args: {
+    items: [
+      {
+        id: 3,
+        kind: 'error',
+        message: '生成にはログインが要ります',
+        action: { label: 'ログイン', onClick: retry },
+      },
+    ],
+  },
+}
+
+export const ActionCallsOnClickAndDismisses: Story = {
+  ...WithAction,
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'ログイン' }))
+    await expect(retry).toHaveBeenCalledOnce()
+    await expect(args.onDismiss).toHaveBeenCalledWith(3)
+  },
+}
