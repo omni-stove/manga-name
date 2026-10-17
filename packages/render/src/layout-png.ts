@@ -40,7 +40,9 @@ export async function renderLayoutPng(
   c.lineWidth = lineWidth
   c.strokeStyle = '#000'
   if (panel.shape) {
-    // 輪郭の頂点は囲む矩形の端にあり、そのまま引くと外側の半分がキャンバスから出る。内側に全幅を残すため倍の太さで引く
+    // 輪郭の頂点は囲む矩形の端にあり、そのまま引くと外側の半分がキャンバスから出る。どの辺も内側に同じ全幅を残すため、
+    // 輪郭で clip して倍の太さで引く（clip しないと斜めの辺だけ外側にも出て倍の太さになる）
+    c.save()
     c.beginPath()
     panel.shape.forEach((p, i) => {
       const x = p.x * width
@@ -49,8 +51,10 @@ export async function renderLayoutPng(
       else c.lineTo(x, y)
     })
     c.closePath()
+    c.clip()
     c.lineWidth = lineWidth * 2
     c.stroke()
+    c.restore()
   } else {
     c.strokeRect(lineWidth / 2, lineWidth / 2, width - lineWidth, height - lineWidth)
   }
@@ -115,8 +119,10 @@ if (import.meta.vitest) {
       Array.from(
         probe.ctx.getImageData(Math.round(x * w), Math.round(y * h), 1, 1).data.subarray(0, 3),
       )
-    // 斜めの枠線は縁がぼけるので、薄灰より暗いことだけを見る
-    expect(at(0.5, 0.5)[0]).toBeLessThan(200)
+    // 枠線は輪郭の内側に引くので、斜めの辺のすぐ内側を見る。縁がぼけるので薄灰より暗いことだけを見る
+    expect(at(0.49, 0.49)[0]).toBeLessThan(200)
+    // 輪郭の外へははみ出さない
+    expect(at(0.53, 0.53)).toEqual([224, 224, 224])
     expect(at(0.9, 0.9)).toEqual([224, 224, 224])
     expect(at(0.2, 0.2)).toEqual([224, 224, 224])
   })

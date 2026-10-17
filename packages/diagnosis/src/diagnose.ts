@@ -30,7 +30,7 @@ export const defaultDiagnosisConfig: DiagnosisConfig = Object.freeze({
 /** targetFocusId の無い Vector の終点を焦点に吸着させる距離（コマ高さ比） */
 const VECTOR_SNAP = 0.1
 
-/** Panel の輪郭の重なりが、縦横ともこれ以上あると OVERLAP */
+/** Panel の輪郭の共通部分を囲む矩形が縦横ともこれ以上で、厚みがこの 1/√2 以上あると OVERLAP（04 の 8 節） */
 const OVERLAP_MIN = 0.01
 
 /** 距離や重なりは 2 進小数で丸まるので、閾値ちょうどの値を仕様どおり閾値側に入れる余裕 */
