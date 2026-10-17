@@ -1,0 +1,56 @@
+name: Desktop
+
+# 配布はタグ push の desktop-release.yml が担い、PR には署名用の証明書も updater の秘密鍵もないので、
+# 両 OS で tauri build が通ることだけを確かめ、成果物は上げない。
+# Desktop は apps/web とそれが使う packages を同梱するので、その変更でも走らせる。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/desktop.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
+      - name: Version check
+        run: pnpm --filter @manga/desktop version:check
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Build
+        run: pnpm --filter @manga/desktop build
