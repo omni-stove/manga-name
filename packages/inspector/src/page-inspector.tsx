@@ -1,5 +1,5 @@
 import type { Page } from '@manga/schema'
-import { Button, Checkbox, Field } from '@manga/ui'
+import { Button, Checkbox, Field, XStack } from '@manga/ui'
 import { DEBOUNCE_MS, SelectField, TextField } from './fields'
 import styles from './page-inspector.module.css'
 import { optionalString, replace } from './patch'
@@ -37,7 +37,9 @@ export function PageInspector({
         delayMs={DEBOUNCE_MS}
         onCommit={(v) => onChange(optionalString('/note', page.note, v))}
       />
-      <h4 className={section.heading}>参考画像</h4>
+      <XStack as="h4" className={section.heading}>
+        参考画像
+      </XStack>
       {reference === undefined ? (
         <p className={section.muted}>
           なし。PNG、JPEG、PDF。キャンバスへのドロップと貼り付けでも読み込めます
@@ -62,7 +64,7 @@ export function PageInspector({
           />
         </>
       )}
-      <div className={section.group}>
+      <XStack wrap className={section.group}>
         <Button size="small" onClick={onPickReference}>
           {reference === undefined ? '読み込む' : '差し替え'}
         </Button>
@@ -75,8 +77,8 @@ export function PageInspector({
             削除
           </Button>
         )}
-      </div>
-      <div className={section.group}>
+      </XStack>
+      <XStack wrap className={section.group}>
         <Button
           variant="primary"
           disabled={generating || page.panels.length === 0}
@@ -85,7 +87,7 @@ export function PageInspector({
           {generating ? '生成中…' : 'このページを全部生成'}
         </Button>
         <span className={section.muted}>コマ {page.panels.length}</span>
-      </div>
+      </XStack>
       {diagnosis && (
         <dl className={styles.diagnosis}>
           <dt>読み順</dt>

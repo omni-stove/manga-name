@@ -1,6 +1,6 @@
 import { EditorCanvas, type Layers } from '@manga/editor-canvas'
 import type { ID, Page, Project } from '@manga/schema'
-import { Button, Checkbox, Dialog, Field, Input, TextArea } from '@manga/ui'
+import { Button, Checkbox, Dialog, Field, Input, TextArea, XStack, YStack } from '@manga/ui'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import common from './common.module.css'
 import {
@@ -150,7 +150,7 @@ export function ScriptDraftDialog({
             {phase.pages.map((page, index) => {
               const issue = issues[index]
               return (
-                <li key={page.id} className={styles.page} data-proposal-page={index + 1}>
+                <YStack as="li" gap={6} key={page.id} data-proposal-page={index + 1}>
                   <Checkbox
                     label={`${index + 1} ページ（コマ ${page.panels.length}）`}
                     checked={issue === undefined && !unchecked.has(index)}
@@ -185,7 +185,7 @@ export function ScriptDraftDialog({
                       {issue}
                     </p>
                   )}
-                </li>
+                </YStack>
               )
             })}
           </ol>
@@ -232,7 +232,7 @@ export function ScriptDraftDialog({
         </>
       }
     >
-      <fieldset className={styles.inputs} disabled={isRunning}>
+      <YStack as="fieldset" gap={12} className={styles.inputs} disabled={isRunning}>
         <Field label="脚本" hint="セリフとト書きをそのまま貼り付けます">
           <TextArea
             className={styles.script}
@@ -257,12 +257,12 @@ export function ScriptDraftDialog({
             onChange={(e) => setTone(e.target.value)}
           />
         </Field>
-      </fieldset>
+      </YStack>
       {isRunning && (
-        <p className={styles.progress} role="status">
+        <XStack as="p" className={styles.progress} role="status">
           提案を作っています…
           <progress aria-label="提案の進行" />
-        </p>
+        </XStack>
       )}
       {phase.kind === 'failed' && (
         <FailureAlert failure="提案を作れませんでした" error={phase.error} signInButton={false} />

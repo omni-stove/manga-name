@@ -17,6 +17,8 @@ allowBuilds:
 catalog:
   typescript: ^7.0.2
   vitest: ^5.0.4
+  # vitest と同じバージョンでないと browser mode が起動しない
+  '@vitest/browser-playwright': ^5.0.4
 
 minimumReleaseAgeExclude:
   - '@cloudflare/vitest-plugin@1.4.3'

@@ -2,6 +2,7 @@ export { Button, type ButtonProps, IconButton, type IconButtonProps } from './bu
 export { Dialog } from './dialog'
 export { Checkbox, type CheckboxProps, Field, FieldGroup, Input, Select, TextArea } from './field'
 export { SegmentedControl, type SegmentedOption } from './segmented-control'
+export { type Space, XStack, type XStackProps, YStack } from './stack'
 export {
   applyThemePreference,
   readThemePreference,
@@ -9,4 +10,3 @@ export {
   useThemePreference,
 } from './theme'
 export { type ToastItem, ToastList } from './toast-list'
-export { ToolGroup } from './tool-group'

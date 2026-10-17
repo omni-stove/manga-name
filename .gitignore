@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-collab/
+storybook-static/
 coverage/
 target/
 *.tsbuildinfo

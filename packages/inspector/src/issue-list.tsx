@@ -1,4 +1,5 @@
 import type { Issue } from '@manga/schema'
+import { XStack, YStack } from '@manga/ui'
 import styles from './issue-list.module.css'
 import section from './section.module.css'
 import type { IssueListProps } from './types'
@@ -25,11 +26,13 @@ export function IssueList({ issues, onFocus }: IssueListProps) {
     )
   }
   return (
-    <ol className={styles.list} data-issue-list>
+    <YStack as="ol" gap={2} className={styles.list} data-issue-list>
       {sortIssues(issues).map((issue, i) => (
         <li key={`${issue.code}-${issue.panelId ?? ''}-${issue.focusPointId ?? i}`}>
-          <button
+          <XStack
+            as="button"
             type="button"
+            align="baseline"
             className={styles.issue}
             data-severity={issue.severity}
             data-code={issue.code}
@@ -38,9 +41,9 @@ export function IssueList({ issues, onFocus }: IssueListProps) {
           >
             <span className={styles.severity}>{SEVERITY_LABELS[issue.severity]}</span>
             <span>{issue.message}</span>
-          </button>
+          </XStack>
         </li>
       ))}
-    </ol>
+    </YStack>
   )
 }
