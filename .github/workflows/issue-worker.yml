@@ -16,6 +16,4 @@ jobs:
       provider: "claude"
       node-version: "26"
       regen-command: 'pnpm install --lockfile-only --no-frozen-lockfile'
-      # 既定のツールに、next-task スキルと docs/tasks.json を動かすスクリプトを足す。
-      allowed-tools: "Read,Edit,Write,NotebookEdit,Glob,Grep,Bash(pnpm:*),Bash(npm:*),Bash(make:*),Bash(git:*),Bash(gh:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(rg:*),Bash(node:*),Bash(npx:*),Bash(mkdir:*),Bash(mv:*),Bash(cp:*),Bash(rm:*),Bash(jq:*),Bash(sh:*),Bash(bash:*),Bash(scripts/tasks.sh:*),Bash(.agents/skills/next-task/scripts/next.sh),Bash(.agents/skills/next-task/scripts/start.sh:*),Bash(.agents/skills/next-task/scripts/finish.sh:*)"
     secrets: inherit
