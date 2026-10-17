@@ -97,3 +97,61 @@ export function placeholderPng(
   r.text(digits, x0, y0, scale)
   return encodeGrayPng(size.w, size.h, r.pixels)
 }
+
+if (import.meta.vitest) {
+  const { fixtures } = await import('@manga/schema')
+  const { expect, test } = import.meta.vitest
+
+  const panel = fixtures.samplePage01.episodes[0]?.pages[0]?.panels[0] as Panel
+  const settings = fixtures.samplePage01.settings
+  const withRect = (w: number, h: number): Panel => ({ ...panel, rect: { x: 0, y: 0, w, h } })
+  const page = (w: number, h: number): ProjectSettings => ({
+    ...settings,
+    pageSize: { ...settings.pageSize, w, h },
+  })
+
+  /** IDAT を実行環境の inflate で解き、行頭のフィルタ種別を除いた画素の読み出し関数にする */
+  const decode = async (png: Uint8Array) => {
+    const view = new DataView(png.buffer, png.byteOffset, png.byteLength)
+    const width = view.getUint32(16)
+    const height = view.getUint32(20)
+    const idatLength = view.getUint32(33)
+    const idat = png.subarray(41, 41 + idatLength)
+    const stream = new Blob([idat as Uint8Array<ArrayBuffer>])
+      .stream()
+      .pipeThrough(new DecompressionStream('deflate'))
+    const raw = new Uint8Array(await new Response(stream).arrayBuffer())
+    return { width, height, at: (x: number, y: number) => raw[y * (width + 1) + 1 + x] }
+  }
+
+  test('placeholderSize keeps the real aspect ratio with a 512px long side', () => {
+    expect(placeholderSize(withRect(0.5, 0.5), page(100, 200))).toEqual({ w: 256, h: 512 })
+    expect(placeholderSize(withRect(0.5, 0.25), page(100, 100))).toEqual({ w: 512, h: 256 })
+    expect(placeholderSize(withRect(1, 1), page(100, 100))).toEqual({ w: 512, h: 512 })
+    expect(placeholderSize(withRect(1, 0.0001), page(100, 100))).toEqual({ w: 512, h: 1 })
+  })
+
+  test('placeholderPng draws the border, both diagonals and the order on grey', async () => {
+    const png = await decode(placeholderPng(3, { w: 64, h: 32 }))
+    expect([png.width, png.height]).toEqual([64, 32])
+    expect([png.at(0, 0), png.at(1, 1), png.at(63, 31), png.at(5, 30)]).toEqual([
+      INK,
+      INK,
+      INK,
+      INK,
+    ])
+    expect(png.at(5, 16)).toBe(GRAY)
+    expect(png.at(10, Math.round((10 * 31) / 63))).toBe(INK)
+    expect(png.at(10, Math.round(31 - (10 * 31) / 63))).toBe(INK)
+    // 数字 3 は scale 2 で x 27..36、y 9..22。最上段は 5 マス全部が点灯する
+    for (let x = 27; x < 37; x++) expect(png.at(x, 9)).toBe(INK)
+    expect(png.at(31, 15)).toBe(GRAY)
+    expect(png.at(32, 16)).toBe(GRAY)
+  })
+
+  test('placeholderPng is byte-for-byte deterministic and differs by order', () => {
+    const size = { w: 40, h: 60 }
+    expect(placeholderPng(12, size)).toEqual(placeholderPng(12, size))
+    expect(placeholderPng(12, size)).not.toEqual(placeholderPng(13, size))
+  })
+}

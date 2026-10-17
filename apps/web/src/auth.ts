@@ -135,7 +135,7 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
   }
 
   async function getToken(): Promise<string | null> {
-    if (session === null) return refreshing ? refreshing : null
+    if (session === null) return refreshing ?? null
     if (session.expiresAt - now() > REFRESH_MARGIN_MS) return session.token
     return refreshOnce()
   }
@@ -194,4 +194,247 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
 interface GetSessionBody {
   session?: { token: string; expiresAt: string }
   user?: { id: string; name: string; email: string; image?: string | null }
+}
+
+if (import.meta.vitest) {
+  const { afterEach, describe, expect, test, vi } = import.meta.vitest
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const HOUR = 3_600_000
+  const user = { id: 'u1', name: 'A', email: 'a@example.com', image: null }
+
+  const sessionResponse = (token: string, expiresAt: number, headers: HeadersInit = {}) =>
+    new Response(
+      JSON.stringify({
+        session: { token, expiresAt: new Date(expiresAt).toISOString() },
+        user: { id: user.id, name: user.name, email: user.email },
+      }),
+      { headers },
+    )
+
+  type Respond = (url: string, init: RequestInit) => Response | Promise<Response>
+
+  const setup = (respond: Respond, overrides: Partial<AuthClientOptions> = {}) => {
+    let time = 0
+    const fetch = vi.fn((input: RequestInfo | URL, init: RequestInit = {}) =>
+      Promise.resolve().then(() => respond(String(input), init)),
+    )
+    const client = createAuthClient({
+      baseUrl: 'https://api.test/',
+      fetch: fetch as typeof globalThis.fetch,
+      now: () => time,
+      ...overrides,
+    })
+    const bearers = () =>
+      fetch.mock.calls.map(([, init]) => new Headers(init?.headers).get('authorization'))
+    return {
+      client,
+      fetch,
+      bearers,
+      advance: (ms: number) => {
+        time += ms
+      },
+    }
+  }
+
+  const memoryTokenStore = (token: string | null = null) => {
+    const store = {
+      token,
+      save: vi.fn(async (t: string | null) => {
+        store.token = t
+      }),
+    }
+    return {
+      store,
+      tokenStore: { load: async () => store.token, save: store.save } satisfies TokenStore,
+    }
+  }
+
+  describe('createAuthClient', () => {
+    test('without an API it stays signed out and never calls fetch', async () => {
+      const { client, fetch } = setup(() => new Response(), { baseUrl: '' })
+      await client.restore()
+      expect(client.getUser()).toBeNull()
+      expect(await client.getToken()).toBeNull()
+      await expect(client.signIn()).rejects.toThrow('API の URL')
+      await client.signOut()
+      expect(fetch).not.toHaveBeenCalled()
+    })
+
+    test('restore takes the session from the cookie and tells subscribers', async () => {
+      const { client, fetch } = setup(() => sessionResponse('t1', HOUR))
+      const listener = vi.fn()
+      client.subscribe(listener)
+      await client.restore()
+      expect(client.getUser()).toEqual(user)
+      expect(await client.getToken()).toBe('t1')
+      expect(listener).toHaveBeenCalledOnce()
+      expect(fetch).toHaveBeenCalledWith(
+        'https://api.test/v1/auth/get-session',
+        expect.objectContaining({ credentials: 'include' }),
+      )
+    })
+
+    test('a token in set-auth-token wins over the one in the body', async () => {
+      const { client } = setup(() => sessionResponse('old', HOUR, { 'set-auth-token': 'new' }))
+      await client.restore()
+      expect(await client.getToken()).toBe('new')
+    })
+
+    test('an empty session or a 401 signs out, a network failure keeps the session', async () => {
+      let respond: Respond = () => sessionResponse('t1', HOUR)
+      const { client, advance } = setup((url, init) => respond(url, init))
+      await client.restore()
+
+      respond = () => {
+        throw new TypeError('network')
+      }
+      await client.restore()
+      expect(client.getUser()).toEqual(user)
+
+      respond = () => new Response('null')
+      await client.restore()
+      expect(client.getUser()).toBeNull()
+
+      respond = () => sessionResponse('t2', HOUR)
+      await client.restore()
+      respond = () => new Response(null, { status: 401 })
+      advance(HOUR)
+      expect(await client.getToken()).toBeNull()
+      expect(client.getUser()).toBeNull()
+    })
+
+    test('getToken refreshes only near the expiry, with one get-session for concurrent callers', async () => {
+      let token = 't1'
+      const { client, fetch, advance } = setup(() => sessionResponse(token, HOUR))
+      await client.restore()
+      advance(HOUR - 60_001)
+      expect(await client.getToken()).toBe('t1')
+      expect(fetch).toHaveBeenCalledOnce()
+
+      token = 't2'
+      advance(1)
+      const tokens = await Promise.all([client.getToken(), client.getToken()])
+      expect(tokens).toEqual(['t2', 't2'])
+      expect(fetch).toHaveBeenCalledTimes(2)
+    })
+
+    test('getToken waits for a restore in flight', async () => {
+      const { client } = setup(() => sessionResponse('t1', HOUR))
+      const restoring = client.restore()
+      expect(await client.getToken()).toBe('t1')
+      await restoring
+    })
+
+    test('fetch adds the bearer and retries once with a refreshed token after a 401', async () => {
+      let token = 't1'
+      const { client, bearers } = setup((url, init) => {
+        if (url.endsWith('/get-session')) return sessionResponse(token, HOUR)
+        const ok = new Headers(init.headers).get('authorization') === 'Bearer t2'
+        return new Response(null, { status: ok ? 200 : 401 })
+      })
+      await client.restore()
+      token = 't2'
+      const res = await client.fetch('https://api.test/v1/projects', {
+        headers: { accept: 'application/json' },
+      })
+      expect(res.status).toBe(200)
+      expect(bearers()).toEqual([null, 'Bearer t1', 'Bearer t1', 'Bearer t2'])
+    })
+
+    test('fetch gives back the 401 when the refresh brings no new token', async () => {
+      const { client, fetch } = setup((url) =>
+        url.endsWith('/get-session')
+          ? sessionResponse('t1', HOUR)
+          : new Response(null, { status: 401 }),
+      )
+      await client.restore()
+      expect((await client.fetch('https://api.test/v1/projects')).status).toBe(401)
+      expect(fetch).toHaveBeenCalledTimes(3)
+    })
+
+    test('fetch without a session sends the request as it is', async () => {
+      const { client, bearers } = setup(() => new Response(null, { status: 200 }))
+      await client.fetch('https://api.test/v1/projects')
+      expect(bearers()).toEqual([null])
+    })
+
+    test('signIn asks for Google and goes to the returned URL', async () => {
+      vi.stubGlobal('window', { location: { href: 'https://app.test/p/1' } })
+      const navigate = vi.fn()
+      const { client, fetch } = setup(
+        () => new Response(JSON.stringify({ url: 'https://accounts.test/o' })),
+        { navigate },
+      )
+      await client.signIn()
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('https://accounts.test/o')
+      const [url, init] = fetch.mock.calls[0] ?? []
+      expect(url).toBe('https://api.test/v1/auth/sign-in/social')
+      expect(JSON.parse(String(init?.body))).toEqual({
+        provider: 'google',
+        callbackURL: 'https://app.test/p/1',
+      })
+      expect(new Headers(init?.headers).get('content-type')).toBe('application/json')
+    })
+
+    test('signIn fails on an error status or a missing URL', async () => {
+      vi.stubGlobal('window', { location: { href: 'https://app.test/' } })
+      const navigate = vi.fn()
+      const failing = setup(() => new Response(null, { status: 500 }), { navigate })
+      await expect(failing.client.signIn()).rejects.toThrow('sign-in failed: 500')
+      const empty = setup(() => new Response('{}'), { navigate })
+      await expect(empty.client.signIn()).rejects.toThrow('no redirect URL')
+      expect(navigate).not.toHaveBeenCalled()
+    })
+
+    test('signOut drops the session even when the server cannot be reached', async () => {
+      let reachable = true
+      const { client, fetch } = setup((url) => {
+        if (url.endsWith('/get-session')) return sessionResponse('t1', HOUR)
+        if (!reachable) throw new TypeError('network')
+        return new Response(null)
+      })
+      await client.restore()
+      reachable = false
+      await client.signOut()
+      expect(client.getUser()).toBeNull()
+      expect(await client.getToken()).toBeNull()
+      expect(fetch.mock.calls.at(-1)?.[0]).toBe('https://api.test/v1/auth/sign-out')
+
+      await client.signOut()
+      expect(fetch).toHaveBeenCalledTimes(2)
+    })
+
+    test('with a tokenStore, restore sends the saved token and keeps the new one', async () => {
+      const { store, tokenStore } = memoryTokenStore('saved')
+      const { client, bearers } = setup(
+        () => sessionResponse('saved', HOUR, { 'set-auth-token': 'renewed' }),
+        { tokenStore },
+      )
+      await client.restore()
+      expect(bearers()).toEqual(['Bearer saved'])
+      expect(store.token).toBe('renewed')
+
+      await client.restore()
+      expect(bearers()).toEqual(['Bearer saved', 'Bearer renewed'])
+      expect(store.save).toHaveBeenCalledOnce()
+
+      await client.signOut()
+      expect(store.token).toBeNull()
+    })
+
+    test('a tokenStore that fails does not break the session', async () => {
+      const tokenStore: TokenStore = {
+        load: () => Promise.reject(new Error('locked')),
+        save: () => Promise.reject(new Error('locked')),
+      }
+      const { client, bearers } = setup(() => sessionResponse('t1', HOUR), { tokenStore })
+      await client.restore()
+      expect(bearers()).toEqual([null])
+      expect(await client.getToken()).toBe('t1')
+    })
+  })
 }

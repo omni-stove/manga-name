@@ -25,6 +25,14 @@ export default defineConfig(async () => {
         },
       }),
     ],
-    test: { setupFiles: ['./test/setup.ts'] },
+    test: {
+      setupFiles: ['./test/setup.ts'],
+      // workerd には V8 のカバレッジを取る口が無いので、計装する istanbul を使う
+      coverage: {
+        provider: 'istanbul' as const,
+        include: ['src/**/*.ts'],
+        reporter: ['text-summary', 'html'],
+      },
+    },
   }
 })

@@ -88,6 +88,30 @@ describe('X-Debug-User', () => {
     expect((await proposeLayout(headers)).status).toBe(200)
   })
 
+  test('accepts up to 128 letters, digits and ._@+- and rejects anything else', async () => {
+    const status = async (user: string) =>
+      (await app.request('/v1/projects', { headers: { [DEBUG_USER_HEADER]: user } }, env)).status
+    expect(await status('a'.repeat(128))).toBe(200)
+    expect(await status('A_z.0+9-@example.com')).toBe(200)
+    expect(await status('a'.repeat(129))).toBe(401)
+    expect(await status('')).toBe(401)
+    expect(await status('a/b')).toBe(401)
+  })
+
+  test('takes precedence over the Bearer token in development, also when malformed', async () => {
+    await seedSession('u_alice', 'tok-alice', Date.now() + DAY)
+    expect((await app.request('/v1/projects', { headers: bearer('tok-alice') }, env)).status).toBe(
+      200,
+    )
+    const headers = { ...bearer('tok-alice'), [DEBUG_USER_HEADER]: 'a b' }
+    expect((await app.request('/v1/projects', { headers }, env)).status).toBe(401)
+
+    const asBob = { ...bearer('tok-alice'), [DEBUG_USER_HEADER]: 'bob' }
+    expect((await proposeLayout(asBob)).status).toBe(200)
+    const { results } = await env.DB.prepare('SELECT user_id FROM ai_usage').all()
+    expect(results).toEqual([{ user_id: 'bob' }])
+  })
+
   test('is ignored outside development', async () => {
     const headers = { [DEBUG_USER_HEADER]: 'alice' }
     expect((await app.request('/v1/projects', { headers }, staging)).status).toBe(401)

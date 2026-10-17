@@ -37,7 +37,8 @@ export function loadFonts(): Promise<void> {
 
 async function importNodeBackend(): Promise<Backend> {
   // 指定子を文字列リテラルにすると Vite が @napi-rs/canvas をブラウザ向けに束ねようとするので、変数にして解析から外す
-  const specifier = './backend-node'
+  // 拡張子まで書くのは、apps/web のように Vite の root の外から /@fs で読むと拡張子を補わないため
+  const specifier = './backend-node.ts'
   const mod = (await import(/* @vite-ignore */ specifier)) as typeof import('./backend-node')
   return mod.createNodeBackend()
 }

@@ -839,3 +839,499 @@ describe('ghostPage', () => {
     expect(svg.querySelector('[data-ghost]')).toBeNull()
   })
 })
+
+/** コマ panelId のコマ内座標に対応する、layout 後の画面座標 */
+const inPanel = (panelId: string, x: number, y: number) => {
+  const { rect } = must(samplePage.panels.find((p) => p.id === panelId))
+  return clientAt(rect.x + x * rect.w, rect.y + y * rect.h)
+}
+
+describe('hints layer', () => {
+  test('draws every focus and vector with its kind, strength and label', async () => {
+    const svg = await render()
+    const layer = must(svg.querySelector('[data-layer="hints"]'))
+    expect(layer.querySelectorAll('[data-focus-id]')).toHaveLength(9)
+    expect(layer.querySelectorAll('[data-vector-id]')).toHaveLength(13)
+    const focus = must(layer.querySelector('[data-focus-id="fp_4_mask"]'))
+    expect(focus.getAttribute('data-kind')).toBe('face')
+    // weight 0.7 の焦点は半径 7mm
+    expect(must(focus.querySelector('circle')).getAttribute('r')).toBe('7')
+    expect(focus.textContent).toBe('beast porcelain mask')
+    const strong = must(layer.querySelector('[data-vector-id="vc_4_a"]'))
+    const weak = must(layer.querySelector('[data-vector-id="vc_4_b"]'))
+    expect(strong.getAttribute('data-strength')).toBe('strong')
+    expect(must(strong.querySelector('line')).getAttribute('stroke-width')).toBe('2')
+    expect(must(weak.querySelector('line')).getAttribute('stroke-width')).toBe('1')
+  })
+
+  test('marks the selected focus and vector in the guide colour', async () => {
+    const focusSelected = await render({ selection: { kind: 'focus', id: 'fp_2_e' } })
+    const focus = must(focusSelected.querySelector('[data-focus-id="fp_2_e"]'))
+    expect(focus.hasAttribute('data-selected')).toBe(true)
+    expect(must(focus.querySelector('circle')).style.stroke).toBe('var(--guide)')
+    expect(focusSelected.querySelectorAll('[data-layer="hints"] [data-selected]')).toHaveLength(1)
+
+    const vectorSelected = await render({ selection: { kind: 'vector', id: 'vc_2_a' } })
+    const vector = must(vectorSelected.querySelector('[data-vector-id="vc_2_a"]'))
+    expect(vector.hasAttribute('data-selected')).toBe(true)
+    expect(vector.querySelectorAll('line')).toHaveLength(2)
+  })
+
+  test('layers.hints = false draws no hints', async () => {
+    const svg = await render({ layers: { ...defaults.layers, hints: false } })
+    expect(svg.querySelector('[data-layer="hints"]')).toBeNull()
+  })
+})
+
+describe('hint tool', () => {
+  test('a focus click on an empty spot places a focus of focusKind and selects it', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ tool: 'focus', focusKind: 'sfx', onChange, onSelect })
+    layout(svg)
+    click(svg, inPanel('pn_5', 0.2, 0.3))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    const patch = patchOf(onChange)
+    expect(patch).toEqual([
+      {
+        op: 'add',
+        path: '/panels/4/focusPoints/-',
+        value: expect.objectContaining({ kind: 'sfx', label: '', pos: { x: 0.2, y: 0.3 } }),
+      },
+    ])
+    expect(onSelect).toHaveBeenCalledTimes(1)
+    expect(onSelect).toHaveBeenCalledWith({
+      kind: 'focus',
+      id: (patch[0] as { value: { id: string } }).value.id,
+    })
+  })
+
+  test('focusKind defaults to face, and a drag from an empty spot places nothing', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ tool: 'focus', onChange })
+    layout(svg)
+    drag(svg, inPanel('pn_5', 0.2, 0.3), inPanel('pn_5', 0.4, 0.3))
+    expect(onChange).not.toHaveBeenCalled()
+    click(svg, inPanel('pn_5', 0.2, 0.3))
+    expect(patchOf(onChange)).toEqual([
+      expect.objectContaining({ value: expect.objectContaining({ kind: 'face' }) }),
+    ])
+  })
+
+  test('dragging a focus selects it, draws it moved, and moves its linked vectors in one patch', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ tool: 'focus', onChange, onSelect })
+    layout(svg)
+    const centre = () =>
+      Number(must(svg.querySelector('[data-focus-id="fp_2_e"] circle')).getAttribute('cx'))
+    const before = centre()
+    const to = inPanel('pn_2', 0.8, 0.3)
+    drag(svg, inPanel('pn_2', 0.75, 0.3), to, { release: false })
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'focus', id: 'fp_2_e' })
+    expect(onChange).not.toHaveBeenCalled()
+    // 0.05 x 91mm
+    expect(centre() - before).toBeCloseTo(4.55)
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(patchOf(onChange)).toEqual([
+      { op: 'replace', path: '/panels/1/focusPoints/0/pos', value: { x: 0.8, y: 0.3 } },
+      { op: 'replace', path: '/panels/1/vectors/0/from', value: { x: 0.77, y: 0.33 } },
+      { op: 'replace', path: '/panels/1/vectors/1/to', value: { x: 0.83, y: 0.28 } },
+      { op: 'replace', path: '/panels/1/vectors/2/to', value: { x: 0.83, y: 0.33 } },
+    ])
+    expect(centre()).toBeCloseTo(before)
+  })
+
+  test('the linked vector ends follow the dragged focus while dragging', async () => {
+    const svg = await render({ tool: 'focus' })
+    layout(svg)
+    const endX = () =>
+      Number(
+        must(svg.querySelector('[data-vector-id="vc_2_b"] polygon'))
+          .getAttribute('points')
+          ?.split(',')[0],
+      )
+    const unlinkedX = () =>
+      Number(
+        must(svg.querySelector('[data-vector-id="vc_2_d"] polygon'))
+          .getAttribute('points')
+          ?.split(',')[0],
+      )
+    const [end, unlinked] = [endX(), unlinkedX()]
+    drag(svg, inPanel('pn_2', 0.75, 0.3), inPanel('pn_2', 0.8, 0.3), { release: false })
+    expect(endX() - end).toBeCloseTo(4.55)
+    expect(unlinkedX()).toBe(unlinked)
+  })
+
+  test('Escape cancels a focus drag without a patch or a deselect', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({
+      tool: 'focus',
+      onChange,
+      onSelect,
+      selection: { kind: 'focus', id: 'fp_2_e' },
+    })
+    layout(svg)
+    const to = inPanel('pn_2', 0.8, 0.3)
+    drag(svg, inPanel('pn_2', 0.75, 0.3), to, { release: false })
+    const e = key(svg, { key: 'Escape' })
+    expect(e.defaultPrevented).toBe(true)
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(onChange).not.toHaveBeenCalled()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  test('a vector drag draws a dashed draft, then creates one linked vector and selects it', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ tool: 'vector', onChange, onSelect })
+    layout(svg)
+    const to = inPanel('pn_2', 0.45, 0.5)
+    drag(svg, inPanel('pn_2', 0.75, 0.3), to, { release: false })
+    expect(svg.querySelector('[data-hints-panel-id="pn_2"] [data-draft="vector"]')).not.toBeNull()
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(svg.querySelector('[data-draft="vector"]')).toBeNull()
+    expect(onChange).toHaveBeenCalledTimes(1)
+    const patch = patchOf(onChange)
+    expect(patch).toEqual([
+      {
+        op: 'add',
+        path: '/panels/1/vectors/-',
+        value: expect.objectContaining({
+          kind: 'gaze',
+          from: { x: 0.75, y: 0.3 },
+          to: { x: 0.45, y: 0.5 },
+          sourceFocusId: 'fp_2_e',
+          targetFocusId: 'fp_2_vial',
+        }),
+      },
+    ])
+    expect(onSelect).toHaveBeenLastCalledWith({
+      kind: 'vector',
+      id: (patch[0] as { value: { id: string } }).value.id,
+    })
+  })
+
+  test('a vector click selects what is under it instead of creating', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ tool: 'vector', onChange, onSelect })
+    layout(svg)
+    click(svg, inPanel('pn_2', 0.75, 0.3))
+    expect(onChange).not.toHaveBeenCalled()
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'focus', id: 'fp_2_e' })
+  })
+
+  test('Escape cancels a vector drag', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ tool: 'vector', onChange })
+    layout(svg)
+    const to = inPanel('pn_2', 0.45, 0.5)
+    drag(svg, inPanel('pn_2', 0.75, 0.3), to, { release: false })
+    key(svg, { key: 'Escape' })
+    expect(svg.querySelector('[data-draft="vector"]')).toBeNull()
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  test('with layers.hints = false neither tool places or grabs anything', async () => {
+    const onChange = vi.fn()
+    const layers = { ...defaults.layers, hints: false }
+    const focus = await render({ tool: 'focus', layers, onChange })
+    layout(focus)
+    click(focus, inPanel('pn_5', 0.2, 0.3))
+    drag(focus, inPanel('pn_2', 0.75, 0.3), inPanel('pn_2', 0.8, 0.3))
+    const vector = await render({ tool: 'vector', layers, onChange })
+    layout(vector)
+    drag(vector, inPanel('pn_2', 0.75, 0.3), inPanel('pn_2', 0.45, 0.5))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+})
+
+describe('bubble tool', () => {
+  test('a click on an empty spot of a panel creates a default bubble there and selects it', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ tool: 'bubble', onChange, onSelect })
+    layout(svg)
+    click(svg, inPanel('pn_5', 0.4, 0.5))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    const patch = patchOf(onChange)
+    expect(patch).toEqual([
+      {
+        op: 'add',
+        path: '/panels/4/bubbles/0',
+        value: expect.objectContaining({ order: 1, shape: 'normal', pos: { x: 0.4, y: 0.5 } }),
+      },
+    ])
+    expect(onSelect).toHaveBeenCalledTimes(1)
+    expect(onSelect).toHaveBeenCalledWith({
+      kind: 'bubble',
+      id: (patch[0] as { value: { id: string } }).value.id,
+    })
+  })
+
+  test('a drag from an empty spot and a click outside the page create nothing', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ tool: 'bubble', onChange })
+    layout(svg)
+    drag(svg, inPanel('pn_5', 0.2, 0.5), inPanel('pn_5', 0.6, 0.5))
+    click(svg, { x: -10, y: -10 })
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  test('dragging a bubble draws a draft, then moves it with its tail and selects it', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ tool: 'bubble', onChange, onSelect })
+    layout(svg)
+    const to = inPanel('pn_3', 0.75, 0.25)
+    drag(svg, inPanel('pn_3', 0.85, 0.25), to, { release: false })
+    expect(svg.querySelector('[data-layer="bubble-tool"][data-draft="bb_3"]')).not.toBeNull()
+    expect(onChange).not.toHaveBeenCalled()
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(svg.querySelector('[data-layer="bubble-tool"][data-draft]')).toBeNull()
+    expect(patchOf(onChange)).toEqual([
+      { op: 'replace', path: '/panels/2/bubbles/0/pos', value: { x: 0.75, y: 0.25 } },
+      { op: 'replace', path: '/panels/2/bubbles/0/tail', value: { x: 0.54, y: 0.38 } },
+    ])
+    expect(onSelect).toHaveBeenCalledTimes(1)
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'bubble', id: 'bb_3' })
+  })
+
+  test('a click on a bubble only selects it', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ tool: 'bubble', onChange, onSelect })
+    layout(svg)
+    click(svg, inPanel('pn_3', 0.85, 0.25))
+    expect(onChange).not.toHaveBeenCalled()
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'bubble', id: 'bb_3' })
+  })
+
+  test('the selected bubble shows four corner handles and its tail handle', async () => {
+    const svg = await render({ tool: 'bubble', selection: { kind: 'bubble', id: 'bb_3' } })
+    const layer = must(svg.querySelector('[data-layer="bubble-tool"]'))
+    expect(
+      [...layer.querySelectorAll('[data-handle]')].map((h) => h.getAttribute('data-handle')),
+    ).toEqual(['nw', 'ne', 'se', 'sw'])
+    expect(must(layer.querySelector('[data-tail-handle]')).getAttribute('data-tail-handle')).toBe(
+      'set',
+    )
+    const select = await render({ tool: 'select', selection: { kind: 'bubble', id: 'bb_3' } })
+    expect(select.querySelector('[data-layer="bubble-tool"]')).toBeNull()
+  })
+
+  test('a corner drag resizes the bubble around the opposite corner', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      tool: 'bubble',
+      onChange,
+      selection: { kind: 'bubble', id: 'bb_3' },
+    })
+    layout(svg)
+    const to = inPanel('pn_3', 0.96, 0.55)
+    drag(svg, inPanel('pn_3', 0.96, 0.45), to, { release: false })
+    expect(svg.querySelector('[data-layer="bubble-tool"][data-draft="bb_3"]')).not.toBeNull()
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(patchOf(onChange)).toEqual([
+      { op: 'replace', path: '/panels/2/bubbles/0/pos', value: { x: 0.85, y: 0.3 } },
+      { op: 'replace', path: '/panels/2/bubbles/0/size', value: { w: 0.22, h: 0.5 } },
+    ])
+  })
+
+  test('dragging the unset tail handle adds a tail', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      tool: 'bubble',
+      onChange,
+      selection: { kind: 'bubble', id: 'bb_1' },
+    })
+    layout(svg)
+    expect(must(svg.querySelector('[data-tail-handle]')).getAttribute('data-tail-handle')).toBe(
+      'unset',
+    )
+    // 未設定の先端は本体の下、中心から縦の半径の 1.5 倍
+    const handle = inPanel('pn_1', 0.92, 0.22 + 0.275 * 1.5)
+    drag(svg, handle, inPanel('pn_1', 0.7, 0.9))
+    expect(patchOf(onChange)).toEqual([
+      { op: 'add', path: '/panels/0/bubbles/0/tail', value: { x: 0.7, y: 0.9 } },
+    ])
+  })
+
+  test('Escape cancels a bubble drag without a patch or a deselect', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({
+      tool: 'bubble',
+      onChange,
+      onSelect,
+      selection: { kind: 'bubble', id: 'bb_3' },
+    })
+    layout(svg)
+    const to = inPanel('pn_3', 0.95, 0.25)
+    drag(svg, inPanel('pn_3', 0.85, 0.25), to, { release: false })
+    key(svg, { key: 'Escape' })
+    expect(svg.querySelector('[data-layer="bubble-tool"][data-draft]')).toBeNull()
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(onChange).not.toHaveBeenCalled()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+})
+
+describe('scribble', () => {
+  const stroke = (id: string, points: { x: number; y: number }[]) => ({
+    id,
+    points,
+    width: 0.002,
+    color: 'ink' as const,
+  })
+  const withScribbles: Page = {
+    ...samplePage,
+    scribbles: [
+      stroke('st_1', [
+        { x: 0.1, y: 0.5 },
+        { x: 0.9, y: 0.5 },
+      ]),
+      stroke('st_2', [
+        { x: 0.5, y: 0.4 },
+        { x: 0.5, y: 0.6 },
+      ]),
+      stroke('st_dot', [{ x: 0.2, y: 0.2 }]),
+    ],
+  }
+
+  test('a drag draws a live line, then adds one stroke in the chosen colour', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ tool: 'scribble', scribbleTool: 'red', onChange, onSelect })
+    layout(svg)
+    const to = clientAt(0.3, 0.2)
+    drag(svg, clientAt(0.2, 0.2), to, { release: false })
+    const live = must(svg.querySelector('[data-live-stroke]'))
+    expect(live.getAttribute('points')?.split(' ')).toHaveLength(3)
+    expect(onChange).not.toHaveBeenCalled()
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(live.getAttribute('points')).toBe('')
+    const patch = patchOf(onChange)
+    expect(patch).toEqual([
+      {
+        op: 'add',
+        path: '/scribbles/-',
+        value: expect.objectContaining({ color: 'red', width: 0.002 }),
+      },
+    ])
+    const { points } = (patch[0] as { value: { points: { x: number; y: number }[] } }).value
+    expect(points.map((p) => [p.x, p.y])).toEqual([
+      [expect.closeTo(0.2), expect.closeTo(0.2)],
+      [expect.closeTo(0.25), expect.closeTo(0.2)],
+      [expect.closeTo(0.3), expect.closeTo(0.2)],
+    ])
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  test('points closer than the minimum step are dropped, and points stay on the page', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ tool: 'scribble', onChange })
+    layout(svg)
+    const from = clientAt(0.5, 0.5)
+    fire(svg, pointer('pointerdown', { id: 1, ...from }))
+    fire(svg, pointer('pointermove', { id: 1, x: from.x + 0.2, y: from.y }))
+    fire(svg, pointer('pointermove', { id: 1, x: -100, y: -100 }))
+    fire(svg, pointer('pointerup', { id: 1, x: -100, y: -100 }))
+    const { points, color } = (
+      patchOf(onChange)[0] as { value: { points: unknown; color: string } }
+    ).value
+    expect(color).toBe('ink')
+    expect(points).toEqual([
+      { x: expect.closeTo(0.5), y: expect.closeTo(0.5) },
+      { x: 0, y: 0 },
+    ])
+  })
+
+  test('strokes are drawn as polylines, and a one-point stroke as a dot', async () => {
+    const svg = await render({ page: withScribbles })
+    expect(svg.querySelectorAll('[data-layer="scribble"] [data-stroke-id]')).toHaveLength(3)
+    const x = 0.2 * 182
+    const y = 0.2 * 257
+    expect(must(svg.querySelector('[data-stroke-id="st_dot"]')).getAttribute('points')).toBe(
+      `${x},${y} ${x},${y}`,
+    )
+    expect(svg.querySelector('[data-live-stroke]')).toBeNull()
+  })
+
+  test('the eraser removes the topmost stroke under the pointer, and nothing elsewhere', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      page: withScribbles,
+      tool: 'scribble',
+      scribbleTool: 'eraser',
+      onChange,
+    })
+    layout(svg)
+    click(svg, clientAt(0.5, 0.5))
+    expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/scribbles/1' }])
+    // 線の 6px 以内なら拾う
+    click(svg, { x: clientAt(0.3, 0.5).x, y: clientAt(0.3, 0.5).y + 5 })
+    expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/scribbles/0' }])
+    click(svg, clientAt(0.3, 0.8))
+    expect(onChange).toHaveBeenCalledTimes(2)
+  })
+
+  test('a touch eraser waits for pointerup, and a second finger cancels it', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      page: withScribbles,
+      tool: 'scribble',
+      scribbleTool: 'eraser',
+      onChange,
+    })
+    layout(svg)
+    const at = clientAt(0.5, 0.5)
+    const touch = { pointerType: 'touch' }
+    fire(svg, pointer('pointerdown', { id: 1, ...at, ...touch }))
+    expect(onChange).not.toHaveBeenCalled()
+    fire(svg, pointer('pointerup', { id: 1, ...at, ...touch }))
+    expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/scribbles/1' }])
+
+    fire(svg, pointer('pointerdown', { id: 2, ...at, ...touch }))
+    fire(svg, pointer('pointerdown', { id: 3, x: at.x + 100, y: at.y, ...touch }))
+    fire(svg, pointer('pointerup', { id: 2, ...at, ...touch }))
+    fire(svg, pointer('pointerup', { id: 3, x: at.x + 100, y: at.y, ...touch }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  test('a second finger throws away the line being drawn', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ tool: 'scribble', onChange })
+    layout(svg)
+    const touch = { pointerType: 'touch' }
+    const from = clientAt(0.2, 0.2)
+    fire(svg, pointer('pointerdown', { id: 1, ...from, ...touch }))
+    fire(svg, pointer('pointermove', { id: 1, x: from.x + 40, y: from.y, ...touch }))
+    fire(svg, pointer('pointerdown', { id: 2, x: from.x + 200, y: from.y, ...touch }))
+    expect(must(svg.querySelector('[data-live-stroke]')).getAttribute('points')).toBe('')
+    fire(svg, pointer('pointerup', { id: 1, x: from.x + 40, y: from.y, ...touch }))
+    fire(svg, pointer('pointerup', { id: 2, x: from.x + 200, y: from.y, ...touch }))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  test('with the scribble layer hidden the tool neither draws nor selects', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({
+      tool: 'scribble',
+      layers: { ...defaults.layers, scribble: false },
+      onChange,
+      onSelect,
+    })
+    layout(svg)
+    expect(svg.querySelector('[data-layer="scribble"]')).toBeNull()
+    drag(svg, clientAt(0.2, 0.2), clientAt(0.3, 0.2))
+    click(svg, clientAt(0.75, 0.4))
+    expect(onChange).not.toHaveBeenCalled()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+})

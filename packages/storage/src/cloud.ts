@@ -624,7 +624,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
   function schedule(id: ID, delay: number) {
     if (disposed) return
     const state = stateOf(id)
-    if (state.running) {
+    if (state.running !== undefined) {
       state.again = true
       return
     }
@@ -637,7 +637,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     const state = stateOf(id)
     clearTimeout(state.timer)
     state.timer = undefined
-    if (state.running) {
+    if (state.running !== undefined) {
       state.again = true
       return state.running
     }
@@ -1377,7 +1377,7 @@ if (import.meta.vitest) {
       const cloudRefs = artRefs(api.rows.get(cloudId))
       expect(cloudRefs.every((r) => parseCloudAssetRef(r))).toBe(true)
       const uploadIndex = (r: string | undefined) =>
-        api.requests.findIndex((q) => q === `PUT /v1/uploads/${r?.slice('r2:'.length)}`)
+        api.requests.indexOf(`PUT /v1/uploads/${r?.slice('r2:'.length)}`)
       const sent = api.requests.slice(before)
       expect(sent.filter((q) => q === `PUT /v1/projects/${cloudId}`)).toHaveLength(2)
       const firstPut = api.requests.indexOf(`PUT /v1/projects/${cloudId}`, before)

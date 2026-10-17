@@ -7,7 +7,6 @@ export type ProjectRole = 'owner' | 'editor' | 'commenter' | 'viewer'
 
 /** 招待と参加者に付けられるロール。owner は譲らない */
 export const MEMBER_ROLES = ['editor', 'commenter', 'viewer'] as const
-type MemberRole = (typeof MEMBER_ROLES)[number]
 
 /** プロジェクトの本文を何でも書けるロール */
 export const canEdit = (role: ProjectRole) => role === 'owner' || role === 'editor'
@@ -66,11 +65,11 @@ export function changesOnlyScribbles(saved: string, next: Project): boolean {
 }
 
 /** type が、キー scribbles に置かれた型（Page.scribbles）かその子孫なら true */
-function insideScribbles(type: Y.AbstractType<Y.YEvent<any>>): boolean {
+function insideScribbles(type: Pick<Y.AbstractType<unknown>, '_item'>): boolean {
   for (
     let item = type._item;
     item !== null;
-    item = (item.parent as Y.AbstractType<Y.YEvent<any>>)._item
+    item = (item.parent as Y.AbstractType<unknown>)._item
   ) {
     if (item.parentSub === 'scribbles') return true
   }

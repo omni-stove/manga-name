@@ -47,6 +47,15 @@ jobs:
           chmod +x "$RUNNER_TEMP/biome"
           "$RUNNER_TEMP/biome" ci .
 
+      # ubuntu-latest の shellcheck も使い、run: のシェルまで見る
+      - name: Actionlint
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint"
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -67,10 +76,26 @@ jobs:
         run: pnpm --silent knip
 
       - name: Test
-        run: pnpm test
+        run: pnpm exec vitest run --coverage && pnpm --filter "./workers/*" test --coverage
+
+      - name: Upload coverage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            coverage/
+            workers/*/coverage/
+          retention-days: 14
 
       - name: Bundle size
         run: pnpm --filter @manga/web size
+
+      # テストが docs/fixtures/art を、vite build が routeTree.gen.ts を作り直すので、ソースと食い違う生成物はここで差分になる
+      - name: Generated files are up to date
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
 
   ci:
     needs: [checks, lint, test]

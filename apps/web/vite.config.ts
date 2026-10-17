@@ -17,6 +17,10 @@ export default defineConfig({
   server: { port: 5173, strictPort: true },
   // in-source のテストブロックを本番ビルドから落とす
   define: { 'import.meta.vitest': 'undefined' },
-  // scripts/bundle-size.ts が初期ロードのチャンクを辿るのに使う
-  build: { manifest: true },
+  build: {
+    // scripts/bundle-size.ts が初期ロードのチャンクを辿るのに使う
+    manifest: true,
+    // 初期ロードの上限は scripts/bundle-size.ts が gzip 後の合計で見るので、圧縮前の 1 チャンクの大きさでは警告しない
+    chunkSizeWarningLimit: Number.POSITIVE_INFINITY,
+  },
 })

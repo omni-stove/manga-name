@@ -1,7 +1,10 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    // emit-*.test.ts が読み込む packages/schema の契約が Blob を持つため
+    "lib": ["ES2023", "DOM"],
+    "types": ["node", "vitest/importMeta"]
   },
-  "include": ["vitest.config.ts"]
+  // packages/ai と packages/schema の scripts は node:fs を使うが、パッケージには @types/node を入れたくないので、ここで型を見る
+  "include": ["vitest.config.ts", "packages/ai/scripts", "packages/schema/scripts"]
 }

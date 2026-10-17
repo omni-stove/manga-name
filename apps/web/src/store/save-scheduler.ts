@@ -54,3 +54,122 @@ export function createSaveScheduler(
     },
   }
 }
+
+if (import.meta.vitest) {
+  const { afterEach, beforeEach, describe, expect, test, vi } = import.meta.vitest
+  const { createStore } = await import('zustand/vanilla')
+  const { createEmptyProject } = await import('@manga/schema')
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const setup = (saveProject: (p: Project) => Promise<void> = async () => {}) => {
+    const state = createStore<ProjectStoreState>()(() => ({
+      project: createEmptyProject('t'),
+      canUndo: false,
+      canRedo: false,
+      saveStatus: 'saved',
+    }))
+    const save = vi.fn(saveProject)
+    const saver = createSaveScheduler(state, save, 100)
+    const edit = (title: string) => {
+      state.setState({ project: { ...state.getState().project, title } })
+      saver.schedule()
+    }
+    return { state, save, saver, edit }
+  }
+
+  /** resolve を外から呼べる Promise。保存の途中の状態を見るのに使う */
+  const deferred = () => {
+    let resolve!: () => void
+    let reject!: (e: unknown) => void
+    const promise = new Promise<void>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  describe('createSaveScheduler', () => {
+    test('saves the latest project once, debounceMs after the last change', async () => {
+      const { state, save, edit } = setup()
+      edit('a')
+      expect(state.getState().saveStatus).toBe('pending')
+      await vi.advanceTimersByTimeAsync(99)
+      edit('b')
+      await vi.advanceTimersByTimeAsync(99)
+      expect(save).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(save).toHaveBeenCalledOnce()
+      expect(save.mock.calls[0]?.[0].title).toBe('b')
+      expect(state.getState().saveStatus).toBe('saved')
+    })
+
+    test('flush saves without waiting and cancels the pending timer', async () => {
+      const { state, save, saver, edit } = setup()
+      edit('a')
+      await saver.flush()
+      expect(save).toHaveBeenCalledOnce()
+      expect(state.getState().saveStatus).toBe('saved')
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(save).toHaveBeenCalledOnce()
+    })
+
+    test('flush without changes does not save', async () => {
+      const { save, saver } = setup()
+      await saver.flush()
+      expect(save).not.toHaveBeenCalled()
+    })
+
+    test('a change during a save keeps saving and is written after it, not concurrently', async () => {
+      const first = deferred()
+      const { state, save, saver, edit } = setup(() => first.promise)
+      edit('a')
+      const flushing = saver.flush()
+      await vi.waitFor(() => expect(save).toHaveBeenCalledOnce())
+      expect(state.getState().saveStatus).toBe('saving')
+      edit('b')
+      expect(state.getState().saveStatus).toBe('saving')
+      const second = saver.flush()
+      expect(save).toHaveBeenCalledOnce()
+
+      save.mockImplementation(async () => {})
+      first.resolve()
+      await flushing
+      await second
+      expect(save.mock.calls.map(([p]) => p.title)).toEqual(['a', 'b'])
+      expect(state.getState().saveStatus).toBe('saved')
+    })
+
+    test('a save that ends with unsaved changes reports pending', async () => {
+      const first = deferred()
+      const { state, saver, edit } = setup(() => first.promise)
+      edit('a')
+      const flushing = saver.flush()
+      await vi.waitFor(() => expect(state.getState().saveStatus).toBe('saving'))
+      edit('b')
+      first.resolve()
+      await flushing
+      expect(state.getState().saveStatus).toBe('pending')
+    })
+
+    test('a failed save reports the error, does not reject, and retries on the next flush', async () => {
+      const error = new Error('disk full')
+      const { state, save, saver, edit } = setup(async () => {
+        throw error
+      })
+      edit('a')
+      await expect(saver.flush()).resolves.toBeUndefined()
+      expect(state.getState()).toMatchObject({ saveStatus: 'error', saveError: error })
+
+      save.mockImplementation(async () => {})
+      await saver.flush()
+      expect(save).toHaveBeenCalledTimes(2)
+      expect(state.getState()).toMatchObject({ saveStatus: 'saved', saveError: undefined })
+    })
+  })
+}

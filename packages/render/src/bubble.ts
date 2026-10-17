@@ -213,3 +213,104 @@ export function drawBubble(ctx: Ctx, shape: Shape, g: Geometry, lineWidth: numbe
 
   ctx.restore()
 }
+
+if (import.meta.vitest) {
+  const { describe, expect, test } = import.meta.vitest
+  const { getBackend } = await import('./backend')
+
+  const GREY = [128, 128, 128]
+
+  /** 灰色で塗った 200 x 200 の面に draw で描き、画素を RGB で読む関数を返す */
+  const paint = async (draw: (ctx: Ctx) => void) => {
+    const surface = (await getBackend()).createSurface(200, 200)
+    surface.ctx.fillStyle = 'rgb(128, 128, 128)'
+    surface.ctx.fillRect(0, 0, 200, 200)
+    draw(surface.ctx)
+    return (x: number, y: number) =>
+      Array.from(surface.ctx.getImageData(x, y, 1, 1).data.subarray(0, 3))
+  }
+  const dark = (rgb: number[]) => rgb.every((c) => c < 100)
+
+  const body = { cx: 100, cy: 100, rx: 60, ry: 40 }
+  const tailed = { ...body, tail: { x: 100, y: 190 } }
+
+  test('bubbleGeometry maps pos, size and tail into the panel in px', () => {
+    const bubble: Bubble = {
+      id: 'bb',
+      order: 1,
+      text: '',
+      shape: 'normal',
+      pos: { x: 0.5, y: 0.25 },
+      size: { w: 0.2, h: 0.4 },
+      tail: { x: 0, y: 1 },
+    }
+    const panel = { x: 100, y: 0, w: 200, h: 100 }
+    expect(bubbleGeometry(bubble, panel)).toEqual({
+      cx: 200,
+      cy: 25,
+      rx: 20,
+      ry: 20,
+      tail: { x: 100, y: 100 },
+    })
+    expect(bubbleGeometry({ ...bubble, tail: undefined }, panel).tail).toBeUndefined()
+  })
+
+  test('textBox is centred, and narration keeps more of the body than other shapes', () => {
+    expect(textBox('narration', body)).toEqual({ x: 49, y: 66, w: 102, h: 68 })
+    for (const shape of ['normal', 'shout', 'thought'] as const) {
+      expect(textBox(shape, body)).toEqual({ x: 58, y: 70, w: 84, h: 60 })
+    }
+  })
+
+  describe('drawBubble', () => {
+    test('a normal bubble is white inside a black outline, and leaves the outside alone', async () => {
+      const at = await paint((ctx) => drawBubble(ctx, 'normal', body, 4))
+      expect(at(100, 100)).toEqual([255, 255, 255])
+      expect(dark(at(160, 100))).toBe(true)
+      expect(dark(at(100, 60))).toBe(true)
+      expect(at(190, 100)).toEqual(GREY)
+      expect(at(158, 136)).toEqual(GREY)
+    })
+
+    test('a tail joins the body without an outline across its base', async () => {
+      const at = await paint((ctx) => drawBubble(ctx, 'normal', tailed, 4))
+      expect(at(100, 160)).toEqual([255, 255, 255])
+      expect(at(100, 140)).toEqual([255, 255, 255])
+      // しっぽの辺は引く。付け根は (81.5, 133.8) と (118.5, 133.8) あたり
+      expect(dark(at(109, 162))).toBe(true)
+      expect(dark(at(91, 162))).toBe(true)
+      expect(dark(at(100, 60))).toBe(true)
+      expect(at(130, 170)).toEqual(GREY)
+    })
+
+    test('a shout bubble is spiky: the gaps between spikes stay outside', async () => {
+      const at = await paint((ctx) => drawBubble(ctx, 'shout', body, 2))
+      const point = (angle: number, scale: number) =>
+        at(
+          Math.round(100 + 60 * scale * Math.cos(angle)),
+          Math.round(100 + 40 * scale * Math.sin(angle)),
+        )
+      expect(point(0, 0.9)).toEqual([255, 255, 255])
+      expect(point(Math.PI / 14, 0.95)).toEqual(GREY)
+    })
+
+    test('a thought tail is two separate circles shrinking toward the tip', async () => {
+      const at = await paint((ctx) => drawBubble(ctx, 'thought', tailed, 1))
+      // 本体の縁 (100, 140) から先端 (100, 190) へ 0.3 と 0.75 の位置
+      expect(at(100, 155)).toEqual([255, 255, 255])
+      expect(at(100, 177)).toEqual([255, 255, 255])
+      expect(at(100, 167)).toEqual(GREY)
+      expect(at(100, 186)).toEqual(GREY)
+    })
+  })
+
+  test('fillBubble fills body and tail with the colour and draws no outline', async () => {
+    const at = await paint((ctx) => fillBubble(ctx, 'narration', tailed, 'rgb(255, 0, 0)'))
+    expect(at(100, 100)).toEqual([255, 0, 0])
+    // 角丸の矩形なので、楕円なら外になる隅の近くも塗る
+    expect(at(150, 135)).toEqual([255, 0, 0])
+    expect(at(100, 170)).toEqual([255, 0, 0])
+    expect(at(100, 195)).toEqual(GREY)
+    expect(at(170, 100)).toEqual(GREY)
+  })
+}

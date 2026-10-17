@@ -131,22 +131,50 @@ export async function comparePng(
       const full = await createImageBitmap(blobA)
       // 丸めで 1px ずれないよう、高さは 1 枚目から決めて両方に使う
       const height = Math.round((full.height * width) / full.width)
+      // 縮小は Canvas に任せず面積の加重平均で自前で計算する。Chromium の縮小は resizeQuality: 'high' でも、
+      // 半分ずつ drawImage しても、2150px から 91px のような縮小で同じ絵どうしの平均が 3 ずれる
+      const shrinkAxis = (
+        src: Float64Array,
+        from: number,
+        to: number,
+        lines: number,
+        at: (line: number, i: number) => number,
+      ) => {
+        const out = new Float64Array(to * lines)
+        const scale = from / to
+        for (let line = 0; line < lines; line++) {
+          for (let i = 0; i < to; i++) {
+            const start = i * scale
+            const end = start + scale
+            let sum = 0
+            for (let j = Math.floor(start); j < Math.min(from, Math.ceil(end)); j++) {
+              sum += (src[at(line, j)] ?? 0) * (Math.min(end, j + 1) - Math.max(start, j))
+            }
+            out[line * to + i] = sum / scale
+          }
+        }
+        return out
+      }
       const gray = async (blob: Blob) => {
-        const bitmap = await createImageBitmap(blob, {
-          resizeWidth: width,
-          resizeHeight: height,
-          resizeQuality: 'high',
-        })
-        const ctx = new OffscreenCanvas(width, height).getContext('2d')
+        const bitmap = await createImageBitmap(blob)
+        const { width: w, height: h } = bitmap
+        const ctx = new OffscreenCanvas(w, h).getContext('2d')
         if (!ctx) throw new Error('no 2d context')
         ctx.drawImage(bitmap, 0, 0)
-        const { data } = ctx.getImageData(0, 0, width, height)
-        const out = new Float64Array(width * height)
-        for (let i = 0; i < out.length; i++) {
-          out[i] =
+        const { data } = ctx.getImageData(0, 0, w, h)
+        const lum = new Float64Array(w * h)
+        for (let i = 0; i < lum.length; i++) {
+          lum[i] =
             0.299 * (data[i * 4] ?? 0) +
             0.587 * (data[i * 4 + 1] ?? 0) +
             0.114 * (data[i * 4 + 2] ?? 0)
+        }
+        // 行ごとに横を縮めて（h 行 × width 列）、列ごとに縦を縮める（width 列 × height 行）
+        const rows = shrinkAxis(lum, w, width, h, (y, x) => y * w + x)
+        const cols = shrinkAxis(rows, h, height, width, (x, y) => y * width + x)
+        const out = new Float64Array(width * height)
+        for (let x = 0; x < width; x++) {
+          for (let y = 0; y < height; y++) out[y * width + x] = cols[x * height + y] ?? 0
         }
         return out
       }

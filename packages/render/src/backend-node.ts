@@ -7,8 +7,12 @@ export function createNodeBackend(): Backend {
   return {
     createSurface(width, height) {
       const canvas = createCanvas(width, height)
+      const ctx = canvas.getContext('2d')
+      // 同梱の可変フォントは既定のインスタンスが Thin（wght 100）で、軸を指定しないと font-weight に関わらず Thin で描く。
+      // ブラウザは font-weight を wght に当てるので、指定して揃える。bold はこの指定より font の太さが勝つ
+      ctx.fontVariationSettings = '"wght" 400'
       return {
-        ctx: canvas.getContext('2d') as unknown as CanvasRenderingContext2D,
+        ctx: ctx as unknown as CanvasRenderingContext2D,
         width,
         height,
         toPng: async () =>

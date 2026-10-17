@@ -19,6 +19,20 @@ const NO_LINE_START = new Set(
 /** 行末に置かない字 */
 const NO_LINE_END = new Set('（「『【〈《〔［｛')
 
+// 同梱の Noto Sans JP の em ボックス。OS/2 の sTypoAscender 880、sTypoDescender -120（unitsPerEm 1000）
+const EM_ASCENT = 0.88
+const EM_DESCENT = 0.12
+
+/**
+ * textBaseline の 'top'（em ボックスの上端）か 'middle'（em ボックスの中央）に字を置くつもりの y を、
+ * textBaseline = 'alphabetic' で fillText するときの y に直す。
+ * Canvas の 'top' / 'middle' を使わないのは、@napi-rs/canvas が em ボックスでなく hhea の ascent / descent から
+ * 位置を決め、ブラウザより字が fontPx の 5〜10% 下にずれて、スナップショットが書き出しと食い違うため
+ */
+export function alphabeticY(y: number, fontPx: number, baseline: 'top' | 'middle'): number {
+  return baseline === 'top' ? y + EM_ASCENT * fontPx : y + ((EM_ASCENT - EM_DESCENT) / 2) * fontPx
+}
+
 let segmenter: Intl.Segmenter | undefined
 
 /** 書記素ごとに分ける。改行は段落の区切り */
@@ -103,7 +117,7 @@ export function drawVerticalText(
   ctx.save()
   ctx.font = `${fontPx}px "${FONT_FAMILY}"`
   ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
+  ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = '#000'
   const pitch = fontPx * COLUMN_PITCH
   const right = box.x + box.w / 2 + blockWidth(lines.length, fontPx) / 2
@@ -123,7 +137,7 @@ export function drawVerticalText(
         ctx.fillText(glyph, dx, dy)
         ctx.restore()
       } else {
-        ctx.fillText(glyph, cx, cy)
+        ctx.fillText(glyph, cx, alphabeticY(cy, fontPx, 'middle'))
       }
     })
   })

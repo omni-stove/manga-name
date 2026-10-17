@@ -42,3 +42,45 @@ export function createImageProvider(opts: HttpProviderOptions): ImageProvider {
   if (opts.baseUrl === '') return createFakeImageProvider()
   return createHttpImageProvider(opts)
 }
+
+if (import.meta.vitest) {
+  const { afterEach, describe, expect, test, vi } = import.meta.vitest
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  const storageWith = (items: Record<string, string>) => {
+    const map = new Map(Object.entries(items))
+    return {
+      map,
+      getItem: (key: string) => map.get(key) ?? null,
+      removeItem: (key: string) => void map.delete(key),
+    }
+  }
+
+  describe('readApiBaseUrl', () => {
+    test('the saved app setting wins over the build-time URL', () => {
+      vi.stubEnv('VITE_API_BASE_URL', 'https://built.test')
+      const storage = storageWith({ [API_BASE_URL_KEY]: ' https://saved.test ' })
+      expect(readApiBaseUrl(storage)).toBe('https://saved.test')
+    })
+
+    test('a blank or missing setting falls back to the build-time URL', () => {
+      vi.stubEnv('VITE_API_BASE_URL', ' https://built.test ')
+      expect(readApiBaseUrl(storageWith({ [API_BASE_URL_KEY]: '  ' }))).toBe('https://built.test')
+      expect(readApiBaseUrl(null)).toBe('https://built.test')
+    })
+
+    test('without either it is empty', () => {
+      vi.stubEnv('VITE_API_BASE_URL', undefined)
+      expect(readApiBaseUrl(storageWith({}))).toBe('')
+    })
+
+    test('the legacy shared token is removed', () => {
+      const storage = storageWith({ [LEGACY_TOKEN_KEY]: 'secret' })
+      readApiBaseUrl(storage)
+      expect(storage.map.has(LEGACY_TOKEN_KEY)).toBe(false)
+    })
+  })
+}

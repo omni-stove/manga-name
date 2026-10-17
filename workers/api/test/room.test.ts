@@ -46,8 +46,8 @@ function upgrade(id: string, user: string | null = 'alice', headers: Record<stri
 }
 
 /** y-websocket のクライアントと同じ手順で同期する接続を開く */
-async function connect(id: string): Promise<Client> {
-  const res = await upgrade(id)
+async function connect(id: string, user = 'alice'): Promise<Client> {
+  const res = await upgrade(id, user)
   expect(res.status).toBe(101)
   const ws = res.webSocket
   if (!ws) throw new Error('no WebSocket in the response')
@@ -167,10 +167,19 @@ function upgradeWithTicket(id: string, ticket: string, target = app) {
 
 const room = (id: string) => env.PROJECT_ROOMS.get(env.PROJECT_ROOMS.idFromName(id))
 
+async function addMember(projectId: string, userId: string, role: string) {
+  await env.DB.prepare(
+    'INSERT INTO project_members (project_id, user_id, role, created_at) VALUES (?1, ?2, ?3, 0)',
+  )
+    .bind(projectId, userId, role)
+    .run()
+}
+
 beforeEach(async () => {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM rate_limits'),
     env.DB.prepare('DELETE FROM sync_tickets'),
+    env.DB.prepare('DELETE FROM project_members'),
     env.DB.prepare('DELETE FROM assets'),
     env.DB.prepare('DELETE FROM project_ydoc_chunks'),
     env.DB.prepare('DELETE FROM project_doc_chunks'),
@@ -318,6 +327,79 @@ describe('sync tickets', () => {
     }>()
     expect(rows.results).toHaveLength(1)
     expect(rows.results[0]?.token_hash).not.toBe(ticket)
+  })
+})
+
+describe('roles', () => {
+  /** apps/web と同じく、ルートの Y.Map `project` に 1 ページを置き、その scribbles を空の Y.Array にする */
+  function writePage(doc: Y.Doc) {
+    doc.transact(() => {
+      const root = doc.getMap<unknown>('project')
+      root.set('title', '元の題')
+      const page = new Y.Map<unknown>()
+      page.set('id', 'pg_1')
+      page.set('scribbles', new Y.Array())
+      const episode = new Y.Map<unknown>()
+      episode.set('pages', Y.Array.from([page]))
+      root.set('episodes', Y.Array.from([episode]))
+    })
+  }
+
+  const scribblesOf = (doc: Y.Doc) => {
+    const episodes = doc.getMap('project').get('episodes') as Y.Array<Y.Map<unknown>> | undefined
+    const page = (episodes?.get(0)?.get('pages') as Y.Array<Y.Map<unknown>> | undefined)?.get(0)
+    return page?.get('scribbles') as Y.Array<string> | undefined
+  }
+
+  /** owner の alice が 1 ページを書いたプロジェクトに user を role で参加させ、両方の接続を返す */
+  async function joined(role: string) {
+    const project = await createProject()
+    await addMember(project.id, 'bob', role)
+    const owner = await connect(project.id)
+    writePage(owner.doc)
+    const member = await connect(project.id, 'bob')
+    await vi.waitFor(() => expect(scribblesOf(member.doc)).toBeDefined())
+    return { project, owner, member }
+  }
+
+  /** 新しい接続で、サーバの今の状態を受け取る */
+  async function serverState(projectId: string) {
+    const fresh = await connect(projectId)
+    await vi.waitFor(() => expect(scribblesOf(fresh.doc)).toBeDefined())
+    return fresh.doc
+  }
+
+  test('a commenter’s scribbles, with the root updatedAt, reach the other connections', async () => {
+    const { owner, member } = await joined('commenter')
+    member.doc.transact(() => {
+      scribblesOf(member.doc)?.push(['stroke'])
+      member.doc.getMap('project').set('updatedAt', '2026-10-15T00:00:00.000Z')
+    })
+    await vi.waitFor(() => expect(scribblesOf(owner.doc)?.toArray()).toEqual(['stroke']))
+    expect(owner.doc.getMap('project').get('updatedAt')).toBe('2026-10-15T00:00:00.000Z')
+  })
+
+  test('a commenter’s change outside the scribbles closes the connection and is not applied', async () => {
+    const { project, member } = await joined('commenter')
+    member.doc.getMap('project').set('title', 'commenter の題')
+    expect(await member.closed).toBe(4403)
+    expect((await serverState(project.id)).getMap('project').get('title')).toBe('元の題')
+  })
+
+  test('a viewer receives updates but any change of theirs closes the connection', async () => {
+    const { project, owner, member } = await joined('viewer')
+    owner.doc.getMap('project').set('title', 'owner の題')
+    await vi.waitFor(() => expect(member.doc.getMap('project').get('title')).toBe('owner の題'))
+
+    scribblesOf(member.doc)?.push(['stroke'])
+    expect(await member.closed).toBe(4403)
+    expect(scribblesOf(await serverState(project.id))?.length).toBe(0)
+  })
+
+  test('an editor’s changes reach the other connections', async () => {
+    const { owner, member } = await joined('editor')
+    member.doc.getMap('project').set('title', 'editor の題')
+    await vi.waitFor(() => expect(owner.doc.getMap('project').get('title')).toBe('editor の題'))
   })
 })
 

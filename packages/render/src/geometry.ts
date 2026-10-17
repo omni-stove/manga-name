@@ -40,3 +40,28 @@ export function pointToPx(p: Point, base: PxRect): { x: number; y: number } {
 export function sizeToPx(s: Size, base: PxRect): { w: number; h: number } {
   return { w: s.w * base.w, h: s.h * base.h }
 }
+
+if (import.meta.vitest) {
+  const { expect, test } = import.meta.vitest
+  const { fixtures } = await import('@manga/schema')
+  const settings = fixtures.samplePage01.settings
+
+  test('pagePixelSize follows dpi, or the given width with the page aspect ratio', () => {
+    const w = Math.round((182 / 25.4) * 300)
+    expect(pagePixelSize(settings)).toEqual({ w, h: Math.round((w * 257) / 182) })
+    expect(pagePixelSize(settings, 400)).toEqual({ w: 400, h: Math.round((400 * 257) / 182) })
+    expect(pagePixelSize(settings, 400.4).w).toBe(400)
+  })
+
+  test('rectToPx, pointToPx and sizeToPx map normalized values into the base rect', () => {
+    const base = { x: 10, y: 20, w: 200, h: 100 }
+    expect(rectToPx({ x: 0.5, y: 0.25, w: 0.25, h: 0.5 }, base)).toEqual({
+      x: 110,
+      y: 45,
+      w: 50,
+      h: 50,
+    })
+    expect(pointToPx({ x: 1, y: 1 }, base)).toEqual({ x: 210, y: 120 })
+    expect(sizeToPx({ w: 0.1, h: 0.2 }, base)).toEqual({ w: 20, h: 20 })
+  })
+}
