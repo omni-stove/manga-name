@@ -1,4 +1,4 @@
-import { Button, Input } from '@manga/ui'
+import { Button, Input, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { type DragEvent, useState } from 'react'
 import common from '../common.module.css'
@@ -64,10 +64,12 @@ function ProjectList() {
           })
         }}
       >
-        <Input name="title" placeholder="タイトル" aria-label="タイトル" />
-        <Button type="submit" variant="primary" disabled={busy}>
-          新規作成
-        </Button>
+        <XStack align="stretch">
+          <Input name="title" placeholder="タイトル" aria-label="タイトル" />
+          <Button type="submit" variant="primary" disabled={busy}>
+            新規作成
+          </Button>
+        </XStack>
       </form>
       <fieldset
         className={styles.dropZone}
@@ -105,14 +107,16 @@ function ProjectList() {
       )}
       <ul className={common.cards}>
         {projects.map((project) => (
-          <li key={project.id} className={common.card}>
+          <YStack as="li" gap={6} key={project.id} className={common.card}>
             <Link to="/p/$projectId" params={{ projectId: project.id }} className={common.cardLink}>
-              <strong>{project.title || '無題'}</strong>
-              <small className={styles.updated}>
-                更新 {new Date(project.updatedAt).toLocaleString()}
-              </small>
+              <YStack gap={4}>
+                <strong>{project.title || '無題'}</strong>
+                <small className={styles.updated}>
+                  更新 {new Date(project.updatedAt).toLocaleString()}
+                </small>
+              </YStack>
             </Link>
-            <span className={common.cardActions}>
+            <XStack as="span" wrap gap={6} className={common.cardActions}>
               <Button
                 size="small"
                 variant="ghost"
@@ -129,8 +133,8 @@ function ProjectList() {
               >
                 削除
               </Button>
-            </span>
-          </li>
+            </XStack>
+          </YStack>
         ))}
       </ul>
     </section>

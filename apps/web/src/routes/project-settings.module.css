@@ -17,9 +17,6 @@
 }
 
 .size {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
   color: var(--text-muted);
 }
 

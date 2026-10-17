@@ -1,5 +1,5 @@
 import { SignInRequiredError } from '@manga/ai'
-import { Button, type ButtonProps } from '@manga/ui'
+import { Button, type ButtonProps, XStack } from '@manga/ui'
 import common from './common.module.css'
 import { errorMessage } from './route-error'
 import { signInOrNotify } from './toasts'
@@ -33,11 +33,11 @@ export function FailureAlert({
   signInButton?: boolean
 }) {
   return (
-    <p className={`${common.error} ${common.actions}`} role="alert">
+    <XStack as="p" wrap className={common.error} role="alert">
       <span>
         {failure}: {errorMessage(error)}
       </span>
       {signInButton && needsSignIn(error) && <SignInButton size="small" variant="primary" />}
-    </p>
+    </XStack>
   )
 }

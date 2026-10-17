@@ -1,0 +1,20 @@
+.x,
+.y {
+  display: flex;
+  align-items: var(--_align);
+  justify-content: var(--_justify);
+  min-width: 0;
+}
+
+.x {
+  gap: var(--_row-gap) var(--_gap);
+}
+
+.y {
+  flex-direction: column;
+  gap: var(--_gap);
+}
+
+.wrap {
+  flex-wrap: wrap;
+}

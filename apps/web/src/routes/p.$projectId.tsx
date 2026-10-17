@@ -1,4 +1,4 @@
-import { Button } from '@manga/ui'
+import { Button, XStack } from '@manga/ui'
 import { createFileRoute, Link, notFound, Outlet, useParams } from '@tanstack/react-router'
 import { useStore } from 'zustand'
 import { CollaborationBar } from '../collaboration-view'
@@ -27,10 +27,10 @@ function ProjectLayout() {
   const { canUndo, canRedo } = useStore(store.state)
   return (
     <section>
-      <header className={styles.header}>
+      <XStack as="header" wrap gap={24} rowGap={8} className={styles.header}>
         <h1 className={styles.title}>{project.title || '無題'}</h1>
         <CollaborationBar collab={collab} project={project} />
-        <nav className={styles.tabs}>
+        <XStack as="nav" gap={4} align="stretch" className={styles.tabs}>
           <Link to="/p/$projectId" params={{ projectId }} activeOptions={{ exact: true }}>
             ページ
           </Link>
@@ -40,8 +40,8 @@ function ProjectLayout() {
           <Link to="/p/$projectId/settings" params={{ projectId }}>
             設定
           </Link>
-        </nav>
-        <span className={styles.actions}>
+        </XStack>
+        <XStack as="span" gap={6} className={styles.actions}>
           <SaveStatusIndicator store={store} />
           <Button size="small" variant="ghost" disabled={!canUndo} onClick={() => store.undo()}>
             Undo
@@ -61,8 +61,8 @@ function ProjectLayout() {
           >
             JSON 書き出し
           </Button>
-        </span>
-      </header>
+        </XStack>
+      </XStack>
       <Outlet />
     </section>
   )

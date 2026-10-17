@@ -1,4 +1,5 @@
 import type { Project } from '@manga/schema'
+import { XStack } from '@manga/ui'
 import { type CSSProperties, useSyncExternalStore } from 'react'
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
@@ -31,9 +32,9 @@ export const peerColor = (color: string) => ({ '--peer-color': color }) as CSSPr
 /** カーソル色の印と名前 */
 export function PeerBadge({ name, color, title }: { name: string; color: string; title?: string }) {
   return (
-    <span className={styles.peer} style={peerColor(color)} title={title}>
+    <XStack as="span" gap={4} className={styles.peer} style={peerColor(color)} title={title}>
       {name}
-    </span>
+    </XStack>
   )
 }
 
@@ -53,11 +54,18 @@ export function CollaborationBar({
     return found ? `${found.pageIndex + 1} ページを編集中` : undefined
   }
   return (
-    <span className={styles.bar}>
+    <XStack as="span" gap={12} className={styles.bar}>
       <span className={styles.syncStatus} data-status={status}>
         {status === 'connected' && !synced ? '同期中…' : SYNC_STATUS[status]}
       </span>
-      <ul className={styles.peers} aria-label="開いている人">
+      <XStack
+        as="ul"
+        wrap
+        gap={4}
+        align="stretch"
+        className={styles.peers}
+        aria-label="開いている人"
+      >
         <li>
           <PeerBadge name="自分" color={collab.presence.color} />
         </li>
@@ -66,7 +74,7 @@ export function CollaborationBar({
             <PeerBadge name={peer.name} color={peer.color} title={where(peer)} />
           </li>
         ))}
-      </ul>
-    </span>
+      </XStack>
+    </XStack>
   )
 }

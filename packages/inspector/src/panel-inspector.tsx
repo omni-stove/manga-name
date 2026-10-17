@@ -6,7 +6,7 @@ import {
   PanelSchema,
   type Patch,
 } from '@manga/schema'
-import { Button, Checkbox, Field, IconButton, TextArea } from '@manga/ui'
+import { Button, Checkbox, Field, IconButton, TextArea, XStack, YStack } from '@manga/ui'
 import { useId, useMemo, useState } from 'react'
 import { DEBOUNCE_MS, NumberField, TextField } from './fields'
 import styles from './panel-inspector.module.css'
@@ -92,16 +92,18 @@ export function PanelInspector({
         </p>
       )}
 
-      <h4 className={section.heading}>フキダシ</h4>
+      <XStack as="h4" className={section.heading}>
+        フキダシ
+      </XStack>
       {bubbles.length === 0 ? (
         <p className={section.muted}>フキダシはありません</p>
       ) : (
-        <ol className={styles.bubbles}>
+        <YStack as="ol" gap={2} className={styles.bubbles}>
           {bubbles.map(({ bubble, index }, i) => {
             const prev = bubbles[i - 1]
             const next = bubbles[i + 1]
             return (
-              <li key={bubble.id} className={styles.bubble} data-bubble-id={bubble.id}>
+              <XStack as="li" key={bubble.id} className={styles.bubble} data-bubble-id={bubble.id}>
                 <span className={styles.order}>{bubble.order}</span>
                 <span className={styles.line}>
                   {speakerOf(bubble) && <b className={styles.speaker}>{speakerOf(bubble)}</b>}
@@ -141,13 +143,15 @@ export function PanelInspector({
                 >
                   ▼
                 </IconButton>
-              </li>
+              </XStack>
             )
           })}
-        </ol>
+        </YStack>
       )}
 
-      <h4 className={section.heading}>生成</h4>
+      <XStack as="h4" className={section.heading}>
+        生成
+      </XStack>
       {diagnosis && (
         <>
           <p className={styles.hint} data-hint data-used={useHint}>
@@ -167,11 +171,11 @@ export function PanelInspector({
           onChange={(e) => onUseReferenceChange?.(e.target.checked)}
         />
       )}
-      <div className={section.group}>
+      <XStack wrap className={section.group}>
         <Button variant="primary" disabled={generating} onClick={() => onGenerate()}>
           {generating ? '生成中…' : '生成'}
         </Button>
-      </div>
+      </XStack>
       <Field label="修正指示">
         <TextArea
           rows={3}
@@ -180,20 +184,22 @@ export function PanelInspector({
           onChange={(e) => setInstruction(e.target.value)}
         />
       </Field>
-      <div className={section.group}>
+      <XStack wrap className={section.group}>
         <Button
           disabled={generating || !current || instruction.trim() === ''}
           onClick={() => onGenerate(instruction.trim())}
         >
           修正して再生成
         </Button>
-      </div>
+      </XStack>
 
-      <h4 className={section.heading}>履歴</h4>
+      <XStack as="h4" className={section.heading}>
+        履歴
+      </XStack>
       {arts.length === 0 ? (
         <p className={section.muted}>まだ生成していません</p>
       ) : (
-        <ol className={styles.arts}>
+        <YStack as="ol" className={styles.arts}>
           {arts.map((art) => (
             <ArtItem
               key={art.id}
@@ -206,7 +212,7 @@ export function PanelInspector({
               }}
             />
           ))}
-        </ol>
+        </YStack>
       )}
     </div>
   )
@@ -224,7 +230,14 @@ function ArtItem({
   onSelect(): void
 }) {
   return (
-    <li className={styles.art} data-art-id={art.id} data-current={current || undefined}>
+    <XStack
+      as="li"
+      gap={12}
+      align="stretch"
+      className={styles.art}
+      data-art-id={art.id}
+      data-current={current || undefined}
+    >
       <button type="button" className={styles.thumb} aria-pressed={current} onClick={onSelect}>
         {url ? (
           <img src={url} alt={art.instruction ?? '生成した絵'} />
@@ -232,18 +245,18 @@ function ArtItem({
           <span>{url === null ? '読み込めません' : '読み込み中…'}</span>
         )}
       </button>
-      <div className={styles.meta}>
-        <span className={styles.metaHead}>
+      <YStack gap={4} className={styles.meta}>
+        <XStack as="span" className={styles.metaHead}>
           <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
           {current && <b className={styles.badge}>採用中</b>}
-        </span>
+        </XStack>
         {art.instruction && <p className={styles.instruction}>{art.instruction}</p>}
         <details className={styles.prompt}>
           <summary>プロンプト</summary>
           <pre>{art.prompt}</pre>
         </details>
-      </div>
-    </li>
+      </YStack>
+    </XStack>
   )
 }
 

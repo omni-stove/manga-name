@@ -1,8 +1,7 @@
 import type { ID } from '@manga/schema'
-import { Button, Checkbox } from '@manga/ui'
+import { Button, Checkbox, XStack } from '@manga/ui'
 import { useState } from 'react'
 import { useStore } from 'zustand'
-import common from './common.module.css'
 import { batchRunning, type PanelGeneration } from './generate-panel'
 import type { ProjectStore } from './store/project-store'
 
@@ -33,7 +32,7 @@ export function useBatchGeneration({ generation, store, projectId, scope, pageId
 /** 「生成済みも含める」と、走っている間のキャンセル */
 export function BatchOptions({ batch }: { batch: ReturnType<typeof useBatchGeneration> }) {
   return (
-    <span className={common.actions}>
+    <XStack as="span" wrap>
       <Checkbox
         label="生成済みも含める"
         checked={batch.includeGenerated}
@@ -45,6 +44,6 @@ export function BatchOptions({ batch }: { batch: ReturnType<typeof useBatchGener
           キャンセル
         </Button>
       )}
-    </span>
+    </XStack>
   )
 }
