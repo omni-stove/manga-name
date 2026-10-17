@@ -11,7 +11,7 @@ import {
   selectPanel,
 } from './app'
 
-const REFERENCE = fileURLToPath(new URL('../../docs/fixtures/art/pn_1.png', import.meta.url))
+const REFERENCE = fileURLToPath(new URL('../../fixtures/art/pn_1.png', import.meta.url))
 
 test('キャラクター一覧で参照画像付きで追加したキャラを、台詞の無いコマの登場キャラに足す', async ({
   page,

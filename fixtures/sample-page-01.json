@@ -1,5 +1,5 @@
 {
-  "$comment": "6 コマ、右綴じの 1 ページを 03-data-model.md の Page として表現したもの。arts は空で、生成前のネーム。04-diagnosis-spec.md の期待値の入力。",
+  "$comment": "6 コマ、右綴じの 1 ページ。arts は空で、生成前のネーム。sample-page-01.diagnosis.json の入力。",
   "project": {
     "schemaVersion": 4,
     "id": "prj_sample",

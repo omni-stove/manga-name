@@ -6,7 +6,7 @@ export interface ProjectSummary {
   updatedAt: ISODate
 }
 
-/** docs/03-data-model.md のストレージアダプタ。 */
+/** プロジェクトとアセットの保存先。Web と Desktop の差はこの実装の選択に閉じる */
 export interface StorageAdapter {
   /** 保存済みプロジェクトの概要。updatedAt の新しい順 */
   listProjects(): Promise<ProjectSummary[]>

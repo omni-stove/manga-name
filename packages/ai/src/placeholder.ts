@@ -66,7 +66,7 @@ export function placeholderSize(panel: Panel, settings: ProjectSettings): { w: n
 
 /**
  * 生成画像の代わりになる灰色の矩形の PNG。枠線、対角線、コマ番号を描く。
- * 同じ引数からは常に同じバイト列になるので、docs/fixtures/art のフィクスチャはこれで作る。
+ * 同じ引数からは常に同じバイト列になるので、fixtures/art のフィクスチャはこれで作る。
  */
 export function placeholderPng(
   order: number,

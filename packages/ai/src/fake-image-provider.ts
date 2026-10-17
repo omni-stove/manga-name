@@ -8,7 +8,7 @@ const CHARACTER_SIZE = { w: 384, h: 512 }
 
 /**
  * 画像を生成せず、コマ番号を描いた灰色の矩形を返す ImageProvider。キャラの参照画像は番号 0 の縦長の矩形。
- * フィクスチャの 6 コマに対する出力は docs/fixtures/art/<panelId>.png と同じバイト列になる。
+ * フィクスチャの 6 コマに対する出力は fixtures/art/<panelId>.png と同じバイト列になる。
  * `art` に panelId -> PNG を渡すと、そのコマではそれをそのまま返す。
  */
 export function createFakeImageProvider(art: Record<ID, Blob> = {}): ImageProvider {

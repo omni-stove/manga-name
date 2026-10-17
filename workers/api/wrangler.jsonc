@@ -21,7 +21,7 @@
     // env なしの deploy でも X-Debug-User が開かないよう、既定は閉じた値にする。development は wrangler dev の --var とテストの bindings で明示する
     "ENVIRONMENT": "production",
     "WEB_ORIGINS": "http://localhost:5173",
-    // 06-open-questions.md #9 が決まるまでの仮の値
+    // 課金の形が決まるまでの仮の値
     "MONTHLY_GENERATION_LIMIT": "300"
   },
   // 秘密: wrangler secret put BETTER_AUTH_SECRET、GOOGLE_CLIENT_ID、GOOGLE_CLIENT_SECRET、ASSET_URL_SECRET、GEMINI_API_KEY、ANTHROPIC_API_KEY（staging は --env staging）

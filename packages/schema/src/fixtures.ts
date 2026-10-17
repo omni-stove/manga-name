@@ -1,7 +1,7 @@
-import sample from '../../../docs/fixtures/sample-page-01.json'
+import sample from '../../../fixtures/sample-page-01.json'
 import { parseProject } from './parse'
 
-/** `docs/fixtures/sample-page-01.json`。読み込み時に検証済み */
+/** `fixtures/sample-page-01.json`。読み込み時に検証済み */
 export const fixtures = { samplePage01: parseProject(sample.project) }
 
 if (import.meta.vitest) {

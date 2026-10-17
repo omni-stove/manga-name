@@ -4,7 +4,7 @@ import { bubbleGeometry, fillBubble } from './bubble'
 import type { PxRect } from './geometry'
 
 const GRAY = '#e0e0e0'
-/** 03-data-model.md の pageSize の既定値。コマのアスペクト比の計算に使う */
+/** pageSize の既定値。コマのアスペクト比の計算に使う */
 const DEFAULT_PAGE_SIZE = { w: 182, h: 257 }
 const FRAME_WIDTH = 0.006
 

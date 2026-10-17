@@ -184,7 +184,7 @@ function addArtPatch(project: Project, pageId: ID, panelId: ID, art: PanelArt): 
 }
 
 /**
- * 02-architecture.md のデータフロー「生成」を 1 コマ分まとめる。
+ * 1 コマの生成をまとめる。
  * 配置図 → 参考画像の切り抜き → 登場キャラの参照画像 → 前回の絵（修正指示つきのとき）→ 診断のヒント → ImageProvider → putAsset → applyPatch(ai)。
  * 生成は store の外で進め、結果だけを Patch で入れるので Undo で生成前に戻せる。アセットは残る。
  * 進行中のコマは `generating` に持ち、画面を離れても生き続ける。同じコマの二重起動は `busy` で断る
@@ -582,7 +582,7 @@ if (import.meta.vitest) {
           return fake.generatePanelArt(req)
         },
       })
-      // docs/fixtures/sample-page-01.diagnosis.json の pn_1 の hint
+      // fixtures/sample-page-01.diagnosis.json の pn_1 の hint
       const expected =
         '視線は中央の glass-crystal forest を大きく捉え、右上の フキダシ から中央下の E tiny, walking へ流れる'
 

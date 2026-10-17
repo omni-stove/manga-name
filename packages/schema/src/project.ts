@@ -274,7 +274,7 @@ if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
 
   const loadFixture = async (): Promise<Project> => {
-    const { default: fixture } = await import('../../../docs/fixtures/sample-page-01.json')
+    const { default: fixture } = await import('../../../fixtures/sample-page-01.json')
     return ProjectSchema.parse(fixture.project)
   }
 
@@ -292,7 +292,7 @@ if (import.meta.vitest) {
 
   const panelPath = (index: number, rest: string) => `episodes.0.pages.0.panels.${index}.${rest}`
 
-  test('docs/fixtures/sample-page-01.json passes ProjectSchema.parse', async () => {
+  test('fixtures/sample-page-01.json passes ProjectSchema.parse', async () => {
     const project = await loadFixture()
     expect(project.episodes[0]?.pages[0]?.panels).toHaveLength(6)
   })

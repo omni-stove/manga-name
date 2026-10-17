@@ -206,7 +206,7 @@ export function bubbleChain(page: Page): Point[] {
 }
 
 /**
- * ページを診断する（`docs/04-diagnosis-spec.md`）。Bubble を合成焦点に加えてから、
+ * ページを診断する。Bubble を合成焦点に加えてから、
  * 読み順、焦点の t・距離・誘導線・ステータス、フキダシ順、bubble chain、Issue、集計、ヒントを返す。
  * panels は Panel.order 順。issues はページ単位の Issue（READING_ORDER、OVERLAP）の後に
  * Panel.order 順の Panel ごとの Issue が続く。純粋関数で、入力は変更しない。
@@ -341,10 +341,8 @@ if (import.meta.vitest) {
       expect(d.bubbleChain[2]?.y).toBeCloseTo(0.8845)
     })
 
-    test('matches docs/fixtures/sample-page-01.diagnosis.json', async () => {
-      const { default: snapshot } = await import(
-        '../../../docs/fixtures/sample-page-01.diagnosis.json'
-      )
+    test('matches fixtures/sample-page-01.diagnosis.json', async () => {
+      const { default: snapshot } = await import('../../../fixtures/sample-page-01.diagnosis.json')
       expect(PageDiagnosisSchema.parse(d)).toBeTruthy()
       expect(normalise(d)).toEqual(normalise(snapshot.diagnosis))
     })

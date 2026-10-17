@@ -13,7 +13,7 @@ import {
   SCHEMA_VERSION,
 } from './project'
 
-/** 既定の生成スタイル。03-data-model.md の ProjectSettings 既定値 */
+/** 既定の生成スタイル */
 const DEFAULT_STYLE = {
   prompt: 'manga name rough, monochrome line art, loose sketch',
   negative: 'text, letters, speech bubbles, color',

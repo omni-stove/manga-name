@@ -20,7 +20,7 @@ export interface PatchMeta {
   label?: string
 }
 
-/** docs/03-data-model.md の ProjectStore */
+/** Project を JSON Patch で変える store。Zustand 版と Yjs 版が同じ形を持つので、呼び出し側は実装を選ばない */
 export interface ProjectStore {
   get(): Project
   applyPatch(patch: Patch, meta?: PatchMeta): void

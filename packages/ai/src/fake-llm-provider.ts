@@ -3,12 +3,12 @@ import {
   LayoutProposalResponseSchema,
   PagePlanResponseSchema,
 } from '@manga/schema'
-import critique from '../../../docs/fixtures/ai/critique.json'
-import layoutProposal from '../../../docs/fixtures/ai/layout-proposal.json'
-import pagePlan from '../../../docs/fixtures/ai/page-plan.json'
+import critique from '../../../fixtures/ai/critique.json'
+import layoutProposal from '../../../fixtures/ai/layout-proposal.json'
+import pagePlan from '../../../fixtures/ai/page-plan.json'
 import type { LlmProvider } from './provider'
 
-/** `docs/fixtures/ai/` の固定応答。読み込み時に検証済み */
+/** `fixtures/ai/` の固定応答。読み込み時に検証済み */
 export const aiFixtures = {
   pagePlan: PagePlanResponseSchema.parse(pagePlan),
   layoutProposal: LayoutProposalResponseSchema.parse(layoutProposal),
@@ -16,7 +16,7 @@ export const aiFixtures = {
 }
 
 /**
- * 入力に関わらず docs/fixtures/ai/ の応答を返す LlmProvider。planPages と proposeLayout は `pageCount` があれば、
+ * 入力に関わらず fixtures/ai/ の応答を返す LlmProvider。planPages と proposeLayout は `pageCount` があれば、
  * フィクスチャのページを繰り返してその枚数にする
  */
 export function createFakeLlmProvider(): LlmProvider {
