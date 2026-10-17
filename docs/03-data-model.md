@@ -1,6 +1,6 @@
 # 03. データモデル（共有契約）
 
-このファイルは全ワークストリームが依存する契約。`packages/schema` はこの定義を Zod に写したものであり、このファイルが正。
+このファイルは全パッケージが依存する契約。`packages/schema` はこの定義を Zod に写したものであり、このファイルが正。
 変更は PR で提案し、`schemaVersion` を上げ、マイグレーションを同梱する。
 
 ## 設計原則
@@ -26,7 +26,7 @@ interface Rect  { x: number; y: number; w: number; h: number }
 type ReadingDirection = 'rtl' | 'ltr';   // rtl = 右綴じ縦書き（既定）
 
 interface Project {
-  schemaVersion: 2;
+  schemaVersion: 3;
   id: ID;
   title: string;
   createdAt: ISODate;
@@ -120,6 +120,12 @@ interface Bubble {
   size: Size;
   /** しっぽの先端。コマ内座標。省略時はしっぽなし */
   tail?: Point;
+  /**
+   * true なら本体をコマの枠からはみ出させてよい。省略時は、フキダシの作成・移動・リサイズ、
+   * コマのリサイズ・分割・結合・頂点の移動、AI の下書きと提案のたびに本体を枠の内側に収める
+   * （輪郭から 2mm 空け、収まらなければ縮める）。しっぽは枠の外へ出てよい
+   */
+  overflow?: boolean;
 }
 
 interface PanelArt {
@@ -248,7 +254,7 @@ interface Issue {
 ## パッチ形式（store と AI 提案の共通インターフェース）
 
 store への変更はすべて JSON Patch（RFC 6902）で表現する。AI の提案も JSON Patch で返す。
-これにより Phase 4 で CRDT に置き換えるときも、呼び出し側のコードは変わらない。
+これにより store が Zustand でも Yjs（共同編集）でも、呼び出し側のコードは変わらない。
 
 ```ts
 type Patch = { op: 'add' | 'remove' | 'replace'; path: string; value?: unknown }[];

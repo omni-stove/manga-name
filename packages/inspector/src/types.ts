@@ -1,5 +1,6 @@
 import type {
   Bubble,
+  BubbleFrame,
   Character,
   FocusDiagnosis,
   FocusPoint,
@@ -37,6 +38,8 @@ export interface PanelInspectorProps {
 export interface BubbleInspectorProps {
   bubble: Bubble
   characters: Character[]
+  /** フキダシを持つコマとページの大きさ。「枠からはみ出す」を外したとき本体をこの枠に収める */
+  frame: BubbleFrame
   onChange(patch: Patch): void
 }
 

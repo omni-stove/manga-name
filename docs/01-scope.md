@@ -54,7 +54,7 @@
 
 ### プラットフォーム
 - Web アプリ（ブラウザ、iPad の Safari 含む）。これが主。
-- Desktop アプリ（Tauri 2、macOS と Windows）。Phase 4。
+- Desktop アプリ（Tauri 2、macOS と Windows）。
 - 同一の React コードベース。差分はストレージと認証のアダプタのみ。
 
 ### アクセシビリティ

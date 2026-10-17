@@ -10,7 +10,7 @@ export type CritiquePatchCheck = { ok: true; patch: Patch } | { ok: false; reaso
 const PAGE_PREFIX = /^\/episodes\/\d+\/pages\/\d+(?=\/)/
 const POS_PATH = /^\/panels\/(\d+)\/(focusPoints|bubbles)\/(\d+)\/pos$/
 const VECTOR_PATH = /^\/panels\/(\d+)\/vectors\/(-|\d+)$/
-/** コマそのもの、コマの配列、矩形に届くパス。WS-16 で AI に触らせないもの */
+/** コマそのもの、コマの配列、矩形に届くパス。critique で AI に触らせないもの */
 const PANEL_RECT_PATH = /^\/panels(\/(-|\d+)(\/rect(\/.*)?)?)?$/
 
 const REJECT_RECT = 'コマの矩形（rect）を変える提案なので適用できません'

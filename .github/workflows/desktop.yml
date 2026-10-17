@@ -1,26 +1,13 @@
 name: Desktop
 
-# 配布はタグ push の desktop-release.yml が担い、PR には署名用の証明書も updater の秘密鍵もないので、
-# 両 OS で tauri build が通ることだけを確かめ、成果物は上げない。
-# Desktop は apps/web とそれが使う packages を同梱するので、その変更でも走らせる。
+# 両 OS で tauri build が通ることを、タグを打つ前に手で確かめるためのもの。push や PR ごとに走らせると
+# 毎回 2 OS 分のビルドを待たされるので、配布するタグ push の desktop-release.yml 以外では自動で走らせない。
+# 署名用の証明書も updater の秘密鍵も使わないので、成果物は上げない。
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps/**"
-      - "packages/**"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/desktop.yml"
-  pull_request:
-    paths:
-      - "apps/**"
-      - "packages/**"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/desktop.yml"
   workflow_dispatch:
 
 concurrency:
-  group: desktop-${{ github.event.pull_request.number || github.ref }}
+  group: desktop-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

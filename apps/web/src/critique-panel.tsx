@@ -1,5 +1,5 @@
 import type { CritiqueResponse, LlmProvider } from '@manga/ai'
-import type { ID, Page, PageDiagnosis, Patch } from '@manga/schema'
+import type { ID, Page, PageDiagnosis, Patch, ProjectSettings } from '@manga/schema'
 import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -39,6 +39,8 @@ interface CritiquePanelProps {
   store: ProjectStore
   page: Page
   pageId: ID
+  /** ページの大きさ（mm）。フキダシを動かす提案を枠に収めるのに使う */
+  pageSize: ProjectSettings['pageSize']
   diagnosis: PageDiagnosis
   llmProvider: LlmProvider
   canEdit: boolean
@@ -130,6 +132,7 @@ export function CritiquePanel(props: CritiquePanelProps) {
           before={consultation.before}
           now={counts(diagnosis)}
           page={page}
+          pageSize={props.pageSize}
           canEdit={canEdit}
           generating={generating}
           regenerate={regenerate}
@@ -151,6 +154,7 @@ function Result({
   before,
   now,
   page,
+  pageSize,
   canEdit,
   generating,
   regenerate,
@@ -164,6 +168,7 @@ function Result({
   before: Counts
   now: Counts
   page: Page
+  pageSize: ProjectSettings['pageSize']
   canEdit: boolean
   generating: Set<ID>
   regenerate: Regenerate[]
@@ -173,7 +178,7 @@ function Result({
   onGenerate(panelId: ID): void
   onDismiss(panelId: ID): void
 }) {
-  const states = response.suggestions.map((s) => suggestionState(page, s))
+  const states = response.suggestions.map((s) => suggestionState(page, s, pageSize))
   const stale = [
     ...new Map(
       regenerate

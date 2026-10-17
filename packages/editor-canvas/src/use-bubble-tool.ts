@@ -1,4 +1,4 @@
-import type { Bubble, ID, Page, Patch } from '@manga/schema'
+import type { Bubble, BubbleFrame, ID, Page, Patch } from '@manga/schema'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -97,7 +97,8 @@ const toPanel = (box: Box, p: PagePoint): Pos => ({
 /**
  * `bubble` ツールの操作。コマの何も無いところをクリックすると既定のフキダシを作って選び、
  * フキダシのドラッグで移動、選択中のフキダシの隅のハンドルでリサイズ、しっぽの先端のドラッグで
- * しっぽを動かす（無ければ作る）。ドラッグ中は `draft` を描くだけで、Patch は pointerup で 1 回だけ出す。
+ * しっぽを動かす（無ければ作る）。作成、移動、リサイズでは、overflow でない限り本体をコマの枠に収める。
+ * ドラッグ中は `draft` を描くだけで、Patch は pointerup で 1 回だけ出す。
  * フキダシを動かさずに離したときの選択は useSelection に任せる。Escape でドラッグを取り消す
  */
 export function useBubbleTool(opts: Options) {
@@ -114,9 +115,12 @@ export function useBubbleTool(opts: Options) {
 
   const pointAt = (e: ReactPointerEvent<SVGSVGElement>) =>
     clientToPage(opts.view, boxOf(e.currentTarget), { x: e.clientX, y: e.clientY })
+  const pageSize = { w: opts.width, h: opts.height }
   const panelOf = (bubbleId: ID) => {
     const f = findBubble(opts.page, bubbleId)
-    return f && panelBox(f.panel, opts.width, opts.height)
+    return (
+      f && { box: panelBox(f.panel, opts.width, opts.height), frame: { panel: f.panel, pageSize } }
+    )
   }
   const end = () => {
     gesture.current = null
@@ -130,11 +134,16 @@ export function useBubbleTool(opts: Options) {
     gesture.current = g
   }
   /** ドラッグ中の点 p での姿 */
-  const shapeAt = (g: Exclude<Gesture, { kind: 'create' }>, box: Box, p: PagePoint): Bubble => {
+  const shapeAt = (
+    g: Exclude<Gesture, { kind: 'create' }>,
+    box: Box,
+    frame: BubbleFrame,
+    p: PagePoint,
+  ): Bubble => {
     if (g.kind === 'move') {
-      return movedBubble(g.start, (p.x - g.from.x) / box.w, (p.y - g.from.y) / box.h)
+      return movedBubble(g.start, (p.x - g.from.x) / box.w, (p.y - g.from.y) / box.h, frame)
     }
-    if (g.kind === 'resize') return resizedBubble(g.start, g.handle, toPanel(box, p))
+    if (g.kind === 'resize') return resizedBubble(g.start, g.handle, toPanel(box, p), frame)
     return tailedBubble(g.start, toPanel(box, p))
   }
   const near = (a: PagePoint, b: PagePoint) =>
@@ -218,10 +227,10 @@ export function useBubbleTool(opts: Options) {
         if (Math.hypot(e.clientX - g.client.x, e.clientY - g.client.y) <= CLICK_SLOP) return
         g.dragging = true
       }
-      const box = panelOf(g.start.id)
+      const of = panelOf(g.start.id)
       const at = pointAt(e)
-      if (!box || at === null) return
-      setDraft({ bubble: shapeAt(g, box, at), panel: box })
+      if (!of || at === null) return
+      setDraft({ bubble: shapeAt(g, of.box, of.frame, at), panel: of.box })
     },
     onPointerUp(e: ReactPointerEvent<SVGSVGElement>) {
       const g = gesture.current
@@ -233,17 +242,17 @@ export function useBubbleTool(opts: Options) {
       if (g.pointerId !== e.pointerId) return
       end()
       if (g.kind === 'create') {
-        const created = createBubblePatch(opts.page, g.panelId, g.at)
+        const created = createBubblePatch(opts.page, g.panelId, g.at, pageSize)
         if (!created) return
         opts.onChange(created.patch)
         opts.onSelect({ kind: 'bubble', id: created.id })
         return
       }
       if (!g.dragging) return
-      const box = panelOf(g.start.id)
+      const of = panelOf(g.start.id)
       const at = pointAt(e)
-      if (!box || at === null) return
-      const patch = updateBubblePatch(opts.page, shapeAt(g, box, at))
+      if (!of || at === null) return
+      const patch = updateBubblePatch(opts.page, shapeAt(g, of.box, of.frame, at))
       if (patch.length > 0) opts.onChange(patch)
       if (selectedId !== g.start.id) opts.onSelect({ kind: 'bubble', id: g.start.id })
     },

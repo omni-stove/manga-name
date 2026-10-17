@@ -2,6 +2,7 @@ import {
   boundsOf,
   clipHalfPlane,
   convexHull,
+  fitPanelBubbles,
   type ID,
   intersectPolygons,
   newId,
@@ -12,6 +13,7 @@ import {
   polygonArea,
   type ReadingDirection,
   type Rect,
+  type Size,
   type Sweep,
   sideOf,
 } from '@manga/schema'
@@ -521,9 +523,21 @@ export function mergePanelsPatch(
   ]
 }
 
+/**
+ * コマを丸ごと add か replace する patch の、そのコマのフキダシを fitPanelBubbles で枠に収めた patch。
+ * pageSize はページの大きさ（mm）。コマの形を変える操作の後に、新しい枠からはみ出たフキダシを戻すのに使う
+ */
+export function fitBubblesPatch(patch: Patch, pageSize: Pick<Size, 'w' | 'h'>): Patch {
+  return patch.map((op) =>
+    (op.op === 'add' || op.op === 'replace') && /^\/panels\/\d+$/.test(op.path)
+      ? { ...op, value: fitPanelBubbles(op.value as Panel, pageSize) }
+      : op,
+  )
+}
+
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
-  const { fixtures, PageSchema } = await import('@manga/schema')
+  const { bubbleFits, fixtures, PageSchema } = await import('@manga/schema')
   const page = fixtures.samplePage01.episodes[0]?.pages[0] as Page
 
   /** Patch を当てたページ。ここでは index の add / remove / replace だけを扱う */
@@ -677,6 +691,19 @@ if (import.meta.vitest) {
     ])
     expect(resizePanelPatch(page, 'pn_2', (page.panels[1] as Panel).rect)).toEqual([])
     expect(resizePanelPatch(page, 'nope', rect)).toEqual([])
+  })
+
+  test('fitBubblesPatch fits the bubbles of whole panels and leaves other operations', () => {
+    const pageSize = fixtures.samplePage01.settings.pageSize
+    const patch = resizePanelPatch(page, 'pn_3', { x: 0.5, y: 0.3, w: 0.1, h: 0.1 })
+    const fitted = fitBubblesPatch(
+      [...patch, { op: 'replace', path: '/panels/0/order', value: 1 }],
+      pageSize,
+    )
+    const panel = (fitted[0] as { value: Panel }).value
+    expect(panel.rect).toEqual({ x: 0.5, y: 0.3, w: 0.1, h: 0.1 })
+    for (const b of panel.bubbles) expect(bubbleFits(b, { panel, pageSize })).toBe(true)
+    expect(fitted[1]).toEqual({ op: 'replace', path: '/panels/0/order', value: 1 })
   })
 
   describe('splitPanelPatch', () => {
