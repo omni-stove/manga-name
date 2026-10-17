@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 1 as const
+export const SCHEMA_VERSION = 2 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -128,6 +128,7 @@ const PanelBaseSchema = z.object({
   id: IdSchema,
   order,
   rect: RectSchema,
+  shape: z.array(PointSchema).min(3).optional(),
   bubbles: z.array(BubbleSchema),
   note: z.string().optional(),
   camera: z.string().optional(),

@@ -1,15 +1,17 @@
 import {
   type Bubble,
+  cornerAnchor,
   currentArt,
   type ID,
   type Page,
   type Panel,
+  type Point,
   type Rect,
   type ReferenceImage,
 } from '@manga/schema'
 import { memo } from 'react'
 import { type Box, bodyPath, bubbleGeometry, tailPath, textBox } from './bubble-shape'
-import { panelBox } from './hit-test'
+import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
 import type { AssetState } from './use-asset-urls'
 import { COLUMN_PITCH, layoutVertical } from './vertical-text'
@@ -105,6 +107,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
           key={panel.id}
           panelId={panel.id}
           panelRect={panel.rect}
+          panelShape={panel.shape}
           width={width}
           height={height}
           generating={props.generating.has(panel.id)}
@@ -140,6 +143,8 @@ const PanelView = memo(function PanelView({
   onArtError(ref: string): void
 }) {
   const rect = panelBox(panel, width, height)
+  const outline = panelPolygon(panel, width, height)
+  const points = polygonPoints(outline)
   const url = asset && 'url' in asset ? asset.url : undefined
   return (
     <g
@@ -148,38 +153,37 @@ const PanelView = memo(function PanelView({
       data-generating={generating || undefined}
       data-art-error={(asset && 'error' in asset) || undefined}
     >
+      <clipPath id={clipId}>
+        <polygon points={points} />
+      </clipPath>
       {artRef !== undefined && url !== undefined ? (
-        <>
-          <clipPath id={clipId}>
-            <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} />
-          </clipPath>
-          <image
-            href={url}
-            x={rect.x}
-            y={rect.y}
-            width={rect.w}
-            height={rect.h}
-            preserveAspectRatio="xMidYMid slice"
-            clipPath={`url(#${clipId})`}
-            onError={() => onArtError(artRef)}
-          />
-        </>
+        <image
+          href={url}
+          x={rect.x}
+          y={rect.y}
+          width={rect.w}
+          height={rect.h}
+          preserveAspectRatio="xMidYMid slice"
+          clipPath={`url(#${clipId})`}
+          onError={() => onArtError(artRef)}
+        />
       ) : (
-        <Placeholder panel={panel} rect={rect} error={asset !== undefined && 'error' in asset} />
+        <g clipPath={`url(#${clipId})`}>
+          <Placeholder panel={panel} rect={rect} error={asset !== undefined && 'error' in asset} />
+        </g>
       )}
-      <rect
-        x={rect.x}
-        y={rect.y}
-        width={rect.w}
-        height={rect.h}
+      <polygon
+        data-panel-frame=""
+        points={points}
         fill="none"
         stroke="#000"
         style={selected ? { stroke: GUIDE } : undefined}
         data-selected={selected || undefined}
         strokeWidth={selected ? 2 : 1}
+        strokeLinejoin="miter"
         vectorEffect="non-scaling-stroke"
       />
-      <PanelNumber order={panel.order} rect={rect} />
+      <PanelNumber order={panel.order} outline={outline} />
     </g>
   )
 })
@@ -188,6 +192,7 @@ const PanelView = memo(function PanelView({
 const PanelOverlay = memo(function PanelOverlay({
   panelId,
   panelRect,
+  panelShape,
   width,
   height,
   generating,
@@ -195,19 +200,22 @@ const PanelOverlay = memo(function PanelOverlay({
 }: {
   panelId: ID
   panelRect: Rect
+  panelShape: Point[] | undefined
   width: number
   height: number
   generating: boolean
   onGenerate?(panelId: ID): void
 }) {
   const rect = panelBox({ rect: panelRect }, width, height)
+  const outline = panelPolygon({ rect: panelRect, shape: panelShape }, width, height)
+  const points = polygonPoints(outline)
   return (
     <g className="ec-overlay" data-overlay-panel-id={panelId}>
       {/* フキダシの上でも .ec-overlay:hover を効かせるための当たり判定 */}
-      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} fill="transparent" />
-      {generating && <GeneratingOverlay rect={rect} />}
+      <polygon points={points} fill="transparent" />
+      {generating && <GeneratingOverlay rect={rect} points={points} />}
       {onGenerate && !generating && (
-        <GenerateButton rect={rect} onClick={() => onGenerate(panelId)} />
+        <GenerateButton outline={outline} onClick={() => onGenerate(panelId)} />
       )}
     </g>
   )
@@ -277,10 +285,9 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
 }
 
 /** 右上の丸の番号。出力のコマ番号とは別の、作業用の印 */
-function PanelNumber({ order, rect }: { order: number; rect: Box }) {
+function PanelNumber({ order, outline }: { order: number; outline: readonly PagePoint[] }) {
   const r = NUMBER_RADIUS
-  const cx = rect.x + rect.w - r - 1
-  const cy = rect.y + r + 1
+  const { x: cx, y: cy } = cornerAnchor(outline, 'ne', -(r + 1), r + 1)
   return (
     <g data-panel-number={order}>
       <circle cx={cx} cy={cy} r={r} style={{ fill: GUIDE }} />
@@ -301,13 +308,13 @@ function PanelNumber({ order, rect }: { order: number; rect: Box }) {
 }
 
 /** 半透明の白と回るスピナー */
-function GeneratingOverlay({ rect }: { rect: Box }) {
+function GeneratingOverlay({ rect, points }: { rect: Box; points: string }) {
   const cx = rect.x + rect.w / 2
   const cy = rect.y + rect.h / 2
   const r = Math.min(12, Math.max(3, Math.min(rect.w, rect.h) * 0.12))
   return (
     <g data-spinner="" aria-label="生成中">
-      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} fill="#fff" opacity={0.6} />
+      <polygon points={points} fill="#fff" opacity={0.6} />
       <circle
         cx={cx}
         cy={cy}
@@ -339,11 +346,12 @@ function GeneratingOverlay({ rect }: { rect: Box }) {
 }
 
 /** コマのホバーで出す「生成」ボタン。右下に置く */
-function GenerateButton({ rect, onClick }: { rect: Box; onClick(): void }) {
+function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; onClick(): void }) {
   const w = 12
   const h = 5
-  const x = rect.x + rect.w - w - 1.5
-  const y = rect.y + rect.h - h - 1.5
+  const center = cornerAnchor(outline, 'se', -(w / 2 + 1.5), -(h / 2 + 1.5))
+  const x = center.x - w / 2
+  const y = center.y - h / 2
   return (
     // biome-ignore lint/a11y/useSemanticElements: SVG の中に <button> は置けない
     <g

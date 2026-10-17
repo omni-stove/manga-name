@@ -6,7 +6,7 @@ import { DiagnosisLayer } from './diagnosis-layer'
 import { GhostLayer } from './ghost-layer'
 import { findFocus, findVector, focusRadius, toPagePoint } from './hint-ops'
 import { HintsLayer } from './hints-layer'
-import { panelBox } from './hit-test'
+import { panelBox, panelPolygon, polygonPoints } from './hit-test'
 import { PageLayer } from './page-layer'
 import { PanelToolLayer } from './panel-tool-layer'
 import type { EditorCanvasProps, Selection } from './types'
@@ -39,8 +39,10 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * 1 ページを SVG で描くキャンバス。ユーザー単位はページの mm（`settings.pageSize`）で、
  * ズームとパンは viewBox で表す。ページの外側は作業台の色（`--surface-desk`）。
  * クリックで選択、ホバーで強調、Delete で削除、矢印キーで 0.01 刻みの移動。
- * `panel` ツールではドラッグでコマを作り、選択中のコマをハンドルでリサイズ、ボタンで分割、
- * Shift + クリックで結合する。端は他のコマとページの端に 0.01 以内で吸い付く。
+ * `panel` ツールではドラッグでコマを作り、選択中のコマをハンドルでリサイズ、ボタンで縦横に分割、
+ * 「線で分割」か Alt + ドラッグで引いた斜めの線で分割、Shift + クリックで結合する。多角形のコマは
+ * 頂点をドラッグで動かし、矩形のコマも Alt + 隅のドラッグで頂点を動かせる。
+ * 端は他のコマとページの端に 0.01 以内で吸い付き、頂点は他のコマの頂点にも吸い付く。
  * `bubble` ツールではコマのクリックでフキダシを作り、ドラッグで移動、隅のハンドルでリサイズ、
  * しっぽの先端のドラッグでしっぽを動かす。セリフは縦書きで、収まらなければ末尾を省略記号にする。
  * Patch はページ root 基準で `onChange` に 1 操作 1 回出し、Undo / Redo は持たない。
@@ -290,7 +292,9 @@ export function EditorCanvas(props: EditorCanvasProps) {
         width={pageW}
         height={pageH}
         handleSize={panelTool.handleSize}
+        cutting={panelTool.cutting}
         onSplit={panelTool.split}
+        onToggleCut={panelTool.toggleCut}
       />
       <BubbleToolLayer
         selected={bubbleTool.selected}
@@ -363,10 +367,9 @@ function Highlight({
   if (target.kind === 'panel') {
     const panel = page.panels.find((p) => p.id === target.id)
     if (!panel) return null
-    const box = panelBox(panel, width, height)
     return (
       <g data-layer="highlight" data-hovered-id={target.id}>
-        <rect x={box.x} y={box.y} width={box.w} height={box.h} {...stroke} />
+        <polygon points={polygonPoints(panelPolygon(panel, width, height))} {...stroke} />
       </g>
     )
   }

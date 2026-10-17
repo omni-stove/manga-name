@@ -1,12 +1,19 @@
 import {
+  boundsOf,
+  clipHalfPlane,
+  convexHull,
   type ID,
+  intersectPolygons,
   newId,
   type Page,
   type Panel,
   type Patch,
+  panelOutline,
+  polygonArea,
   type ReadingDirection,
   type Rect,
   type Sweep,
+  sideOf,
 } from '@manga/schema'
 
 /** コマの端を、他のコマの端とページの端へ吸い付ける距離（正規化座標） */
@@ -15,11 +22,21 @@ const SNAP_DISTANCE = 0.01
 const MIN_PANEL_SIZE = 0.02
 /** 分割で 2 つのコマの間に空ける幅。createPage のコマ間と同じ */
 const SPLIT_GUTTER = 0.02
+/** 頂点を他のコマの頂点へ吸い付ける距離。辺の吸い付けと同じ */
+const VERTEX_SNAP = SNAP_DISTANCE
+/** 縦か横からこの角度（度）以内の分割線は、縦か横にそろえる */
+const CUT_SNAP_DEGREES = 4
 // 0.51 - 0.5 が 0.010000000000000009 になるので、ちょうど SNAP_DISTANCE の差も吸い付ける
 const EPSILON = 1e-9
 
 /** vertical は縦の線で左右に、horizontal は横の線で上下に割る */
 export type SplitAxis = 'vertical' | 'horizontal'
+
+/** 正規化座標の 2 点を通る分割線。線は 2 点の外へも伸ばして使う */
+export interface Cut {
+  from: Point
+  to: Point
+}
 
 /** リサイズのハンドル。動かす辺の方角 */
 export type Handle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
@@ -44,6 +61,41 @@ const rectOf = (e: Edges): Rect => {
   const y = round(e.top)
   return { x, y, w: round(e.right - x), h: round(e.bottom - y) }
 }
+
+const samePoint = (a: Point, b: Point) =>
+  Math.abs(a.x - b.x) <= EPSILON && Math.abs(a.y - b.y) <= EPSILON
+
+/** 重なった頂点と、前後の頂点と一直線に並ぶ頂点を除いた輪郭 */
+function simplify(outline: readonly Point[]): Point[] {
+  const pts = outline.filter((p, i) => !samePoint(p, outline[(i + 1) % outline.length] as Point))
+  return pts.filter((p, i) => {
+    const prev = pts[(i + pts.length - 1) % pts.length] as Point
+    const next = pts[(i + 1) % pts.length] as Point
+    return Math.abs(sideOf(prev, next, p)) > EPSILON
+  })
+}
+
+/**
+ * ページ座標の輪郭を Panel の rect と shape にする。rect は輪郭を囲む矩形で、輪郭がその矩形そのものなら
+ * shape を省く。rect は他の操作と同じく 0.001 に丸め、shape は丸めた rect に対するコマ内座標
+ */
+function geometryOf(outline: readonly Point[]): { rect: Rect; shape?: Point[] } {
+  const pts = simplify(outline)
+  const b = boundsOf(pts)
+  const rect = rectOf({ left: b.x, top: b.y, right: b.x + b.w, bottom: b.y + b.h })
+  const corners = panelOutline({ rect: b })
+  const isRect = pts.length === 4 && corners.every((c) => pts.some((p) => samePoint(p, c)))
+  if (isRect) return { rect }
+  const shape = pts.map((p) => ({
+    x: round(clamp01((p.x - rect.x) / rect.w)),
+    y: round(clamp01((p.y - rect.y) / rect.h)),
+  }))
+  return { rect, shape }
+}
+
+/** 2 つの輪郭が、辺で接するだけでなく面で重なるか。b は凸包で見るので、凹んだ b では広めに見る */
+const outlinesOverlap = (a: readonly Point[], b: readonly Point[]) =>
+  polygonArea(intersectPolygons(a, convexHull(b))) > EPSILON
 
 /** 0 から 1 の、v に最も近い target。SNAP_DISTANCE より遠ければ v のまま */
 function snapValue(v: number, targets: readonly number[]): number {
@@ -203,10 +255,6 @@ function contentIn(panel: Panel, to: Rect, keep: (p: Point) => boolean) {
   return { bubbles, focusPoints, vectors }
 }
 
-const overlaps = (a: Rect, b: Rect) =>
-  Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > EPSILON &&
-  Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > EPSILON
-
 /**
  * rect の空のコマを足す Patch と、そのコマの id。order は今ある最大の次。
  * 幅か高さが MIN_PANEL_SIZE 未満なら null
@@ -249,48 +297,94 @@ export function resizePanelPatch(page: Page, panelId: ID, rect: Rect): Patch {
 }
 
 /**
- * コマ panelId を SPLIT_GUTTER を空けて 2 つに割る Patch。読む順で先に来る半分が元の id、絵の履歴、
- * note と camera を引き継ぎ、もう一方は新しい空のコマになる。フキダシ、焦点、ベクトルは位置で振り分ける。
- * 割った後はページの全コマの order を読む順に振り直す。割ると MIN_PANEL_SIZE を下回るなら空
+ * 縦か横から CUT_SNAP_DEGREES 以内の分割線を、縦か横にそろえた線。角度はページの mm で測るので
+ * width と height はページの大きさ（mm）。from は動かさない
  */
-export function splitPanelPatch(
+export function snapCut(cut: Cut, width: number, height: number): Cut {
+  const dx = (cut.to.x - cut.from.x) * width
+  const dy = (cut.to.y - cut.from.y) * height
+  const degrees = (Math.atan2(Math.abs(dy), Math.abs(dx)) * 180) / Math.PI
+  if (degrees <= CUT_SNAP_DEGREES) return { from: cut.from, to: { x: cut.to.x, y: cut.from.y } }
+  if (degrees >= 90 - CUT_SNAP_DEGREES) {
+    return { from: cut.from, to: { x: cut.from.x, y: cut.to.y } }
+  }
+  return cut
+}
+
+/**
+ * 分割線 cut を伸ばした直線がコマの輪郭を横切る区間の両端（ページ座標）。横切らなければ null。
+ * 分割線のプレビューに使う
+ */
+export function cutChord(panel: Pick<Panel, 'rect' | 'shape'>, cut: Cut): [Point, Point] | null {
+  const { from: a, to: b } = cut
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const ts: number[] = []
+  const outline = panelOutline(panel)
+  outline.forEach((p, i) => {
+    const q = outline[(i + 1) % outline.length] as Point
+    const ex = q.x - p.x
+    const ey = q.y - p.y
+    const denom = dx * ey - dy * ex
+    if (Math.abs(denom) <= EPSILON) return
+    const t = ((p.x - a.x) * ey - (p.y - a.y) * ex) / denom
+    const u = ((p.x - a.x) * dy - (p.y - a.y) * dx) / denom
+    if (u >= -EPSILON && u <= 1 + EPSILON) ts.push(t)
+  })
+  if (ts.length < 2) return null
+  const lo = Math.min(...ts)
+  const hi = Math.max(...ts)
+  if (hi - lo <= EPSILON) return null
+  const at = (t: number) => ({ x: a.x + dx * t, y: a.y + dy * t })
+  return [at(lo), at(hi)]
+}
+
+/**
+ * コマ panelId を分割線 cut で SPLIT_GUTTER を空けて 2 つに割る Patch。線は 2 点の外へも伸ばし、
+ * 斜めの線なら台形や三角形のコマになる。読む順で先に来る半分が元の id、絵の履歴、note と camera を
+ * 引き継ぎ、もう一方は新しい空のコマになる。フキダシ、焦点、ベクトルは線のどちら側にあるかで振り分ける。
+ * 割った後はページの全コマの order を読む順に振り直す。線がコマを横切らないか、
+ * 割った片方が MIN_PANEL_SIZE を下回るなら空
+ */
+export function cutPanelPatch(
   page: Page,
   panelId: ID,
-  axis: SplitAxis,
+  cut: Cut,
   direction: ReadingDirection,
 ): Patch {
   const i = page.panels.findIndex((p) => p.id === panelId)
   const panel = page.panels[i]
-  if (!panel) return []
+  if (!panel || samePoint(cut.from, cut.to)) return []
+  const outline = panelOutline(panel)
+  const halves = [
+    clipHalfPlane(outline, cut.from, cut.to, SPLIT_GUTTER / 2),
+    clipHalfPlane(outline, cut.to, cut.from, SPLIT_GUTTER / 2),
+  ].map(geometryOf)
+  const tooSmall = (g: { rect: Rect }) =>
+    g.rect.w < MIN_PANEL_SIZE - EPSILON || g.rect.h < MIN_PANEL_SIZE - EPSILON
+  if (halves.some(tooSmall)) return []
+  const [firstIndex] = readingOrder(
+    halves.map((g, k) => ({ ...g, k })),
+    direction,
+  ).map((g) => g.k)
+  const first = halves[firstIndex as number] as (typeof halves)[number]
+  const next = halves[firstIndex === 0 ? 1 : 0] as (typeof halves)[number]
   const r = panel.rect
-  const vertical = axis === 'vertical'
-  const length = vertical ? r.w : r.h
-  const half = round((length - SPLIT_GUTTER) / 2)
-  if (half < MIN_PANEL_SIZE - EPSILON) return []
-  const start = vertical ? r.x : r.y
-  const second = round(start + half + SPLIT_GUTTER)
-  const rest = round(start + length - second)
-  const a: Rect = vertical ? { ...r, w: half } : { ...r, h: half }
-  const b: Rect = vertical ? { ...r, x: second, w: rest } : { ...r, y: second, h: rest }
-  const cut = start + length / 2
-  const inA = (p: Point) => (vertical ? p.x : p.y) < cut
-  const aFirst = !(vertical && direction === 'rtl')
-  const [first, next] = aFirst ? [a, b] : [b, a]
-  const inFirst = (p: Point) => inA(p) === aFirst
+  const inFirst = (p: Point) => sideOf(cut.from, cut.to, p) >= 0 === (firstIndex === 0)
 
-  const { sweep, ...base } = panel
+  const { sweep, shape: _, ...base } = panel
   const kept: Panel = {
     ...base,
-    rect: first,
-    ...contentIn(panel, first, inFirst),
-    ...(sweep && { sweep: moveSweep(sweep, r, first) }),
+    ...first,
+    ...contentIn(panel, first.rect, inFirst),
+    ...(sweep && { sweep: moveSweep(sweep, r, first.rect) }),
   }
   const added: Panel = {
     id: newId(),
     order: panel.order,
-    rect: next,
+    ...next,
     arts: [],
-    ...contentIn(panel, next, (p) => !inFirst(p)),
+    ...contentIn(panel, next.rect, (p) => !inFirst(p)),
   }
   const before = [...page.panels]
   before.splice(i, 1, kept, added)
@@ -302,11 +396,73 @@ export function splitPanelPatch(
   ]
 }
 
+/** コマ panelId を、囲む矩形の中央を通る縦か横の線で割る Patch。cutPanelPatch と同じ規則で割る */
+export function splitPanelPatch(
+  page: Page,
+  panelId: ID,
+  axis: SplitAxis,
+  direction: ReadingDirection,
+): Patch {
+  const panel = page.panels.find((p) => p.id === panelId)
+  if (!panel) return []
+  const r = panel.rect
+  const cx = r.x + r.w / 2
+  const cy = r.y + r.h / 2
+  const cut: Cut =
+    axis === 'vertical'
+      ? { from: { x: cx, y: r.y }, to: { x: cx, y: r.y + r.h } }
+      : { from: { x: r.x, y: cy }, to: { x: r.x + r.w, y: cy } }
+  return cutPanelPatch(page, panelId, cut, direction)
+}
+
 /**
- * コマ keepId と otherId を、2 つを囲む矩形の 1 コマにする Patch。keepId の id、note、camera、
+ * コマ panelId の輪郭の index 番目の頂点を、正規化座標の点 p へ動かした輪郭（ページ座標）。
+ * 頂点は他のコマの頂点へ VERTEX_SNAP 以内なら吸い付け、そうでなければ x と y をそれぞれ
+ * 他のコマとページの端へ吸い付ける。ドラッグ中のプレビューにも使う
+ */
+export function moveVertex(page: Page, panelId: ID, index: number, p: Point): Point[] {
+  const panel = page.panels.find((q) => q.id === panelId)
+  if (!panel) return []
+  const others = page.panels.filter((q) => q.id !== panelId).flatMap(panelOutline)
+  const at = { x: clamp01(p.x), y: clamp01(p.y) }
+  const near = others
+    .map((v) => ({ v, d: Math.hypot(v.x - at.x, v.y - at.y) }))
+    .filter(({ d }) => d <= VERTEX_SNAP + EPSILON)
+    .sort((a, b) => a.d - b.d)[0]
+  const { xs, ys } = snapTargets(page, panelId)
+  const moved = near ? near.v : { x: snapValue(at.x, xs), y: snapValue(at.y, ys) }
+  return panelOutline(panel).map((v, k) => (k === index ? moved : v))
+}
+
+/**
+ * コマ panelId の輪郭を outline（ページ座標）に置き換える Patch。rect は輪郭を囲む矩形になり、
+ * 中身はページ上の見た目を保つようにコマ内座標を移し直す。囲む矩形が MIN_PANEL_SIZE を下回るか、
+ * 面積がほぼ無いか、変わらなければ空
+ */
+export function reshapePanelPatch(page: Page, panelId: ID, outline: readonly Point[]): Patch {
+  const i = page.panels.findIndex((p) => p.id === panelId)
+  const prev = page.panels[i]
+  if (!prev) return []
+  const g = geometryOf(outline)
+  if (g.rect.w < MIN_PANEL_SIZE - EPSILON || g.rect.h < MIN_PANEL_SIZE - EPSILON) return []
+  if (polygonArea(outline) < MIN_PANEL_SIZE * MIN_PANEL_SIZE) return []
+  const { sweep, shape: _, ...base } = prev
+  const next: Panel = {
+    ...base,
+    ...g,
+    ...contentIn(prev, g.rect, () => true),
+    ...(sweep && { sweep: moveSweep(sweep, prev.rect, g.rect) }),
+  }
+  if (JSON.stringify(next) === JSON.stringify(prev)) return []
+  return [{ op: 'replace', path: `/panels/${i}`, value: next }]
+}
+
+/**
+ * コマ keepId と otherId を 1 コマにする Patch。2 つとも矩形なら 2 つを囲む矩形、どちらかが多角形なら
+ * 2 つの輪郭の凸包にする（斜めに割った 2 コマは元の形に戻る）。keepId の id、note、camera、
  * 採用中の絵を残し、絵の履歴、フキダシ、焦点、ベクトルは両方を移す。otherId のフキダシの order は
  * keepId の後ろに続ける。結合後はページの全コマの order を読む順に振り直す。
- * 囲む矩形が他のコマに重なるなら、そのコマを覆ってしまうので空
+ * 結合したコマが他のコマに重なるなら、そのコマを覆ってしまうので空
  */
 export function mergePanelsPatch(
   page: Page,
@@ -320,17 +476,15 @@ export function mergePanelsPatch(
   const keep = page.panels[i]
   const other = page.panels[j]
   if (!keep || !other) return []
-  const ka = edgesOf(keep.rect)
-  const kb = edgesOf(other.rect)
-  const union = rectOf({
-    left: Math.min(ka.left, kb.left),
-    top: Math.min(ka.top, kb.top),
-    right: Math.max(ka.right, kb.right),
-    bottom: Math.max(ka.bottom, kb.bottom),
-  })
-  if (page.panels.some((p) => p.id !== keepId && p.id !== otherId && overlaps(p.rect, union))) {
-    return []
-  }
+  const corners = [...panelOutline(keep), ...panelOutline(other)]
+  const outline =
+    keep.shape || other.shape ? convexHull(corners) : panelOutline({ rect: boundsOf(corners) })
+  const g = geometryOf(outline)
+  const union = g.rect
+  const covered = page.panels.some(
+    (p) => p.id !== keepId && p.id !== otherId && outlinesOverlap(outline, panelOutline(p)),
+  )
+  if (covered) return []
 
   const all = () => true
   const ck = contentIn(keep, union, all)
@@ -345,7 +499,7 @@ export function mergePanelsPatch(
   const merged: Panel = {
     id: keep.id,
     order: keep.order,
-    rect: union,
+    ...g,
     bubbles: [...ck.bubbles, ...co.bubbles.map((b) => ({ ...b, order: b.order + offset }))],
     focusPoints: [...ck.focusPoints, ...co.focusPoints],
     vectors: [...ck.vectors, ...co.vectors],
@@ -593,6 +747,121 @@ if (import.meta.vitest) {
     })
   })
 
+  describe('cutPanelPatch', () => {
+    // pn_1 は x 0..1, y 0..0.26 の横長のコマ
+    const diagonal: Cut = { from: { x: 0.6, y: 0 }, to: { x: 0.4, y: 0.26 } }
+
+    test('a diagonal cut makes two trapezoids with a gutter between them', () => {
+      const next = apply(page, cutPanelPatch(page, 'pn_1', diagonal, 'rtl'))
+      expect(PageSchema.safeParse(next).success).toBe(true)
+      const [right, left] = next.panels as [Panel, Panel]
+      // rtl では右の半分が先に読まれ、元の id を引き継ぐ
+      expect(right.id).toBe('pn_1')
+      expect(left.id).not.toBe('pn_1')
+      expect(right.shape).toHaveLength(4)
+      expect(left.shape).toHaveLength(4)
+      const a = panelOutline(right)
+      const b = panelOutline(left)
+      expect(polygonArea(intersectPolygons(a, b))).toBe(0)
+      // 2 つの間は線に垂直に SPLIT_GUTTER 空く
+      const gap = Math.min(...a.map((p) => Math.abs(sideOf(diagonal.from, diagonal.to, p))))
+      expect(gap).toBeCloseTo(SPLIT_GUTTER / 2, 2)
+      expect(next.panels.map((p) => p.order)).toEqual([1, 2, 3, 4, 5, 6, 7])
+      // pn_1 の焦点とフキダシは線の右側にある
+      expect(right.bubbles.map((x) => x.id)).toEqual(['bb_1'])
+    })
+
+    test('cutting a trapezoid again keeps both halves inside it', () => {
+      const once = apply(page, cutPanelPatch(page, 'pn_1', diagonal, 'rtl'))
+      const right = once.panels[0] as Panel
+      const outline = panelOutline(right)
+      const twice = apply(once, splitPanelPatch(once, 'pn_1', 'horizontal', 'rtl'))
+      expect(PageSchema.safeParse(twice).success).toBe(true)
+      const halves = twice.panels.filter(
+        (p) => p.id === 'pn_1' || !once.panels.some((q) => q.id === p.id),
+      )
+      const area = halves.reduce((sum, p) => sum + polygonArea(panelOutline(p)), 0)
+      expect(area).toBeLessThan(polygonArea(outline))
+      for (const p of halves) {
+        for (const v of panelOutline(p)) {
+          expect(v.y).toBeGreaterThanOrEqual(outline[0]?.y ?? 0)
+        }
+      }
+    })
+
+    test('does nothing when the line misses the panel or leaves a sliver', () => {
+      expect(
+        cutPanelPatch(page, 'pn_1', { from: { x: 0, y: 0.5 }, to: { x: 1, y: 0.5 } }, 'rtl'),
+      ).toEqual([])
+      expect(
+        cutPanelPatch(page, 'pn_1', { from: { x: 0.005, y: 0 }, to: { x: 0.005, y: 1 } }, 'rtl'),
+      ).toEqual([])
+      expect(
+        cutPanelPatch(page, 'pn_1', { from: diagonal.from, to: diagonal.from }, 'rtl'),
+      ).toEqual([])
+    })
+  })
+
+  test('cutChord spans the panel along the extended line, or is null when it misses', () => {
+    const pn1 = page.panels[0] as Panel
+    const chord = cutChord(pn1, { from: { x: 0.5, y: 0.1 }, to: { x: 0.5, y: 0.2 } })
+    expect(chord?.map((p) => [p.x, Number(p.y.toFixed(3))])).toEqual([
+      [0.5, 0],
+      [0.5, 0.26],
+    ])
+    expect(cutChord(pn1, { from: { x: 0, y: 0.5 }, to: { x: 1, y: 0.5 } })).toBeNull()
+  })
+
+  test('snapCut straightens nearly vertical and horizontal lines only', () => {
+    const from = { x: 0.5, y: 0.1 }
+    expect(snapCut({ from, to: { x: 0.505, y: 0.5 } }, 182, 257).to).toEqual({ x: 0.5, y: 0.5 })
+    expect(snapCut({ from, to: { x: 0.9, y: 0.11 } }, 182, 257).to).toEqual({ x: 0.9, y: 0.1 })
+    expect(snapCut({ from, to: { x: 0.6, y: 0.5 } }, 182, 257).to).toEqual({ x: 0.6, y: 0.5 })
+  })
+
+  describe('moveVertex and reshapePanelPatch', () => {
+    test('moving a corner turns a rectangle into a quadrilateral and keeps the content in place', () => {
+      // pn_1 の左下の頂点（3 番）を右へずらす
+      const outline = moveVertex(page, 'pn_1', 3, { x: 0.2, y: 0.26 })
+      expect(outline[3]).toEqual({ x: 0.2, y: 0.26 })
+      const patch = reshapePanelPatch(page, 'pn_1', outline)
+      const next = apply(page, patch)
+      expect(PageSchema.safeParse(next).success).toBe(true)
+      const pn1 = next.panels[0] as Panel
+      expect(pn1.rect).toEqual((page.panels[0] as Panel).rect)
+      expect(pn1.shape).toEqual([
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 1, y: 1 },
+        { x: 0.2, y: 1 },
+      ])
+    })
+
+    test('a vertex snaps to a nearby vertex of another panel', () => {
+      // pn_2 の左上は (0.5, 0.275)
+      expect(moveVertex(page, 'pn_1', 2, { x: 0.505, y: 0.268 })[2]).toEqual({ x: 0.5, y: 0.275 })
+    })
+
+    test('moving the vertex back to the corner drops the shape', () => {
+      const bent = apply(
+        page,
+        reshapePanelPatch(page, 'pn_1', moveVertex(page, 'pn_1', 3, { x: 0.2, y: 0.26 })),
+      )
+      const back = apply(
+        bent,
+        reshapePanelPatch(bent, 'pn_1', moveVertex(bent, 'pn_1', 3, { x: 0, y: 0.26 })),
+      )
+      expect(back.panels[0]?.shape).toBeUndefined()
+    })
+
+    test('refuses an outline that collapses, and returns nothing when unchanged', () => {
+      const pn1 = page.panels[0] as Panel
+      const flat = panelOutline(pn1).map((p) => ({ ...p, y: 0 }))
+      expect(reshapePanelPatch(page, 'pn_1', flat)).toEqual([])
+      expect(reshapePanelPatch(page, 'pn_1', panelOutline(pn1))).toEqual([])
+    })
+  })
+
   describe('mergePanelsPatch', () => {
     test('merges two panels into their bounding box and renumbers', () => {
       const patch = mergePanelsPatch(page, 'pn_3', 'pn_2', 'rtl')
@@ -631,6 +900,17 @@ if (import.meta.vitest) {
         ['bb_5', 1],
         ['bb_6', 2],
       ])
+    })
+
+    test('merging the two halves of a diagonal cut restores the original panel', () => {
+      const cut: Cut = { from: { x: 0.6, y: 0 }, to: { x: 0.4, y: 0.26 } }
+      const halves = apply(page, cutPanelPatch(page, 'pn_1', cut, 'rtl'))
+      const otherId = halves.panels[1]?.id as ID
+      const next = apply(halves, mergePanelsPatch(halves, 'pn_1', otherId, 'rtl'))
+      expect(PageSchema.safeParse(next).success).toBe(true)
+      expect(next.panels[0]?.rect).toEqual((page.panels[0] as Panel).rect)
+      expect(next.panels[0]?.shape).toBeUndefined()
+      expect(next.panels).toHaveLength(6)
     })
 
     test('refuses a merge that would cover another panel', () => {
