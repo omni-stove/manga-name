@@ -1,7 +1,7 @@
-import { Button, Typography, XStack, YStack } from '@manga/ui'
+import { Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, notFound, Outlet, useParams } from '@tanstack/react-router'
-import { useStore } from 'zustand'
 import { CollaborationBar } from '../collaboration-view'
+import { HistoryButtons } from '../history-buttons'
 import { SaveStatusIndicator } from '../save-status'
 import { useProject } from '../use-project'
 import styles from './project.module.css'
@@ -19,19 +19,13 @@ export const Route = createFileRoute('/p/$projectId')({
 function ProjectLayout() {
   const { store, collab } = Route.useLoaderData()
   const project = useProject(store)
-  const { canUndo, canRedo } = useStore(store.state)
   return (
     <section>
       <XStack wrap gap={24} rowGap={8} className={styles.toolbar}>
+        <HistoryButtons store={store} />
         <CollaborationBar collab={collab} project={project} />
         <XStack as="span" gap={6} className={styles.actions}>
           <SaveStatusIndicator store={store} />
-          <Button size="small" variant="ghost" disabled={!canUndo} onClick={() => store.undo()}>
-            Undo
-          </Button>
-          <Button size="small" variant="ghost" disabled={!canRedo} onClick={() => store.redo()}>
-            Redo
-          </Button>
         </XStack>
       </XStack>
       <Outlet />

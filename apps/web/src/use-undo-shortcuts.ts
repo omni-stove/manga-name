@@ -1,10 +1,16 @@
 import { useEffect } from 'react'
 import type { ProjectStore } from './store/project-store'
 
+// 押すだけの input は文字を受けないので、フォーカスがあってもショートカットを効かせる
+const PRESSABLE_INPUTS = ['checkbox', 'radio', 'button', 'submit', 'reset']
+
 /** 入力欄の中か。Undo / Redo を入力欄自身の取り消しに任せる判定に使う */
 export function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
-  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+  if (target.tagName === 'INPUT') {
+    return !PRESSABLE_INPUTS.includes((target as HTMLInputElement).type)
+  }
+  return target.isContentEditable || ['TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
 /**

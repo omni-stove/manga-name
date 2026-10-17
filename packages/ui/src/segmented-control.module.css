@@ -27,6 +27,14 @@
   pointer-events: none;
 }
 
+.key {
+  margin-left: var(--space-6);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: normal;
+}
+
 .option:hover {
   color: var(--text);
 }

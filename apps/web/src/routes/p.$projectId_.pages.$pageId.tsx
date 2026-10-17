@@ -38,12 +38,13 @@ import {
   Checkbox,
   IconButton,
   SegmentedControl,
+  type SegmentedOption,
   Select,
   Typography,
   XStack,
   YStack,
 } from '@manga/ui'
-import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
+import { createFileRoute, Link, notFound, useNavigate, useParams } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
@@ -55,6 +56,7 @@ import { exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
 import { REFERENCE_ACCEPT, useFilePicker } from '../file-picker'
 import { generatingPanels, usesHint, usesReference } from '../generate-panel'
+import { HistoryButtons, Icon } from '../history-buttons'
 import {
   bubblePatch,
   findBubble,
@@ -81,6 +83,7 @@ import { ROLE_LABELS } from '../sharing'
 import type { Peer } from '../store/presence'
 import { toasts } from '../toasts'
 import { useAssetResolver } from '../use-asset-resolver'
+import { useKeyShortcuts } from '../use-key-shortcuts'
 import { useApplyPatch, useProject } from '../use-project'
 import { useUndoShortcuts } from '../use-undo-shortcuts'
 import styles from './editor.module.css'
@@ -95,21 +98,40 @@ export const Route = createFileRoute('/p/$projectId_/pages/$pageId')({
   notFoundComponent: PageNotFound,
 })
 
-const TOOLS: readonly { value: Tool; label: string }[] = [
-  { value: 'select', label: '選択' },
-  { value: 'panel', label: 'コマ' },
-  { value: 'bubble', label: 'フキダシ' },
-  { value: 'focus', label: '焦点' },
-  { value: 'vector', label: 'ベクトル' },
-  { value: 'scribble', label: '手描き' },
+// 数字キーはペンと焦点の種別に使うので、ツールは英字にする
+const TOOLS: readonly SegmentedOption<Tool>[] = [
+  { value: 'select', label: '選択', shortcut: 'v' },
+  { value: 'panel', label: 'コマ', shortcut: 'p' },
+  { value: 'bubble', label: 'フキダシ', shortcut: 'b' },
+  { value: 'focus', label: '焦点', shortcut: 'f' },
+  { value: 'vector', label: 'ベクトル', shortcut: 'a' },
+  { value: 'scribble', label: '手描き', shortcut: 'd' },
 ]
 
-const SCRIBBLE_TOOLS: readonly { value: ScribbleTool; label: string }[] = [
-  { value: 'ink', label: '黒' },
-  { value: 'red', label: '赤' },
-  { value: 'blue', label: '青' },
-  { value: 'eraser', label: '消しゴム' },
+const SCRIBBLE_TOOLS: readonly SegmentedOption<ScribbleTool>[] = [
+  { value: 'ink', label: '黒', shortcut: '1' },
+  { value: 'red', label: '赤', shortcut: '2' },
+  { value: 'blue', label: '青', shortcut: '3' },
+  { value: 'eraser', label: '消しゴム', shortcut: '4' },
 ]
+
+const FOCUS_KIND_OPTIONS: readonly SegmentedOption<FocusKind>[] = FOCUS_KINDS.map((k, i) => ({
+  ...k,
+  shortcut: String(i + 1),
+}))
+
+const PREV_PAGE_KEY = '['
+const NEXT_PAGE_KEY = ']'
+
+/** 選択肢のキーから、その値を選ぶ操作への対応を作る */
+function shortcutsOf<T extends string>(
+  options: readonly SegmentedOption<T>[],
+  select: (value: T) => void,
+): Record<string, () => void> {
+  return Object.fromEntries(
+    options.flatMap((o) => (o.shortcut ? [[o.shortcut, () => select(o.value)]] : [])),
+  )
+}
 
 // 診断の経路はコマ単位の centre sweep で、読者の目が実際に追うコマ内の顔などを見ていないので、
 // 読み順 OK や miss は評価として当てにならない。LLM に評価させるのも費用に見合わない。
@@ -179,7 +201,6 @@ function Editor() {
   const { store, collab } = Route.useLoaderData()
   const { library, generation, llmProvider } = Route.useRouteContext()
   const project = useProject(store)
-  const { canUndo, canRedo } = useStore(store.state)
   const generatingState = useStore(generation.generating)
   const generating = generatingPanels(generatingState, projectId)
   const referenceOptOut = useStore(generation.referenceOptOut)
@@ -200,6 +221,7 @@ function Editor() {
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
   useUndoShortcuts(store)
+  const navigate = useNavigate()
   const importReference = (file: Blob) => {
     toReferenceImage(file)
       .then((blob) => library.putAsset(projectId, blob, `reference-${pageId}`))
@@ -236,6 +258,19 @@ function Editor() {
     () => (foundPage && preview ? previewPage(foundPage, preview) : undefined),
     [foundPage, preview],
   )
+
+  const episodePages = found ? project.episodes[found.episodeIndex]?.pages : undefined
+  const prevPage = found ? episodePages?.[found.pageIndex - 1] : undefined
+  const nextPage = found ? episodePages?.[found.pageIndex + 1] : undefined
+  const openPage = (id: ID) =>
+    void navigate({ to: '/p/$projectId/pages/$pageId', params: { projectId, pageId: id } })
+  useKeyShortcuts({
+    ...shortcutsOf(tools, setTool),
+    ...(tool === 'scribble' ? shortcutsOf(SCRIBBLE_TOOLS, setScribbleTool) : {}),
+    ...(tool === 'focus' ? shortcutsOf(FOCUS_KIND_OPTIONS, setFocusKind) : {}),
+    [PREV_PAGE_KEY]: () => prevPage && openPage(prevPage.id),
+    [NEXT_PAGE_KEY]: () => nextPage && openPage(nextPage.id),
+  })
 
   useEffect(() => {
     collab?.presence.setLocation({ pageId, selection: selectedId ? [selectedId] : [] })
@@ -303,15 +338,52 @@ function Editor() {
         <Link to="/p/$projectId/episodes/$episodeId" params={{ projectId, episodeId: episode.id }}>
           {episode.title}
         </Link>
-        <Typography as="span" weight="bold">
-          {pageIndex + 1} ページ
-        </Typography>
+        <XStack as="span" gap={2} role="group" aria-label="ページの移動">
+          <IconButton
+            size="small"
+            label="前のページ"
+            title={`前のページ（${PREV_PAGE_KEY}）`}
+            aria-keyshortcuts={PREV_PAGE_KEY}
+            disabled={!prevPage}
+            onClick={() => prevPage && openPage(prevPage.id)}
+          >
+            <Icon>
+              <path d="m15 6-6 6 6 6" />
+            </Icon>
+          </IconButton>
+          <Select
+            label="ページ"
+            hideLabel
+            value={pageId}
+            className={styles.pageSelect}
+            onChange={(e) => openPage(e.target.value)}
+          >
+            {episode.pages.map((p, i) => (
+              <option key={p.id} value={p.id}>
+                {i + 1} / {episode.pages.length} ページ
+              </option>
+            ))}
+          </Select>
+          <IconButton
+            size="small"
+            label="次のページ"
+            title={`次のページ（${NEXT_PAGE_KEY}）`}
+            aria-keyshortcuts={NEXT_PAGE_KEY}
+            disabled={!nextPage}
+            onClick={() => nextPage && openPage(nextPage.id)}
+          >
+            <Icon>
+              <path d="m9 6 6 6-6 6" />
+            </Icon>
+          </IconButton>
+        </XStack>
         <CollaborationBar collab={collab} project={project} />
         {!canEdit && (
           <Typography as="span" tone="muted">
             {ROLE_LABELS[role]}
           </Typography>
         )}
+        <HistoryButtons store={store} />
         <SegmentedControl
           label="ツール"
           value={tool}
@@ -330,7 +402,7 @@ function Editor() {
           <SegmentedControl
             label="焦点の種別"
             value={focusKind}
-            options={FOCUS_KINDS}
+            options={FOCUS_KIND_OPTIONS}
             onChange={(k) => setFocusKind(k)}
           />
         )}
@@ -349,12 +421,6 @@ function Editor() {
         </XStack>
         <XStack as="span" gap={6} className={styles.actions}>
           <SaveStatusIndicator store={store} />
-          <Button size="small" variant="ghost" disabled={!canUndo} onClick={() => store.undo()}>
-            Undo
-          </Button>
-          <Button size="small" variant="ghost" disabled={!canRedo} onClick={() => store.redo()}>
-            Redo
-          </Button>
           {typeof exporting === 'object' ? (
             <XStack as="span" className={styles.exportProgress} role="status">
               書き出し中… {exporting.done} / {exporting.total}
