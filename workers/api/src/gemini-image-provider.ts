@@ -101,7 +101,7 @@ async function characterParts(
  * ページの parts は前回の絵が無いほかは同じで、比は判型に最も近いもの。キャラ参照はどちらも先頭の 4 人まで。
  * キャラの参照画像の parts はプロンプトだけで、比は 3:4。
  * negative は「avoid: 」としてプロンプトの末尾に足し、足した後の文を prompt として返す。
- * 応答の画像が PNG でなければ toPng で変換する。画像が無ければ空の Blob を返し、PNG かどうかの判定と再試行は呼び出し側に任せる。HTTP エラーは throw する。
+ * 応答の画像が PNG でなければ toPng で変換する。画像が無ければ空の Blob を返し、PNG かどうかの判定と再試行は呼び出し側に任せる。HTTP エラーは status だけを載せて throw する。
  */
 export function createGeminiImageProvider(opts: GeminiImageProviderOptions): ImageProvider {
   const generate = async (parts: Part[], aspectRatio: string, prompt: string) => {
@@ -116,7 +116,11 @@ export function createGeminiImageProvider(opts: GeminiImageProviderOptions): Ima
         },
       }),
     })
-    if (!res.ok) throw new Error(`gemini responded ${res.status}: ${await res.text()}`)
+    if (!res.ok) {
+      // 本文はリクエストの内容を返すことがあり、例外はログに残るので status だけにする
+      await res.body?.cancel()
+      throw new Error(`gemini responded ${res.status}`)
+    }
     const body: GenerateContentResponse = await res.json()
     const inline = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData
     if (!inline?.data) {

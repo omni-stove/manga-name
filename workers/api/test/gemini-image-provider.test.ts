@@ -208,11 +208,11 @@ describe('response', () => {
     }
   })
 
-  test('throws on an HTTP error with the status and body', async () => {
+  test('throws on an HTTP error with the status but not the body', async () => {
     fetchMock.mockResolvedValueOnce(new Response('quota exceeded', { status: 429 }))
-    await expect(provider.generatePanelArt(request())).rejects.toThrow(
-      'gemini responded 429: quota exceeded',
-    )
+    const error = await provider.generatePanelArt(request()).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toBe('gemini responded 429')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
