@@ -1,4 +1,4 @@
-import { PatchSchema, type Project, ProjectSchema } from '@manga/schema'
+import { PatchSchema, type Project, ProjectSchema, parseProject } from '@manga/schema'
 import {
   applyPatches,
   enablePatches,
@@ -62,7 +62,11 @@ export function createYjsProjectStore(
     doc.transact(() => writeYMap(root, initial), untracked)
     project = initial
   } else {
-    project = ProjectSchema.parse(root.toJSON())
+    const stored = root.toJSON()
+    project = parseProject(stored)
+    if (stored.schemaVersion !== project.schemaVersion) {
+      doc.transact(() => root.set('schemaVersion', project.schemaVersion), untracked)
+    }
   }
 
   const state = createStore<ProjectStoreState>()(() => ({
