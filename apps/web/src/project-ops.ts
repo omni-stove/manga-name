@@ -69,6 +69,16 @@ export function addEpisodePatch(project: Project): { patch: Patch; episode: Epis
   return { patch: [{ op: 'add', path: '/episodes/-', value: episode }], episode }
 }
 
+/** 前後の空白を落として話の名前を置き換える。空の名前は throw し、変わらなければ空の patch */
+export function renameEpisodePatch(project: Project, episodeId: ID, title: string): Patch {
+  const index = project.episodes.findIndex((e) => e.id === episodeId)
+  if (index < 0) throw new Error(`エピソードが見つかりません: ${episodeId}`)
+  const next = title.trim()
+  if (!next) throw new Error('名前を入れてください')
+  if (next === project.episodes[index]?.title) return []
+  return [{ op: 'replace', path: `/episodes/${index}/title`, value: next }]
+}
+
 /**
  * テンプレートからページを作り、エピソードの末尾に足す。
  * `episodeId` を省くと最後のエピソードに足し、エピソードが無ければ 1 話目を作ってそこに入れる。
@@ -285,6 +295,19 @@ if (import.meta.vitest) {
       expect(movePagePatch(store.get(), 'nope', 1)).toEqual([])
       store.undo()
       expect(ids()).toEqual([p2, p1, p3])
+    })
+
+    test('renameEpisode trims the title and refuses an empty one', () => {
+      const store = storeOf(sample)
+      const episode = store.get().episodes[0]
+      if (!episode) throw new Error('fixture に episode がない')
+      store.applyPatch(renameEpisodePatch(store.get(), episode.id, ' 出会い '))
+      expect(store.get().episodes[0]?.title).toBe('出会い')
+      expect(renameEpisodePatch(store.get(), episode.id, '出会い')).toEqual([])
+      expect(() => renameEpisodePatch(store.get(), episode.id, ' ')).toThrow('名前')
+      expect(() => renameEpisodePatch(store.get(), 'nope', 'x')).toThrow()
+      store.undo()
+      expect(store.get().episodes[0]?.title).toBe(episode.title)
     })
 
     test('removePage', () => {
