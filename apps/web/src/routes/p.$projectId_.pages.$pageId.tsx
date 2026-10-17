@@ -7,6 +7,7 @@ import {
   type Tool,
 } from '@manga/editor-canvas'
 import {
+  addCastPatch,
   BubbleInspector,
   FOCUS_KINDS,
   FocusInspector,
@@ -14,6 +15,7 @@ import {
   PageInspector,
   PanelInspector,
   ProjectSettingsInspector,
+  removeCastPatch,
   VectorInspector,
 } from '@manga/inspector'
 import {
@@ -28,9 +30,19 @@ import {
   type Patch,
   type Project,
   type ProjectSettings,
+  pageCharacterIds,
   panelCharacterIds,
 } from '@manga/schema'
-import { Button, Checkbox, SegmentedControl, Typography, XStack, YStack } from '@manga/ui'
+import {
+  Button,
+  Checkbox,
+  IconButton,
+  SegmentedControl,
+  Select,
+  Typography,
+  XStack,
+  YStack,
+} from '@manga/ui'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from 'zustand'
@@ -429,7 +441,14 @@ function Editor() {
               {referencePicker.input}
               <BatchOptions batch={pageBatch} />
             </details>
-            <PageCast page={page} characters={project.characters} projectId={projectId} />
+            <PageCast
+              page={page}
+              characters={project.characters}
+              projectId={projectId}
+              onChange={(patch) =>
+                apply('ページの登場キャラを変更', (p) => pagePatch(p, pageId, patch))
+              }
+            />
             <details>
               <summary>プロジェクト設定</summary>
               <ProjectSettingsInspector
@@ -710,37 +729,68 @@ function useReferencePaste(onFile: (file: File) => void) {
 }
 
 /**
- * このページの登場キャラ。コマごとの登場キャラを集めて、何コマに出るかと参照画像の有無を並べる。
- * キャラ設定と参照画像の編集はキャラクター一覧に置く
+ * このページの登場キャラ。ページの `cast` とコマごとの登場キャラを集めて、何コマに出るかと参照画像の有無を並べる。
+ * ページの `cast` はここで足し外しし、キャラ設定と参照画像の編集はキャラクター一覧に置く
  */
 function PageCast({
   page,
   characters,
   projectId,
+  onChange,
 }: {
   page: Page
   characters: readonly Character[]
   projectId: ID
+  /** path はページを root とする */
+  onChange(patch: Patch): void
 }) {
-  const ids = page.panels.flatMap(panelCharacterIds)
-  const cast = characters.filter((c) => ids.includes(c.id))
+  const ids = pageCharacterIds(page)
+  const panelIds = page.panels.flatMap(panelCharacterIds)
+  const cast = ids.flatMap((id) => characters.filter((c) => c.id === id))
+  const candidates = characters.filter((c) => !ids.includes(c.id))
   return (
     <details data-section="page-cast">
       <summary>このページの登場キャラ（{cast.length}）</summary>
       {cast.length === 0 ? (
-        <Typography tone="muted">コマのインスペクタで登場キャラを追加できます</Typography>
+        <Typography tone="muted">ページかコマのインスペクタで登場キャラを追加できます</Typography>
       ) : (
         <YStack as="ul" gap={2} className={styles.pageCast}>
           {cast.map((c) => (
             <XStack as="li" key={c.id} gap={6} data-cast-id={c.id}>
               <b>{c.name}</b>
               <Typography as="small" variant="caption" tone="muted">
-                {ids.filter((id) => id === c.id).length} コマ
+                {panelIds.filter((id) => id === c.id).length} コマ
                 {c.referenceRef === undefined && '・参照画像なし'}
               </Typography>
+              {page.cast?.includes(c.id) && (
+                <IconButton
+                  size="small"
+                  label={`${c.name} をページの登場キャラから外す`}
+                  onClick={() => onChange(removeCastPatch(page.cast, c.id))}
+                >
+                  ×
+                </IconButton>
+              )}
             </XStack>
           ))}
         </YStack>
+      )}
+      {candidates.length > 0 && (
+        <Select
+          label="ページの登場キャラを追加"
+          hideLabel
+          value=""
+          onChange={(e) => {
+            if (e.target.value) onChange(addCastPatch(page.cast, e.target.value))
+          }}
+        >
+          <option value="">キャラを追加…</option>
+          {candidates.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
       )}
       <Typography tone="muted">
         <Link to="/p/$projectId/characters" params={{ projectId }}>

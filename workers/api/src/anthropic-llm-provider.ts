@@ -1,11 +1,11 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { type LlmPrompt, type LlmProvider, prompts } from '@manga/ai'
-import type { CritiqueResponse, LayoutProposalResponse } from '@manga/schema'
+import type { CritiqueResponse, LayoutProposalResponse, PagePlanResponse } from '@manga/schema'
 import { generateText, type JSONSchema7, jsonSchema, Output } from 'ai'
 
 const ANTHROPIC_LLM_MODEL = 'claude-haiku-5-5'
 
-/** 脚本 20,000 字から数十ページの提案を返しても切れない上限 */
+/** 脚本 20,000 字から数十ページの提案を返しても、ページ割りで脚本を丸ごと書き写しても切れない上限 */
 const MAX_OUTPUT_TOKENS = 64_000
 /** 1 ページの講評と提案 5 件で切れない上限 */
 const MAX_CRITIQUE_OUTPUT_TOKENS = 8_000
@@ -15,7 +15,7 @@ export interface AnthropicLlmProviderOptions {
 }
 
 /**
- * AI SDK 経由で Anthropic `claude-haiku-5-5` に proposeLayout と critique をさせる LlmProvider。
+ * AI SDK 経由で Anthropic `claude-haiku-5-5` に planPages、proposeLayout、critique をさせる LlmProvider。
  * prompts の system と user を送り、schema を構造化出力に渡して、応答の JSON をそのまま返す。
  * 型どおりかの検証と再試行は呼び出し側に任せる。JSON にならない応答や HTTP エラーは throw する。
  */
@@ -41,6 +41,7 @@ export function createAnthropicLlmProvider(opts: AnthropicLlmProviderOptions): L
   }
 
   return {
+    planPages: (req) => generate<PagePlanResponse>(prompts.planPages(req), MAX_OUTPUT_TOKENS),
     proposeLayout: (req) =>
       generate<LayoutProposalResponse>(prompts.proposeLayout(req), MAX_OUTPUT_TOKENS),
     critique: (req) =>

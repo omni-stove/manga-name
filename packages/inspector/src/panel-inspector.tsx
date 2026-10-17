@@ -22,7 +22,7 @@ import {
 import { useId, useMemo, useState } from 'react'
 import { DEBOUNCE_MS, NumberField, TextField } from './fields'
 import styles from './panel-inspector.module.css'
-import { optionalString, replace, swapOrder } from './patch'
+import { addCastPatch, optionalString, removeCastPatch, replace, swapOrder } from './patch'
 import section from './section.module.css'
 import type { PanelInspectorProps } from './types'
 import { useAssetUrls } from './use-asset-urls'
@@ -35,20 +35,6 @@ const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
 function selectArtPatch(artId: ID | undefined, next: ID): Patch {
   if (artId === next) return []
   return [{ op: artId === undefined ? 'add' : 'replace', path: '/artId', value: next }]
-}
-
-/** `cast` に足す。`cast` が無ければ配列ごと add */
-function addCastPatch(cast: readonly ID[] | undefined, id: ID): Patch {
-  if (cast === undefined) return [{ op: 'add', path: '/cast', value: [id] }]
-  if (cast.includes(id)) return []
-  return [{ op: 'add', path: '/cast/-', value: id }]
-}
-
-/** `cast` から外す。最後の 1 人なら `cast` ごと消す */
-function removeCastPatch(cast: readonly ID[] | undefined, id: ID): Patch {
-  const index = cast?.indexOf(id) ?? -1
-  if (cast === undefined || index < 0) return []
-  return [{ op: 'remove', path: cast.length === 1 ? '/cast' : `/cast/${index}` }]
 }
 
 const byOrder = (bubbles: readonly Bubble[]) =>
@@ -376,18 +362,5 @@ if (import.meta.vitest) {
     expect(selectArtPatch(undefined, 'a')).toEqual([{ op: 'add', path: '/artId', value: 'a' }])
     expect(selectArtPatch('a', 'b')).toEqual([{ op: 'replace', path: '/artId', value: 'b' }])
     expect(selectArtPatch('a', 'a')).toEqual([])
-  })
-
-  test('addCastPatch creates the array first and skips a character already in it', () => {
-    expect(addCastPatch(undefined, 'a')).toEqual([{ op: 'add', path: '/cast', value: ['a'] }])
-    expect(addCastPatch(['a'], 'b')).toEqual([{ op: 'add', path: '/cast/-', value: 'b' }])
-    expect(addCastPatch(['a'], 'a')).toEqual([])
-  })
-
-  test('removeCastPatch removes by index and drops the array with the last character', () => {
-    expect(removeCastPatch(['a', 'b'], 'b')).toEqual([{ op: 'remove', path: '/cast/1' }])
-    expect(removeCastPatch(['a'], 'a')).toEqual([{ op: 'remove', path: '/cast' }])
-    expect(removeCastPatch(['a'], 'b')).toEqual([])
-    expect(removeCastPatch(undefined, 'a')).toEqual([])
   })
 }

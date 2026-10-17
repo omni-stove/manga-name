@@ -26,7 +26,7 @@ interface Rect  { x: number; y: number; w: number; h: number }
 type ReadingDirection = 'rtl' | 'ltr';   // rtl = 右綴じ縦書き（既定）
 
 interface Project {
-  schemaVersion: 3;
+  schemaVersion: 4;
   id: ID;
   title: string;
   createdAt: ISODate;
@@ -76,7 +76,10 @@ interface Page {
   /** 参考画像。生成の参照にだけ使い、出力には出ない */
   reference?: ReferenceImage;
   scribbles: Stroke[];
+  /** このページで起きること。「脚本から下書き」はページごとの話の流れをここに入れる */
   note?: string;
+  /** 登場キャラ（Character.id）。コマの登場キャラは書かなくてもページの登場キャラに数える */
+  cast?: ID[];
 }
 
 interface Panel {
@@ -354,6 +357,17 @@ interface LayoutProposalResponse {
   rationale: string;
 }
 
+type PagePlanRequest = LayoutProposalRequest;
+interface PagePlan {
+  note: string;                         // このページで起きること。Page.note になる
+  cast: ID[];                           // このページに出るキャラ。Page.cast になる
+  script: string;                       // このページに割り振った脚本の抜き書き
+}
+interface PagePlanResponse {
+  pages: PagePlan[];                    // 1 ページ以上
+  rationale: string;
+}
+
 interface CritiqueRequest {
   page: Page;
   diagnosis: PageDiagnosis;
@@ -367,6 +381,7 @@ interface ImageProvider {
   generatePanelArt(req: PanelArtRequest): Promise<PanelArtResponse>;
 }
 interface LlmProvider {
+  planPages(req: PagePlanRequest): Promise<PagePlanResponse>;
   proposeLayout(req: LayoutProposalRequest): Promise<LayoutProposalResponse>;
   critique(req: CritiqueRequest): Promise<CritiqueResponse>;
 }

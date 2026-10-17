@@ -43,6 +43,7 @@ function scripted(responses: (() => Promise<LayoutProposalResponse>)[]) {
   const fake = createFakeLlmProvider()
   const calls: unknown[] = []
   const provider: LlmProvider = {
+    planPages: fake.planPages,
     async proposeLayout(req) {
       calls.push(req)
       const next = responses[calls.length - 1]

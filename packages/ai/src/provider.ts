@@ -4,11 +4,12 @@ import type {
   LayoutProposalResponse,
   Page,
   PageDiagnosis,
+  PagePlanResponse,
   PanelArtRequest,
   Project,
 } from '@manga/schema'
 
-export type { CritiqueResponse, LayoutProposalResponse, PanelArtRequest }
+export type { CritiqueResponse, LayoutProposalResponse, PagePlanResponse, PanelArtRequest }
 
 /** 生成結果。image は PNG */
 export interface PanelArtResponse {
@@ -22,8 +23,12 @@ export interface LayoutProposalRequest {
   project: Pick<Project, 'settings' | 'characters'>
   /** 脚本テキスト */
   script: string
+  /** 脚本を割り振るページ数。省くと LLM に任せる */
   pageCount?: number
 }
+
+/** ページ割りの要求。項目は LayoutProposalRequest と同じ */
+export type PagePlanRequest = LayoutProposalRequest
 
 export interface CritiqueRequest {
   page: Page
@@ -35,6 +40,8 @@ export interface ImageProvider {
 }
 
 export interface LlmProvider {
+  /** 脚本をページに割り振り、ページごとの流れと登場キャラを返す。コマ割りはしない */
+  planPages(req: PagePlanRequest): Promise<PagePlanResponse>
   proposeLayout(req: LayoutProposalRequest): Promise<LayoutProposalResponse>
   critique(req: CritiqueRequest): Promise<CritiqueResponse>
 }

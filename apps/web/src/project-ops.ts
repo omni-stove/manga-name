@@ -161,12 +161,19 @@ export function characterUsage(project: Project, id: ID): number {
   return count
 }
 
+/** ページの登場キャラ（Page.cast）に入れているページの数 */
+function pageCastUsage(project: Project, id: ID): number {
+  return project.episodes.flatMap((e) => e.pages).filter((p) => p.cast?.includes(id)).length
+}
+
 /** 参照が残るキャラクターは消すとスキーマを通らなくなるので、理由を添えて throw する */
 export function removeCharacterPatch(project: Project, id: ID): Patch {
   const index = project.characters.findIndex((c) => c.id === id)
   if (index < 0) return []
   const usage = characterUsage(project, id)
   if (usage > 0) throw new Error(`${usage} コマで使われているため削除できません`)
+  const pages = pageCastUsage(project, id)
+  if (pages > 0) throw new Error(`${pages} ページの登場キャラに入っているため削除できません`)
   return [{ op: 'remove', path: `/characters/${index}` }]
 }
 
@@ -324,6 +331,17 @@ if (import.meta.vitest) {
       ])
       expect(characterUsage(store.get(), character.id)).toBe(1)
       expect(() => removeCharacterPatch(store.get(), character.id)).toThrow('削除できません')
+    })
+
+    test('a character only in a page cast cannot be removed', () => {
+      const store = storeOf(structuredClone(sample))
+      const { patch, character } = addCharacterPatch({ name: 'A', shortName: 'A' })
+      store.applyPatch([
+        ...patch,
+        { op: 'add', path: '/episodes/0/pages/0/cast', value: [character.id] },
+      ])
+      expect(characterUsage(store.get(), character.id)).toBe(0)
+      expect(() => removeCharacterPatch(store.get(), character.id)).toThrow('1 ページの登場キャラ')
     })
   })
 

@@ -10,6 +10,7 @@ import {
   CritiqueResponseSchema,
   LayoutProposalResponseSchema,
   PageDiagnosisSchema,
+  PagePlanResponseSchema,
   PageSchema,
   PanelArtRequestSchema,
   ProjectBaseSchema,
@@ -41,6 +42,8 @@ const MAX_ATTEMPTS = 2
 const MAX_SCRIPT_LENGTH = 20_000
 /** ページ数の目安の上限 */
 const MAX_PAGE_COUNT = 64
+/** 1 分あたりの生成上限(10)に、ページ割り 1 回とコマ割りのまとまりが収まる最大ページ数。Web の MAX_PAGE_COUNT と揃える */
+const MAX_PLANNED_PAGES = 32
 /**
  * critique の本文の上限。ページの JSON は手描きの線や絵の履歴で際限なく膨らむので、
  * LLM に渡すトークン数を抑えるため本文の大きさで切る。Web は線と絵を外して送る
@@ -75,7 +78,7 @@ const PanelArtJsonSchema = PanelArtRequestSchema.omit({
   previous: true,
 }).extend({ previous: z.object({ instruction: z.string() }).optional() })
 
-/** `@manga/ai` の LayoutProposalRequest */
+/** `@manga/ai` の LayoutProposalRequest と PagePlanRequest */
 const LayoutProposalRequestSchema = z.object({
   project: ProjectBaseSchema.pick({ settings: true, characters: true }),
   script: z.string().trim().min(1).max(MAX_SCRIPT_LENGTH),
@@ -122,7 +125,7 @@ async function retryUntilValid<T>(
 const isFile = (v: unknown): v is File => typeof v !== 'string' && v !== null && v !== undefined
 
 /**
- * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique`、
+ * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique`、
  * `/v1/projects` の CRUD とアセットと参加者、招待リンクの受け口 `/v1/invites/:token`、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
  * `/v1/health`、`/v1/auth/*`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
  * CORS は WEB_ORIGINS と tauri://localhost だけに許す。
@@ -247,6 +250,44 @@ export function createApp(options: AppOptions = {}) {
       [PROVIDER_HEADER]: value.res.provider,
       [PROMPT_HEADER]: encodeURIComponent(value.res.prompt),
     })
+  })
+
+  app.post('/v1/ai/plan-pages', async (c) => {
+    const body: unknown = await c.req.json().catch(() => undefined)
+    if (body === undefined) return c.json({ error: 'body is not valid JSON' }, 400)
+    const parsed = LayoutProposalRequestSchema.safeParse(body)
+    if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
+
+    // 上限を超える枚数は必ず弾かれるので、生成回数を予約する前に断る
+    if ((parsed.data.pageCount ?? 0) > MAX_PLANNED_PAGES) {
+      return c.json({ error: `pageCount must be at most ${MAX_PLANNED_PAGES}` }, 400)
+    }
+
+    const usageId = await reserve(c, 'plan-pages')
+    if (usageId instanceof Response) return usageId
+    const provider = createLlm(c.env)
+    const characterIds = new Set(parsed.data.project.characters.map((ch) => ch.id))
+
+    const { value, attempts } = await retryUntilValid(async () => {
+      // proposeLayout と同じく、実プロバイダの応答は LLM の出力そのままなので検証し直す。
+      // 居ないキャラを指す割り振りも、ページの登場キャラがスキーマを通らなくなるので不正として作り直させる
+      const result = PagePlanResponseSchema.safeParse(await provider.planPages(parsed.data))
+      if (!result.success) return undefined
+      // 割り振りの枚数がコマ割りの要求数を決めるので、上限超過と指定枚数との不一致は作り直させる
+      const expected = parsed.data.pageCount
+      const count = result.data.pages.length
+      if (count > MAX_PLANNED_PAGES || (expected !== undefined && count !== expected)) {
+        return undefined
+      }
+      const known = result.data.pages.every((p) => p.cast.every((id) => characterIds.has(id)))
+      return known ? result.data : undefined
+    })
+    await settleUsage(c.env.DB, usageId, attempts)
+
+    if (value === undefined) {
+      return c.json({ error: 'llm provider returned an invalid page plan' }, 502)
+    }
+    return c.json(value)
   })
 
   app.post('/v1/ai/propose-layout', async (c) => {

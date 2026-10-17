@@ -1,4 +1,4 @@
-import type { Episode, PageTemplate } from '@manga/schema'
+import { type Episode, type PageTemplate, pageCharacterIds } from '@manga/schema'
 import { Button, Select, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -91,6 +91,7 @@ function PageList() {
           store={store}
           llmProvider={llmProvider}
           episodeId={targetEpisode?.id}
+          template={template}
           onClose={() => setDrafting(false)}
         />
       )}
@@ -113,6 +114,9 @@ function PageList() {
           >
             {episode.pages.map((page, index) => {
               const status = artStatus(page)
+              const cast = pageCharacterIds(page).flatMap((id) =>
+                project.characters.filter((c) => c.id === id).map((c) => c.name),
+              )
               const editing = peers.filter((peer) => peer.pageId === page.id)
               return (
                 <YStack as="li" gap={6} key={page.id} className={common.card}>
@@ -150,6 +154,16 @@ function PageList() {
                       {status}
                     </span>
                   </Typography>
+                  {page.note !== undefined && (
+                    <Typography as="small" variant="caption" className={styles.note}>
+                      {page.note}
+                    </Typography>
+                  )}
+                  {cast.length > 0 && (
+                    <Typography as="small" variant="caption" tone="muted" data-page-cast>
+                      登場: {cast.join('、')}
+                    </Typography>
+                  )}
                   <XStack as="span" wrap gap={6} className={common.cardActions}>
                     <Button
                       size="small"

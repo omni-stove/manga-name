@@ -45,6 +45,7 @@ function scripted(responses: (() => Promise<CritiqueResponse>)[]) {
   const fake = createFakeLlmProvider()
   const calls: unknown[] = []
   const provider: LlmProvider = {
+    planPages: fake.planPages,
     proposeLayout: fake.proposeLayout,
     async critique(req) {
       calls.push(req)

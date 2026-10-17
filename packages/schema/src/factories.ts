@@ -114,6 +114,11 @@ export function panelCharacterIds(panel: Panel): ID[] {
   return [...new Set(ids)]
 }
 
+/** ページに登場するキャラの id。ページの `cast`、各コマの panelCharacterIds の順に、重複なく集める */
+export function pageCharacterIds(page: Page): ID[] {
+  return [...new Set([...(page.cast ?? []), ...page.panels.flatMap(panelCharacterIds)])]
+}
+
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
 
@@ -210,5 +215,16 @@ if (import.meta.vitest) {
     })
     panel.cast = ['c', 'a']
     expect(panelCharacterIds(panel)).toEqual(['c', 'a', 'b'])
+  })
+
+  test('pageCharacterIds lists the page cast, then the characters of each panel, once', () => {
+    const page = createPage('2rows', 'rtl')
+    expect(pageCharacterIds(page)).toEqual([])
+    const [first, second] = page.panels
+    if (!first || !second) throw new Error('2rows のページにコマが 2 つない')
+    first.cast = ['a', 'b']
+    second.cast = ['c']
+    page.cast = ['c', 'd']
+    expect(pageCharacterIds(page)).toEqual(['c', 'd', 'a', 'b'])
   })
 }
