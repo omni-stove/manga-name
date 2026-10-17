@@ -258,6 +258,11 @@ export function createApp(options: AppOptions = {}) {
     const parsed = LayoutProposalRequestSchema.safeParse(body)
     if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
 
+    // 上限を超える枚数は必ず弾かれるので、生成回数を予約する前に断る
+    if ((parsed.data.pageCount ?? 0) > MAX_PLANNED_PAGES) {
+      return c.json({ error: `pageCount must be at most ${MAX_PLANNED_PAGES}` }, 400)
+    }
+
     const usageId = await reserve(c, 'plan-pages')
     if (usageId instanceof Response) return usageId
     const provider = createLlm(c.env)

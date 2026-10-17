@@ -20,6 +20,9 @@ import {
   type PanelArtRequest,
 } from './provider'
 
+/** ページ割りで割り振らせるページ数の上限。Workers の生成上限に収めるため、Web と Workers の上限と揃える */
+const MAX_PLANNED_PAGES = 32
+
 /** LLM に渡すプロンプト。schema は構造化出力に対応したプロバイダにそのまま渡す */
 export interface LlmPrompt {
   system: string
@@ -174,7 +177,7 @@ function planPages(req: PagePlanRequest): LlmPrompt {
   const user = [
     ...characterList(characters),
     req.pageCount === undefined
-      ? 'Pages: as many as the script needs.'
+      ? `Pages: as many as the script needs.\nNever more than ${MAX_PLANNED_PAGES} pages.`
       : `Pages: exactly ${req.pageCount}.`,
     'Script:',
     req.script,

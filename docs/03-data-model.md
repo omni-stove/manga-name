@@ -357,6 +357,17 @@ interface LayoutProposalResponse {
   rationale: string;
 }
 
+type PagePlanRequest = LayoutProposalRequest;
+interface PagePlan {
+  note: string;                         // このページで起きること。Page.note になる
+  cast: ID[];                           // このページに出るキャラ。Page.cast になる
+  script: string;                       // このページに割り振った脚本の抜き書き
+}
+interface PagePlanResponse {
+  pages: PagePlan[];                    // 1 ページ以上
+  rationale: string;
+}
+
 interface CritiqueRequest {
   page: Page;
   diagnosis: PageDiagnosis;
@@ -370,6 +381,7 @@ interface ImageProvider {
   generatePanelArt(req: PanelArtRequest): Promise<PanelArtResponse>;
 }
 interface LlmProvider {
+  planPages(req: PagePlanRequest): Promise<PagePlanResponse>;
   proposeLayout(req: LayoutProposalRequest): Promise<LayoutProposalResponse>;
   critique(req: CritiqueRequest): Promise<CritiqueResponse>;
 }
