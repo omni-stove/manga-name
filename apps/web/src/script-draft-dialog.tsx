@@ -17,6 +17,7 @@ import {
   layoutRequest,
   MAX_PAGE_COUNT,
   normalizePlan,
+  PAGE_COUNT_GUIDES,
   pageWithNewIds,
   parsePageCount,
   plannedPage,
@@ -104,6 +105,7 @@ export function ScriptDraftDialog({
   const pageCount = parsePageCount(pageCountText)
   const pageCountError =
     pageCount === null ? `1〜${MAX_PAGE_COUNT} の整数にしてください` : undefined
+  const pageCountGuide = PAGE_COUNT_GUIDES.find((g) => g.pages === pageCount)
   const issues = useMemo(
     () =>
       slots.map((slot) =>
@@ -498,6 +500,25 @@ export function ScriptDraftDialog({
           value={pageCountText}
           onChange={(e) => setPageCountText(e.target.value)}
         />
+        <YStack gap={4}>
+          <XStack wrap gap={8} role="group" aria-label="商業誌の目安">
+            {PAGE_COUNT_GUIDES.map((g) => (
+              <Button
+                key={g.label}
+                size="small"
+                aria-pressed={g.pages === pageCount}
+                onClick={() => setPageCountText(String(g.pages))}
+              >
+                {g.label} {g.pages}
+              </Button>
+            ))}
+          </XStack>
+          {pageCountGuide && (
+            <Typography variant="caption" tone="muted">
+              {pageCountGuide.hint}
+            </Typography>
+          )}
+        </YStack>
         <Input
           label="トーンのヒント"
           value={tone}
