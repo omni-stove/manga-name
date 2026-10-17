@@ -20,8 +20,7 @@ pnpm check      # lint + typecheck + test
 
 ## ブランチと PR
 
-- ブランチ名は `task-<id>`。`<id>` は `docs/08-tasks.md` のタスク ID。例: `task-02`。
-- PR は `main` 宛て。テンプレートに沿って、タスクの完了条件をチェックリストで列挙する。
+- PR は `main` 宛て。テンプレートに沿って、Issue の完了条件をチェックリストで列挙する。
 - CI（lint / typecheck / test）が green でないとマージしない。
 - 契約（`docs/03-data-model.md`, `docs/04-diagnosis-spec.md`）の変更は単独の PR にし、全 WS に通知する。
 
@@ -86,15 +85,3 @@ WS ごとにディレクトリを 1 つ足すだけで取り込まれる。`apps
 - `tsconfig.base.json` に `paths` は置かない。パッケージ参照は `workspace:*` 依存で行う。
 - テストは in-source（`import.meta.vitest`）。ルートの `vitest.config.ts` が `**/src/**/*.{ts,tsx}` を対象にし、各パッケージの `test` スクリプトも同じファイルを `--config` で指す。パッケージ固有の設定（jsdom など）が要るときだけ、そのディレクトリに `vitest.config.ts` を置き、ルートの設定を `extends` する。
 - Vite でバンドルする apps は `define: { 'import.meta.vitest': 'undefined' }` を置き、テストブロックを本番ビルドから落とす。
-
-## タスクを進める
-
-| コマンド | 内容 |
-|---|---|
-| `make tasks next` | 着手できるタスクを列挙する |
-| `make tasks show <id>` | 依存、範囲、完了条件、仕様を表示する |
-| `make tasks start <id>` | 着手にする。依存が未完了なら拒否。決定待ちは `ARGS="--decided"` |
-| `make tasks done <id>` | 完了にする。検証はしない |
-| `make tasks render` | タスクの定義を変えたあと、`docs/tasks.json` から `docs/08-tasks.md` を生成し直す |
-
-`docs/08-tasks.md` は生成物なので手で編集しない。着手・完了の状態は `docs/tasks.json` にだけ入り、`08-tasks.md` には出ない。`start` と `done` が書き換えるのは `tasks.json` だけで、進捗は `make tasks next` で見る。

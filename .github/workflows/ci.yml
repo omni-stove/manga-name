@@ -67,7 +67,7 @@ jobs:
         run: pnpm --silent knip
 
       - name: Test
-        run: pnpm test && pnpm dlx bats@1 tests
+        run: pnpm test
 
       - name: Bundle size
         run: pnpm --filter @manga/web size
