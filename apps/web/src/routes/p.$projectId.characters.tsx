@@ -1,5 +1,5 @@
 import type { Character } from '@manga/schema'
-import { Button, Field, Input } from '@manga/ui'
+import { Button, Field, Input, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi } from '@tanstack/react-router'
 import common from '../common.module.css'
 import {
@@ -33,7 +33,7 @@ function CharacterList() {
       )}
       <ul className={`${common.cards} ${styles.cards}`}>
         {project.characters.map((character) => (
-          <li key={character.id} className={common.card}>
+          <YStack as="li" gap={6} key={character.id} className={common.card}>
             <CharacterForm
               // 保存後に入力欄を保存済みの値へ戻すため、内容が変わったら作り直す
               key={JSON.stringify(character)}
@@ -44,7 +44,7 @@ function CharacterList() {
               }
             />
             <small className={styles.usage}>使用コマ {characterUsage(project, character.id)}</small>
-            <span className={common.cardActions}>
+            <XStack as="span" wrap gap={6} className={common.cardActions}>
               <Button
                 size="small"
                 variant="ghost"
@@ -55,8 +55,8 @@ function CharacterList() {
               >
                 削除
               </Button>
-            </span>
-          </li>
+            </XStack>
+          </YStack>
         ))}
       </ul>
       <h3 className={styles.addTitle}>キャラクターを追加</h3>

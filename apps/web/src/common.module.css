@@ -7,18 +7,7 @@
   white-space: pre-line;
 }
 
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-8);
-}
-
 .toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-12);
   margin: 0 0 var(--space-16);
 }
 
@@ -32,9 +21,6 @@
 }
 
 .card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
   padding: var(--space-14);
   border: 1px solid var(--border);
   border-radius: var(--radius-l);
@@ -42,16 +28,10 @@
 }
 
 .cardLink {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
   text-decoration: none;
 }
 
 .cardActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-6);
   margin-top: auto;
 }
 

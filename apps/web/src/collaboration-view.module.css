@@ -1,7 +1,4 @@
 .bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
   font-size: var(--text-s);
 }
 
@@ -15,9 +12,6 @@
 }
 
 .peers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
   margin: 0;
   padding: 0;
   border: 0;
@@ -27,9 +21,6 @@
 
 /* 人ごとの色は --peer-color で、peerColor() が style に入れる */
 .peer {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-4);
   font-size: var(--text-xs);
 }
 

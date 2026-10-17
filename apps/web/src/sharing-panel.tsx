@@ -1,5 +1,5 @@
 import type { ID } from '@manga/schema'
-import { Button, Input, Select } from '@manga/ui'
+import { Button, Input, Select, XStack, YStack } from '@manga/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import common from './common.module.css'
 import { errorMessage } from './route-error'
@@ -60,7 +60,7 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
   const isOwner = members.role === 'owner'
 
   return (
-    <div className={styles.panel}>
+    <YStack gap={12} className={styles.panel}>
       <p>あなたのロール: {ROLE_LABELS[members.role]}</p>
       {isOwner && (
         <form
@@ -90,7 +90,7 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
         </form>
       )}
       {link && (
-        <p className={styles.link}>
+        <XStack as="p" wrap className={styles.link}>
           <Input readOnly value={link} aria-label="招待リンク" onFocus={(e) => e.target.select()} />
           <Button size="small" onClick={() => void navigator.clipboard.writeText(link)}>
             コピー
@@ -98,7 +98,7 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
           <small className={common.placeholder}>
             このリンクを招待先に渡してください。招待したメールアドレスでログインした人だけが参加できます。
           </small>
-        </p>
+        </XStack>
       )}
       {error && (
         <p className={common.error} role="alert">
@@ -106,9 +106,9 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
         </p>
       )}
       <h3>参加者</h3>
-      <ul className={styles.list}>
+      <YStack as="ul" className={styles.list}>
         {members.members.map((m) => (
-          <li key={m.userId}>
+          <XStack as="li" wrap key={m.userId}>
             <span title={m.userId}>{m.name ?? m.email ?? m.userId}</span>
             {isOwner && m.role !== 'owner' ? (
               <>
@@ -136,15 +136,15 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
             ) : (
               <small>{ROLE_LABELS[m.role]}</small>
             )}
-          </li>
+          </XStack>
         ))}
-      </ul>
+      </YStack>
       {isOwner && members.invites.length > 0 && (
         <>
           <h3>未使用の招待</h3>
-          <ul className={styles.list}>
+          <YStack as="ul" className={styles.list}>
             {members.invites.map((invite) => (
-              <li key={invite.id}>
+              <XStack as="li" wrap key={invite.id}>
                 <span>{invite.email}</span>
                 <small>
                   {ROLE_LABELS[invite.role]}・{new Date(invite.expiresAt).toLocaleDateString()} まで
@@ -157,11 +157,11 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
                 >
                   取り消す
                 </Button>
-              </li>
+              </XStack>
             ))}
-          </ul>
+          </YStack>
         </>
       )}
-    </div>
+    </YStack>
   )
 }

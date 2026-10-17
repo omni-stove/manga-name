@@ -38,6 +38,14 @@ run = "pnpm test"
 description = "Vitest with the wall-clock budgets (PERF=1). Kept out of test because shared CI runners make timings flaky"
 run = "PERF=1 pnpm exec vitest run"
 
+[storybook]
+description = "Storybook for packages/ui on http://localhost:6006"
+run = "pnpm --filter @manga/ui storybook"
+
+[test-storybook]
+description = "Run the play functions of packages/ui stories in headless Chromium. Kept out of test because it starts a real browser"
+run = "pnpm --filter @manga/ui test-storybook"
+
 [test-watch]
 description = "Vitest in watch mode"
 run = "pnpm test:watch"

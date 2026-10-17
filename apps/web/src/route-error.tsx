@@ -1,4 +1,4 @@
-import { Button } from '@manga/ui'
+import { Button, XStack } from '@manga/ui'
 import { type ErrorComponentProps, Link, useRouter } from '@tanstack/react-router'
 import common from './common.module.css'
 
@@ -9,10 +9,10 @@ export function RouteError({ error }: ErrorComponentProps) {
     <section role="alert">
       <h1>読み込めませんでした</h1>
       <p className={common.error}>{errorMessage(error)}</p>
-      <p className={common.actions}>
+      <XStack as="p" wrap>
         <Button onClick={() => void router.invalidate()}>再試行</Button>
         <Link to="/">プロジェクト一覧へ</Link>
-      </p>
+      </XStack>
     </section>
   )
 }

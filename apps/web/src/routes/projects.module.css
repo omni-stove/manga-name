@@ -1,6 +1,4 @@
 .create {
-  display: flex;
-  gap: var(--space-8);
   max-width: 28rem;
 }
 

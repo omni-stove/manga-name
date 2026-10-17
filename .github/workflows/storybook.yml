@@ -1,0 +1,34 @@
+name: Storybook
+
+# 実ブラウザを起動するので、E2E と同じく PR ごとには走らせず毎晩 main で回す
+on:
+  schedule:
+    - cron: "0 18 * * *" # 03:00 JST
+  workflow_dispatch:
+
+concurrency:
+  group: storybook
+  cancel-in-progress: true
+
+jobs:
+  storybook:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
+      - name: Install Chromium
+        run: pnpm --filter @manga/ui exec playwright install --with-deps chromium
+
+      - name: Storybook tests
+        run: pnpm --filter @manga/ui test-storybook
+
+      - name: Build Storybook
+        run: pnpm --filter @manga/ui build-storybook --quiet

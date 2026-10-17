@@ -29,7 +29,7 @@ import type {
   Patch,
   Project,
 } from '@manga/schema'
-import { Button, Checkbox, SegmentedControl, ToolGroup } from '@manga/ui'
+import { Button, Checkbox, SegmentedControl, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from 'zustand'
@@ -272,8 +272,8 @@ function Editor() {
     }
   }
   return (
-    <section className={styles.editor}>
-      <header className={styles.toolbar}>
+    <YStack as="section" gap={0} className={styles.editor}>
+      <XStack as="header" gap={20} rowGap={12} wrap className={styles.toolbar}>
         <Link to="/p/$projectId" params={{ projectId }} className={styles.back}>
           ← {project.title || '無題'}
         </Link>
@@ -302,7 +302,10 @@ function Editor() {
             onChange={(k) => setFocusKind(k)}
           />
         )}
-        <ToolGroup label="レイヤー">
+        <XStack role="group" aria-label="レイヤー">
+          <span className={styles.groupLabel} aria-hidden>
+            レイヤー
+          </span>
           {LAYERS.map((l) => (
             <Checkbox
               key={l.key}
@@ -311,8 +314,8 @@ function Editor() {
               onChange={(e) => setLayers({ ...layers, [l.key]: e.target.checked })}
             />
           ))}
-        </ToolGroup>
-        <span className={styles.actions}>
+        </XStack>
+        <XStack as="span" gap={6} className={styles.actions}>
           <SaveStatusIndicator store={store} />
           <Button size="small" variant="ghost" disabled={!canUndo} onClick={() => store.undo()}>
             Undo
@@ -321,17 +324,17 @@ function Editor() {
             Redo
           </Button>
           {typeof exporting === 'object' ? (
-            <span className={styles.exportProgress} role="status">
+            <XStack as="span" className={styles.exportProgress} role="status">
               書き出し中… {exporting.done} / {exporting.total}
               <progress aria-label="書き出しの進捗" value={exporting.done} max={exporting.total} />
-            </span>
+            </XStack>
           ) : (
             <Button size="small" variant="primary" onClick={() => setExporting('dialog')}>
               書き出し
             </Button>
           )}
-        </span>
-      </header>
+        </XStack>
+      </XStack>
       {exporting === 'dialog' && (
         <ExportDialog
           pages={episode.pages}
@@ -472,7 +475,7 @@ function Editor() {
           )}
         </aside>
       </div>
-    </section>
+    </YStack>
   )
 }
 
@@ -664,9 +667,9 @@ function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply:
   return (
     <details className={styles.section} data-inspector="art-removal">
       <summary>履歴の削除（{removable.length}）</summary>
-      <ul className={styles.artRemove}>
+      <YStack as="ul" gap={4} className={styles.artRemove}>
         {removable.map((art) => (
-          <li key={art.id} data-art-id={art.id}>
+          <XStack as="li" key={art.id} data-art-id={art.id}>
             <span className={styles.ellipsis}>
               <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
               {art.instruction && ` ${art.instruction}`}
@@ -678,9 +681,9 @@ function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply:
             >
               削除
             </Button>
-          </li>
+          </XStack>
         ))}
-      </ul>
+      </YStack>
     </details>
   )
 }

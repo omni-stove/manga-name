@@ -1,4 +1,10 @@
-import { Button, SegmentedControl, type ThemePreference, useThemePreference } from '@manga/ui'
+import {
+  Button,
+  SegmentedControl,
+  type ThemePreference,
+  useThemePreference,
+  XStack,
+} from '@manga/ui'
 import { createFileRoute } from '@tanstack/react-router'
 import common from '../common.module.css'
 import { SignInButton } from '../sign-in'
@@ -25,7 +31,7 @@ function AppSettings() {
         <dt>AI プロキシの URL</dt>
         <dd>未設定</dd>
         <dt>アカウント</dt>
-        <dd className={common.actions}>
+        <XStack as="dd" wrap>
           {user ? (
             <>
               {`${user.name}（${user.email}）`}
@@ -39,7 +45,7 @@ function AppSettings() {
               <SignInButton size="small" />
             </>
           )}
-        </dd>
+        </XStack>
         <dt>テーマ</dt>
         <dd>
           <SegmentedControl label="テーマ" value={theme} options={THEMES} onChange={setTheme} />
