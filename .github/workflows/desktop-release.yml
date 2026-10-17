@@ -11,7 +11,7 @@ name: Desktop release
 # - Windows（任意。証明書の調達先が未決なので、WINDOWS_CERTIFICATE がなければ未署名で出す）
 #   WINDOWS_CERTIFICATE（.pfx を base64）、WINDOWS_CERTIFICATE_PASSWORD
 # - updater（必須）: TAURI_SIGNING_PRIVATE_KEY、TAURI_SIGNING_PRIVATE_KEY_PASSWORD。公開鍵は tauri.conf.json の
-#   plugins.updater.pubkey。更新用の成果物と latest.json は秘密鍵がないと作れず、PR の Desktop ビルドを落とすので、
+#   plugins.updater.pubkey。更新用の成果物と latest.json は秘密鍵がないと作れず、手元や Desktop ワークフローのビルドを落とすので、
 #   作る設定は tauri.release.conf.json に分けてここでだけ足す
 on:
   push:
