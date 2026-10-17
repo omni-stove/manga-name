@@ -40,6 +40,8 @@ export async function renderLayoutPng(
   c.lineWidth = lineWidth
   c.strokeStyle = '#000'
   if (panel.shape) {
+    // 輪郭の頂点は囲む矩形の端にあり、そのまま引くと外側の半分がキャンバスから出る。内側に全幅を残すため clip して倍の太さで引く
+    c.save()
     c.beginPath()
     panel.shape.forEach((p, i) => {
       const x = p.x * width
@@ -48,7 +50,10 @@ export async function renderLayoutPng(
       else c.lineTo(x, y)
     })
     c.closePath()
+    c.clip()
+    c.lineWidth = lineWidth * 2
     c.stroke()
+    c.restore()
   } else {
     c.strokeRect(lineWidth / 2, lineWidth / 2, width - lineWidth, height - lineWidth)
   }
