@@ -15,3 +15,7 @@
 .size > input {
   width: 7rem;
 }
+
+.dialog {
+  width: min(44rem, calc(100vw - 2rem));
+}

@@ -88,7 +88,7 @@ if (import.meta.vitest) {
     library = createProjectLibrary(storage)
   })
 
-  describe('8 ルートが描画される', () => {
+  describe('6 ルートが描画される', () => {
     test.each([
       ['/', 'プロジェクト一覧'],
       ['/new', '新規プロジェクト'],
@@ -96,11 +96,20 @@ if (import.meta.vitest) {
       [`/p/${projectId}/episodes/${episodeId}`, '脚本から下書き'],
       [`/p/${projectId}/pages/${pageId}`, 'インスペクタ'],
       [`/p/${projectId}/characters`, 'キャラクター一覧'],
-      [`/p/${projectId}/settings`, 'プロジェクト設定'],
-      ['/settings', 'アプリ設定'],
     ])('%s', async (path, heading) => {
       expect(await render(library, path)).toContain(heading)
     })
+  })
+
+  test('設定は ?settings= のときだけ、今の画面の上にダイアログで出る', async () => {
+    const editor = `/p/${projectId}/pages/${pageId}`
+    expect(await render(library, editor)).not.toContain('判型')
+    const project = await render(library, `${editor}?settings=project`)
+    expect(project).toContain('判型')
+    expect(project).toContain('インスペクタ')
+    expect(await render(library, `/p/${projectId}?settings=app`)).toContain('テーマ')
+    // プロジェクトを開いていない画面にはプロジェクト設定を出さない
+    expect(await render(library, '/?settings=project')).not.toContain('判型')
   })
 
   test('保存済みのプロジェクトが一覧に出る', async () => {

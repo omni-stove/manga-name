@@ -135,7 +135,12 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
     ]
   }
 
-  const navigate = (to: '/' | '/settings') => () => void router.navigate({ to })
+  const openSettings = () =>
+    void router.navigate({
+      to: '.',
+      search: (prev) => ({ ...prev, settings: 'app' }),
+      replace: true,
+    })
 
   // 最近開いたファイルが変わるたびに作り直す。項目を 1 つずつ差し替えるより IPC の往復が少ない
   const rebuildMenu = async () => {
@@ -202,8 +207,8 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
         {
           text: '表示',
           items: [
-            { text: 'プロジェクト一覧', action: navigate('/') },
-            { text: 'アプリ設定', accelerator: 'CmdOrCtrl+,', action: navigate('/settings') },
+            { text: 'プロジェクト一覧', action: () => void router.navigate({ to: '/' }) },
+            { text: 'アプリ設定', accelerator: 'CmdOrCtrl+,', action: openSettings },
             ...(isMac ? [separator, predefined('Fullscreen'), predefined('Minimize')] : []),
           ],
         },
@@ -467,11 +472,17 @@ if (import.meta.vitest) {
       )
     })
 
-    test('the View menu navigates to the project list and the settings', async () => {
+    test('the View menu navigates to the project list and opens the settings over the current screen', async () => {
       const shell = await setup()
       shell.click('表示', 'プロジェクト一覧')
       shell.click('表示', 'アプリ設定')
-      expect(shell.router.navigate.mock.calls).toEqual([[{ to: '/' }], [{ to: '/settings' }]])
+      const [[list], [settings]] = shell.router.navigate.mock.calls as unknown as [
+        [unknown],
+        [{ search(prev: object): object }],
+      ]
+      expect(list).toEqual({ to: '/' })
+      expect(settings).toMatchObject({ to: '.', replace: true })
+      expect(settings.search({ q: 1 })).toEqual({ q: 1, settings: 'app' })
     })
   })
 }
