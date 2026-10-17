@@ -17,7 +17,7 @@ export interface RouterContext {
   library: ProjectLibrary
   /** 生成に使う ImageProvider。`createImageProvider()` で API の URL とログインから作る */
   imageProvider: ImageProvider
-  /** 「AI に相談」に使う LlmProvider。`createLlmProvider()` で imageProvider と同じく作る */
+  /** 「脚本から下書き」と「AI に相談」に使う LlmProvider。`createLlmProvider()` で API の URL とログインから作る */
   llmProvider: LlmProvider
   /** コマの生成と進行状況。画面を離れても生成が続くよう、ルーターより長く生きる */
   generation: PanelGeneration
@@ -108,6 +108,7 @@ if (import.meta.vitest) {
     const html = await render(library, `/p/${projectId}`)
     expect(html).toContain(`/p/${projectId}/pages/${pageId}`)
     expect(html).toContain('未生成')
+    expect(html).toContain('脚本から下書き')
   })
 
   test('知らないプロジェクトとページは見つからない旨を出す', async () => {

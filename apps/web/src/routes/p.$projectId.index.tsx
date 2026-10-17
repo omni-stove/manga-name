@@ -15,8 +15,10 @@ import {
   PAGE_TEMPLATES,
   removePagePatch,
 } from '../project-ops'
+import { ScriptDraftDialog } from '../script-draft-dialog'
 import type { ProjectStore } from '../store/project-store'
 import { useApplyPatch, useProject } from '../use-project'
+import { useUndoShortcuts } from '../use-undo-shortcuts'
 import styles from './pages.module.css'
 
 export const Route = createFileRoute('/p/$projectId/')({ component: PageList })
@@ -26,12 +28,14 @@ const projectRoute = getRouteApi('/p/$projectId')
 function PageList() {
   const { projectId } = Route.useParams()
   const { store, collab } = projectRoute.useLoaderData()
-  const { library } = Route.useRouteContext()
+  const { library, llmProvider } = Route.useRouteContext()
   const project = useProject(store)
   const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
   const [template, setTemplate] = useState<PageTemplate>('3rows')
   const [episodeId, setEpisodeId] = useState<string>()
+  const [drafting, setDrafting] = useState(false)
+  useUndoShortcuts(store)
   const targetEpisode = project.episodes.find((e) => e.id === episodeId) ?? project.episodes.at(-1)
   // rtl の本では先のページが左にあるので、並べ替えのボタンを向きに合わせる
   const [earlier, later] = project.settings.direction === 'rtl' ? ['→', '←'] : ['←', '→']
@@ -77,7 +81,17 @@ function PageList() {
           ページを追加
         </Button>
         <Button onClick={() => apply('エピソードを追加', addEpisodePatch)}>エピソードを追加</Button>
+        <Button onClick={() => setDrafting(true)}>脚本から下書き</Button>
       </form>
+      {drafting && (
+        <ScriptDraftDialog
+          project={project}
+          store={store}
+          llmProvider={llmProvider}
+          episodeId={targetEpisode?.id}
+          onClose={() => setDrafting(false)}
+        />
+      )}
       {error && (
         <p className={common.error} role="alert">
           {error}
