@@ -51,11 +51,13 @@ export async function fakeGoogleAccount(context: BrowserContext, email: string):
   })
 }
 
-/** アプリ設定のログインからログインし、ヘッダーにサインアウトが出るまで待つ */
+/** アプリ設定のログインからログインし、ナビにサインアウトが出るまで待つ */
 export async function signIn(page: Page): Promise<void> {
   await page.goto('/settings')
   await page.getByRole('button', { name: 'ログイン' }).click()
-  await expect(page.getByRole('banner').getByRole('button', { name: 'サインアウト' })).toBeVisible()
+  await expect(
+    page.getByRole('navigation').getByRole('button', { name: 'サインアウト' }),
+  ).toBeVisible()
 }
 
 /** エディタのツールバーの同期状態が「同期済み」になるまで待つ */

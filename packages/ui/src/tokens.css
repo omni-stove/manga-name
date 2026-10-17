@@ -75,8 +75,6 @@
 
   --control-s: 1.75rem;
   --control-m: 2.25rem;
-  /* エディタは画面の高さからこれを引いて埋めるので、ヘッダーと共有する */
-  --header-height: 2.75rem;
 
   --radius-s: 0.25rem;
   --radius-m: 0.5rem;

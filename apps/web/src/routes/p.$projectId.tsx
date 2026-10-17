@@ -21,26 +21,13 @@ export const Route = createFileRoute('/p/$projectId')({
 })
 
 function ProjectLayout() {
-  const { projectId } = Route.useParams()
   const { store, collab } = Route.useLoaderData()
   const project = useProject(store)
   const { canUndo, canRedo } = useStore(store.state)
   return (
     <section>
-      <XStack as="header" wrap gap={24} rowGap={8} className={styles.header}>
-        <Typography variant="heading">{project.title || '無題'}</Typography>
+      <XStack wrap gap={24} rowGap={8} className={styles.toolbar}>
         <CollaborationBar collab={collab} project={project} />
-        <XStack as="nav" gap={4} align="stretch" className={styles.tabs}>
-          <Link to="/p/$projectId" params={{ projectId }} activeOptions={{ exact: true }}>
-            ページ
-          </Link>
-          <Link to="/p/$projectId/characters" params={{ projectId }}>
-            キャラクター
-          </Link>
-          <Link to="/p/$projectId/settings" params={{ projectId }}>
-            設定
-          </Link>
-        </XStack>
         <XStack as="span" gap={6} className={styles.actions}>
           <SaveStatusIndicator store={store} />
           <Button size="small" variant="ghost" disabled={!canUndo} onClick={() => store.undo()}>

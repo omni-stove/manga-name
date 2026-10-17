@@ -272,9 +272,9 @@ function Editor() {
   return (
     <YStack as="section" gap={0} className={styles.editor}>
       <XStack as="header" gap={20} rowGap={12} wrap className={styles.toolbar}>
-        <Link to="/p/$projectId" params={{ projectId }} className={styles.back}>
-          ← {project.title || '無題'}
-        </Link>
+        <Typography as="span" variant="label" tone="muted">
+          {project.title || '無題'}
+        </Typography>
         <Typography as="span" weight="bold">
           {pageIndex + 1} ページ
         </Typography>
