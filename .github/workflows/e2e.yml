@@ -39,3 +39,53 @@ jobs:
             e2e/playwright-report/
             e2e/test-results/
           retention-days: 14
+
+  # シナリオ 8。tauri-driver が WebDriver を持つのは Linux と Windows だけなので、Linux の Xvfb で動かす
+  desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
+      # xdotool はメニューのショートカットとネイティブのファイルダイアログを操作し、imagemagick は失敗時に画面全体を撮る
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+            webkit2gtk-driver xvfb xdotool imagemagick
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+
+      - name: Build
+        run: |
+          pnpm --filter @manga/desktop icons
+          pnpm --filter @manga/desktop tauri build --debug --no-bundle
+
+      - name: E2E
+        run: xvfb-run -a pnpm --filter @manga/e2e e2e:desktop
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-desktop-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 14
