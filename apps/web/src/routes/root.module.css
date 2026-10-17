@@ -1,33 +1,10 @@
 .app {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   min-height: 100vh;
 }
 
-.header {
-  height: var(--header-height);
-  padding: 0 var(--space-16);
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-chrome);
-  font-size: var(--text-m);
-}
-
-.brand {
-  font-weight: var(--weight-bold);
-  letter-spacing: var(--tracking-label);
-  text-decoration: none;
-}
-
-.nav a {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-
-.nav a:hover,
-.nav a[data-status="active"] {
-  color: var(--text);
-}
-
 .main {
-  flex: 1;
-  min-height: 0;
+  min-width: 0;
   padding: var(--space-16);
 }

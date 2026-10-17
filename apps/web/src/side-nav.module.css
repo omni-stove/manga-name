@@ -1,0 +1,92 @@
+.nav {
+  position: sticky;
+  top: 0;
+  width: 13rem;
+  height: 100vh;
+  padding: var(--space-12) var(--space-8);
+  border-right: 1px solid var(--border);
+  background: var(--surface-chrome);
+  font-size: var(--text-m);
+  overflow-y: auto;
+}
+
+.nav[data-collapsed] {
+  width: calc(var(--hit) + 2 * var(--space-6));
+  padding-inline: var(--space-6);
+}
+
+.brand {
+  padding: 0 var(--space-8);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-label);
+  text-decoration: none;
+}
+
+.list,
+.footer {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer {
+  margin-top: auto;
+}
+
+.project {
+  padding: 0 var(--space-8) var(--space-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-height: var(--control-m);
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-m);
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.nav[data-collapsed] .item {
+  justify-content: center;
+  min-height: var(--hit);
+  padding: 0;
+}
+
+.item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.item[data-status="active"] {
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+
+.icon {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* 畳んでもリンクの名前として読み上げられるよう、display: none ではなく見た目だけ隠す */
+.nav[data-collapsed] .label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.account {
+  padding: var(--space-8) var(--space-8) 0;
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-8);
+  color: var(--text-muted);
+}
