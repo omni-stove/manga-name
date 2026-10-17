@@ -3,6 +3,7 @@ import {
   createFakeLlmProvider,
   type ImageProvider,
   type LlmProvider,
+  type PanelArtResponse,
   PROMPT_HEADER,
   PROVIDER_HEADER,
 } from '@manga/ai'
@@ -10,6 +11,7 @@ import {
   CharacterArtRequestSchema,
   CritiqueResponseSchema,
   LayoutProposalResponseSchema,
+  PageArtRequestSchema,
   PageDiagnosisSchema,
   PagePlanResponseSchema,
   PageSchema,
@@ -81,6 +83,13 @@ const PanelArtJsonSchema = PanelArtRequestSchema.omit({
   previous: true,
 }).extend({ previous: z.object({ instruction: z.string() }).optional() })
 
+/** page-art の multipart の json 部。PageArtRequest から Blob を除いたもの */
+const PageArtJsonSchema = PageArtRequestSchema.omit({
+  layoutPng: true,
+  referencePng: true,
+  characterRefs: true,
+})
+
 /** `@manga/ai` の LayoutProposalRequest と PagePlanRequest */
 const LayoutProposalRequestSchema = z.object({
   project: ProjectBaseSchema.pick({ settings: true, characters: true }),
@@ -128,7 +137,39 @@ async function retryUntilValid<T>(
 const isFile = (v: unknown): v is File => typeof v !== 'string' && v !== null && v !== undefined
 
 /**
- * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique`、
+ * 画像生成の multipart を読む。json 部を schema で検証し、layout と reference と character_<id> を取り出す。
+ * 欠けや不正は invalid_request を throw する
+ */
+async function readImageForm<S extends z.ZodType>(c: Context<UserEnv>, schema: S) {
+  const form = await c.req.formData().catch(() => null)
+  const rawJson = form?.get('json')
+  const layout = form?.get('layout')
+  if (!form || typeof rawJson !== 'string' || !isFile(layout)) {
+    throw new ApiException('invalid_request', { detail: 'json and layout are required' })
+  }
+  let json: unknown
+  try {
+    json = JSON.parse(rawJson)
+  } catch {
+    throw new ApiException('invalid_request', { detail: 'json is not valid JSON' })
+  }
+  const reference = form.get('reference')
+  const characterRefs = [...form.entries()].flatMap(([key, value]) =>
+    key.startsWith('character_') && isFile(value)
+      ? [{ characterId: key.slice('character_'.length), image: value }]
+      : [],
+  )
+  return {
+    form,
+    json: parseOrThrow(schema, json),
+    layoutPng: layout,
+    referencePng: isFile(reference) ? reference : undefined,
+    characterRefs: characterRefs.length > 0 ? characterRefs : undefined,
+  }
+}
+
+/**
+ * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/page-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique`、
  * `/v1/projects` の CRUD とアセットと参加者、招待リンクの受け口 `/v1/invites/:token`、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
  * `/v1/health`、`/v1/auth/*`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
  * CORS は WEB_ORIGINS と tauri://localhost だけに許す。
@@ -197,86 +238,69 @@ export function createApp(options: AppOptions = {}) {
 
   app.use('/v1/ai/*', requireUser(now))
 
-  app.post('/v1/ai/panel-art', async (c) => {
-    const form = await c.req.formData().catch(() => null)
-    const rawJson = form?.get('json')
-    const layout = form?.get('layout')
-    if (!form || typeof rawJson !== 'string' || !isFile(layout)) {
-      throw new ApiException('invalid_request', { detail: 'json and layout are required' })
-    }
-    let json: unknown
-    try {
-      json = JSON.parse(rawJson)
-    } catch {
-      throw new ApiException('invalid_request', { detail: 'json is not valid JSON' })
-    }
-    const { previous, ...rest } = parseOrThrow(PanelArtJsonSchema, json)
+  /** 画像を返す生成の共通の後半。1 回予約し、PNG として読めるまで再試行して、プロバイダを呼んだ回数を記録する */
+  const respondImage = async (
+    c: Context<UserEnv>,
+    kind: string,
+    call: (provider: ImageProvider) => Promise<PanelArtResponse>,
+  ) => {
+    const usageId = await reserve(c, kind)
+    const provider = createImage(c.env)
 
-    const referencePng = form.get('reference')
+    const { value, attempts } = await retryUntilValid(async () => {
+      const res = await call(provider)
+      const bytes = new Uint8Array(await res.image.arrayBuffer())
+      return isDecodablePng(bytes) ? { res, bytes } : undefined
+    })
+    await settleUsage(c.env.DB, usageId, attempts)
+
+    if (value === undefined) {
+      throw new ApiException('provider_invalid_response', {
+        detail: 'image provider returned an invalid image',
+      })
+    }
+    return c.body(value.bytes, 200, {
+      'content-type': 'image/png',
+      [PROVIDER_HEADER]: value.res.provider,
+      [PROMPT_HEADER]: encodeURIComponent(value.res.prompt),
+    })
+  }
+
+  app.post('/v1/ai/panel-art', async (c) => {
+    const { form, json, ...images } = await readImageForm(c, PanelArtJsonSchema)
+    const { previous, ...rest } = json
     const previousArt = form.get('previous')
     if (previous && !isFile(previousArt)) {
       throw new ApiException('invalid_request', {
         detail: 'previous image is required with previous.instruction',
       })
     }
-    const characterRefs = [...form.entries()].flatMap(([key, value]) =>
-      key.startsWith('character_') && isFile(value)
-        ? [{ characterId: key.slice('character_'.length), image: value }]
-        : [],
-    )
-    const usageId = await reserve(c, 'panel-art')
-    const provider = createImage(c.env)
-
-    const { value, attempts } = await retryUntilValid(async () => {
-      const res = await provider.generatePanelArt({
+    return respondImage(c, 'panel-art', (provider) =>
+      provider.generatePanelArt({
         ...rest,
-        layoutPng: layout,
-        referencePng: isFile(referencePng) ? referencePng : undefined,
-        characterRefs: characterRefs.length > 0 ? characterRefs : undefined,
+        ...images,
         previous:
           previous && isFile(previousArt)
             ? { art: previousArt, instruction: previous.instruction }
             : undefined,
-      })
-      const bytes = new Uint8Array(await res.image.arrayBuffer())
-      return isDecodablePng(bytes) ? { res, bytes } : undefined
-    })
-    await settleUsage(c.env.DB, usageId, attempts)
+      }),
+    )
+  })
 
-    if (value === undefined) {
-      throw new ApiException('provider_invalid_response', {
-        detail: 'image provider returned an invalid image',
-      })
-    }
-    return c.body(value.bytes, 200, {
-      'content-type': 'image/png',
-      [PROVIDER_HEADER]: value.res.provider,
-      [PROMPT_HEADER]: encodeURIComponent(value.res.prompt),
-    })
+  // ページ 1 枚を 1 回の生成として数える。コマへの切り抜きは Web がする
+  app.post('/v1/ai/page-art', async (c) => {
+    const { json, layoutPng, referencePng, characterRefs } = await readImageForm(
+      c,
+      PageArtJsonSchema,
+    )
+    return respondImage(c, 'page-art', (provider) =>
+      provider.generatePageArt({ ...json, layoutPng, referencePng, characterRefs }),
+    )
   })
 
   app.post('/v1/ai/character-art', async (c) => {
     const req = parseOrThrow(CharacterArtRequestSchema, await requestJson(c.req.raw))
-    const usageId = await reserve(c, 'character-art')
-    const provider = createImage(c.env)
-
-    const { value, attempts } = await retryUntilValid(async () => {
-      const res = await provider.generateCharacterArt(req)
-      const bytes = new Uint8Array(await res.image.arrayBuffer())
-      return isDecodablePng(bytes) ? { res, bytes } : undefined
-    })
-    await settleUsage(c.env.DB, usageId, attempts)
-
-    if (value === undefined) {
-      throw new ApiException('provider_invalid_response', {
-        detail: 'image provider returned an invalid image',
-      })
-    }
-    return c.body(value.bytes, 200, {
-      'content-type': 'image/png',
-      [PROVIDER_HEADER]: value.res.provider,
-      [PROMPT_HEADER]: encodeURIComponent(value.res.prompt),
-    })
+    return respondImage(c, 'character-art', (provider) => provider.generateCharacterArt(req))
   })
 
   app.post('/v1/ai/plan-pages', async (c) => {

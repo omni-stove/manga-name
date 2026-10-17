@@ -1,6 +1,6 @@
-import type { ImageProvider, PanelArtRequest } from '@manga/ai'
+import type { ImageProvider, PageArtRequest, PanelArtRequest } from '@manga/ai'
 import { diagnosePage, panelHint } from '@manga/diagnosis'
-import { renderLayoutPng } from '@manga/render'
+import { cropPanelArts, renderLayoutPng, renderPageLayoutPng } from '@manga/render'
 import {
   type Character,
   currentArt,
@@ -12,6 +12,7 @@ import {
   type Patch,
   type Project,
   type ProjectSettings,
+  pageCharacterIds,
   panelCharacterIds,
   type ReferenceImage,
 } from '@manga/schema'
@@ -84,10 +85,19 @@ interface BatchRequest {
   projectId: ID
   /** 走っている一括生成を見分けるキー。`page/<id>` や `episode/<id>`。同じ範囲の二重起動は断る */
   scope: string
-  /** 対象のページ。並びの順にコマへ分解する */
+  /** 対象のページ。並びの順に 1 ページ 1 回で生成する */
   pageIds: readonly ID[]
-  /** false なら絵の無いコマだけを生成する */
+  /** false なら絵の無いコマだけに絵を入れ、絵の無いコマが無いページは呼ばない */
   includeGenerated: boolean
+}
+
+interface PageRunRequest {
+  store: ProjectStore
+  projectId: ID
+  pageId: ID
+  /** 生成したページから絵を入れるコマ */
+  panelIds: readonly ID[]
+  signal: AbortSignal
 }
 
 /** 範囲がすでに走っていれば `busy`。それ以外はコマごとの結果の件数 */
@@ -102,7 +112,10 @@ export interface PanelGeneration {
   readonly hintOptOut: StoreApi<OptOutState>
   setUseHint(projectId: ID, panelId: ID, use: boolean): void
   generate(req: GenerateRequest): Promise<GenerateOutcome>
-  /** 範囲のコマを同時 `batchConcurrency` 本で生成する。失敗はまとめて 1 回通知する */
+  /**
+   * 範囲のページを 1 ページ 1 回の呼び出しで生成し、コマごとに切り抜いて入れる。同時 `batchConcurrency` ページ。
+   * 失敗はまとめて 1 回通知する
+   */
   generateAll(req: BatchRequest): Promise<BatchOutcome>
   /** 走っている一括生成を止める。生成中のコマの応答は捨て、まだのコマは始めない */
   cancel(projectId: ID, scope: string): void
@@ -110,13 +123,13 @@ export interface PanelGeneration {
 
 export interface PanelGenerationDeps {
   library: Pick<ProjectLibrary, 'isOpen' | 'loadAsset' | 'putAsset'>
-  imageProvider: Pick<ImageProvider, 'generatePanelArt'>
+  imageProvider: Pick<ImageProvider, 'generatePanelArt' | 'generatePageArt'>
   /** 失敗の文言の出し先。既定はトースト。signIn は未ログインのせいで失敗したことを表す */
   notify?(message: string, opts: { signIn: boolean }): void
   now?(): string
-  /** ImageProvider に渡す配置図の長辺 px。既定 1024 */
+  /** ImageProvider に渡す配置図の長辺 px。コマでもページでも同じ。既定 1024 */
   layoutLongSide?: number
-  /** 一括生成の同時実行数。既定 3 */
+  /** 一括生成で同時に生成するページ数。既定 3 */
   batchConcurrency?: number
   /** 参考画像からコマの範囲を切り抜く。既定は canvas で描く `cropReference` */
   cropReference?: typeof cropReference
@@ -132,6 +145,24 @@ function layoutWidth(panel: Panel, settings: ProjectSettings, longSide: number):
   const { pageSize } = settings
   const aspect = (panel.rect.h * pageSize.h) / (panel.rect.w * pageSize.w)
   return Math.round(aspect > 1 ? longSide / aspect : longSide)
+}
+
+/** 判型の縦横比で、長辺を `longSide` にしたときの幅 */
+function pageLayoutWidth(settings: ProjectSettings, longSide: number): number {
+  const aspect = settings.pageSize.h / settings.pageSize.w
+  return Math.round(aspect > 1 ? longSide / aspect : longSide)
+}
+
+/**
+ * ページに登場するキャラ。出るコマの多い順で、同数なら pageCharacterIds の順。
+ * プロバイダが参照画像の枚数で切るとき（Gemini はキャラ 4 枚まで）に、よく出るキャラを残すため
+ */
+function pageCharacters(page: Page, characters: readonly Character[]): Character[] {
+  const panels = new Map<ID, number>()
+  for (const id of page.panels.flatMap(panelCharacterIds)) panels.set(id, (panels.get(id) ?? 0) + 1)
+  return pageCharacterIds(page)
+    .flatMap((id) => characters.filter((c) => c.id === id))
+    .toSorted((a, b) => (panels.get(b.id) ?? 0) - (panels.get(a.id) ?? 0))
 }
 
 /** 診断の panelHint。ヒントが空なら undefined */
@@ -184,8 +215,9 @@ function addArtPatch(project: Project, pageId: ID, panelId: ID, art: PanelArt): 
 }
 
 /**
- * 1 コマの生成をまとめる。
+ * コマの生成をまとめる。`generate` は 1 コマ分で、
  * 配置図 → 参考画像の切り抜き → 登場キャラの参照画像 → 前回の絵（修正指示つきのとき）→ 診断のヒント → ImageProvider → putAsset → applyPatch(ai)。
+ * `generateAll` はページごとに、ページ全体を 1 回で生成してコマごとに切り抜く（`runPage`）。
  * 生成は store の外で進め、結果だけを Patch で入れるので Undo で生成前に戻せる。アセットは残る。
  * 進行中のコマは `generating` に持ち、画面を離れても生き続ける。同じコマの二重起動は `busy` で断る
  */
@@ -214,17 +246,19 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     })
   const batchControllers = new Map<string, AbortController>()
 
-  const toggle = (field: keyof GeneratingState, key: string, on: boolean) =>
+  const toggle = (field: keyof GeneratingState, key: string | readonly string[], on: boolean) =>
     generating.setState((s) => {
       const keys = new Set(s[field])
-      if (on) keys.add(key)
-      else keys.delete(key)
+      for (const k of typeof key === 'string' ? [key] : key) {
+        if (on) keys.add(k)
+        else keys.delete(k)
+      }
       return field === 'panels' ? { panels: keys } : { batches: keys }
     })
 
-  const loadCharacterRefs = async (panel: Panel, characters: readonly Character[]) =>
+  const loadCharacterRefs = async (cast: readonly Character[]) =>
     Promise.all(
-      panelCharacters(panel, characters)
+      cast
         .filter((c): c is Character & { referenceRef: string } => c.referenceRef !== undefined)
         .map(async (c) => ({ characterId: c.id, image: await library.loadAsset(c.referenceRef) })),
     )
@@ -272,7 +306,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       pageSize: settings.pageSize,
     })
     const referencePng = await loadReference(page.reference, projectId, panel, settings)
-    const characterRefs = await loadCharacterRefs(panel, characters)
+    const characterRefs = await loadCharacterRefs(panelCharacters(panel, characters))
     const previous = instruction === undefined ? undefined : await loadPrevious(panel, instruction)
     const hint = usesHint(hintOptOut.getState(), projectId, panelId)
       ? hintFor(page, panel, settings)
@@ -326,13 +360,128 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     }
   }
 
-  const batchTargets = (project: Project, pageIds: readonly ID[], includeGenerated: boolean) =>
-    pageIds.flatMap((pageId) =>
-      (findPage(project, pageId)?.page.panels ?? [])
-        .filter((panel) => includeGenerated || panel.artId === undefined)
-        .toSorted((a, b) => a.order - b.order)
-        .map((panel) => ({ pageId, panelId: panel.id })),
+  /** 診断のヒントを使うコマの panelHint。キーは Panel.id。空のヒントは入れない */
+  const pageHints = (page: Page, settings: ProjectSettings, projectId: ID) => {
+    const diagnosis = diagnosePage(page, settings)
+    const hints: Record<ID, string> = {}
+    for (const panel of page.panels) {
+      if (!usesHint(hintOptOut.getState(), projectId, panel.id)) continue
+      const d = diagnosis.panels.find((p) => p.panelId === panel.id)
+      const hint = d ? panelHint(panel, d) : ''
+      if (hint !== '') hints[panel.id] = hint
+    }
+    return hints
+  }
+
+  /**
+   * ページ全体の配置図 → 参考画像（どれかのコマが使うときページ丸ごと）→ 登場キャラの参照画像 → コマごとのヒント →
+   * generatePageArt → コマごとに切り抜き → putAsset → 1 回の applyPatch(ai)。
+   * 絵を入れる間にコマが消えていれば、残りのコマにだけ入れてそのコマの id を返す。全部消えていれば throw
+   */
+  const runPage = async ({ store, projectId, pageId, panelIds, signal }: PageRunRequest) => {
+    signal.throwIfAborted()
+    const project = store.get()
+    const found = findPage(project, pageId)
+    if (!found) throw new Error(`page ${pageId} is not in project ${projectId}`)
+    const { page } = found
+    const { settings, characters } = project
+
+    const layoutPng = await renderPageLayoutPng(page, {
+      width: pageLayoutWidth(settings, layoutLongSide),
+      pageSize: settings.pageSize,
+    })
+    const referencePng =
+      page.reference &&
+      panelIds.some((id) => usesReference(referenceOptOut.getState(), projectId, id))
+        ? await library.loadAsset(page.reference.ref)
+        : undefined
+    const characterRefs = await loadCharacterRefs(pageCharacters(page, characters))
+    const hints = pageHints(page, settings, projectId)
+    const req: PageArtRequest = {
+      project: { settings, characters },
+      page,
+      layoutPng,
+      ...(referencePng && { referencePng }),
+      ...(characterRefs.length > 0 && { characterRefs }),
+      ...(Object.keys(hints).length > 0 && { hints }),
+    }
+    const res = await abortable(() => imageProvider.generatePageArt(req), signal)
+    signal.throwIfAborted()
+    // 待つ間にコマが動いていても、送った配置図と同じ位置で切る
+    const crops = (await cropPanelArts(page, res.image)).filter((c) => panelIds.includes(c.panelId))
+    await assertOpen(store, projectId)
+    const arts = await Promise.all(
+      crops.map(
+        async (c): Promise<{ panelId: ID; art: PanelArt }> => ({
+          panelId: c.panelId,
+          art: {
+            id: newId(),
+            ref: await library.putAsset(projectId, c.image, `art-${c.panelId}`),
+            provider: res.provider,
+            prompt: res.prompt,
+            createdAt: now(),
+          },
+        }),
+      ),
     )
+    await assertOpen(store, projectId)
+    signal.throwIfAborted()
+
+    const current = store.get()
+    const missing: ID[] = []
+    const patch = arts.flatMap(({ panelId, art }) => {
+      try {
+        return addArtPatch(current, pageId, panelId, art)
+      } catch {
+        missing.push(panelId)
+        return []
+      }
+    })
+    if (patch.length === 0) throw new Error('生成中にコマが消えました')
+    store.applyPatch(patch, {
+      source: 'ai',
+      label: `ページ ${found.pageIndex + 1} のコマ ${arts.length - missing.length} 件を生成`,
+    })
+    return missing
+  }
+
+  /** 通知はせず、コマごとの結果の件数と、失敗なら理由を返す。ほかで生成中のコマは `busy` にして絵を入れない */
+  const attemptPage = async (
+    req: PageRunRequest,
+  ): Promise<{ counts: Record<GenerateOutcome, number>; error?: unknown }> => {
+    const counts: Record<GenerateOutcome, number> = { done: 0, busy: 0, failed: 0, canceled: 0 }
+    const running = generating.getState().panels
+    const panelIds = req.panelIds.filter((id) => !running.has(generatingKey(req.projectId, id)))
+    counts.busy = req.panelIds.length - panelIds.length
+    if (panelIds.length === 0) return { counts }
+    const keys = panelIds.map((id) => generatingKey(req.projectId, id))
+    toggle('panels', keys, true)
+    try {
+      const missing = await runPage({ ...req, panelIds })
+      counts.done = panelIds.length - missing.length
+      counts.failed = missing.length
+      return missing.length > 0
+        ? { counts, error: new Error('生成中にコマが消えました') }
+        : { counts }
+    } catch (error) {
+      if (req.signal.aborted) {
+        counts.canceled = panelIds.length
+        return { counts }
+      }
+      counts.failed = panelIds.length
+      return { counts, error }
+    } finally {
+      toggle('panels', keys, false)
+    }
+  }
+
+  const batchTargets = (project: Project, pageIds: readonly ID[], includeGenerated: boolean) =>
+    pageIds.flatMap((pageId) => {
+      const panelIds = (findPage(project, pageId)?.page.panels ?? [])
+        .filter((panel) => includeGenerated || panel.artId === undefined)
+        .map((panel) => panel.id)
+      return panelIds.length > 0 ? [{ pageId, panelIds }] : []
+    })
 
   return {
     generating,
@@ -360,30 +509,35 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       const errors: unknown[] = []
       try {
         const targets = batchTargets(store.get(), pageIds, includeGenerated)
-        await runPool(targets, batchConcurrency, async ({ pageId, panelId }) => {
+        await runPool(targets, batchConcurrency, async ({ pageId, panelIds }) => {
           const { signal } = controller
           if (signal.aborted) {
-            counts.canceled++
+            counts.canceled += panelIds.length
             return
           }
           if (!(await library.isOpen(projectId, store))) {
             controller.abort()
-            counts.canceled++
+            counts.canceled += panelIds.length
             errors.push(new Error('生成中にプロジェクトが削除されました'))
             return
           }
-          const { outcome, error } = await attempt({ store, projectId, pageId, panelId, signal })
-          counts[outcome]++
-          if (outcome === 'failed') errors.push(error)
+          const page = await attemptPage({ store, projectId, pageId, panelIds, signal })
+          for (const outcome of Object.keys(counts) as GenerateOutcome[]) {
+            counts[outcome] += page.counts[outcome]
+          }
+          if (page.error !== undefined) errors.push(page.error)
         })
       } finally {
         batchControllers.delete(key)
         toggle('batches', key, false)
       }
-      if (errors.length > 0)
-        notify(`コマ ${errors.length} 件の生成に失敗しました: ${errorMessage(errors[0])}`, {
-          signIn: errors.some(needsSignIn),
-        })
+      if (errors.length > 0) {
+        const summary =
+          counts.failed > 0
+            ? `コマ ${counts.failed} 件の生成に失敗しました`
+            : '一括生成を止めました'
+        notify(`${summary}: ${errorMessage(errors[0])}`, { signIn: errors.some(needsSignIn) })
+      }
       return counts
     },
     cancel(projectId, scope) {
@@ -408,9 +562,11 @@ if (import.meta.vitest) {
   const panelId = panel.id
   const NOW = '2026-10-16T00:00:00.000Z'
 
+  /** 渡さなかった生成は Fake のもの */
   const setup = (
-    imageProvider: Pick<ImageProvider, 'generatePanelArt'> = createFakeImageProvider(),
+    overrides: Partial<Pick<ImageProvider, 'generatePanelArt' | 'generatePageArt'>> = {},
   ) => {
+    const imageProvider = { ...createFakeImageProvider(), ...overrides }
     const storage = createMemoryStorage()
     const library = createProjectLibrary(storage)
     const store = createProjectStore(sample, { saveProject: async () => {} })
@@ -661,6 +817,189 @@ if (import.meta.vitest) {
       expect(notify).toHaveBeenCalledWith(expect.stringContaining('コマが消えました'), {
         signIn: false,
       })
+    })
+  })
+
+  describe('generateAll', () => {
+    const pagePanels = (store: ProjectStore) => store.get().episodes[0]?.pages[0]?.panels ?? []
+
+    /** generatePageArt と generatePanelArt の呼び出しを数え、受けた要求を残す */
+    const counting = () => {
+      const fake = createFakeImageProvider()
+      const seen: PageArtRequest[] = []
+      const calls = { page: 0, panel: 0 }
+      const provider = {
+        async generatePageArt(req: PageArtRequest) {
+          calls.page++
+          seen.push(req)
+          return fake.generatePageArt(req)
+        },
+        async generatePanelArt(req: PanelArtRequest) {
+          calls.panel++
+          return fake.generatePanelArt(req)
+        },
+      }
+      return { provider, seen, calls }
+    }
+
+    const all = (store: ProjectStore, includeGenerated = false) => ({
+      store,
+      projectId: sample.id,
+      scope: `page/${pageId}`,
+      pageIds: [pageId],
+      includeGenerated,
+    })
+
+    test('generates the page in one call and puts a crop of it in every panel in one undo step', async () => {
+      const { provider, calls } = counting()
+      const { generation, store, library, notify } = setup(provider)
+      expect(await generation.generateAll(all(store))).toEqual({
+        done: 6,
+        busy: 0,
+        failed: 0,
+        canceled: 0,
+      })
+      expect(calls).toEqual({ page: 1, panel: 0 })
+      const panels = pagePanels(store)
+      expect(panels.map((p) => p.arts.length)).toEqual([1, 1, 1, 1, 1, 1])
+      expect(new Set(panels.map((p) => p.arts[0]?.prompt)).size).toBe(1)
+      for (const p of panels) {
+        expect(p.artId).toBe(p.arts[0]?.id)
+        expect((await library.loadAsset(p.arts[0]?.ref ?? '')).type).toBe('image/png')
+      }
+      expect(notify).not.toHaveBeenCalled()
+
+      store.undo()
+      expect(pagePanels(store).every((p) => p.artId === undefined)).toBe(true)
+    })
+
+    test('without includeGenerated it fills only the panels without art, and skips a full page', async () => {
+      const { provider, calls } = counting()
+      const { generation, store, generate } = setup(provider)
+      await generate()
+      expect(await generation.generateAll(all(store))).toMatchObject({ done: 5 })
+      expect(pagePanels(store).map((p) => p.arts.length)).toEqual([1, 1, 1, 1, 1, 1])
+      expect(calls).toEqual({ page: 1, panel: 1 })
+
+      expect(await generation.generateAll(all(store))).toMatchObject({ done: 0 })
+      expect(calls.page).toBe(1)
+
+      expect(await generation.generateAll(all(store, true))).toMatchObject({ done: 6 })
+      expect(pagePanels(store).map((p) => p.arts.length)).toEqual([2, 2, 2, 2, 2, 2])
+    })
+
+    test('a panel being generated on its own is busy and gets no crop', async () => {
+      let release = () => {}
+      const fake = createFakeImageProvider()
+      const { generation, store, generate } = setup({
+        async generatePanelArt(req) {
+          await new Promise<void>((resolve) => {
+            release = resolve
+          })
+          return fake.generatePanelArt(req)
+        },
+      })
+      const single = generate()
+      expect(await generation.generateAll(all(store))).toMatchObject({ done: 5, busy: 1 })
+      expect(pagePanels(store).find((p) => p.id === panelId)?.arts).toHaveLength(0)
+      release()
+      expect(await single).toBe('done')
+      expect(pagePanels(store).find((p) => p.id === panelId)?.arts).toHaveLength(1)
+    })
+
+    test('sends the reference images of the page cast, most frequent first, and hints per panel', async () => {
+      const { provider, seen } = counting()
+      const { generation, store, library } = setup(provider)
+      const ref = await library.putAsset(sample.id, new Blob(['ref'], { type: 'image/png' }))
+      const once = { id: 'chr_once', name: '一度', shortName: '一', referenceRef: ref }
+      const often = { id: 'chr_often', name: '何度も', shortName: '何', referenceRef: ref }
+      const castOf = (i: number) => (i === 0 ? [once.id] : i < 4 ? [often.id] : [])
+      store.applyPatch([
+        { op: 'add', path: '/characters/-', value: once },
+        { op: 'add', path: '/characters/-', value: often },
+        { op: 'add', path: '/episodes/0/pages/0/cast', value: [once.id] },
+        ...pagePanels(store).flatMap((_, i) =>
+          castOf(i).length > 0
+            ? [
+                {
+                  op: 'add' as const,
+                  path: `/episodes/0/pages/0/panels/${i}/cast`,
+                  value: castOf(i),
+                },
+              ]
+            : [],
+        ),
+      ])
+      generation.setUseHint(sample.id, panelId, false)
+      await generation.generateAll(all(store))
+      expect(seen[0]?.characterRefs?.map((r) => r.characterId)).toEqual([often.id, once.id])
+      expect(seen[0]?.hints).toBeDefined()
+      expect(seen[0]?.hints).not.toHaveProperty(panelId)
+      expect(Object.keys(seen[0]?.hints ?? {}).length).toBeGreaterThan(0)
+    })
+
+    test('a page failure notifies once with the number of panels and leaves the project untouched', async () => {
+      const { generation, store, notify } = setup({
+        generatePageArt: async () => {
+          throw new Error('quota exceeded')
+        },
+      })
+      const before = store.get()
+      expect(await generation.generateAll(all(store))).toMatchObject({ failed: 6, done: 0 })
+      expect(store.get()).toBe(before)
+      expect(notify).toHaveBeenCalledTimes(1)
+      expect(notify).toHaveBeenCalledWith('コマ 6 件の生成に失敗しました: quota exceeded', {
+        signIn: false,
+      })
+    })
+
+    test('a panel removed while the page is generated is counted as failed, the rest get art', async () => {
+      let release = () => {}
+      let started = () => {}
+      const called = new Promise<void>((resolve) => {
+        started = resolve
+      })
+      const fake = createFakeImageProvider()
+      const { generation, store, notify } = setup({
+        async generatePageArt(req) {
+          started()
+          await new Promise<void>((resolve) => {
+            release = resolve
+          })
+          return fake.generatePageArt(req)
+        },
+      })
+      const pending = generation.generateAll(all(store))
+      await called
+      store.applyPatch([{ op: 'remove', path: '/episodes/0/pages/0/panels/0' }])
+      release()
+      expect(await pending).toMatchObject({ done: 5, failed: 1 })
+      expect(pagePanels(store).map((p) => p.arts.length)).toEqual([1, 1, 1, 1, 1])
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining('コマが消えました'), {
+        signIn: false,
+      })
+    })
+
+    test('cancel drops the page reply without a patch', async () => {
+      let started = () => {}
+      const called = new Promise<void>((resolve) => {
+        started = resolve
+      })
+      const { generation, store, notify } = setup({
+        generatePageArt: () => {
+          started()
+          return new Promise(() => {})
+        },
+      })
+      const pending = generation.generateAll(all(store))
+      await called
+      generation.cancel(sample.id, `page/${pageId}`)
+      expect(await pending).toMatchObject({ canceled: 6, done: 0 })
+      expect(pagePanels(store).every((p) => p.arts.length === 0)).toBe(true)
+      expect(notify).not.toHaveBeenCalled()
+      expect(batchRunning(generation.generating.getState(), sample.id, `page/${pageId}`)).toBe(
+        false,
+      )
     })
   })
 

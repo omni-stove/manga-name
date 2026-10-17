@@ -1,4 +1,4 @@
-import type { PanelArtRequest } from '@manga/ai'
+import type { PageArtRequest, PanelArtRequest } from '@manga/ai'
 import { fixtures, type Page } from '@manga/schema'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createGeminiImageProvider } from '../src/gemini-image-provider'
@@ -214,6 +214,71 @@ describe('response', () => {
       'gemini responded 429: quota exceeded',
     )
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('generatePageArt', () => {
+  const pageRequest = (overrides: Partial<PageArtRequest> = {}): PageArtRequest => ({
+    project: { settings, characters },
+    page,
+    layoutPng: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }),
+    ...overrides,
+  })
+
+  test('sends the layout, the reference, named character refs and the page prompt', async () => {
+    const blob = (byte: number) => new Blob([new Uint8Array([byte])], { type: 'image/png' })
+    const res = await provider.generatePageArt(
+      pageRequest({
+        referencePng: blob(10),
+        characterRefs: [{ characterId: 'chr_e', image: blob(20) }],
+      }),
+    )
+    expect(sentBody().contents[0]?.parts).toEqual([
+      { inlineData: { mimeType: 'image/png', data: b64(new Uint8Array([1, 2, 3])) } },
+      { inlineData: { mimeType: 'image/png', data: b64(new Uint8Array([10])) } },
+      { text: 'E' },
+      { inlineData: { mimeType: 'image/png', data: b64(new Uint8Array([20])) } },
+      { text: res.prompt },
+    ])
+    expect(res.prompt).toContain('panel 1 (')
+    expect(res.prompt.endsWith(`\navoid: ${settings.style.negative}`)).toBe(true)
+  })
+
+  test.each([
+    [{ w: 182, h: 257 }, '3:4'],
+    [{ w: 257, h: 182 }, '4:3'],
+    [{ w: 100, h: 100 }, '1:1'],
+  ])('aspect ratio for page %o is %s', async (pageSize, expected) => {
+    await provider.generatePageArt(
+      pageRequest({
+        project: { settings: { ...settings, pageSize: { ...pageSize, unit: 'mm' } }, characters },
+      }),
+    )
+    expect(sentBody().generationConfig.imageConfig).toEqual({
+      imageSize: '1K',
+      aspectRatio: expected,
+    })
+  })
+
+  test('sends at most 4 character refs, skipping unknown characters', async () => {
+    const cast = Array.from({ length: 6 }, (_, i) => ({
+      id: `c${i}`,
+      name: `N${i}`,
+      shortName: `${i}`,
+    }))
+    await provider.generatePageArt(
+      pageRequest({
+        project: { settings, characters: cast },
+        characterRefs: [
+          { characterId: 'missing', image: new Blob([new Uint8Array([9])]) },
+          ...cast.map((c) => ({ characterId: c.id, image: new Blob([new Uint8Array([1])]) })),
+        ],
+      }),
+    )
+    const names = (sentBody().contents[0]?.parts ?? [])
+      .slice(1, -1)
+      .flatMap((p) => (p.text ? [p.text] : []))
+    expect(names).toEqual(['N0', 'N1', 'N2', 'N3'])
   })
 })
 
