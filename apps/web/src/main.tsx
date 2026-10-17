@@ -13,6 +13,7 @@ import { createAuthClient } from './auth'
 import { createDesktopTokenStore } from './desktop/desktop-store'
 import { createPanelGeneration } from './generate-panel'
 import { createImageProvider, readApiBaseUrl } from './image-provider'
+import { createLlmProvider } from './llm-provider'
 import { createProjectLibrary } from './project-library'
 import { createAppRouter } from './router'
 import { createSharingClient } from './sharing'
@@ -66,8 +67,9 @@ const library = createProjectLibrary(storage, {
   }),
 })
 const imageProvider = createImageProvider({ baseUrl, getToken: auth.getToken })
+const llmProvider = createLlmProvider({ baseUrl, getToken: auth.getToken })
 const generation = createPanelGeneration({ library, imageProvider })
-const router = createAppRouter({ library, imageProvider, generation, sharing })
+const router = createAppRouter({ library, imageProvider, llmProvider, generation, sharing })
 // 一覧に並ぶクラウドだけのプロジェクトとロールはユーザーで変わるので、ログインとサインアウトで loader を読み直す
 // トークンの取り直しでも通知が来るが、同じユーザーなら読み直さない
 let userId = auth.getUser()?.id

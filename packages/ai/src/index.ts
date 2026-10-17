@@ -1,3 +1,4 @@
+export * from './critique-patch'
 export * from './fake-image-provider'
 export * from './fake-llm-provider'
 export * from './http-image-provider'

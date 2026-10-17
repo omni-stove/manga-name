@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router'
 import type { PanelGeneration } from './generate-panel'
 import type { ImageProvider } from './image-provider'
+import type { LlmProvider } from './llm-provider'
 import type { ProjectLibrary } from './project-library'
 import { RouteError } from './route-error'
 import { routeTree } from './routeTree.gen'
@@ -16,6 +17,8 @@ export interface RouterContext {
   library: ProjectLibrary
   /** 生成に使う ImageProvider。`createImageProvider()` で API の URL とログインから作る */
   imageProvider: ImageProvider
+  /** 「AI に相談」に使う LlmProvider。`createLlmProvider()` で imageProvider と同じく作る */
+  llmProvider: LlmProvider
   /** コマの生成と進行状況。画面を離れても生成が続くよう、ルーターより長く生きる */
   generation: PanelGeneration
   /** プロジェクトの参加者と招待 */
@@ -48,6 +51,7 @@ if (import.meta.vitest) {
   )
   const { createPanelGeneration } = await import('./generate-panel')
   const { createImageProvider } = await import('./image-provider')
+  const { createLlmProvider } = await import('./llm-provider')
   const { createProjectLibrary } = await import('./project-library')
   const { createSharingClient } = await import('./sharing')
   const { addPagePatch } = await import('./project-ops')
@@ -62,6 +66,7 @@ if (import.meta.vitest) {
       {
         library,
         imageProvider,
+        llmProvider: createLlmProvider({ baseUrl: '', getToken: async () => null }),
         generation: createPanelGeneration({ library, imageProvider }),
         sharing: createSharingClient({ baseUrl: '', fetch, cloudId: async () => null }),
       },
