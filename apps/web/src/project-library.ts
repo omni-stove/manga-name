@@ -127,6 +127,7 @@ export function createProjectLibrary(
     id: ID,
     project: Project,
     collab: CollaborationOptions,
+    role: ProjectRole,
   ): Promise<WebProjectStore> => {
     const doc = new Y.Doc()
     const saved = await collab.ydocs.load(id)
@@ -159,6 +160,8 @@ export function createProjectLibrary(
         saveProject: (p) => storage.saveProject(p.id === id ? p : { ...p, id }),
         debounceMs,
         now,
+        // commenter と viewer が版を書くと、サーバが拒否して接続を閉じるため
+        writeBackVersion: role === 'owner' || role === 'editor',
       })
       sessions.set(id, {
         sync: provider.state,
@@ -195,7 +198,7 @@ export function createProjectLibrary(
       const role = (await roleOf?.(id)) ?? 'owner'
       roles.set(id, role)
       if (collaboration) {
-        return restrictStore(await openCollaborative(id, project, collaboration), role)
+        return restrictStore(await openCollaborative(id, project, collaboration, role), role)
       }
       const store = createProjectStore(project, {
         saveProject: (p) => storage.saveProject(p),

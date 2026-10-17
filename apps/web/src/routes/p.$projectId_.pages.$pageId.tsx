@@ -8,7 +8,6 @@ import {
 } from '@manga/editor-canvas'
 import {
   BubbleInspector,
-  CharacterInspector,
   FOCUS_KINDS,
   FocusInspector,
   IssueList,
@@ -17,17 +16,18 @@ import {
   ProjectSettingsInspector,
   VectorInspector,
 } from '@manga/inspector'
-import type {
-  Character,
-  Episode,
-  FocusKind,
-  ID,
-  Issue,
-  Page,
-  PageDiagnosis,
-  Panel,
-  Patch,
-  Project,
+import {
+  type Character,
+  type Episode,
+  type FocusKind,
+  type ID,
+  type Issue,
+  type Page,
+  type PageDiagnosis,
+  type Panel,
+  type Patch,
+  type Project,
+  panelCharacterIds,
 } from '@manga/schema'
 import { Button, Checkbox, SegmentedControl, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
@@ -40,10 +40,10 @@ import { CritiquePanel } from '../critique-panel'
 import { ExportDialog, type ExportSettings } from '../export-dialog'
 import { exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
+import { REFERENCE_ACCEPT, useFilePicker } from '../file-picker'
 import { generatingPanels, usesHint, usesReference } from '../generate-panel'
 import {
   bubblePatch,
-  characterPatch,
   findBubble,
   findFocus,
   findPanel,
@@ -54,7 +54,6 @@ import {
   settingsInspectorPatch,
   vectorPatch,
 } from '../inspector-ops'
-import type { ProjectLibrary } from '../project-library'
 import { findPage, pagePatch } from '../project-ops'
 import { firstFile, referencePatch, toReferenceImage } from '../reference-image'
 import { errorMessage } from '../route-error'
@@ -128,7 +127,6 @@ interface HintToggle {
   set(panelId: ID, use: boolean): void
 }
 
-const REFERENCE_ACCEPT = 'image/png,image/jpeg,application/pdf'
 /** 書き出しダイアログが開いているか。`{ done, total }` は書き出し中で、描き終えたページ数と対象のページ数 */
 type Exporting = 'closed' | 'dialog' | { done: number; total: number }
 
@@ -429,27 +427,7 @@ function Editor() {
               {referencePicker.input}
               <BatchOptions batch={pageBatch} />
             </details>
-            <details>
-              <summary>キャラクター（{project.characters.length}）</summary>
-              {project.characters.length === 0 && (
-                <Typography tone="muted">
-                  <Link to="/p/$projectId/characters" params={{ projectId }}>
-                    キャラクター一覧
-                  </Link>
-                  で追加できます
-                </Typography>
-              )}
-              {project.characters.map((character) => (
-                <CharacterPane
-                  key={character.id}
-                  character={character}
-                  projectId={projectId}
-                  library={library}
-                  apply={apply}
-                  resolveAsset={resolveAsset}
-                />
-              ))}
-            </details>
+            <PageCast page={page} characters={project.characters} projectId={projectId} />
             <details>
               <summary>プロジェクト設定</summary>
               <ProjectSettingsInspector
@@ -699,26 +677,6 @@ function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply:
   )
 }
 
-/** 非表示のファイル入力と、そのダイアログを開く関数。`input` は画面のどこかに置く */
-function useFilePicker(accept: string, onPick: (file: File) => void) {
-  const ref = useRef<HTMLInputElement>(null)
-  const input = (
-    <input
-      ref={ref}
-      type="file"
-      accept={accept}
-      hidden
-      onChange={(e) => {
-        const file = e.target.files?.[0]
-        // 同じファイルを選び直しても change が出るように空にする
-        e.target.value = ''
-        if (file) onPick(file)
-      }}
-    />
-  )
-  return { open: () => ref.current?.click(), input }
-}
-
 /**
  * クリップボードのファイルを onFile に渡す。文字入力欄への貼り付けとファイルを含まない貼り付けには触らない
  */
@@ -745,51 +703,46 @@ function useReferencePaste(onFile: (file: File) => void) {
   }, [])
 }
 
-/** CharacterInspector に、参照画像を選ぶファイルダイアログと putAsset を付ける。読み込みはページの参考画像と同じ経路 */
-function CharacterPane({
-  character,
+/**
+ * このページの登場キャラ。コマごとの登場キャラを集めて、何コマに出るかと参照画像の有無を並べる。
+ * キャラ設定と参照画像の編集はキャラクター一覧に置く
+ */
+function PageCast({
+  page,
+  characters,
   projectId,
-  library,
-  apply,
-  resolveAsset,
 }: {
-  character: Character
+  page: Page
+  characters: readonly Character[]
   projectId: ID
-  library: ProjectLibrary
-  apply: Apply
-  resolveAsset(ref: string): Promise<string>
 }) {
-  const [pickError, setPickError] = useState<string>()
-  const picker = useFilePicker(REFERENCE_ACCEPT, (file) => {
-    toReferenceImage(file)
-      .then((blob) => library.putAsset(projectId, blob, `reference-${character.id}`))
-      .then(
-        (ref) => {
-          setPickError(undefined)
-          apply('参照画像を差し替え', (p) =>
-            characterPatch(p, character.id, [{ op: 'add', path: '/referenceRef', value: ref }]),
-          )
-        },
-        (err) => setPickError(errorMessage(err)),
-      )
-  })
+  const ids = page.panels.flatMap(panelCharacterIds)
+  const cast = characters.filter((c) => ids.includes(c.id))
   return (
-    <>
-      <CharacterInspector
-        character={character}
-        onChange={(patch) =>
-          apply('キャラクターを編集', (p) => characterPatch(p, character.id, patch))
-        }
-        onPickReference={picker.open}
-        resolveAsset={resolveAsset}
-      />
-      {pickError && (
-        <Typography tone="alert" role="alert">
-          {pickError}
-        </Typography>
+    <details data-section="page-cast">
+      <summary>このページの登場キャラ（{cast.length}）</summary>
+      {cast.length === 0 ? (
+        <Typography tone="muted">コマのインスペクタで登場キャラを追加できます</Typography>
+      ) : (
+        <YStack as="ul" gap={2} className={styles.pageCast}>
+          {cast.map((c) => (
+            <XStack as="li" key={c.id} gap={6} data-cast-id={c.id}>
+              <b>{c.name}</b>
+              <Typography as="small" variant="caption" tone="muted">
+                {ids.filter((id) => id === c.id).length} コマ
+                {c.referenceRef === undefined && '・参照画像なし'}
+              </Typography>
+            </XStack>
+          ))}
+        </YStack>
       )}
-      {picker.input}
-    </>
+      <Typography tone="muted">
+        <Link to="/p/$projectId/characters" params={{ projectId }}>
+          キャラクター一覧
+        </Link>
+        で設定と参照画像を編集できます
+      </Typography>
+    </details>
   )
 }
 

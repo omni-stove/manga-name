@@ -26,7 +26,7 @@ interface Rect  { x: number; y: number; w: number; h: number }
 type ReadingDirection = 'rtl' | 'ltr';   // rtl = 右綴じ縦書き（既定）
 
 interface Project {
-  schemaVersion: 1;
+  schemaVersion: 2;
   id: ID;
   title: string;
   createdAt: ISODate;
@@ -83,8 +83,13 @@ interface Panel {
   id: ID;
   /** 読み順。1 始まり。ページ内で一意 */
   order: number;
-  /** ページ座標 */
+  /** ページ座標。shape があればその輪郭を囲む矩形 */
   rect: Rect;
+  /**
+   * コマの輪郭。rect に対するコマ内座標の頂点列（3 点以上）。斜めに割ったコマや台形、三角形を表す。
+   * 省略時は rect そのもの。絵は rect に cover で置き、輪郭の外を切る
+   */
+  shape?: Point[];
   bubbles: Bubble[];
   /** 演出指示。芝居、時間、感情など自由記述。生成プロンプトの主成分 */
   note?: string;
@@ -98,6 +103,8 @@ interface Panel {
   vectors: Vector[];
   /** 視線経路の上書き。省略時は centre sweep（y = 0.5） */
   sweep?: Sweep;
+  /** 登場キャラ（Character.id）。台詞も焦点も無いキャラを生成に渡すために持つ。話者と焦点のキャラは書かなくても登場キャラに数える */
+  cast?: ID[];
 }
 
 interface Bubble {

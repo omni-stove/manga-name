@@ -12,6 +12,7 @@ import {
   type Patch,
   type Project,
   type ProjectSettings,
+  panelCharacterIds,
   type ReferenceImage,
 } from '@manga/schema'
 import { createStore, type StoreApi } from 'zustand/vanilla'
@@ -121,13 +122,9 @@ export interface PanelGenerationDeps {
   cropReference?: typeof cropReference
 }
 
-/** コマに登場するキャラ。フキダシの speakerId と焦点の characterId を登場順に、重複なく集める */
+/** コマに登場するキャラ。順は panelCharacterIds */
 function panelCharacters(panel: Panel, characters: readonly Character[]): Character[] {
-  const ids = [
-    ...panel.bubbles.map((b) => b.speakerId),
-    ...panel.focusPoints.map((f) => f.characterId),
-  ].filter((id): id is ID => id !== undefined)
-  return [...new Set(ids)].flatMap((id) => characters.filter((c) => c.id === id))
+  return panelCharacterIds(panel).flatMap((id) => characters.filter((c) => c.id === id))
 }
 
 /** コマの実寸の縦横比で、長辺を `longSide` にしたときの幅 */
@@ -551,6 +548,27 @@ if (import.meta.vitest) {
       store.applyPatch([{ op: 'add', path: `/characters/${index}/referenceRef`, value: ref }])
       await generate()
       expect(seen[0]?.characterRefs?.map((r) => r.characterId)).toEqual([characterId])
+    })
+
+    test('sends the reference image of a character who is only in the cast', async () => {
+      const seen: PanelArtRequest[] = []
+      const fake = createFakeImageProvider()
+      const { generate, library, store } = setup({
+        generatePanelArt(req) {
+          seen.push(req)
+          return fake.generatePanelArt(req)
+        },
+      })
+      const ref = await library.putAsset(sample.id, new Blob(['ref'], { type: 'image/png' }))
+      const extra = { id: 'chr_extra', name: '通行人', shortName: '通', referenceRef: ref }
+      store.applyPatch([
+        { op: 'add', path: '/characters/-', value: extra },
+        ...panelPatch(store.get(), pageId, panelId, [
+          { op: 'add', path: '/cast', value: [extra.id] },
+        ]),
+      ])
+      await generate()
+      expect(seen[0]?.characterRefs?.map((r) => r.characterId)).toEqual([extra.id])
     })
 
     test('sends the panel hint unless the panel opts out of it', async () => {

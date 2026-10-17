@@ -8,6 +8,12 @@ export interface PxRect {
   h: number
 }
 
+/** px 単位の点 */
+export interface PxPoint {
+  x: number
+  y: number
+}
+
 const MM_PER_INCH = 25.4
 
 /** 出力ページの px サイズ。width 指定時は pageSize のアスペクト比を保ってその幅にする */

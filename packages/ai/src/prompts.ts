@@ -7,6 +7,7 @@ import {
   type PageDiagnosis,
   type Panel,
   type Point,
+  panelCharacterIds,
   StrengthSchema,
   VectorKindSchema,
 } from '@manga/schema'
@@ -49,14 +50,9 @@ function endpointLabel(panel: Panel, focusId: ID | undefined, pos: Point): strin
   return formatPoint(pos)
 }
 
-/** コマに登場するキャラ。bubbles の speakerId と focusPoints の characterId を登場順に集める */
+/** コマに登場するキャラ。順は panelCharacterIds */
 function panelCharacters(panel: Panel, characters: Character[]): Character[] {
-  const ids = [
-    ...panel.bubbles.map((b) => b.speakerId),
-    ...panel.focusPoints.map((f) => f.characterId),
-  ].filter((id): id is ID => id !== undefined)
-  const unique = [...new Set(ids)]
-  return unique.flatMap((id) => characters.filter((c) => c.id === id))
+  return panelCharacterIds(panel).flatMap((id) => characters.filter((c) => c.id === id))
 }
 
 /**
@@ -119,8 +115,9 @@ function proposeLayout(req: LayoutProposalRequest): LlmPrompt {
     `- ${readingOrder}`,
     '- Copy each line of dialogue from the script into bubbles[].text as written, in its original language. Use shape "narration" for narration, "thought" for inner voice, "shout" for shouting, and "normal" otherwise.',
     '- Set bubbles[].speakerId to the id of the speaking character from the character list. Omit it for narration or when the speaker is unknown.',
+    '- Set cast to the ids of every character from the character list who is visible in the panel, including those who do not speak. Omit it when no listed character is visible.',
     '- Put the stage directions of the script into the panel note, in the original language. Set camera to the shot you infer, such as ロング, ミドル, アップ, アオリ, 俯瞰.',
-    '- arts and scribbles are empty arrays. Omit artId, sweep, and reference.',
+    '- arts and scribbles are empty arrays. Omit artId, sweep, shape, and reference.',
     '- rationale briefly explains how the script was split into pages and panels.',
     'JSON Schema:',
     JSON.stringify(schema),
@@ -234,7 +231,7 @@ function critique(req: CritiqueRequest): LlmPrompt {
     `- Give at most ${MAX_SUGGESTIONS} suggestions, most effective first. Each suggestion is one fix described by message and applied by patch.`,
     '- patch is a JSON Patch (RFC 6902) whose paths start at the page, for example /panels/3/focusPoints/1/pos. Indexes are the array indexes given in brackets, not panel order.',
     '- Only these operations are allowed: replace the pos of a focus point (/panels/<i>/focusPoints/<j>/pos), replace the pos of a bubble (/panels/<i>/bubbles/<j>/pos), and add a vector (/panels/<i>/vectors/-).',
-    '- Never change panel rect, panel order, or anything else. Never remove anything.',
+    '- Never change panel rect, panel shape, panel order, or anything else. Never remove anything.',
     '- Coordinates are between 0 and 1, relative to the panel, with the origin at the top left.',
     '- A new vector has a new unique id that starts with "vc_ai_". Its sourceFocusId and targetFocusId, when set, are ids of focus points or bubbles of the same panel.',
     '- Prefer fixes that turn "miss" and "weak" focus points into "ok", that is, move them closer to the sweep path or add a strong vector toward them.',
