@@ -184,7 +184,11 @@ export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: numb
     if (e.defaultPrevented || e.button !== 0 || e.isPrimary === false) return
     if (gesture.current !== null) return
     capture(e.currentTarget, e.pointerId)
-    gesture.current = { kind: 'press', pointerId: e.pointerId, from: { x: e.clientX, y: e.clientY } }
+    gesture.current = {
+      kind: 'press',
+      pointerId: e.pointerId,
+      from: { x: e.clientX, y: e.clientY },
+    }
   }
 
   return { view, base, spaceHeld, panning, handlers, panFromPress }
