@@ -40,10 +40,9 @@ function Playground() {
   const onChange = (patch: Patch) => setLog((l) => [JSON.stringify(patch), ...l].slice(0, 30))
   const panels = page.panels.map(withArts)
   const panel = view.kind === 'panel' ? panels.find((p) => p.id === view.id) : undefined
-  const bubble =
-    view.kind === 'bubble'
-      ? panels.flatMap((p) => p.bubbles).find((b) => b.id === view.id)
-      : undefined
+  const bubblePanel =
+    view.kind === 'bubble' ? panels.find((p) => p.bubbles.some((b) => b.id === view.id)) : undefined
+  const bubble = bubblePanel?.bubbles.find((b) => view.kind === 'bubble' && b.id === view.id)
 
   return (
     <div className="playground">
@@ -84,8 +83,13 @@ function Playground() {
             resolveAsset={resolveAsset}
           />
         )}
-        {bubble && (
-          <BubbleInspector bubble={bubble} characters={project.characters} onChange={onChange} />
+        {bubble && bubblePanel && (
+          <BubbleInspector
+            bubble={bubble}
+            characters={project.characters}
+            frame={{ panel: bubblePanel, pageSize: project.settings.pageSize }}
+            onChange={onChange}
+          />
         )}
         {view.kind === 'page' && (
           <PageInspector

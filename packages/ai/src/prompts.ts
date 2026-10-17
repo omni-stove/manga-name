@@ -117,7 +117,7 @@ function proposeLayout(req: LayoutProposalRequest): LlmPrompt {
     '- Set bubbles[].speakerId to the id of the speaking character from the character list. Omit it for narration or when the speaker is unknown.',
     '- Set cast to the ids of every character from the character list who is visible in the panel, including those who do not speak. Omit it when no listed character is visible.',
     '- Put the stage directions of the script into the panel note, in the original language. Set camera to the shot you infer, such as ロング, ミドル, アップ, アオリ, 俯瞰.',
-    '- arts and scribbles are empty arrays. Omit artId, sweep, shape, and reference.',
+    '- arts and scribbles are empty arrays. Omit artId, sweep, shape, reference, and bubbles[].overflow.',
     '- rationale briefly explains how the script was split into pages and panels.',
     'JSON Schema:',
     JSON.stringify(schema),
