@@ -95,12 +95,17 @@ const SCRIBBLE_TOOLS: readonly { value: ScribbleTool; label: string }[] = [
   { value: 'eraser', label: '消しゴム' },
 ]
 
+// 診断の経路はコマ単位の centre sweep で、読者の目が実際に追うコマ内の顔などを見ていないので、
+// 読み順 OK や miss は評価として当てにならない。LLM に評価させるのも費用に見合わない。
+// そのため診断レイヤー、読み順と焦点の集計、診断の問題、AI に相談を出さない。生成プロンプトのヒントは残す
+const GAZE_EVALUATION = false
+
 const LAYERS: readonly { key: keyof Layers; label: string }[] = [
   { key: 'reference', label: '参考' },
   { key: 'art', label: '絵' },
   { key: 'scribble', label: '手描き' },
   { key: 'hints', label: 'ヒント' },
-  { key: 'diagnosis', label: '診断' },
+  ...(GAZE_EVALUATION ? [{ key: 'diagnosis' as const, label: '診断' }] : []),
 ]
 
 const ALL_LAYERS: Layers = {
@@ -108,7 +113,7 @@ const ALL_LAYERS: Layers = {
   art: true,
   scribble: true,
   hints: true,
-  diagnosis: true,
+  diagnosis: GAZE_EVALUATION,
 }
 
 type Apply = (label: string, build: (project: Project) => Patch) => boolean
@@ -399,7 +404,7 @@ function Editor() {
               <summary>ページ</summary>
               <PageInspector
                 page={page}
-                diagnosis={diagnosis ?? undefined}
+                diagnosis={GAZE_EVALUATION ? (diagnosis ?? undefined) : undefined}
                 generating={
                   pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
                 }
@@ -441,7 +446,7 @@ function Editor() {
               />
             </details>
           </fieldset>
-          {diagnosis && (
+          {GAZE_EVALUATION && diagnosis && (
             <details open data-section="issues">
               <summary>診断の問題（{diagnosis.issues.length}）</summary>
               <IssueList
@@ -621,9 +626,13 @@ function SelectionInspector({
         key={selection.id}
         focus={found.focus}
         characters={characters}
-        diagnosis={diagnosis?.panels
-          .find((d) => d.panelId === found.panel.id)
-          ?.focus.find((f) => f.focusPointId === selection.id)}
+        diagnosis={
+          GAZE_EVALUATION
+            ? diagnosis?.panels
+                .find((d) => d.panelId === found.panel.id)
+                ?.focus.find((f) => f.focusPointId === selection.id)
+            : undefined
+        }
         onChange={(patch) => apply('焦点を編集', (p) => focusPatch(p, pageId, selection.id, patch))}
       />
     )
