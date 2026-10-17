@@ -2,7 +2,9 @@ name: CI
 
 # 共通 ci.yml の lint ジョブは依存の install を伴うが、Biome は standalone バイナリで動くので、lint は
 # checkout と Biome だけの自前ジョブにする (run-lint: false)。typecheck と knip は node_modules が要るので
-# test ジョブに置く。ci-gate.yml を呼ぶジョブ名は、必須チェック名 "ci / CI Gate" を保つため ci にする。
+# typecheck ジョブに置く。ci-gate.yml を呼ぶジョブ名は、必須チェック名 "ci / CI Gate" を保つため ci にする。
+# 必須チェックを毎回報告させるため、変更のない PR を on.paths で外さず、changes の結果で各ジョブを
+# skipped にする（CI Gate は skipped を失敗にしない）。
 
 on:
   push:
@@ -30,7 +32,73 @@ jobs:
       review-provider: "claude"
     secrets: inherit
 
+  # push では前回の push との差分を取る手間に見合わないので、全部走らせる
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      lint: ${{ github.event_name != 'pull_request' || steps.exclude.outputs.lint == 'true' }}
+      typecheck: ${{ github.event_name != 'pull_request' || steps.exclude.outputs.typecheck == 'true' }}
+      test: ${{ github.event_name != 'pull_request' || steps.exclude.outputs.test == 'true' || steps.include.outputs.workflow == 'true' }}
+      test-workers: ${{ github.event_name != 'pull_request' || steps.include.outputs.test-workers == 'true' || steps.include.outputs.workflow == 'true' }}
+    steps:
+      # predicate-quantifier は step 内の全フィルターに効くので、除外で書くものと列挙で書くものを分ける
+      - uses: dorny/paths-filter@v3
+        id: exclude
+        if: github.event_name == 'pull_request'
+        with:
+          # 否定パターンを除外として効かせるため、ファイルが全パターンに合うときだけ数える
+          predicate-quantifier: every
+          # lint: Biome が見ないファイル（biome.json の files.includes で外したものと、扱わない拡張子）
+          # typecheck: tsc も knip も読まないファイル（knip は .github/workflows の run: からバイナリを拾う）
+          # test: typecheck の除外に加え、vitest と vite build が読まない .github/ と、ルートの vitest が外している workers/
+          filters: |
+            lint:
+              - "!docs/**"
+              - "!**/*.md"
+              - "!**/*.rs"
+              - "!**/*.toml"
+              - "!**/*.png"
+              - "!**/*.sh"
+              - "!Makefile"
+              - "!pnpm-lock.yaml"
+            typecheck: &typecheck
+              - "!**/*.md"
+              - "!apps/desktop/src-tauri/**"
+              - "!.claude/**"
+              - "!.agents/**"
+              - "!.mise/**"
+              - "!mise.toml"
+              - "!Makefile"
+            test:
+              - *typecheck
+              - "!.github/**"
+              - "!workers/**"
+
+      # test-workers: workers/api と、それが import するパッケージ（packages/schema と packages/ai は docs/fixtures を読む）
+      - uses: dorny/paths-filter@v3
+        id: include
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            test-workers:
+              - "workers/**"
+              - "packages/schema/**"
+              - "packages/ai/**"
+              - "packages/diagnosis/**"
+              - "docs/fixtures/**"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - "tsconfig.base.json"
+            workflow:
+              - ".github/workflows/ci.yml"
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.lint == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -56,9 +124,11 @@ jobs:
           curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint"
 
-  test:
+  typecheck:
+    needs: changes
+    if: needs.changes.outputs.typecheck == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -75,17 +145,30 @@ jobs:
       - name: Knip
         run: pnpm --silent knip
 
+  test:
+    needs: changes
+    if: needs.changes.outputs.test == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
       - name: Test
-        run: pnpm exec vitest run --coverage && pnpm --filter "./workers/*" test --coverage
+        run: pnpm exec vitest run --coverage
 
       - name: Upload coverage
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: |
-            coverage/
-            workers/*/coverage/
+          path: coverage/
           retention-days: 14
 
       - name: Bundle size
@@ -97,8 +180,34 @@ jobs:
           git status --porcelain
           test -z "$(git status --porcelain)"
 
+  test-workers:
+    needs: changes
+    if: needs.changes.outputs.test-workers == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
+      - name: Test
+        run: pnpm --filter "./workers/*" test --coverage
+
+      - name: Upload coverage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-workers
+          path: workers/*/coverage/
+          retention-days: 14
+
   ci:
-    needs: [checks, lint, test]
+    needs: [checks, changes, lint, typecheck, test, test-workers]
     if: always()
     uses: omni-stove/.github/.github/workflows/ci-gate.yml@main
     permissions:
