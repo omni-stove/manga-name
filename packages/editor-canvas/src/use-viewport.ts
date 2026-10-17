@@ -6,11 +6,13 @@ import {
   useRef,
   useState,
 } from 'react'
+import { CLICK_SLOP } from './use-selection'
 import { type ClientBox, fitView, panBy, pinchView, type View, wheelFactor, zoomAt } from './view'
 
 type Pos = { x: number; y: number }
 
 type Gesture =
+  | { kind: 'press'; pointerId: number; from: Pos }
   | { kind: 'pan'; pointerId: number; last: Pos }
   | { kind: 'pinch'; ids: [number, number]; from: [Pos, Pos]; start: View }
 
@@ -35,6 +37,7 @@ function boxOf(el: Element): ClientBox {
 /**
  * ズームとパン。ホイール（トラックパッドのピンチを含む）でカーソル位置を中心にズーム、
  * 2 本指のタッチでピンチズームとパン、Space を押しながらのドラッグと中ボタンドラッグでパンする。
+ * `panFromPress` を呼んだ押下も、CLICK_SLOP を超えて動いたらパンにする。動かずに離せばクリックのまま。
  * Space はカーソルがキャンバス上にあるか、キャンバスにフォーカスがあるときだけ奪う。
  * ページの大きさが変わったら全体表示に戻す
  */
@@ -103,7 +106,7 @@ export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: numb
     pointers.current.delete(e.pointerId)
     const g = gesture.current
     if (!g) return
-    const ended = g.kind === 'pan' ? g.pointerId === e.pointerId : g.ids.includes(e.pointerId)
+    const ended = g.kind === 'pinch' ? g.ids.includes(e.pointerId) : g.pointerId === e.pointerId
     if (!ended) return
     gesture.current = null
     setPanning(false)
@@ -122,7 +125,8 @@ export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: numb
         pointers.current.set(e.pointerId, pos)
         capture(e.currentTarget, e.pointerId)
         const touches = [...pointers.current.entries()]
-        if (touches.length === 2 && gesture.current === null) {
+        // 1 本指で何も無いところを押してからのパンは、2 本目が来たらピンチに譲る
+        if (touches.length === 2 && gesture.current?.kind !== 'pinch') {
           const [a, b] = touches as [[number, Pos], [number, Pos]]
           gesture.current = {
             kind: 'pinch',
@@ -144,8 +148,15 @@ export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: numb
     onPointerMove: (e: ReactPointerEvent<SVGSVGElement>) => {
       const pos = { x: e.clientX, y: e.clientY }
       if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, pos)
-      const g = gesture.current
+      let g = gesture.current
       if (!g) return
+      if (g.kind === 'press') {
+        if (g.pointerId !== e.pointerId) return
+        if (Math.hypot(pos.x - g.from.x, pos.y - g.from.y) <= CLICK_SLOP) return
+        g = { kind: 'pan', pointerId: g.pointerId, last: g.from }
+        gesture.current = g
+        setPanning(true)
+      }
       const box = boxOf(e.currentTarget)
       if (g.kind === 'pan') {
         if (g.pointerId !== e.pointerId) return
@@ -165,5 +176,16 @@ export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: numb
     onPointerCancel: endPointer,
   }
 
-  return { view, base, spaceHeld, panning, handlers }
+  /**
+   * 左ボタン（タッチは 1 本目の指）の押下を、動いたらパンになる押下として預かる。
+   * ほかの操作が受けた押下（preventDefault 済み）やジェスチャーの最中は何もしない
+   */
+  const panFromPress = (e: ReactPointerEvent<SVGSVGElement>) => {
+    if (e.defaultPrevented || e.button !== 0 || e.isPrimary === false) return
+    if (gesture.current !== null) return
+    capture(e.currentTarget, e.pointerId)
+    gesture.current = { kind: 'press', pointerId: e.pointerId, from: { x: e.clientX, y: e.clientY } }
+  }
+
+  return { view, base, spaceHeld, panning, handlers, panFromPress }
 }

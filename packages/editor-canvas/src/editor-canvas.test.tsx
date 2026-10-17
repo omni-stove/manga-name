@@ -806,6 +806,39 @@ describe('zoom and pan', () => {
     expect([w, h]).toEqual([base.w, base.h])
   })
 
+  test('a drag from where nothing is pans, except with the panel tool', async () => {
+    const onSelect = vi.fn()
+    const svg = await render({ onSelect, selection: { kind: 'panel', id: 'pn_2' } })
+    layout(svg)
+    // pn_2 と pn_3 の隙間と、作業台。clientAt は全体表示での位置なので隙間を先に引く
+    for (const from of [clientAt(0.49, 0.4), { x: 4, y: 4 }]) {
+      const [x0, y0] = viewBox(svg) as [number, number]
+      drag(svg, from, { x: from.x + 40, y: from.y + 20 })
+      const [x, y] = viewBox(svg) as [number, number]
+      expect(x).toBeCloseTo(x0 - 20)
+      expect(y).toBeCloseTo(y0 - 10)
+    }
+    expect(onSelect).not.toHaveBeenCalled()
+
+    const onChange = vi.fn()
+    const panelTool = await render({ tool: 'panel', onChange })
+    layout(panelTool)
+    drag(panelTool, clientAt(0.49, 0.4), clientAt(0.6, 0.45))
+    expect(viewBox(panelTool)).toEqual([base.x, base.y, base.w, base.h])
+  })
+
+  test('one finger from where nothing is pans, and a second finger turns it into a pinch', async () => {
+    const svg = await render()
+    layout(svg)
+    const touch = { pointerType: 'touch' }
+    fire(svg, pointer('pointerdown', { id: 1, x: 4, y: 4, ...touch }))
+    fire(svg, pointer('pointermove', { id: 1, x: 24, y: 4, ...touch }))
+    expect(viewBox(svg)[0]).toBeCloseTo(base.x - 10)
+    fire(svg, pointer('pointerdown', { id: 2, x: 124, y: 4, ...touch }))
+    fire(svg, pointer('pointermove', { id: 2, x: 224, y: 4, ...touch }))
+    expect(svg.getAttribute('data-zoom')).toBe('2.000')
+  })
+
   test('Space is left alone while typing in a text field', async () => {
     const svg = await render()
     fire(svg, pointer('pointerover', { id: 1, x: 100, y: 100 }))

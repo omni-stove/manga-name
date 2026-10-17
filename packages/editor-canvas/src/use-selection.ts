@@ -127,5 +127,5 @@ export function useSelection(opts: Options) {
     },
   }
 
-  return { hovered, handlers }
+  return { hovered, hitAt, handlers }
 }
