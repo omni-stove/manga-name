@@ -44,21 +44,19 @@ function PageList() {
           {error}
         </Typography>
       )}
-      {project.episodes.map((episode) => (
+      {/* 新しいプロジェクトにはエピソードが無いが、最初のページを足すと 1 話目ができるので、その場所を先に見せる。
+          仮の話と 1 話目で key を揃えるのは、他の人が話を足したときに開いている下書きダイアログを作り直さないため */}
+      {(project.episodes.length === 0 ? [undefined] : project.episodes).map((episode, index) => (
         <EpisodeSection
-          key={episode.id}
+          key={index === 0 ? 'first' : episode?.id}
           episode={episode}
-          title={episode.title}
+          title={episode?.title ?? '第1話'}
           project={project}
           store={store}
           peers={peers}
           apply={apply}
         />
       ))}
-      {/* 新しいプロジェクトにはエピソードが無いが、最初のページを足すと 1 話目ができるので、その場所を先に見せる */}
-      {project.episodes.length === 0 && (
-        <EpisodeSection title="第1話" project={project} store={store} peers={peers} apply={apply} />
-      )}
     </YStack>
   )
 }
