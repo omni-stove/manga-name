@@ -1,23 +1,25 @@
 import { CritiqueResponseSchema, LayoutProposalResponseSchema } from '@manga/schema'
-import type { HttpProviderOptions } from './http-image-provider'
+import { type HttpProviderOptions, SignInRequiredError } from './http-image-provider'
 import type { LlmProvider } from './provider'
 
 /**
  * Workers のプロキシ `POST /v1/ai/propose-layout` と `POST /v1/ai/critique` に JSON を送る LlmProvider。
- * 応答は `@manga/schema` で検証して返す。トークン無し、HTTP エラー、検証に通らない応答は throw する。
+ * 応答は `@manga/schema` で検証して返す。トークン無しと 401 は SignInRequiredError、
+ * ほかの HTTP エラーと検証に通らない応答は Error を throw する。
  */
 export function createHttpLlmProvider(opts: HttpProviderOptions): LlmProvider {
   const baseUrl = opts.baseUrl.replace(/\/+$/, '')
 
   async function postJson(path: string, body: unknown): Promise<unknown> {
     const token = await opts.getToken()
-    if (token === null) throw new Error('access token is not set')
+    if (token === null) throw new SignInRequiredError()
 
     const res = await fetch(`${baseUrl}${path}`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
       body: JSON.stringify(body),
     })
+    if (res.status === 401) throw new SignInRequiredError()
     if (!res.ok) throw new Error(`${path} request failed: ${res.status}`)
     return res.json()
   }
@@ -64,9 +66,12 @@ if (import.meta.vitest) {
   test('proposeLayout throws without a token, on HTTP errors and on invalid JSON', async () => {
     await expect(
       createHttpLlmProvider({ baseUrl: 'x', getToken: async () => null }).proposeLayout(req),
-    ).rejects.toThrow('access token')
+    ).rejects.toBeInstanceOf(SignInRequiredError)
 
     const provider = createHttpLlmProvider({ baseUrl: 'x', getToken: async () => 't' })
+    vi.stubGlobal('fetch', async () => new Response('no', { status: 401 }))
+    await expect(provider.proposeLayout(req)).rejects.toBeInstanceOf(SignInRequiredError)
+
     vi.stubGlobal('fetch', async () => new Response('no', { status: 502 }))
     await expect(provider.proposeLayout(req)).rejects.toThrow('502')
 

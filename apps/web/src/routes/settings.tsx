@@ -1,6 +1,7 @@
-import { SegmentedControl, type ThemePreference, useThemePreference } from '@manga/ui'
+import { Button, SegmentedControl, type ThemePreference, useThemePreference } from '@manga/ui'
 import { createFileRoute } from '@tanstack/react-router'
 import common from '../common.module.css'
+import { SignInButton } from '../sign-in'
 import { useAuth } from '../use-auth'
 
 export const Route = createFileRoute('/settings')({ component: AppSettings })
@@ -13,7 +14,7 @@ const THEMES: readonly { value: ThemePreference; label: string }[] = [
 
 function AppSettings() {
   const [theme, setTheme] = useThemePreference()
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   return (
     <section>
       <h1>アプリ設定</h1>
@@ -24,7 +25,21 @@ function AppSettings() {
         <dt>AI プロキシの URL</dt>
         <dd>未設定</dd>
         <dt>アカウント</dt>
-        <dd>{user ? `${user.name}（${user.email}）` : '未ログイン（ローカルモード）'}</dd>
+        <dd className={common.actions}>
+          {user ? (
+            <>
+              {`${user.name}（${user.email}）`}
+              <Button size="small" variant="ghost" onClick={() => void signOut()}>
+                サインアウト
+              </Button>
+            </>
+          ) : (
+            <>
+              未ログイン（ローカルモード）。AI の生成とクラウド保存にはログインが要ります
+              <SignInButton size="small" />
+            </>
+          )}
+        </dd>
         <dt>テーマ</dt>
         <dd>
           <SegmentedControl label="テーマ" value={theme} options={THEMES} onChange={setTheme} />

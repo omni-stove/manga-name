@@ -15,12 +15,13 @@ import type { LlmProvider } from './llm-provider'
 import { appendPagesPatch } from './project-ops'
 import { errorMessage } from './route-error'
 import styles from './script-draft-dialog.module.css'
+import { FailureAlert } from './sign-in'
 import type { ProjectStore } from './store/project-store'
 
 type Phase =
   | { kind: 'input' }
   | { kind: 'running' }
-  | { kind: 'failed'; message: string }
+  | { kind: 'failed'; error: unknown }
   | { kind: 'result'; pages: Page[]; rationale: string }
 
 const PREVIEW_LAYERS: Layers = {
@@ -90,7 +91,7 @@ export function ScriptDraftDialog({
     } catch (e) {
       // 中止とモーダルを閉じたときは、そちらの操作が画面を決める
       if (controller.signal.aborted) return
-      setPhase({ kind: 'failed', message: errorMessage(e) })
+      setPhase({ kind: 'failed', error: e })
     } finally {
       if (running.current === controller) running.current = null
     }
@@ -264,9 +265,7 @@ export function ScriptDraftDialog({
         </p>
       )}
       {phase.kind === 'failed' && (
-        <p className={common.error} role="alert">
-          提案を作れませんでした: {phase.message}
-        </p>
+        <FailureAlert failure="提案を作れませんでした" error={phase.error} />
       )}
     </Dialog>
   )
