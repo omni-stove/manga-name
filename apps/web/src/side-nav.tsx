@@ -7,13 +7,14 @@ import { useAuth } from './use-auth'
 import { useProject } from './use-project'
 
 /**
- * 画面の左に縦に並べるナビゲーション。プロジェクト一覧、開いているプロジェクトのページ・キャラクター・設定、
+ * 画面の左に縦に並べるナビゲーション。プロジェクト一覧、開いているプロジェクトのエピソード・キャラクター・設定、
  * アプリ設定とアカウントを並べる。既定はアイコンだけの細い帯に畳んでおき、上端のボタンで名前付きの幅に開く。
  * 開閉はブラウザに覚えておき、次に開いたときも同じ幅にする
  */
 export function SideNav() {
   const project = useMatch({ from: '/p/$projectId', shouldThrow: false })
   const editor = useMatch({ from: '/p/$projectId_/pages/$pageId', shouldThrow: false })
+  const episode = useMatch({ from: '/p/$projectId/episodes/$episodeId', shouldThrow: false })
   const opened = project ?? editor
   const [expanded, setExpanded] = useExpanded()
   const collapsed = !expanded
@@ -52,7 +53,7 @@ export function SideNav() {
           projectId={opened.params.projectId}
           store={opened.loaderData.store}
           collapsed={collapsed}
-          inEditor={editor !== undefined}
+          inEpisodes={editor !== undefined || episode !== undefined}
         />
       )}
       <YStack as="ul" gap={2} className={styles.footer}>
@@ -67,12 +68,12 @@ function ProjectItems({
   projectId,
   store,
   collapsed,
-  inEditor,
+  inEpisodes,
 }: {
   projectId: string
   store: WebProjectStore
   collapsed: boolean
-  inEditor: boolean
+  inEpisodes: boolean
 }) {
   const project = useProject(store)
   return (
@@ -85,10 +86,10 @@ function ProjectItems({
       <NavItem
         to="/p/$projectId"
         params={{ projectId }}
-        // エディタはページ一覧の下の階層なので、エディタにいる間はページを選ばれた状態にする
-        activeOptions={{ exact: !inEditor }}
+        // エピソードとエディタはエピソード一覧の下の階層なので、そこにいる間もエピソードを選ばれた状態にする
+        activeOptions={{ exact: !inEpisodes }}
         icon={<PagesIcon />}
-        label="ページ"
+        label="エピソード"
       />
       <NavItem
         to="/p/$projectId/characters"

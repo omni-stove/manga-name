@@ -5,7 +5,7 @@ const SCRIPT = ['結晶の森。E が奥へ歩いていく。', 'E「……こ�
 
 const pageLinks = (page: Page) => page.getByRole('link', { name: /\d+ ページ$/ })
 
-/** ページ一覧から「脚本から下書き」を開き、脚本を入れて Fake のページ割り（2 ページ）を受け取る */
+/** エピソードのページ一覧から「脚本から下書き」を開き、脚本を入れて Fake のページ割り（2 ページ）を受け取る */
 async function plan(page: Page) {
   await page.getByRole('button', { name: '脚本から下書き' }).click()
   const dialog = page.getByRole('dialog', { name: '脚本から下書き' })
@@ -78,5 +78,9 @@ test('スキーマを通らない提案はエラーを出し、追加させな�
   await dialog.getByRole('button', { name: '破棄' }).click()
   await expect(dialog).toBeHidden()
   await expect(pageLinks(page)).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled()
+  // 履歴に残るのは 1 話目の追加だけで、それを戻せば Undo するものは無い
+  const undo = page.getByRole('button', { name: 'Undo', exact: true })
+  await undo.click()
+  await expect(page.getByText('エピソードが見つかりません')).toBeVisible()
+  await expect(undo).toBeDisabled()
 })

@@ -1,9 +1,11 @@
 import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 import {
+  FIXTURE_EPISODE,
   FIXTURE_PROJECT,
   importProject,
   inspector,
+  openEpisode,
   openPage,
   panelInspector,
   selectPanel,
@@ -24,7 +26,8 @@ test('キャラクター一覧で参照画像を付けたキャラを、台詞�
   await card.locator('..').locator('input[type="file"]').setInputFiles(REFERENCE)
   await expect(card.getByRole('img', { name: '通行人 の参照画像' })).toBeVisible()
 
-  await page.getByRole('link', { name: 'ページ', exact: true }).click()
+  await page.getByRole('link', { name: 'エピソード', exact: true }).click()
+  await openEpisode(page, FIXTURE_EPISODE)
   await openPage(page, 1)
   await selectPanel(page, 2)
   await panelInspector(page).getByLabel('登場キャラを追加').selectOption({ label: '通行人' })

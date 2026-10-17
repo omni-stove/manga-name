@@ -4,6 +4,7 @@ import {
   clickInsidePanel,
   createProject,
   inspector,
+  openEpisode,
   openPage,
   panelInspector,
   selectPanel,
@@ -50,7 +51,7 @@ test('ログインしてクラウドに保存し、別のブラウザで開く�
   await signIn(b)
   await b.getByRole('navigation').getByRole('link', { name: 'プロジェクト一覧' }).click()
   await b.getByRole('link', { name: title }).click()
-  await expect(b.getByText('エピソード', { exact: true })).toBeVisible()
+  await openEpisode(b, '第1話')
   await openPage(b, 1)
   await expect(inspector(b).getByRole('button', { name: 'フキダシ 1 こんにちは' })).toBeVisible()
   // 生成画像は r2: の ref で届き、API から読んで描く
