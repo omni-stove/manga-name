@@ -118,7 +118,8 @@ if (import.meta.vitest) {
   const episode = fixture.episodes[0]
   const emptyPage = episode?.pages[0]
   if (!episode || !emptyPage) throw new Error('fixture にページがない')
-  const artDir = new URL('../../../docs/fixtures/art/', import.meta.url)
+  // base を import.meta.url のまま渡すと、このブロックが本番ビルドで消える前に Vite がディレクトリを資産として探して警告する
+  const artDir = new URL('../../../docs/fixtures/art/', String(import.meta.url))
   const opts: ExportJob['opts'] = { width: 364, notes: 'margin', panelNumbers: true, spread: false }
 
   const pageWithArts: Page = {

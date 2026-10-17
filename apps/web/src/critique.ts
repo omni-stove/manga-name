@@ -72,7 +72,7 @@ type PageSize = Pick<Size, 'w' | 'h'>
 function fitBubbleMoves(page: Page, patch: Patch, pageSize: PageSize): Patch {
   return patch.map((op) => {
     const pos = POS_PATH.exec(op.path)
-    if (!pos || pos[2] !== 'bubbles' || op.op !== 'replace') return op
+    if (pos?.[2] !== 'bubbles' || op.op !== 'replace') return op
     const panel = page.panels[Number(pos[1])]
     const bubble = panel?.bubbles[Number(pos[3])]
     const value = op.value as Partial<Point> | undefined

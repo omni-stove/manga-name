@@ -264,7 +264,8 @@ if (import.meta.vitest) {
   const episode = base.episodes[0]
   if (!episode) throw new Error('fixture has no episode')
   const template = episode.pages[0] as Page
-  const artDir = new URL('../../../docs/fixtures/art/', import.meta.url)
+  // base を import.meta.url のまま渡すと、このブロックが本番ビルドで消える前に Vite がディレクトリを資産として探して警告する
+  const artDir = new URL('../../../docs/fixtures/art/', String(import.meta.url))
 
   /** フィクスチャのページを n 枚に複製し、全コマに docs/fixtures/art の画像を採用させる */
   const projectOf = (n: number, direction = base.settings.direction): Project => ({

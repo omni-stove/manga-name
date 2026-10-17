@@ -1087,15 +1087,15 @@ describe('bubble tool', () => {
     const onSelect = vi.fn()
     const svg = await render({ tool: 'bubble', onChange, onSelect })
     layout(svg)
-    const to = inPanel('pn_3', 0.95, 0.25)
+    const to = inPanel('pn_3', 0.75, 0.25)
     drag(svg, inPanel('pn_3', 0.85, 0.25), to, { release: false })
     expect(svg.querySelector('[data-layer="bubble-tool"][data-draft="bb_3"]')).not.toBeNull()
     expect(onChange).not.toHaveBeenCalled()
     fire(svg, pointer('pointerup', { id: 1, ...to }))
     expect(svg.querySelector('[data-layer="bubble-tool"][data-draft]')).toBeNull()
     expect(patchOf(onChange)).toEqual([
-      { op: 'replace', path: '/panels/2/bubbles/0/pos', value: { x: 0.95, y: 0.25 } },
-      { op: 'replace', path: '/panels/2/bubbles/0/tail', value: { x: 0.74, y: 0.38 } },
+      { op: 'replace', path: '/panels/2/bubbles/0/pos', value: { x: 0.75, y: 0.25 } },
+      { op: 'replace', path: '/panels/2/bubbles/0/tail', value: { x: 0.54, y: 0.38 } },
     ])
     expect(onSelect).toHaveBeenCalledTimes(1)
     expect(onSelect).toHaveBeenCalledWith({ kind: 'bubble', id: 'bb_3' })

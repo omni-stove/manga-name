@@ -96,7 +96,8 @@ if (import.meta.vitest) {
 
   const project = fixtures.samplePage01
   const emptyPage = project.episodes[0]?.pages[0] as Page
-  const artDir = new URL('../../../docs/fixtures/art/', import.meta.url)
+  // base を import.meta.url のまま渡すと、このブロックが本番ビルドで消える前に Vite がディレクトリを資産として探して警告する
+  const artDir = new URL('../../../docs/fixtures/art/', String(import.meta.url))
 
   const noAssets: RenderContext = {
     settings: project.settings,

@@ -1,6 +1,6 @@
 name: Rust
 
-# Desktop のビルド（desktop.yml）は apps/web の変更でも走るが、Rust の lint は src-tauri の変更でしか結果が変わらない
+# Rust の lint は src-tauri の変更でしか結果が変わらないので、それ以外の PR では Tauri のコンパイルを待たせない
 on:
   push:
     branches: [main]
