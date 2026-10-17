@@ -27,14 +27,14 @@ export async function createProject(page: Page, title: string): Promise<void> {
   await page.goto('/')
   await page.getByLabel('タイトル').fill(title)
   await page.getByRole('button', { name: '新規作成' }).click()
-  await expect(page.getByText('ページ一覧', { exact: true })).toBeVisible()
+  await expect(page.getByText('エピソード', { exact: true })).toBeVisible()
 }
 
 /** 一覧のファイル選択からプロジェクト JSON を読み込み、ページ一覧に移る */
 export async function importProject(page: Page, file: string): Promise<void> {
   await page.goto('/')
   await page.locator('input[type="file"]').setInputFiles(file)
-  await expect(page.getByText('ページ一覧', { exact: true })).toBeVisible()
+  await expect(page.getByText('エピソード', { exact: true })).toBeVisible()
 }
 
 /** ページ一覧から n ページ目のエディタを開く */

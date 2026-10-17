@@ -19,7 +19,7 @@ test('起動してファイルを開き、コマを生成して名前を付け�
   await web.waitFor("//*[normalize-space()='プロジェクト一覧']")
   await app.press('ctrl+o')
   await app.openFile(FIXTURE_PROJECT)
-  await web.waitFor("//*[normalize-space()='ページ一覧']")
+  await web.waitFor("//*[normalize-space()='エピソード']")
 
   await web.click("//a[.//strong[normalize-space()='1 ページ']]")
   await web.click(
