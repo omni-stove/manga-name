@@ -70,20 +70,50 @@ async function imagePart(blob: Blob): Promise<Part> {
   }
 }
 
+/** キャラの参照画像の比。全身を縦に収める */
+const CHARACTER_ASPECT_RATIO = '3:4'
+
+/** negative は Gemini に専用の欄が無いので「avoid: 」としてプロンプトの末尾に足す */
+const withNegative = ({ prompt, negative }: { prompt: string; negative: string }) =>
+  negative ? `${prompt}\navoid: ${negative}` : prompt
+
 /**
  * Gemini `gemini-nano-banana-2.1` の generateContent で 1K の画像を 1 枚生成する ImageProvider。
- * parts は配置図、参照画像、キャラ参照（直前のテキスト part にキャラ名）、前回の絵、プロンプトの順。
- * negative は Gemini に専用の欄が無いので「avoid: 」としてプロンプトの末尾に足し、足した後の文を prompt として返す。
+ * コマの parts は配置図、参照画像、キャラ参照（直前のテキスト part にキャラ名）、前回の絵、プロンプトの順。
+ * キャラの参照画像の parts はプロンプトだけで、比は 3:4。
+ * negative は「avoid: 」としてプロンプトの末尾に足し、足した後の文を prompt として返す。
  * 応答の画像が PNG でなければ toPng で変換する。画像が無ければ空の Blob を返し、PNG かどうかの判定と再試行は呼び出し側に任せる。HTTP エラーは throw する。
  */
 export function createGeminiImageProvider(opts: GeminiImageProviderOptions): ImageProvider {
+  const generate = async (parts: Part[], aspectRatio: string, prompt: string) => {
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': opts.apiKey },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts }],
+        generationConfig: {
+          responseModalities: ['IMAGE'],
+          imageConfig: { imageSize: '1K', aspectRatio },
+        },
+      }),
+    })
+    if (!res.ok) throw new Error(`gemini responded ${res.status}: ${await res.text()}`)
+    const body: GenerateContentResponse = await res.json()
+    const inline = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData
+    if (!inline?.data) {
+      return { image: new Blob([], { type: 'image/png' }), provider: GEMINI_IMAGE_MODEL, prompt }
+    }
+    const mimeType = inline.mimeType ?? 'image/png'
+    const raw = new Blob([decodeBase64(inline.data)], { type: mimeType })
+    const image = mimeType === 'image/png' ? raw : await opts.toPng(raw)
+    return { image, provider: GEMINI_IMAGE_MODEL, prompt }
+  }
+
   return {
     async generatePanelArt(req) {
-      const { prompt: base, negative } = prompts.panelArt({
-        ...req,
-        instruction: req.previous?.instruction,
-      })
-      const prompt = negative ? `${base}\navoid: ${negative}` : base
+      const prompt = withNegative(
+        prompts.panelArt({ ...req, instruction: req.previous?.instruction }),
+      )
       const panel = findPanel(req.page, req.panelId)
 
       const parts: Part[] = [await imagePart(req.layoutPng)]
@@ -95,33 +125,11 @@ export function createGeminiImageProvider(opts: GeminiImageProviderOptions): Ima
       }
       if (req.previous) parts.push(await imagePart(req.previous.art))
       parts.push({ text: prompt })
-
-      const res = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': opts.apiKey },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts }],
-          generationConfig: {
-            responseModalities: ['IMAGE'],
-            imageConfig: {
-              imageSize: '1K',
-              aspectRatio: aspectRatio(panel, req.project.settings),
-            },
-          },
-        }),
-      })
-      if (!res.ok) throw new Error(`gemini responded ${res.status}: ${await res.text()}`)
-      const body: GenerateContentResponse = await res.json()
-      const inline = body.candidates?.[0]?.content?.parts?.find(
-        (p) => p.inlineData?.data,
-      )?.inlineData
-      if (!inline?.data) {
-        return { image: new Blob([], { type: 'image/png' }), provider: GEMINI_IMAGE_MODEL, prompt }
-      }
-      const mimeType = inline.mimeType ?? 'image/png'
-      const raw = new Blob([decodeBase64(inline.data)], { type: mimeType })
-      const image = mimeType === 'image/png' ? raw : await opts.toPng(raw)
-      return { image, provider: GEMINI_IMAGE_MODEL, prompt }
+      return generate(parts, aspectRatio(panel, req.project.settings), prompt)
+    },
+    async generateCharacterArt(req) {
+      const prompt = withNegative(prompts.characterArt(req))
+      return generate([{ text: prompt }], CHARACTER_ASPECT_RATIO, prompt)
     },
   }
 }

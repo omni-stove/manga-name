@@ -3,6 +3,13 @@ import type { Page, Patch, ProjectSettings, Rect } from '@manga/schema'
 /** 参考画像を保存するときの長辺の上限（px）。大きな画像でキャンバス操作が重くならないよう読み込み時に縮める */
 const REFERENCE_MAX_SIDE = 2048
 
+/**
+ * キャラの参照画像の長辺の上限（px）と JPEG の品質。コマを生成するたびに登場キャラの分だけ送るので、
+ * 見た目が伝わる範囲でページの参考画像より小さくする
+ */
+const CHARACTER_MAX_SIDE = 1024
+const CHARACTER_JPEG_QUALITY = 0.85
+
 type ReferenceFormat = 'png' | 'jpeg' | 'pdf'
 
 /** 描ける画像。`draw` は (0, 0) から width × height に引き伸ばして描く */
@@ -18,7 +25,14 @@ export interface ReferenceCodec {
   decodeImage(blob: Blob): Promise<Raster>
   /** 1 ページ目を長辺 maxSide px で描く */
   rasterizePdf(blob: Blob, maxSide: number): Promise<Raster>
-  encode(raster: Raster, width: number, height: number, type: string): Promise<Blob>
+  /** quality は JPEG のときだけ効く */
+  encode(
+    raster: Raster,
+    width: number,
+    height: number,
+    type: string,
+    quality: number,
+  ): Promise<Blob>
 }
 
 /**
@@ -47,6 +61,19 @@ function fitLongSide(
   }
 }
 
+/** 形式を判定して描ける画像にする。PDF は 1 ページ目を長辺 maxSide で描く。対応外の形式は throw する */
+async function decodeReference(
+  blob: Blob,
+  codec: ReferenceCodec,
+  maxSide: number,
+): Promise<{ format: ReferenceFormat; raster: Raster }> {
+  const format = await sniffFormat(blob)
+  if (format === null) throw new Error('PNG、JPEG、PDF のいずれかを選んでください')
+  const raster =
+    format === 'pdf' ? await codec.rasterizePdf(blob, maxSide) : await codec.decodeImage(blob)
+  return { format, raster }
+}
+
 /**
  * PNG / JPEG / PDF を保存用の画像にする。PDF は 1 ページ目を PNG に、長辺が
  * REFERENCE_MAX_SIDE を超える画像は縮めて同じ形式にする。収まっている PNG / JPEG はそのまま返す。
@@ -56,19 +83,34 @@ export async function toReferenceImage(
   blob: Blob,
   codec: ReferenceCodec = browserCodec,
 ): Promise<Blob> {
-  const format = await sniffFormat(blob)
-  if (format === null) throw new Error('PNG、JPEG、PDF のいずれかを選んでください')
-  const raster =
-    format === 'pdf'
-      ? await codec.rasterizePdf(blob, REFERENCE_MAX_SIDE)
-      : await codec.decodeImage(blob)
+  const { format, raster } = await decodeReference(blob, codec, REFERENCE_MAX_SIDE)
   try {
     const size = fitLongSide(raster.width, raster.height)
     const type = format === 'jpeg' ? 'image/jpeg' : 'image/png'
     if (format !== 'pdf' && size.width === raster.width && size.height === raster.height) {
       return new Blob([blob], { type })
     }
-    return await codec.encode(raster, size.width, size.height, type)
+    return await codec.encode(raster, size.width, size.height, type, 0.92)
+  } finally {
+    raster.close?.()
+  }
+}
+
+/**
+ * PNG / JPEG / PDF をキャラの参照画像として保存する JPEG にする。長辺を CHARACTER_MAX_SIDE 以下に縮め、
+ * 透過は白で埋める。収まっている JPEG はそのまま返す。対応外の形式は throw する
+ */
+export async function toCharacterImage(
+  blob: Blob,
+  codec: ReferenceCodec = browserCodec,
+): Promise<Blob> {
+  const { format, raster } = await decodeReference(blob, codec, CHARACTER_MAX_SIDE)
+  try {
+    const size = fitLongSide(raster.width, raster.height, CHARACTER_MAX_SIDE)
+    if (format === 'jpeg' && size.width === raster.width && size.height === raster.height) {
+      return new Blob([blob], { type: 'image/jpeg' })
+    }
+    return await codec.encode(raster, size.width, size.height, 'image/jpeg', CHARACTER_JPEG_QUALITY)
   } finally {
     raster.close?.()
   }
@@ -140,7 +182,7 @@ export async function cropReference(
         ctx.restore()
       },
     }
-    return await codec.encode(cropped, width, height, 'image/png')
+    return await codec.encode(cropped, width, height, 'image/png', 1)
   } finally {
     raster.close?.()
   }
@@ -200,14 +242,19 @@ const browserCodec: ReferenceCodec = {
       void task.destroy()
     }
   },
-  async encode(raster, width, height, type) {
+  async encode(raster, width, height, type, quality) {
     const { canvas, ctx } = canvasOf(width, height)
+    if (type === 'image/jpeg') {
+      // JPEG は透過を持てず、透明な画素が黒になるので先に白で塗る
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, width, height)
+    }
     raster.draw(ctx, width, height)
     return new Promise((resolve, reject) =>
       canvas.toBlob(
         (b) => (b ? resolve(b) : reject(new Error('画像を書き出せませんでした'))),
         type,
-        0.92,
+        quality,
       ),
     )
   },
@@ -229,7 +276,11 @@ if (import.meta.vitest) {
 
   /** デコード結果の寸法を決めておき、encode の呼び出しを記録する codec */
   function fakeCodec(image: { width: number; height: number }) {
-    const calls = { decode: 0, pdf: [] as number[], encode: [] as [number, number, string][] }
+    const calls = {
+      decode: 0,
+      pdf: [] as number[],
+      encode: [] as [number, number, string, number][],
+    }
     const raster = (w: number, h: number): Raster => ({ width: w, height: h, draw: () => {} })
     const codec: ReferenceCodec = {
       async decodeImage() {
@@ -241,8 +292,8 @@ if (import.meta.vitest) {
         const scale = maxSide / Math.max(image.width, image.height)
         return raster(Math.round(image.width * scale), Math.round(image.height * scale))
       },
-      async encode(_, width, height, type) {
-        calls.encode.push([width, height, type])
+      async encode(_, width, height, type, quality) {
+        calls.encode.push([width, height, type, quality])
         return new Blob([`${width}x${height}`], { type })
       },
     }
@@ -262,7 +313,7 @@ if (import.meta.vitest) {
     test('a JPEG is detected without a MIME type and keeps its format when shrunk', async () => {
       const { codec, calls } = fakeCodec({ width: 3000, height: 4000 })
       const out = await toReferenceImage(fileOf(JPEG), codec)
-      expect(calls.encode).toEqual([[1536, 2048, 'image/jpeg']])
+      expect(calls.encode).toEqual([[1536, 2048, 'image/jpeg', 0.92]])
       expect(out.type).toBe('image/jpeg')
     })
 
@@ -271,14 +322,14 @@ if (import.meta.vitest) {
       const out = await toReferenceImage(fileOf(PDF, 64, 'application/pdf'), codec)
       expect(calls.pdf).toEqual([2048])
       expect(calls.decode).toBe(0)
-      expect(calls.encode).toEqual([[1447, 2048, 'image/png']])
+      expect(calls.encode).toEqual([[1447, 2048, 'image/png', 0.92]])
       expect(out.type).toBe('image/png')
     })
 
     test('a 10MB image is shrunk to the long side 2048', async () => {
       const { codec, calls } = fakeCodec({ width: 8000, height: 6000 })
       await toReferenceImage(fileOf(PNG, 10 * 1024 * 1024), codec)
-      expect(calls.encode).toEqual([[2048, 1536, 'image/png']])
+      expect(calls.encode).toEqual([[2048, 1536, 'image/png', 0.92]])
     })
 
     test('other formats are refused', async () => {
@@ -289,6 +340,36 @@ if (import.meta.vitest) {
         'image/gif',
       )
       await expect(toReferenceImage(gif, codec)).rejects.toThrow('PNG、JPEG、PDF')
+    })
+  })
+
+  describe('toCharacterImage', () => {
+    test('a PNG is shrunk to the long side 1024 and stored as a JPEG', async () => {
+      const { codec, calls } = fakeCodec({ width: 1500, height: 2000 })
+      const out = await toCharacterImage(fileOf(PNG), codec)
+      expect(calls.encode).toEqual([[768, 1024, 'image/jpeg', 0.85]])
+      expect(out.type).toBe('image/jpeg')
+    })
+
+    test('a small PNG is still re-encoded as a JPEG', async () => {
+      const { codec, calls } = fakeCodec({ width: 384, height: 512 })
+      await toCharacterImage(fileOf(PNG), codec)
+      expect(calls.encode).toEqual([[384, 512, 'image/jpeg', 0.85]])
+    })
+
+    test('a JPEG within the limit is stored as is', async () => {
+      const { codec, calls } = fakeCodec({ width: 600, height: 800 })
+      const jpeg = fileOf(JPEG)
+      const out = await toCharacterImage(jpeg, codec)
+      expect(out.size).toBe(jpeg.size)
+      expect(calls.encode).toEqual([])
+    })
+
+    test('a PDF is rasterized with the long side 1024', async () => {
+      const { codec, calls } = fakeCodec({ width: 595, height: 842 })
+      await toCharacterImage(fileOf(PDF), codec)
+      expect(calls.pdf).toEqual([1024])
+      expect(calls.encode).toEqual([[724, 1024, 'image/jpeg', 0.85]])
     })
   })
 

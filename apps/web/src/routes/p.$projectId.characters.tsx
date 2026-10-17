@@ -1,13 +1,17 @@
 import { Button, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi } from '@tanstack/react-router'
+import { useState } from 'react'
 import { CharacterPane } from '../character-pane'
 import common from '../common.module.css'
+import { REFERENCE_ACCEPT } from '../file-picker'
 import {
   addCharacterPatch,
   type CharacterFields,
   characterUsage,
   removeCharacterPatch,
 } from '../project-ops'
+import { toCharacterImage } from '../reference-image'
+import { errorMessage } from '../route-error'
 import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
 import styles from './characters.module.css'
@@ -19,7 +23,7 @@ const projectRoute = getRouteApi('/p/$projectId')
 function CharacterList() {
   const { projectId } = Route.useParams()
   const { store } = projectRoute.useLoaderData()
-  const { library } = Route.useRouteContext()
+  const { library, imageProvider } = Route.useRouteContext()
   const project = useProject(store)
   const { apply, error } = useApplyPatch(store)
   const resolveAsset = useAssetResolver(library.resolveAsset)
@@ -39,8 +43,10 @@ function CharacterList() {
           <YStack as="li" gap={6} key={character.id} className={common.card}>
             <CharacterPane
               character={character}
+              settings={project.settings}
               projectId={projectId}
               library={library}
+              imageProvider={imageProvider}
               apply={apply}
               resolveAsset={resolveAsset}
             />
@@ -66,9 +72,15 @@ function CharacterList() {
         <Typography variant="subheading">キャラクターを追加</Typography>
         <div className={styles.add}>
           <AddCharacterForm
-            onSubmit={(fields) =>
-              apply('キャラクターを追加', () => addCharacterPatch(fields).patch)
-            }
+            onSubmit={async (fields, image) => {
+              const referenceRef =
+                image &&
+                (await library.putAsset(projectId, await toCharacterImage(image), 'reference'))
+              return apply(
+                'キャラクターを追加',
+                () => addCharacterPatch({ ...fields, referenceRef }).patch,
+              )
+            }}
           />
         </div>
       </YStack>
@@ -86,9 +98,11 @@ const FIELDS = [
 function AddCharacterForm({
   onSubmit,
 }: {
-  /** 反映できたら true */
-  onSubmit(fields: CharacterFields): boolean
+  /** 反映できたら true。参照画像を読めなければ reject する */
+  onSubmit(fields: CharacterFields, image: File | undefined): Promise<boolean>
 }) {
+  const [busy, setBusy] = useState(false)
+  const [imageError, setImageError] = useState<string>()
   return (
     <form
       className={styles.form}
@@ -97,19 +111,39 @@ function AddCharacterForm({
         const form = e.currentTarget
         const data = new FormData(form)
         const text = (key: string) => String(data.get(key) ?? '')
-        const ok = onSubmit({
-          name: text('name'),
-          shortName: text('shortName'),
-          appearance: text('appearance'),
-          note: text('note'),
-        })
-        if (ok) form.reset()
+        const image = data.get('reference')
+        setBusy(true)
+        onSubmit(
+          {
+            name: text('name'),
+            shortName: text('shortName'),
+            appearance: text('appearance'),
+            note: text('note'),
+          },
+          // 何も選ばないと空の File が入る
+          image instanceof File && image.size > 0 ? image : undefined,
+        )
+          .then(
+            (ok) => {
+              setImageError(undefined)
+              if (ok) form.reset()
+            },
+            (err) => setImageError(errorMessage(err)),
+          )
+          .finally(() => setBusy(false))
       }}
     >
       {FIELDS.map((field) => (
         <Input key={field.name} label={field.label} name={field.name} required={field.required} />
       ))}
-      <Button type="submit" size="small" variant="primary">
+      <Input
+        label="参照画像"
+        name="reference"
+        type="file"
+        accept={REFERENCE_ACCEPT}
+        error={imageError}
+      />
+      <Button type="submit" size="small" variant="primary" disabled={busy}>
         追加
       </Button>
     </form>

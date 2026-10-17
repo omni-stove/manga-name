@@ -125,9 +125,9 @@ export function movePagePatch(project: Project, pageId: ID, delta: number): Patc
 }
 
 export type CharacterFields = Pick<Character, 'name' | 'shortName'> &
-  Partial<Pick<Character, 'appearance' | 'note'>>
+  Partial<Pick<Character, 'appearance' | 'note' | 'referenceRef'>>
 
-const OPTIONAL_FIELDS = ['appearance', 'note'] as const
+const OPTIONAL_FIELDS = ['appearance', 'note', 'referenceRef'] as const
 
 /** 前後の空白を落とし、空の任意項目は持たない形にする */
 function normalize(fields: CharacterFields): CharacterFields {
@@ -303,10 +303,17 @@ if (import.meta.vitest) {
         shortName: '山',
         appearance: ' ',
         note: '主人公',
+        referenceRef: 'asset:a',
       })
       store.applyPatch(patch)
       expect(store.get().characters).toEqual([
-        { id: character.id, name: '山田', shortName: '山', note: '主人公' },
+        {
+          id: character.id,
+          name: '山田',
+          shortName: '山',
+          note: '主人公',
+          referenceRef: 'asset:a',
+        },
       ])
       expect(() => addCharacterPatch({ name: '', shortName: 'x' })).toThrow('名前')
       expect(() => addCharacterPatch({ name: 'x', shortName: ' ' })).toThrow('略称')

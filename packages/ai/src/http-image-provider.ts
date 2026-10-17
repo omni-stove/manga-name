@@ -21,18 +21,34 @@ export const PROVIDER_HEADER = 'x-ai-provider'
 export const PROMPT_HEADER = 'x-ai-prompt'
 
 /**
- * Workers のプロキシ `POST /v1/ai/panel-art` を叩く ImageProvider。
- * multipart は json（Blob を除いた PanelArtRequest）/ layout / reference / character_<id> / previous で組み立てる。
+ * Workers のプロキシ `POST /v1/ai/panel-art` と `POST /v1/ai/character-art` を叩く ImageProvider。
+ * panel-art の multipart は json（Blob を除いた PanelArtRequest）/ layout / reference / character_<id> / previous で組み立て、
+ * character-art は CharacterArtRequest を JSON で送る。
  * トークン無しと 401 は SignInRequiredError、ほかの HTTP エラーは Error を throw する。
  */
 export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvider {
-  const url = `${opts.baseUrl.replace(/\/+$/, '')}/v1/ai/panel-art`
+  const base = opts.baseUrl.replace(/\/+$/, '')
+
+  const post = async (path: string, init: { body: BodyInit; headers?: Record<string, string> }) => {
+    const token = await opts.getToken()
+    if (token === null) throw new SignInRequiredError()
+    const res = await fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: { ...init.headers, authorization: `Bearer ${token}` },
+      body: init.body,
+    })
+    if (res.status === 401) throw new SignInRequiredError()
+    if (!res.ok) throw new Error(`${path} request failed: ${res.status}`)
+    const encodedPrompt = res.headers.get(PROMPT_HEADER)
+    return {
+      image: new Blob([await res.arrayBuffer()], { type: 'image/png' }),
+      provider: res.headers.get(PROVIDER_HEADER) ?? 'http',
+      prompt: encodedPrompt ? decodeURIComponent(encodedPrompt) : undefined,
+    }
+  }
 
   return {
     async generatePanelArt(req) {
-      const token = await opts.getToken()
-      if (token === null) throw new SignInRequiredError()
-
       const form = new FormData()
       form.set(
         'json',
@@ -51,23 +67,20 @@ export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvide
       }
       if (req.previous) form.set('previous', req.previous.art, 'previous.png')
 
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${token}` },
-        body: form,
-      })
-      if (res.status === 401) throw new SignInRequiredError()
-      if (!res.ok) throw new Error(`panel-art request failed: ${res.status}`)
-
-      const encodedPrompt = res.headers.get(PROMPT_HEADER)
+      const res = await post('/v1/ai/panel-art', { body: form })
       return {
-        image: new Blob([await res.arrayBuffer()], { type: 'image/png' }),
-        provider: res.headers.get(PROVIDER_HEADER) ?? 'http',
+        ...res,
         // ヘッダが無い旧版のプロキシでも PanelArt.prompt を埋められるよう、手元で組み立てて代える
-        prompt: encodedPrompt
-          ? decodeURIComponent(encodedPrompt)
-          : prompts.panelArt({ ...req, instruction: req.previous?.instruction }).prompt,
+        prompt:
+          res.prompt ?? prompts.panelArt({ ...req, instruction: req.previous?.instruction }).prompt,
       }
+    },
+    async generateCharacterArt(req) {
+      const res = await post('/v1/ai/character-art', {
+        body: JSON.stringify(req),
+        headers: { 'content-type': 'application/json' },
+      })
+      return { ...res, prompt: res.prompt ?? prompts.characterArt(req).prompt }
     },
   }
 }
@@ -124,6 +137,31 @@ if (import.meta.vitest) {
     expect(res.provider).toBe('real')
     expect(res.prompt).toBe('絵')
     expect(new Uint8Array(await res.image.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
+  })
+
+  test('generateCharacterArt posts the request as JSON with the bearer token', async () => {
+    const character = { id: 'c1', name: 'エル', shortName: 'L', appearance: '銀髪' }
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      expect(JSON.parse(init.body as string)).toEqual({
+        project: { settings: fixtures.samplePage01.settings },
+        character,
+      })
+      const headers = init.headers as Record<string, string>
+      expect(headers.authorization).toBe('Bearer tok')
+      expect(headers['content-type']).toBe('application/json')
+      return new Response(new Uint8Array([1]), { headers: { [PROVIDER_HEADER]: 'real' } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const characterReq = { project: { settings: fixtures.samplePage01.settings }, character }
+    const res = await createHttpImageProvider({
+      baseUrl: 'https://api.example',
+      getToken: async () => 'tok',
+    }).generateCharacterArt(characterReq)
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example/v1/ai/character-art')
+    expect(res.provider).toBe('real')
+    expect(res.prompt).toBe(prompts.characterArt(characterReq).prompt)
   })
 
   test('generatePanelArt throws without a token and on HTTP errors', async () => {

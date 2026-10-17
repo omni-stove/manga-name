@@ -360,6 +360,7 @@ describe('CharacterInspector', () => {
         character={character}
         onChange={onChange}
         onPickReference={() => {}}
+        onGenerateReference={() => {}}
         resolveAsset={resolveAsset}
       />,
     )
@@ -382,6 +383,7 @@ describe('CharacterInspector', () => {
         character={character}
         onChange={onChange}
         onPickReference={() => {}}
+        onGenerateReference={() => {}}
         resolveAsset={resolveAsset}
       />,
     )
@@ -396,22 +398,54 @@ describe('CharacterInspector', () => {
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/note', value: '口数が少ない' }])
   })
 
-  test('without a reference image shows なし and the pick button opens the picker', async () => {
+  test('without a reference image shows the default image, and the buttons pick or generate one', async () => {
     const onPickReference = vi.fn()
+    const onGenerateReference = vi.fn()
     const { container } = await render(
       <CharacterInspector
         character={character}
         onChange={() => {}}
         onPickReference={onPickReference}
+        onGenerateReference={onGenerateReference}
         resolveAsset={resolveAsset}
       />,
     )
     const group = must(container.querySelector('[role="group"][aria-label="参照画像"]'))
-    expect(group.textContent).toContain('なし')
+    expect(group.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('既定の画像')
     expect(group.querySelector('img')).toBeNull()
-    expect(container.querySelector('button')?.textContent).toBe('選ぶ')
-    await act(async () => buttonNamed(container, '選ぶ').click())
+    await act(async () => buttonNamed(container, '画像を選ぶ').click())
     expect(onPickReference).toHaveBeenCalledTimes(1)
+    await act(async () => buttonNamed(container, '外見から生成').click())
+    expect(onGenerateReference).toHaveBeenCalledTimes(1)
+  })
+
+  test('generating needs an appearance, and while generating the buttons are disabled', async () => {
+    const button = (container: HTMLElement, name: string) =>
+      buttonNamed(container, name) as HTMLButtonElement
+    const bare = await render(
+      <CharacterInspector
+        character={{ ...character, appearance: undefined }}
+        onChange={() => {}}
+        onPickReference={() => {}}
+        onGenerateReference={() => {}}
+        resolveAsset={resolveAsset}
+      />,
+    )
+    expect(button(bare.container, '外見から生成').disabled).toBe(true)
+    expect(button(bare.container, '画像を選ぶ').disabled).toBe(false)
+
+    const busy = await render(
+      <CharacterInspector
+        character={character}
+        generating
+        onChange={() => {}}
+        onPickReference={() => {}}
+        onGenerateReference={() => {}}
+        resolveAsset={resolveAsset}
+      />,
+    )
+    expect(button(busy.container, '生成中…').disabled).toBe(true)
+    expect(button(busy.container, '画像を選ぶ').disabled).toBe(true)
   })
 
   test('a reference image is shown resolved, and 外す removes referenceRef', async () => {
@@ -422,6 +456,7 @@ describe('CharacterInspector', () => {
         character={{ ...character, referenceRef: 'blob:ref_e' }}
         onChange={onChange}
         onPickReference={() => {}}
+        onGenerateReference={() => {}}
         resolveAsset={resolve}
       />,
     )
@@ -441,6 +476,7 @@ describe('CharacterInspector', () => {
         character={{ ...character, referenceRef: 'blob:gone' }}
         onChange={() => {}}
         onPickReference={() => {}}
+        onGenerateReference={() => {}}
         resolveAsset={() => Promise.reject(new Error('gone'))}
       />,
     )

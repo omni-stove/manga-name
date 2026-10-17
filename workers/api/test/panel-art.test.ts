@@ -92,6 +92,7 @@ describe('POST /v1/ai/panel-art', () => {
     const good = createFakeImageProvider()
     let calls = 0
     const flaky: ImageProvider = {
+      ...good,
       async generatePanelArt(req) {
         calls++
         if (calls === 1) return { image: new Blob([]), provider: 'flaky', prompt: 'p' }
@@ -107,6 +108,7 @@ describe('POST /v1/ai/panel-art', () => {
   test('502 after the retry still returns an invalid image', async () => {
     let calls = 0
     const broken: ImageProvider = {
+      ...createFakeImageProvider(),
       async generatePanelArt() {
         calls++
         return { image: new Blob(['not a png']), provider: 'broken', prompt: 'p' }
@@ -130,6 +132,7 @@ describe('POST /v1/ai/panel-art', () => {
     const fake = createFakeImageProvider()
     let calls = 0
     const counting: ImageProvider = {
+      ...fake,
       async generatePanelArt(req) {
         calls++
         return fake.generatePanelArt(req)
@@ -142,5 +145,51 @@ describe('POST /v1/ai/panel-art', () => {
     expect(statuses.filter((s) => s === 429)).toHaveLength(5)
     expect(calls).toBe(10)
     expect((await usageRows()).results).toHaveLength(10)
+  })
+})
+
+describe('POST /v1/ai/character-art', () => {
+  const character = { id: 'c1', name: 'エル', shortName: 'L', appearance: '銀髪' }
+  const request = (app: ReturnType<typeof createApp>, body: unknown) =>
+    app.request(
+      '/v1/ai/character-art',
+      {
+        method: 'POST',
+        headers: { [DEBUG_USER_HEADER]: 'alice', 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      env,
+    )
+
+  test('returns a PNG from the fake provider and records usage', async () => {
+    const res = await request(createApp(), { project: { settings }, character })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/png')
+    expect(decodeURIComponent(res.headers.get('x-ai-prompt') ?? '')).toContain('エル: 銀髪')
+    expect(isDecodablePng(new Uint8Array(await res.arrayBuffer()))).toBe(true)
+    expect((await usageRows()).results).toEqual([
+      { user_id: 'alice', kind: 'character-art', cost_units: 1 },
+    ])
+  })
+
+  test('400 without a character, and nothing is recorded', async () => {
+    const res = await request(createApp(), { project: { settings } })
+    expect(res.status).toBe(400)
+    expect((await usageRows()).results).toHaveLength(0)
+  })
+
+  test('502 after the retry still returns an invalid image', async () => {
+    const broken: ImageProvider = {
+      ...createFakeImageProvider(),
+      async generateCharacterArt() {
+        return { image: new Blob(['not a png']), provider: 'broken', prompt: 'p' }
+      },
+    }
+    const res = await request(createApp({ imageProvider: () => broken }), {
+      project: { settings },
+      character,
+    })
+    expect(res.status).toBe(502)
+    expect((await usageRows()).results[0]?.cost_units).toBe(2)
   })
 })
