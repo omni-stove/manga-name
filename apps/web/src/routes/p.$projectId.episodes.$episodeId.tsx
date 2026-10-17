@@ -20,7 +20,6 @@ import { RemoveEpisodeDialog } from '../remove-episode-dialog'
 import { ScriptDraftDialog } from '../script-draft-dialog'
 import type { ProjectStore } from '../store/project-store'
 import { useApplyPatch, useProject } from '../use-project'
-import { useUndoShortcuts } from '../use-undo-shortcuts'
 import styles from './pages.module.css'
 
 export const Route = createFileRoute('/p/$projectId/episodes/$episodeId')({
@@ -37,7 +36,6 @@ function EpisodePages() {
   const project = useProject(store)
   const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
-  useUndoShortcuts(store)
   const [template, setTemplate] = useState<PageTemplate>('3rows')
   const [drafting, setDrafting] = useState(false)
   const [removingEpisode, setRemovingEpisode] = useState(false)

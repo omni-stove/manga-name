@@ -138,3 +138,11 @@
   margin: var(--space-8) 0;
   padding: 0;
 }
+
+/* 部品の既定は幅いっぱいなので、ヘッダーの中では中身の幅に縮める */
+select.pageSelect {
+  width: auto;
+  min-height: var(--control-s);
+  padding-block: 0;
+  font-size: var(--text-s);
+}

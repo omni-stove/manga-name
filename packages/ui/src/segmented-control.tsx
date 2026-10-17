@@ -5,6 +5,8 @@ export interface SegmentedOption<T extends string> {
   value: T
   label: string
   disabled?: boolean
+  /** 選ぶキー。ラベルの横に出し、aria-keyshortcuts にする。キーを受けるのは使う側 */
+  shortcut?: string
 }
 
 interface SegmentedControlProps<T extends string> {
@@ -34,8 +36,14 @@ export function SegmentedControl<T extends string>({
             checked={o.value === value}
             disabled={o.disabled}
             onChange={() => onChange(o.value)}
+            aria-keyshortcuts={o.shortcut}
           />
-          {o.label}
+          <span>{o.label}</span>
+          {o.shortcut && (
+            <kbd className={styles.key} aria-hidden>
+              {o.shortcut.toUpperCase()}
+            </kbd>
+          )}
         </label>
       ))}
     </fieldset>

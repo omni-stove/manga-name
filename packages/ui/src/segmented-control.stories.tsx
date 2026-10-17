@@ -6,8 +6,8 @@ import { SegmentedControl, type SegmentedOption } from './segmented-control'
 type Mode = 'select' | 'panel' | 'balloon'
 
 const options: SegmentedOption<Mode>[] = [
-  { value: 'select', label: '選択' },
-  { value: 'panel', label: 'コマ' },
+  { value: 'select', label: '選択', shortcut: 'v' },
+  { value: 'panel', label: 'コマ', shortcut: 'p' },
   { value: 'balloon', label: 'フキダシ', disabled: true },
 ]
 

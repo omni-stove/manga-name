@@ -7,7 +7,6 @@ import { PageThumbnail } from '../page-thumbnail'
 import { addEpisodePatch, removeEpisodePatch } from '../project-ops'
 import { RemoveEpisodeDialog } from '../remove-episode-dialog'
 import { useApplyPatch, useProject } from '../use-project'
-import { useUndoShortcuts } from '../use-undo-shortcuts'
 import styles from './pages.module.css'
 
 export const Route = createFileRoute('/p/$projectId/')({ component: EpisodeList })
@@ -23,7 +22,6 @@ function EpisodeList() {
   const { apply, error } = useApplyPatch(store)
   const navigate = useNavigate()
   const [removing, setRemoving] = useState<Episode>()
-  useUndoShortcuts(store)
 
   // 足した話は空なので、そのまま開いてページを足せるようにする
   const addEpisode = () => {
