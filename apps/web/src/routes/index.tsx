@@ -1,4 +1,5 @@
-import { Button, Typography, XStack, YStack } from '@manga/ui'
+import type { ProjectSummary } from '@manga/storage'
+import { Button, ConfirmDialog, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import common from '../common.module.css'
@@ -20,6 +21,7 @@ function ProjectList() {
   const navigate = useNavigate()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
+  const [removing, setRemoving] = useState<ProjectSummary>()
 
   /** 失敗は画面に出す。削除を並行して走らせないよう、実行中はボタンを止める */
   const run = async (task: () => Promise<void>) => {
@@ -66,15 +68,7 @@ function ProjectList() {
                 size="small"
                 variant="ghost"
                 disabled={busy}
-                onClick={() => {
-                  if (!window.confirm(`「${project.title}」を削除しますか？元に戻せません。`)) {
-                    return
-                  }
-                  void run(async () => {
-                    await library.remove(project.id)
-                    await router.invalidate()
-                  })
-                }}
+                onClick={() => setRemoving(project)}
               >
                 削除
               </Button>
@@ -82,6 +76,22 @@ function ProjectList() {
           </YStack>
         ))}
       </ul>
+      {removing && (
+        <ConfirmDialog
+          title="プロジェクトを削除"
+          message={`「${removing.title || '無題'}」を削除しますか？元に戻せません。`}
+          confirmLabel="削除"
+          irreversible
+          onConfirm={() => {
+            setRemoving(undefined)
+            void run(async () => {
+              await library.remove(removing.id)
+              await router.invalidate()
+            })
+          }}
+          onCancel={() => setRemoving(undefined)}
+        />
+      )}
     </YStack>
   )
 }

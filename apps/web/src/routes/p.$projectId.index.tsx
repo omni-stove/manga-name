@@ -1,9 +1,11 @@
-import type { ID } from '@manga/schema'
+import type { Episode, ID } from '@manga/schema'
 import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
 import common from '../common.module.css'
 import { PageThumbnail } from '../page-thumbnail'
-import { addEpisodePatch } from '../project-ops'
+import { addEpisodePatch, removeEpisodePatch } from '../project-ops'
+import { RemoveEpisodeDialog } from '../remove-episode-dialog'
 import { useApplyPatch, useProject } from '../use-project'
 import { useUndoShortcuts } from '../use-undo-shortcuts'
 import styles from './pages.module.css'
@@ -20,6 +22,7 @@ function EpisodeList() {
   const project = useProject(store)
   const { apply, error } = useApplyPatch(store)
   const navigate = useNavigate()
+  const [removing, setRemoving] = useState<Episode>()
   useUndoShortcuts(store)
 
   // 足した話は空なので、そのまま開いてページを足せるようにする
@@ -82,10 +85,25 @@ function EpisodeList() {
               <Typography as="small" variant="caption" tone="muted">
                 {`${episode.pages.length} ページ`}
               </Typography>
+              <XStack as="span" wrap gap={6} className={common.cardActions}>
+                <Button size="small" variant="ghost" onClick={() => setRemoving(episode)}>
+                  削除
+                </Button>
+              </XStack>
             </YStack>
           )
         })}
       </ol>
+      {removing && (
+        <RemoveEpisodeDialog
+          episode={removing}
+          onConfirm={() => {
+            apply('エピソードを削除', (p) => removeEpisodePatch(p, removing.id))
+            setRemoving(undefined)
+          }}
+          onCancel={() => setRemoving(undefined)}
+        />
+      )}
     </YStack>
   )
 }

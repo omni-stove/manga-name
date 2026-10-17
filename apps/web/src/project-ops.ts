@@ -79,6 +79,13 @@ export function renameEpisodePatch(project: Project, episodeId: ID, title: strin
   return [{ op: 'replace', path: `/episodes/${index}/title`, value: next }]
 }
 
+/** エピソードをページごと消す。無いエピソードなら空の patch */
+export function removeEpisodePatch(project: Project, episodeId: ID): Patch {
+  const index = project.episodes.findIndex((e) => e.id === episodeId)
+  if (index < 0) return []
+  return [{ op: 'remove', path: `/episodes/${index}` }]
+}
+
 /**
  * テンプレートからページを作り、エピソードの末尾に足す。
  * `episodeId` を省くと最後のエピソードに足し、エピソードが無ければ 1 話目を作ってそこに入れる。
@@ -308,6 +315,17 @@ if (import.meta.vitest) {
       expect(() => renameEpisodePatch(store.get(), 'nope', 'x')).toThrow()
       store.undo()
       expect(store.get().episodes[0]?.title).toBe(episode.title)
+    })
+
+    test('removeEpisode drops the episode with its pages, and undo brings them back', () => {
+      const store = storeOf(sample)
+      const episode = store.get().episodes[0]
+      if (!episode) throw new Error('fixture に episode がない')
+      store.applyPatch(removeEpisodePatch(store.get(), episode.id))
+      expect(store.get().episodes).toEqual([])
+      expect(removeEpisodePatch(store.get(), episode.id)).toEqual([])
+      store.undo()
+      expect(store.get().episodes[0]).toEqual(episode)
     })
 
     test('removePage', () => {
