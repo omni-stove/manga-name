@@ -1,4 +1,4 @@
-import type { Bubble, Page, Panel } from '@manga/schema'
+import { type Bubble, containsPoint, type Page, type Panel, panelOutline } from '@manga/schema'
 import { type Box, bubbleGeometry } from './bubble-shape'
 import type { Selection } from './types'
 
@@ -18,8 +18,18 @@ export function panelBox(panel: Pick<Panel, 'rect'>, width: number, height: numb
   }
 }
 
-const inBox = (p: PagePoint, b: Box) =>
-  p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h
+/** コマの輪郭をページ座標（mm）の頂点列にする */
+export function panelPolygon(
+  panel: Pick<Panel, 'rect' | 'shape'>,
+  width: number,
+  height: number,
+): PagePoint[] {
+  return panelOutline(panel).map((p) => ({ x: p.x * width, y: p.y * height }))
+}
+
+/** 頂点列を SVG の points 属性の文字列にする */
+export const polygonPoints = (points: readonly PagePoint[]): string =>
+  points.map((p) => `${p.x},${p.y}`).join(' ')
 
 /** ページ座標の点がフキダシの本体の中か。panel はフキダシのコマの矩形（mm） */
 export function inBubble(bubble: Bubble, panel: Box, p: PagePoint): boolean {
@@ -57,7 +67,7 @@ export function panelAt(
 ): Panel | undefined {
   return [...page.panels]
     .sort((a, b) => b.order - a.order)
-    .find((panel) => inBox(p, panelBox(panel, width, height)))
+    .find((panel) => containsPoint(panelPolygon(panel, width, height), p))
 }
 
 if (import.meta.vitest) {
@@ -76,6 +86,29 @@ if (import.meta.vitest) {
     expect(hitTest(page, w, h, { x: -1, y: -1 })).toBeNull()
     // pn_2 と pn_3 の隙間
     expect(hitTest(page, w, h, { x: 0.49 * w, y: 0.4 * h })).toBeNull()
+  })
+
+  test('hitTest follows the outline of a shaped panel', () => {
+    const triangle: Page = {
+      ...page,
+      panels: [
+        {
+          ...(page.panels[0] as Panel),
+          rect: { x: 0, y: 0, w: 1, h: 1 },
+          shape: [
+            { x: 0, y: 0 },
+            { x: 1, y: 0 },
+            { x: 0, y: 1 },
+          ],
+          bubbles: [],
+        },
+      ],
+    }
+    expect(hitTest(triangle, w, h, { x: 0.2 * w, y: 0.2 * h })).toEqual({
+      kind: 'panel',
+      id: 'pn_1',
+    })
+    expect(hitTest(triangle, w, h, { x: 0.8 * w, y: 0.8 * h })).toBeNull()
   })
 
   test('hitTest picks the panel with the larger order where panels overlap', () => {

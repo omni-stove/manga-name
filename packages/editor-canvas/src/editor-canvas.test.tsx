@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtures, type Page, type Panel, type Patch } from '@manga/schema'
+import { fixtures, type Page, type Panel, type Patch, panelOutline } from '@manga/schema'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -93,7 +93,7 @@ describe('drawing the fixture', () => {
   test('the selected panel gets a guide-coloured frame', async () => {
     const svg = await render({ selection: { kind: 'panel', id: 'pn_2' } })
     const frame = must(
-      svg.querySelector<SVGRectElement>('[data-panel-id="pn_2"] > rect[data-selected]'),
+      svg.querySelector<SVGPolygonElement>('[data-panel-id="pn_2"] > polygon[data-selected]'),
     )
     expect(frame.style.stroke).toBe('var(--guide)')
   })
@@ -111,9 +111,8 @@ describe('art', () => {
       expect(image.getAttribute('href')).toBe(fixtureArtUrl(panel.id))
       expect(image.getAttribute('preserveAspectRatio')).toBe('xMidYMid slice')
       const id = must(image.getAttribute('clip-path')?.match(/^url\(#(.+)\)$/)?.[1])
-      const clip = must(svg.querySelector(`clipPath[id="${id}"] rect`))
-      expect(clip.getAttribute('width')).toBe(image.getAttribute('width'))
-      expect(clip.getAttribute('height')).toBe(image.getAttribute('height'))
+      const clip = must(svg.querySelector(`clipPath[id="${id}"] polygon`))
+      expect(clip.getAttribute('points')).toBe(polygonPointsOf(panel))
     }
   })
 
@@ -234,6 +233,7 @@ function pointer(
     button?: number
     pointerType?: string
     shiftKey?: boolean
+    altKey?: boolean
   },
 ) {
   // jsdom の PointerEvent の有無に依存しないよう、MouseEvent に pointer の属性を足す
@@ -242,6 +242,7 @@ function pointer(
     cancelable: true,
     button: init.button ?? 0,
     shiftKey: init.shiftKey ?? false,
+    altKey: init.altKey ?? false,
     clientX: init.x,
     clientY: init.y,
   })
@@ -407,6 +408,13 @@ function drag(
   if (opts.release ?? true) fire(svg, pointer('pointerup', { id: 1, ...to }))
 }
 
+const polygonPointsOf = (panel: Panel) => {
+  const { w, h } = project.settings.pageSize
+  return panelOutline(panel)
+    .map((p) => `${p.x * w},${p.y * h}`)
+    .join(' ')
+}
+
 const patchOf = (onChange: ReturnType<typeof vi.fn>) => onChange.mock.calls[0]?.[0] as Patch
 
 describe('panel tool', () => {
@@ -510,6 +518,123 @@ describe('panel tool', () => {
       { op: 'replace', path: '/panels/4/order', value: 5 },
       { op: 'replace', path: '/panels/5/order', value: 6 },
       { op: 'replace', path: '/panels/6/order', value: 7 },
+    ])
+  })
+
+  test('"線で分割" then a drag cuts the selected panel along the line', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      tool: 'panel',
+      onChange,
+      selection: { kind: 'panel', id: 'pn_1' },
+    })
+    layout(svg)
+    const button = must(svg.querySelector('[data-cut]'))
+    act(() => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    drag(svg, clientAt(0.6, 0.05), clientAt(0.4, 0.2), { release: false })
+    expect(svg.querySelector('[data-draft-cut="pn_1"]')).not.toBeNull()
+    fire(svg, pointer('pointerup', { id: 1, ...clientAt(0.4, 0.2) }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    const [kept, added] = patchOf(onChange) as { value: Panel }[]
+    expect(kept?.value.id).toBe('pn_1')
+    expect(kept?.value.shape).toHaveLength(4)
+    expect(added?.value.shape).toHaveLength(4)
+    // 1 回割ったらモードを抜ける
+    expect(must(svg.querySelector('[data-cut]')).getAttribute('aria-pressed')).toBe('false')
+  })
+
+  test('Alt + drag cuts without the button, and Escape cancels the cut mode', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({
+      tool: 'panel',
+      onChange,
+      onSelect,
+      selection: { kind: 'panel', id: 'pn_1' },
+    })
+    layout(svg)
+    fire(svg, pointer('pointerdown', { id: 1, ...clientAt(0.6, 0.05), altKey: true }))
+    fire(svg, pointer('pointermove', { id: 1, ...clientAt(0.4, 0.2) }))
+    fire(svg, pointer('pointerup', { id: 1, ...clientAt(0.4, 0.2) }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      must(svg.querySelector('[data-cut]')).dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      )
+    })
+    key(svg, { key: 'Escape' })
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(must(svg.querySelector('[data-cut]')).getAttribute('aria-pressed')).toBe('false')
+  })
+
+  test('a shaped panel shows vertex handles, and a vertex drag reshapes it', async () => {
+    const onChange = vi.fn()
+    const shaped: Page = {
+      ...samplePage,
+      panels: samplePage.panels.map((p) =>
+        p.id === 'pn_1'
+          ? {
+              ...p,
+              shape: [
+                { x: 0, y: 0 },
+                { x: 1, y: 0 },
+                { x: 1, y: 1 },
+                { x: 0.2, y: 1 },
+              ],
+            }
+          : p,
+      ),
+    }
+    const svg = await render({
+      page: shaped,
+      tool: 'panel',
+      onChange,
+      selection: { kind: 'panel', id: 'pn_1' },
+    })
+    layout(svg)
+    expect(svg.querySelectorAll('[data-vertex]')).toHaveLength(4)
+    expect(must(svg.querySelector('[data-panel-id="pn_1"] > polygon')).getAttribute('points')).toBe(
+      polygonPointsOf(shaped.panels[0] as Panel),
+    )
+    drag(svg, clientAt(0.2, 0.26), clientAt(0.3, 0.26))
+    expect(patchOf(onChange)).toEqual([
+      {
+        op: 'replace',
+        path: '/panels/0',
+        value: expect.objectContaining({
+          id: 'pn_1',
+          shape: [
+            { x: 0, y: 0 },
+            { x: 1, y: 0 },
+            { x: 1, y: 1 },
+            { x: 0.3, y: 1 },
+          ],
+        }),
+      },
+    ])
+  })
+
+  test('Alt + corner drag moves one vertex of a rectangle', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      tool: 'panel',
+      onChange,
+      selection: { kind: 'panel', id: 'pn_1' },
+    })
+    layout(svg)
+    fire(svg, pointer('pointerdown', { id: 1, ...clientAt(0, 0.26), altKey: true }))
+    fire(svg, pointer('pointermove', { id: 1, ...clientAt(0.2, 0.26) }))
+    fire(svg, pointer('pointerup', { id: 1, ...clientAt(0.2, 0.26) }))
+    expect(patchOf(onChange)).toEqual([
+      {
+        op: 'replace',
+        path: '/panels/0',
+        value: expect.objectContaining({ shape: expect.arrayContaining([{ x: 0.2, y: 1 }]) }),
+      },
     ])
   })
 

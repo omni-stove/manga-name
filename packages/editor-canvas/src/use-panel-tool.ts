@@ -1,4 +1,12 @@
-import type { ID, Page, Patch, ReadingDirection, Rect } from '@manga/schema'
+import {
+  type ID,
+  type Page,
+  type Patch,
+  type Point,
+  panelOutline,
+  type ReadingDirection,
+  type Rect,
+} from '@manga/schema'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -6,15 +14,20 @@ import {
   useState,
 } from 'react'
 import type { Box } from './bubble-shape'
-import { type PagePoint, panelAt, panelBox } from './hit-test'
+import { type PagePoint, panelAt, panelBox, panelPolygon } from './hit-test'
 import {
+  type Cut,
   createPanelPatch,
+  cutPanelPatch,
   draftRect,
   type Handle,
   mergePanelsPatch,
+  moveVertex,
+  reshapePanelPatch,
   resizePanelPatch,
   resizeRect,
   type SplitAxis,
+  snapCut,
   splitPanelPatch,
 } from './panel-ops'
 import type { Selection, Tool } from './types'
@@ -37,18 +50,25 @@ interface Options {
   onSelect(sel: Selection): void
 }
 
-/** ドラッグ中に描く矩形。panelId があればそのコマのリサイズ、無ければ新しいコマ */
-export interface Draft {
-  rect: Rect
-  panelId?: ID
-}
+/**
+ * ドラッグ中に描くもの。outline は作成、リサイズ、頂点の移動の後の輪郭（ページ座標）で、
+ * panelId があればそのコマの変形、無ければ新しいコマ。cut は panelId のコマを割る線
+ */
+export type Draft =
+  | { kind: 'outline'; outline: Point[]; panelId?: ID }
+  | { kind: 'cut'; cut: Cut; panelId: ID }
 
 type Pos = { x: number; y: number }
 
 type Gesture =
   | { kind: 'create'; pointerId: number; from: Pos; client: Pos; dragging: boolean }
   | { kind: 'resize'; pointerId: number; panelId: ID; handle: Handle; start: Rect }
+  | { kind: 'vertex'; pointerId: number; panelId: ID; index: number }
+  | { kind: 'cut'; pointerId: number; panelId: ID; from: Pos; client: Pos; dragging: boolean }
   | { kind: 'merge'; pointerId: number; targetId: ID; client: Pos }
+
+/** 矩形のコマの隅のハンドルと、panelOutline の頂点の番号の対応 */
+const CORNER_INDEX: Partial<Record<Handle, number>> = { nw: 0, ne: 1, se: 2, sw: 3 }
 
 /** ハンドルの一辺。viewBox の幅に対する比率なので、ズームしても画面上の大きさが変わらない */
 export const HANDLE_RATIO = 0.018
@@ -71,6 +91,12 @@ export function handlePoints(box: Box): { handle: Handle; x: number; y: number }
   ]
 }
 
+/** 点 p で掴める頂点の番号。ハンドルと同じく描いた大きさの倍まで掴める */
+function vertexAt(outline: readonly PagePoint[], p: PagePoint, size: number): number | undefined {
+  const i = outline.findIndex((v) => Math.abs(p.x - v.x) <= size && Math.abs(p.y - v.y) <= size)
+  return i < 0 ? undefined : i
+}
+
 /** 点 p で掴めるハンドル。描いた大きさの倍まで掴めるようにする。隅を辺より優先する */
 function handleAt(box: Box, p: PagePoint, size: number): Handle | undefined {
   const hit = handlePoints(box).find(
@@ -87,20 +113,32 @@ function boxOf(el: Element): ClientBox {
 /**
  * `panel` ツールの操作。何も無いところやコマの上のドラッグで矩形のコマを作り、作ったコマを選ぶ。
  * 選択中のコマはハンドルのドラッグでリサイズし、Shift を押しながら別のコマを押すとそのコマと結合する。
- * 分割は `split` で行う。ドラッグ中は `draft` を描くだけで、Patch は pointerup で 1 回だけ出す。
- * 動かずに離したときは何もせず、クリックの選択は useSelection に任せる。Escape でドラッグを取り消す
+ * 多角形のコマは頂点のドラッグで頂点を動かし、矩形のコマも Alt を押しながら隅を引けば頂点を動かす。
+ * 縦横の分割は `split` で行う。`startCut` の後か Alt を押しながらのドラッグで線を引くと、
+ * 選択中のコマをその線で割る（縦横に近い線はそろえる）。ドラッグ中は `draft` を描くだけで、
+ * Patch は pointerup で 1 回だけ出す。動かずに離したときは何もせず、クリックの選択は useSelection に
+ * 任せる。Escape でドラッグと線の分割を取り消す
  */
 export function usePanelTool(opts: Options) {
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [cutFor, setCutFor] = useState<ID | null>(null)
   const gesture = useRef<Gesture | null>(null)
   const active = opts.tool === 'panel'
   const selectedId = opts.selection?.kind === 'panel' ? opts.selection.id : undefined
   const selected = active ? opts.page.panels.find((p) => p.id === selectedId) : undefined
+  const cutting = selected !== undefined && cutFor === selected.id
   const handleSize = opts.view.w * HANDLE_RATIO
 
   const pointAt = (e: ReactPointerEvent<SVGSVGElement>) => {
     const mm = clientToPage(opts.view, boxOf(e.currentTarget), { x: e.clientX, y: e.clientY })
     return mm && { mm, n: { x: mm.x / opts.width, y: mm.y / opts.height } }
+  }
+  const cutOf = (from: Pos, to: Pos) => snapCut({ from, to }, opts.width, opts.height)
+  /** リサイズか頂点の移動で点 p まで引いたときのコマの輪郭 */
+  const reshaped = (g: Extract<Gesture, { kind: 'resize' | 'vertex' }>, p: Pos): Point[] => {
+    if (g.kind === 'vertex') return moveVertex(opts.page, g.panelId, g.index, p)
+    const shape = opts.page.panels.find((q) => q.id === g.panelId)?.shape
+    return panelOutline({ rect: resizeRect(opts.page, g.panelId, g.start, g.handle, p), shape })
   }
   const end = () => {
     gesture.current = null
@@ -123,6 +161,27 @@ export function usePanelTool(opts: Options) {
       const client = { x: e.clientX, y: e.clientY }
       if (selected) {
         const handle = handleAt(panelBox(selected, opts.width, opts.height), at.mm, handleSize)
+        const vertex = selected.shape
+          ? vertexAt(panelPolygon(selected, opts.width, opts.height), at.mm, handleSize)
+          : e.altKey && handle !== undefined
+            ? CORNER_INDEX[handle]
+            : undefined
+        if (vertex !== undefined && !cutting) {
+          take(e, { kind: 'vertex', pointerId: e.pointerId, panelId: selected.id, index: vertex })
+          setDraft({ kind: 'outline', outline: panelOutline(selected), panelId: selected.id })
+          return
+        }
+        if (cutting || e.altKey) {
+          take(e, {
+            kind: 'cut',
+            pointerId: e.pointerId,
+            panelId: selected.id,
+            from: at.n,
+            client,
+            dragging: false,
+          })
+          return
+        }
         if (handle) {
           take(e, {
             kind: 'resize',
@@ -131,7 +190,7 @@ export function usePanelTool(opts: Options) {
             handle,
             start: selected.rect,
           })
-          setDraft({ rect: selected.rect, panelId: selected.id })
+          setDraft({ kind: 'outline', outline: panelOutline(selected), panelId: selected.id })
           return
         }
         if (e.shiftKey) {
@@ -159,13 +218,10 @@ export function usePanelTool(opts: Options) {
         return
       }
       if (g.pointerId !== e.pointerId) return
-      if (g.kind === 'resize') {
+      if (g.kind === 'resize' || g.kind === 'vertex') {
         const at = pointAt(e)
         if (at === null) return
-        setDraft({
-          rect: resizeRect(opts.page, g.panelId, g.start, g.handle, at.n),
-          panelId: g.panelId,
-        })
+        setDraft({ kind: 'outline', outline: reshaped(g, at.n), panelId: g.panelId })
         return
       }
       const moved = Math.hypot(e.clientX - g.client.x, e.clientY - g.client.y)
@@ -177,7 +233,14 @@ export function usePanelTool(opts: Options) {
       const at = pointAt(e)
       if (at === null) return
       g.dragging = true
-      setDraft({ rect: draftRect(opts.page, g.from, at.n) })
+      if (g.kind === 'cut') {
+        setDraft({ kind: 'cut', cut: cutOf(g.from, at.n), panelId: g.panelId })
+        return
+      }
+      setDraft({
+        kind: 'outline',
+        outline: panelOutline({ rect: draftRect(opts.page, g.from, at.n) }),
+      })
     },
     onPointerUp(e: ReactPointerEvent<SVGSVGElement>) {
       const g = gesture.current
@@ -204,18 +267,32 @@ export function usePanelTool(opts: Options) {
         opts.onSelect({ kind: 'panel', id: created.id })
         return
       }
-      const rect = resizeRect(opts.page, g.panelId, g.start, g.handle, at.n)
-      const patch = resizePanelPatch(opts.page, g.panelId, rect)
+      if (g.kind === 'cut') {
+        if (!g.dragging) return
+        setCutFor(null)
+        const patch = cutPanelPatch(opts.page, g.panelId, cutOf(g.from, at.n), opts.direction)
+        if (patch.length > 0) opts.onChange(patch)
+        return
+      }
+      const patch =
+        g.kind === 'resize'
+          ? resizePanelPatch(
+              opts.page,
+              g.panelId,
+              resizeRect(opts.page, g.panelId, g.start, g.handle, at.n),
+            )
+          : reshapePanelPatch(opts.page, g.panelId, reshaped(g, at.n))
       if (patch.length > 0) opts.onChange(patch)
     },
     onPointerCancel(e: ReactPointerEvent<SVGSVGElement>) {
       if (gesture.current?.pointerId === e.pointerId) end()
     },
-    /** ドラッグ中の Escape を取り消しとして受けたら true。そのときは選択解除をさせない */
+    /** ドラッグ中か線の分割中の Escape を取り消しとして受けたら true。そのときは選択解除をさせない */
     onKeyDown(e: ReactKeyboardEvent<SVGSVGElement>): boolean {
-      if (e.key !== 'Escape' || gesture.current === null) return false
+      if (e.key !== 'Escape' || (gesture.current === null && !cutting)) return false
       e.preventDefault()
       end()
+      setCutFor(null)
       return true
     },
   }
@@ -227,5 +304,16 @@ export function usePanelTool(opts: Options) {
     if (patch.length > 0) opts.onChange(patch)
   }
 
-  return { draft: active ? draft : null, selected, handleSize, split, handlers }
+  /** 選択中のコマを線で割るモードの切り替え。次のドラッグで引いた線で割る */
+  const toggleCut = () => setCutFor(cutting || !selected ? null : selected.id)
+
+  return {
+    draft: active ? draft : null,
+    selected,
+    handleSize,
+    cutting,
+    split,
+    toggleCut,
+    handlers,
+  }
 }

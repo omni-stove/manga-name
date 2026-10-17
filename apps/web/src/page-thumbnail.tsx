@@ -1,5 +1,11 @@
-import { currentArt, type Page, type Panel, type ProjectSettings } from '@manga/schema'
-import { useEffect, useState } from 'react'
+import {
+  currentArt,
+  type Page,
+  type Panel,
+  type ProjectSettings,
+  panelOutline,
+} from '@manga/schema'
+import { useEffect, useId, useState } from 'react'
 import styles from './page-thumbnail.module.css'
 
 type ResolveAsset = (ref: string) => Promise<string>
@@ -49,20 +55,40 @@ function PanelArt({
   resolveAsset: ResolveAsset
 }) {
   const url = useAssetUrl(resolveAsset, currentArt(panel)?.ref)
+  const clipId = `thumb${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   const box = {
     x: panel.rect.x * w,
     y: panel.rect.y * h,
     width: panel.rect.w * w,
     height: panel.rect.h * h,
   }
-  if (url === undefined) return <rect {...box} className={styles.art} />
-  // 入れ子の svg ははみ出しを切るので、slice で埋めた絵がコマ枠の外に出ない
+  if (url === undefined)
+    return <polygon points={outlinePoints(panel, w, h)} className={styles.art} />
+  // 入れ子の svg ははみ出しを切るので、slice で埋めた絵がコマを囲む矩形の外に出ない。多角形のコマはさらに輪郭で切る
   return (
     <svg {...box} role="img" aria-label="コマの絵">
-      <image href={url} width="100%" height="100%" preserveAspectRatio="xMidYMid slice" />
+      {panel.shape && (
+        <clipPath id={clipId}>
+          <polygon
+            points={panel.shape.map((p) => `${p.x * box.width},${p.y * box.height}`).join(' ')}
+          />
+        </clipPath>
+      )}
+      <image
+        href={url}
+        width="100%"
+        height="100%"
+        preserveAspectRatio="xMidYMid slice"
+        clipPath={panel.shape && `url(#${clipId})`}
+      />
     </svg>
   )
 }
+
+const outlinePoints = (panel: Panel, w: number, h: number) =>
+  panelOutline(panel)
+    .map((p) => `${p.x * w},${p.y * h}`)
+    .join(' ')
 
 /** ページのコマ割りを判型の縦横比で描く。絵が選ばれたコマは、`resolveAsset` で読めればその絵を、読めなければ塗りを描く */
 export function PageThumbnail({
@@ -84,14 +110,7 @@ export function PageThumbnail({
         ),
       )}
       {page.panels.map((panel) => (
-        <rect
-          key={panel.id}
-          x={panel.rect.x * w}
-          y={panel.rect.y * h}
-          width={panel.rect.w * w}
-          height={panel.rect.h * h}
-          className={styles.panel}
-        />
+        <polygon key={panel.id} points={outlinePoints(panel, w, h)} className={styles.panel} />
       ))}
     </svg>
   )

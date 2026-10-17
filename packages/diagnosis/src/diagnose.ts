@@ -1,14 +1,18 @@
-import type {
-  DiagnosisConfig,
-  FocusDiagnosis,
-  Issue,
-  Page,
-  PageDiagnosis,
-  Panel,
-  PanelDiagnosis,
-  Point,
-  ProjectSettings,
-  ReadingDirection,
+import {
+  boundsOf,
+  convexHull,
+  type DiagnosisConfig,
+  type FocusDiagnosis,
+  type Issue,
+  intersectPolygons,
+  type Page,
+  type PageDiagnosis,
+  type Panel,
+  type PanelDiagnosis,
+  type Point,
+  type ProjectSettings,
+  panelOutline,
+  type ReadingDirection,
 } from '@manga/schema'
 import { type Focus, panelFoci } from './focus'
 import { panelDistance, toPage } from './geometry'
@@ -25,7 +29,7 @@ export const defaultDiagnosisConfig: DiagnosisConfig = Object.freeze({
 /** targetFocusId の無い Vector の終点を焦点に吸着させる距離（コマ高さ比） */
 const VECTOR_SNAP = 0.1
 
-/** Panel の矩形がこれ以上重なると OVERLAP */
+/** Panel の輪郭の重なりが、縦横ともこれ以上あると OVERLAP */
 const OVERLAP_MIN = 0.01
 
 /** 距離や重なりは 2 進小数で丸まるので、閾値ちょうどの値を仕様どおり閾値側に入れる余裕 */
@@ -159,14 +163,14 @@ const overlapIssues = (panels: readonly Panel[]): Issue[] => {
       const a = panels[i]
       const b = panels[j]
       if (!a || !b) continue
-      const w = Math.min(a.rect.x + a.rect.w, b.rect.x + b.rect.w) - Math.max(a.rect.x, b.rect.x)
-      const h = Math.min(a.rect.y + a.rect.h, b.rect.y + b.rect.h) - Math.max(a.rect.y, b.rect.y)
+      // 斜めに割ったコマは囲む矩形どうしが重なるので、輪郭どうしの共通部分で見る
+      const { w, h } = boundsOf(intersectPolygons(panelOutline(a), convexHull(panelOutline(b))))
       if (w >= OVERLAP_MIN - EPSILON && h >= OVERLAP_MIN - EPSILON) {
         issues.push({
           severity: 'error',
           code: 'OVERLAP',
           panelId: a.id,
-          message: `${a.id} と ${b.id} の矩形が重なっている`,
+          message: `${a.id} と ${b.id} のコマが重なっている`,
         })
       }
     }
@@ -452,6 +456,35 @@ if (import.meta.vitest) {
       expect.objectContaining({ code: 'EMPTY_PANEL', severity: 'info', panelId: 'pn_5' }),
     )
     expect(d.issues).toContainEqual(expect.objectContaining({ code: 'OVERLAP', severity: 'error' }))
+  })
+
+  test('panels cut along a diagonal do not overlap even though their rects do', () => {
+    const page = samplePage()
+    const pn1 = findPanel(page, 'pn_1')
+    pn1.rect = { x: 0.41, y: 0, w: 0.59, h: 0.26 }
+    pn1.shape = [
+      { x: 0.322, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      { x: 0, y: 1 },
+    ]
+    page.panels.push({
+      ...pn1,
+      id: 'pn_7',
+      order: 7,
+      bubbles: [],
+      focusPoints: [],
+      vectors: [],
+      rect: { x: 0, y: 0, w: 0.59, h: 0.26 },
+      shape: [
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 0.678, y: 1 },
+        { x: 0, y: 1 },
+      ],
+    })
+    const d = diagnosePage(page, settings)
+    expect(d.issues.map((i) => i.code)).not.toContain('OVERLAP')
   })
 
   test('a page without bubbles has an empty bubble chain', () => {

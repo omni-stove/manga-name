@@ -89,7 +89,7 @@ Panel 内の Bubble を `order` 順に並べ、合成焦点の `t` が単調増�
 ## 8. その他の Issue
 
 - `EMPTY_PANEL` (info): FocusPoint も Bubble も note もない Panel。
-- `OVERLAP` (error): Panel の矩形が他の Panel と 0.01 以上重なる。
+- `OVERLAP` (error): Panel の輪郭（`shape`、無ければ `rect`）が他の Panel と縦横とも 0.01 以上重なる。
 
 ## 9. 集計
 

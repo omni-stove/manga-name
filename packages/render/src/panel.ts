@@ -1,11 +1,27 @@
+import { cornerAnchor } from '@manga/schema'
 import { FONT_FAMILY } from './backend'
-import type { PxRect } from './geometry'
+import type { PxPoint, PxRect } from './geometry'
 import { wrapHorizontal } from './text'
 
 type Ctx = CanvasRenderingContext2D
 
-/** 画像を rect に cover で置く。rect からはみ出す部分は切る */
-export function drawCover(ctx: Ctx, image: CanvasImageSource, rect: PxRect): void {
+/** 輪郭を閉じたパスにする */
+function tracePolygon(ctx: Ctx, outline: readonly PxPoint[]): void {
+  ctx.beginPath()
+  outline.forEach((p, i) => {
+    if (i === 0) ctx.moveTo(p.x, p.y)
+    else ctx.lineTo(p.x, p.y)
+  })
+  ctx.closePath()
+}
+
+/** 画像をコマを囲む rect に cover で置き、輪郭 outline からはみ出す部分は切る */
+export function drawCover(
+  ctx: Ctx,
+  image: CanvasImageSource,
+  rect: PxRect,
+  outline: readonly PxPoint[],
+): void {
   const iw = 'naturalWidth' in image ? image.naturalWidth : (image as { width: number }).width
   const ih = 'naturalHeight' in image ? image.naturalHeight : (image as { height: number }).height
   if (!(iw > 0 && ih > 0)) return
@@ -13,32 +29,38 @@ export function drawCover(ctx: Ctx, image: CanvasImageSource, rect: PxRect): voi
   const w = iw * scale
   const h = ih * scale
   ctx.save()
-  ctx.beginPath()
-  ctx.rect(rect.x, rect.y, rect.w, rect.h)
+  tracePolygon(ctx, outline)
   ctx.clip()
   ctx.drawImage(image, rect.x + (rect.w - w) / 2, rect.y + (rect.h - h) / 2, w, h)
   ctx.restore()
 }
 
-export function drawFrame(ctx: Ctx, rect: PxRect, lineWidth: number): void {
+export function drawFrame(ctx: Ctx, outline: readonly PxPoint[], lineWidth: number): void {
   ctx.save()
   ctx.lineWidth = lineWidth
   ctx.strokeStyle = '#000'
   ctx.lineJoin = 'miter'
-  ctx.strokeRect(rect.x, rect.y, rect.w, rect.h)
+  tracePolygon(ctx, outline)
+  ctx.stroke()
   ctx.restore()
 }
 
-/** 未生成コマの中身。左上にコマ番号、その下に camera と note を横書きで小さく */
+/**
+ * 未生成コマの中身。rect の左上にコマ番号、その下に camera と note を横書きで小さく。
+ * 輪郭 outline の外に出る部分は切る
+ */
 export function drawPlaceholder(
   ctx: Ctx,
   panel: { order: number; camera?: string; note?: string },
   rect: PxRect,
+  outline: readonly PxPoint[],
   fontPx: number,
 ): void {
   const pad = fontPx
   const numberPx = fontPx * 1.8
   ctx.save()
+  tracePolygon(ctx, outline)
+  ctx.clip()
   ctx.fillStyle = '#000'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
@@ -58,11 +80,16 @@ export function drawPlaceholder(
   ctx.restore()
 }
 
-/** 右上のコマ番号。白丸に黒文字 */
-export function drawPanelNumber(ctx: Ctx, order: number, rect: PxRect, fontPx: number): void {
+/** 輪郭の右上のコマ番号。白丸に黒文字 */
+export function drawPanelNumber(
+  ctx: Ctx,
+  order: number,
+  outline: readonly PxPoint[],
+  fontPx: number,
+): void {
   const r = fontPx * 0.9
-  const cx = rect.x + rect.w - r - fontPx * 0.4
-  const cy = rect.y + r + fontPx * 0.4
+  const inset = r + fontPx * 0.4
+  const { x: cx, y: cy } = cornerAnchor(outline, 'ne', -inset, inset)
   ctx.save()
   ctx.beginPath()
   ctx.arc(cx, cy, r, 0, Math.PI * 2)

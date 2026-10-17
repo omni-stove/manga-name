@@ -9,7 +9,8 @@ const DEFAULT_PAGE_SIZE = { w: 182, h: 257 }
 const FRAME_WIDTH = 0.006
 
 /**
- * 生成に渡す配置図。対象コマの rect を切り出し、薄灰で塗ってフキダシ領域を白にし、黒い枠線を引く。
+ * 生成に渡す配置図。対象コマの rect を切り出し、薄灰で塗ってフキダシ領域を白にし、コマの輪郭に黒い枠線を引く。
+ * 多角形のコマでは輪郭の外も薄灰のまま残す。絵は rect いっぱいに描かせ、輪郭で切るのは合成のとき。
  * 文字は描かない。`pageSize` はコマのアスペクト比の計算に使い、省略時は既定の 182x257。
  */
 export async function renderLayoutPng(
@@ -38,7 +39,19 @@ export async function renderLayoutPng(
   const lineWidth = Math.max(1, Math.round(width * FRAME_WIDTH))
   c.lineWidth = lineWidth
   c.strokeStyle = '#000'
-  c.strokeRect(lineWidth / 2, lineWidth / 2, width - lineWidth, height - lineWidth)
+  if (panel.shape) {
+    c.beginPath()
+    panel.shape.forEach((p, i) => {
+      const x = p.x * width
+      const y = p.y * height
+      if (i === 0) c.moveTo(x, y)
+      else c.lineTo(x, y)
+    })
+    c.closePath()
+    c.stroke()
+  } else {
+    c.strokeRect(lineWidth / 2, lineWidth / 2, width - lineWidth, height - lineWidth)
+  }
 
   return surface.toPng()
 }
@@ -70,6 +83,40 @@ if (import.meta.vitest) {
     expect(at(0.3, 0.5)).toEqual([224, 224, 224])
     expect(at(0.5, 0.85)).toEqual([224, 224, 224])
     expect(at(0, 0.5)).toEqual([0, 0, 0])
+  })
+
+  test('多角形のコマは輪郭に枠線を引き、輪郭の外も薄灰のまま', async () => {
+    const page = fixtures.samplePage01.episodes[0]?.pages[0] as Page
+    const triangle: Page = {
+      ...page,
+      panels: page.panels.map((p) =>
+        p.id === 'pn_4'
+          ? {
+              ...p,
+              shape: [
+                { x: 0, y: 0 },
+                { x: 1, y: 0 },
+                { x: 0, y: 1 },
+              ],
+            }
+          : p,
+      ),
+    }
+    const png = await renderLayoutPng(triangle, 'pn_4', { width: 400 })
+    const backend = await getBackend()
+    const image = await backend.decodeImage(png)
+    const w = (image as { width: number }).width
+    const h = (image as { height: number }).height
+    const probe = backend.createSurface(w, h)
+    probe.ctx.drawImage(image, 0, 0)
+    const at = (x: number, y: number) =>
+      Array.from(
+        probe.ctx.getImageData(Math.round(x * w), Math.round(y * h), 1, 1).data.subarray(0, 3),
+      )
+    // 斜めの枠線は縁がぼけるので、薄灰より暗いことだけを見る
+    expect(at(0.5, 0.5)[0]).toBeLessThan(200)
+    expect(at(0.9, 0.9)).toEqual([224, 224, 224])
+    expect(at(0.2, 0.2)).toEqual([224, 224, 224])
   })
 
   test('無いコマは throw', async () => {

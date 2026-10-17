@@ -1,7 +1,7 @@
-import { currentArt, type Page, type Panel } from '@manga/schema'
+import { currentArt, type Page, type Panel, panelOutline } from '@manga/schema'
 import { getBackend, loadFonts, type Surface } from './backend'
 import { bubbleGeometry, drawBubble, textBox } from './bubble'
-import { type PxRect, pagePixelSize, rectToPx } from './geometry'
+import { type PxRect, pagePixelSize, pointToPx, rectToPx } from './geometry'
 import { drawCover, drawFrame, drawNotesMargin, drawPanelNumber, drawPlaceholder } from './panel'
 import { drawVerticalText, layoutBubbleText } from './text'
 import type { RenderContext, RenderOptions } from './types'
@@ -60,11 +60,14 @@ export async function drawPage(
 
   panels.forEach((panel, i) => {
     const rect = rectToPx(panel.rect, pageRect)
+    const outline = panelOutline(panel).map((p) => pointToPx(p, pageRect))
     const image = arts[i]
-    if (image) drawCover(c, image, rect)
-    else drawPlaceholder(c, panel, rect, pageSize.w * NOTE_FONT)
-    drawFrame(c, rect, pageSize.w * FRAME_WIDTH)
-    if (opts.panelNumbers) drawPanelNumber(c, panel.order, rect, pageSize.w * NOTE_FONT * 1.5)
+    if (image) drawCover(c, image, rect, outline)
+    else drawPlaceholder(c, panel, rect, outline, pageSize.w * NOTE_FONT)
+    drawFrame(c, outline, pageSize.w * FRAME_WIDTH)
+    if (opts.panelNumbers) {
+      drawPanelNumber(c, panel.order, outline, pageSize.w * NOTE_FONT * 1.5)
+    }
   })
 
   for (const panel of panels) {
@@ -189,6 +192,49 @@ if (import.meta.vitest) {
       panelNumbers: false,
     })
     await matchPngSnapshot('page-margin', png)
+  })
+
+  test('多角形のコマは輪郭で絵を切り、枠も輪郭に沿って引く', async () => {
+    const { page, ctx } = withArts()
+    const [pn1, ...rest] = page.panels as [Panel, ...Panel[]]
+    // pn_1 を右上から左下への斜めの線で割った 2 つの台形
+    const shaped: Page = {
+      ...page,
+      panels: [
+        {
+          ...pn1,
+          rect: { x: 0.41, y: 0, w: 0.59, h: 0.26 },
+          shape: [
+            { x: 0.322, y: 0 },
+            { x: 1, y: 0 },
+            { x: 1, y: 1 },
+            { x: 0, y: 1 },
+          ],
+        },
+        {
+          ...pn1,
+          id: 'pn_1b',
+          order: 7,
+          bubbles: [],
+          focusPoints: [],
+          vectors: [],
+          rect: { x: 0, y: 0, w: 0.59, h: 0.26 },
+          shape: [
+            { x: 0, y: 0 },
+            { x: 1, y: 0 },
+            { x: 0.678, y: 1 },
+            { x: 0, y: 1 },
+          ],
+        },
+        ...rest,
+      ],
+    }
+    const png = await renderPage(shaped, ctx, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: true,
+    })
+    await matchPngSnapshot('page-shaped', png)
   })
 
   test('同じ入力で 2 回描くとバイト一致する', async () => {
