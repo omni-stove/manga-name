@@ -1,6 +1,6 @@
-import { Button, Typography, YStack } from '@manga/ui'
+import { Button, IconButton, Typography, XStack, YStack } from '@manga/ui'
 import { Link, type LinkProps, useMatch } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import styles from './side-nav.module.css'
 import type { WebProjectStore } from './store/project-store'
 import { useAuth } from './use-auth'
@@ -8,13 +8,15 @@ import { useProject } from './use-project'
 
 /**
  * 画面の左に縦に並べるナビゲーション。プロジェクト一覧、開いているプロジェクトのページ・キャラクター・設定、
- * アプリ設定とアカウントを並べる。エディタではキャンバスの幅を空けるため、アイコンだけの細い帯に畳む
+ * アプリ設定とアカウントを並べる。既定はアイコンだけの細い帯に畳んでおき、上端のボタンで名前付きの幅に開く。
+ * 開閉はブラウザに覚えておき、次に開いたときも同じ幅にする
  */
 export function SideNav() {
   const project = useMatch({ from: '/p/$projectId', shouldThrow: false })
   const editor = useMatch({ from: '/p/$projectId_/pages/$pageId', shouldThrow: false })
   const opened = project ?? editor
-  const collapsed = editor !== undefined
+  const [expanded, setExpanded] = useExpanded()
+  const collapsed = !expanded
   return (
     <YStack
       as="nav"
@@ -23,11 +25,20 @@ export function SideNav() {
       className={styles.nav}
       data-collapsed={collapsed || undefined}
     >
-      {!collapsed && (
-        <Link to="/" className={styles.brand}>
-          manga
-        </Link>
-      )}
+      <XStack justify={collapsed ? 'center' : 'between'}>
+        {!collapsed && (
+          <Link to="/" className={styles.brand}>
+            manga
+          </Link>
+        )}
+        <IconButton
+          label={collapsed ? 'ナビゲーションを開く' : 'ナビゲーションを畳む'}
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {collapsed ? <ExpandIcon /> : <CollapseIcon />}
+        </IconButton>
+      </XStack>
       <YStack as="ul" gap={2} className={styles.list}>
         <NavItem
           to="/"
@@ -41,6 +52,7 @@ export function SideNav() {
           projectId={opened.params.projectId}
           store={opened.loaderData.store}
           collapsed={collapsed}
+          inEditor={editor !== undefined}
         />
       )}
       <YStack as="ul" gap={2} className={styles.footer}>
@@ -55,10 +67,12 @@ function ProjectItems({
   projectId,
   store,
   collapsed,
+  inEditor,
 }: {
   projectId: string
   store: WebProjectStore
   collapsed: boolean
+  inEditor: boolean
 }) {
   const project = useProject(store)
   return (
@@ -72,7 +86,7 @@ function ProjectItems({
         to="/p/$projectId"
         params={{ projectId }}
         // エディタはページ一覧の下の階層なので、エディタにいる間はページを選ばれた状態にする
-        activeOptions={{ exact: !collapsed }}
+        activeOptions={{ exact: !inEditor }}
         icon={<PagesIcon />}
         label="ページ"
       />
@@ -90,6 +104,35 @@ function ProjectItems({
       />
     </YStack>
   )
+}
+
+const EXPANDED_KEY = 'manga.sideNav.expanded'
+
+/** ナビを開いているか。localStorage に覚え、覚えが無ければ畳んだ状態から始める */
+function useExpanded(): [boolean, (expanded: boolean) => void] {
+  const [expanded, setExpanded] = useState(() => readStorage() === 'true')
+  return [
+    expanded,
+    (next) => {
+      setExpanded(next)
+      writeStorage(String(next))
+    },
+  ]
+}
+
+// ストレージを塞いだブラウザでは参照だけで SecurityError になるので、覚えられないまま動かす
+function readStorage(): string | null {
+  try {
+    return localStorage.getItem(EXPANDED_KEY)
+  } catch {
+    return null
+  }
+}
+
+function writeStorage(value: string): void {
+  try {
+    localStorage.setItem(EXPANDED_KEY, value)
+  } catch {}
 }
 
 function NavItem({
@@ -140,6 +183,20 @@ function Icon({ children }: { children: ReactNode }) {
     </svg>
   )
 }
+
+const ExpandIcon = () => (
+  <Icon>
+    <rect x="3.5" y="4" width="17" height="16" rx="2" />
+    <path d="M9 4v16M13 10l2 2-2 2" />
+  </Icon>
+)
+
+const CollapseIcon = () => (
+  <Icon>
+    <rect x="3.5" y="4" width="17" height="16" rx="2" />
+    <path d="M9 4v16M16 10l-2 2 2 2" />
+  </Icon>
+)
 
 const GridIcon = () => (
   <Icon>
