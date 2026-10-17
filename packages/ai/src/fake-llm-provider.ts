@@ -16,13 +16,21 @@ export const aiFixtures = {
 }
 
 /**
- * 入力に関わらず docs/fixtures/ai/ の応答を返す LlmProvider。proposeLayout だけは `pageCount` があれば、
+ * 入力に関わらず docs/fixtures/ai/ の応答を返す LlmProvider。planPages と proposeLayout は `pageCount` があれば、
  * フィクスチャのページを繰り返してその枚数にする
  */
 export function createFakeLlmProvider(): LlmProvider {
   return {
-    async planPages() {
-      return structuredClone(aiFixtures.pagePlan)
+    async planPages(req) {
+      const { pages, rationale } = structuredClone(aiFixtures.pagePlan)
+      if (req.pageCount === undefined) return { pages, rationale }
+      // Workers が枚数の不一致を弾くので、指定の枚数にそろえる
+      return {
+        pages: Array.from({ length: req.pageCount }, (_, i) =>
+          structuredClone(pages[i % pages.length] as (typeof pages)[number]),
+        ),
+        rationale,
+      }
     },
     async proposeLayout(req) {
       const { pages, rationale } = structuredClone(aiFixtures.layoutProposal)

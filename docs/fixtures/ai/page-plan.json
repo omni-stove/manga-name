@@ -1,5 +1,5 @@
 {
-  "$comment": "createFakeLlmProvider().planPages の固定応答。脚本やページ数に関わらずこの 2 ページの割り振りを返す。",
+  "$comment": "createFakeLlmProvider().planPages の固定応答。脚本に関わらずこの 2 ページの割り振りを返す。ページ数の指定があれば、この 2 ページを繰り返してその枚数にする。",
   "pages": [
     {
       "note": "結晶の森の奥へ E が歩いていく。",
