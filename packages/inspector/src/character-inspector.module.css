@@ -5,3 +5,8 @@
   border-radius: var(--radius-s);
   background: var(--paper);
 }
+
+.reference[data-default-reference] {
+  width: 4.5rem;
+  fill: var(--paper-edge);
+}

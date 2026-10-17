@@ -68,6 +68,10 @@ export interface CharacterInspectorProps {
   onChange(patch: Patch): void
   /** 参照画像を選ぶ UI を開く。選んだ結果は親が `referenceRef` の Patch にする */
   onPickReference(): void
+  /** 外見から参照画像を生成する。結果は親が `referenceRef` の Patch にする */
+  onGenerateReference(): void
+  /** 参照画像を生成中。選ぶ・生成・外すを押せなくする */
+  generating?: boolean
   resolveAsset(ref: string): Promise<string>
 }
 

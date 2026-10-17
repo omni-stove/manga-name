@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { PatchSchema } from './patch'
-import { IdSchema, PageSchema, ProjectBaseSchema } from './project'
+import { CharacterSchema, IdSchema, PageSchema, ProjectBaseSchema } from './project'
 
 const blob = z.instanceof(Blob)
 
@@ -13,6 +13,12 @@ export const PanelArtRequestSchema = z.object({
   referencePng: blob.optional(),
   characterRefs: z.array(z.object({ characterId: IdSchema, image: blob })).optional(),
   previous: z.object({ art: blob, instruction: z.string() }).optional(),
+})
+
+/** キャラの参照画像を外見から作る要求。画風は settings.style から取る */
+export const CharacterArtRequestSchema = z.object({
+  project: ProjectBaseSchema.pick({ settings: true }),
+  character: CharacterSchema,
 })
 
 export const LayoutProposalResponseSchema = z.object({
@@ -41,6 +47,7 @@ export const CritiqueResponseSchema = z.object({
 })
 
 export type PanelArtRequest = z.infer<typeof PanelArtRequestSchema>
+export type CharacterArtRequest = z.infer<typeof CharacterArtRequestSchema>
 export type LayoutProposalResponse = z.infer<typeof LayoutProposalResponseSchema>
 export type PagePlan = z.infer<typeof PagePlanSchema>
 export type PagePlanResponse = z.infer<typeof PagePlanResponseSchema>

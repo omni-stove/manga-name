@@ -110,7 +110,7 @@ export interface PanelGeneration {
 
 export interface PanelGenerationDeps {
   library: Pick<ProjectLibrary, 'isOpen' | 'loadAsset' | 'putAsset'>
-  imageProvider: ImageProvider
+  imageProvider: Pick<ImageProvider, 'generatePanelArt'>
   /** 失敗の文言の出し先。既定はトースト。signIn は未ログインのせいで失敗したことを表す */
   notify?(message: string, opts: { signIn: boolean }): void
   now?(): string
@@ -408,7 +408,9 @@ if (import.meta.vitest) {
   const panelId = panel.id
   const NOW = '2026-10-16T00:00:00.000Z'
 
-  const setup = (imageProvider: ImageProvider = createFakeImageProvider()) => {
+  const setup = (
+    imageProvider: Pick<ImageProvider, 'generatePanelArt'> = createFakeImageProvider(),
+  ) => {
     const storage = createMemoryStorage()
     const library = createProjectLibrary(storage)
     const store = createProjectStore(sample, { saveProject: async () => {} })

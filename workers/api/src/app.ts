@@ -7,6 +7,7 @@ import {
   PROVIDER_HEADER,
 } from '@manga/ai'
 import {
+  CharacterArtRequestSchema,
   CritiqueResponseSchema,
   LayoutProposalResponseSchema,
   PageDiagnosisSchema,
@@ -125,7 +126,7 @@ async function retryUntilValid<T>(
 const isFile = (v: unknown): v is File => typeof v !== 'string' && v !== null && v !== undefined
 
 /**
- * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique`、
+ * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique`、
  * `/v1/projects` の CRUD とアセットと参加者、招待リンクの受け口 `/v1/invites/:token`、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
  * `/v1/health`、`/v1/auth/*`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
  * CORS は WEB_ORIGINS と tauri://localhost だけに許す。
@@ -237,6 +238,32 @@ export function createApp(options: AppOptions = {}) {
             ? { art: previousArt, instruction: previous.instruction }
             : undefined,
       })
+      const bytes = new Uint8Array(await res.image.arrayBuffer())
+      return isDecodablePng(bytes) ? { res, bytes } : undefined
+    })
+    await settleUsage(c.env.DB, usageId, attempts)
+
+    if (value === undefined) {
+      return c.json({ error: 'image provider returned an invalid image' }, 502)
+    }
+    return c.body(value.bytes, 200, {
+      'content-type': 'image/png',
+      [PROVIDER_HEADER]: value.res.provider,
+      [PROMPT_HEADER]: encodeURIComponent(value.res.prompt),
+    })
+  })
+
+  app.post('/v1/ai/character-art', async (c) => {
+    const body: unknown = await c.req.json().catch(() => undefined)
+    if (body === undefined) return c.json({ error: 'body is not valid JSON' }, 400)
+    const parsed = CharacterArtRequestSchema.safeParse(body)
+    if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
+    const usageId = await reserve(c, 'character-art')
+    if (usageId instanceof Response) return usageId
+    const provider = createImage(c.env)
+
+    const { value, attempts } = await retryUntilValid(async () => {
+      const res = await provider.generateCharacterArt(parsed.data)
       const bytes = new Uint8Array(await res.image.arrayBuffer())
       return isDecodablePng(bytes) ? { res, bytes } : undefined
     })

@@ -13,6 +13,7 @@ import {
   VectorKindSchema,
 } from '@manga/schema'
 import {
+  type CharacterArtRequest,
   type CritiqueRequest,
   findPanel,
   type LayoutProposalRequest,
@@ -90,6 +91,26 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
 
   return {
     prompt: parts.filter((p): p is string => Boolean(p)).join('\n'),
+    negative: settings.style.negative ?? '',
+  }
+}
+
+/** キャラの参照画像の固定の末尾。コマの生成で参照しやすいよう、1 人を全身で正面から描かせる */
+const CHARACTER_ART_TAIL =
+  'character reference sheet, a single character, full body, front view, standing, plain white background, no text, no letters'
+
+/** キャラの参照画像のプロンプト。画風、名前と外見、固定の末尾を改行で連結する */
+function characterArt(req: CharacterArtRequest): { prompt: string; negative: string } {
+  const { settings } = req.project
+  const { name, appearance } = req.character
+  return {
+    prompt: [
+      settings.style.prompt,
+      appearance ? `${name}: ${appearance}` : name,
+      CHARACTER_ART_TAIL,
+    ]
+      .filter(Boolean)
+      .join('\n'),
     negative: settings.style.negative ?? '',
   }
 }
@@ -330,13 +351,29 @@ function critique(req: CritiqueRequest): LlmPrompt {
   return { system, user, schema }
 }
 
-export const prompts = { panelArt, planPages, proposeLayout, critique }
+export const prompts = { panelArt, characterArt, planPages, proposeLayout, critique }
 
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
   const { fixtures } = await import('@manga/schema')
 
   const project = fixtures.samplePage01
+
+  test('characterArt joins the style, the name with the appearance, and the fixed tail', () => {
+    const character = { id: 'c', name: 'エル', shortName: 'L', appearance: '銀髪、黒いコート' }
+    const { prompt, negative } = prompts.characterArt({
+      project: { settings: { ...project.settings, style: { prompt: 'ink', negative: 'color' } } },
+      character,
+    })
+    expect(prompt.split('\n')).toEqual(['ink', 'エル: 銀髪、黒いコート', CHARACTER_ART_TAIL])
+    expect(negative).toBe('color')
+    const bare = prompts.characterArt({
+      project: { settings: { ...project.settings, style: { prompt: '' } } },
+      character: { ...character, appearance: undefined },
+    })
+    expect(bare.prompt.split('\n')).toEqual(['エル', CHARACTER_ART_TAIL])
+    expect(bare.negative).toBe('')
+  })
 
   test('proposeLayout embeds the layout proposal JSON Schema and returns it as schema', () => {
     const { system, schema } = prompts.proposeLayout({ project, script: 's' })

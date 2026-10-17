@@ -1,4 +1,5 @@
 import type {
+  CharacterArtRequest,
   CritiqueResponse,
   ID,
   LayoutProposalResponse,
@@ -9,7 +10,13 @@ import type {
   Project,
 } from '@manga/schema'
 
-export type { CritiqueResponse, LayoutProposalResponse, PagePlanResponse, PanelArtRequest }
+export type {
+  CharacterArtRequest,
+  CritiqueResponse,
+  LayoutProposalResponse,
+  PagePlanResponse,
+  PanelArtRequest,
+}
 
 /** 生成結果。image は PNG */
 export interface PanelArtResponse {
@@ -37,6 +44,8 @@ export interface CritiqueRequest {
 
 export interface ImageProvider {
   generatePanelArt(req: PanelArtRequest): Promise<PanelArtResponse>
+  /** キャラの参照画像を名前と外見から 1 枚作る。縦長の全身 */
+  generateCharacterArt(req: CharacterArtRequest): Promise<PanelArtResponse>
 }
 
 export interface LlmProvider {

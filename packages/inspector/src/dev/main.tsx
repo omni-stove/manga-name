@@ -104,6 +104,7 @@ function Playground() {
             character={character}
             onChange={onChange}
             onPickReference={() => console.log('onPickReference')}
+            onGenerateReference={() => console.log('onGenerateReference')}
             resolveAsset={resolveAsset}
           />
         )}

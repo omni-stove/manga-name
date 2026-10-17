@@ -216,3 +216,19 @@ describe('response', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('generateCharacterArt', () => {
+  test('sends only the prompt with the negative appended, in 3:4', async () => {
+    const character = { id: 'c', name: 'エル', shortName: 'L', appearance: '銀髪' }
+    const res = await provider.generateCharacterArt({
+      project: { settings: { ...settings, style: { prompt: 'ink', negative: 'color' } } },
+      character,
+    })
+    const body = sentBody()
+    expect(body.generationConfig.imageConfig).toEqual({ imageSize: '1K', aspectRatio: '3:4' })
+    expect(body.contents[0]?.parts).toEqual([{ text: res.prompt }])
+    expect(res.prompt).toContain('エル: 銀髪')
+    expect(res.prompt.endsWith('\navoid: color')).toBe(true)
+    expect(new Uint8Array(await res.image.arrayBuffer())).toEqual(PNG_BYTES)
+  })
+})

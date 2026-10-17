@@ -14,6 +14,7 @@ const monthlyLimit = parseMonthlyLimit(env.MONTHLY_GENERATION_LIMIT)
 function countingProvider() {
   const fake = createFakeImageProvider()
   const provider: ImageProvider & { calls: number } = {
+    ...fake,
     calls: 0,
     async generatePanelArt(req) {
       provider.calls++
