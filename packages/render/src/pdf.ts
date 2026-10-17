@@ -11,7 +11,7 @@ import {
 import { FONT_FAMILY, getBackend, loadFonts, type Surface } from './backend'
 import { pagePixelSize } from './geometry'
 import { drawPage } from './page'
-import { wrapHorizontal } from './text'
+import { alphabeticY, wrapHorizontal } from './text'
 import type { RenderContext, RenderOptions } from './types'
 
 export interface ExportPdfOptions extends RenderOptions {
@@ -232,7 +232,7 @@ async function renderNotesSheets(
     surface.ctx.fillRect(0, 0, size.w, size.h)
     surface.ctx.fillStyle = '#000'
     surface.ctx.textAlign = 'left'
-    surface.ctx.textBaseline = 'top'
+    surface.ctx.textBaseline = 'alphabetic'
     surfaces.push(surface)
     return surface
   }
@@ -248,7 +248,7 @@ async function renderNotesSheets(
         c.font = font
         y = pad
       }
-      c.fillText(line, x, y)
+      c.fillText(line, x, alphabeticY(y, fontPx, 'top'))
       y += lineHeight
     }
   }

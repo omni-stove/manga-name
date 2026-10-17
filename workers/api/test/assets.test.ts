@@ -3,6 +3,7 @@ import type { Project } from '@manga/schema'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createApp } from '../src/app'
 import { MAX_ASSET_BYTES, UPLOAD_URL_TTL_MS } from '../src/assets'
+import type { Env } from '../src/env'
 import { isDecodablePng } from '../src/png'
 import { DEBUG_USER_HEADER } from '../src/user'
 
@@ -49,8 +50,41 @@ async function uploadUrl(projectId: string, mime: string, size: number, user = '
   return { res, ...((res.ok ? await res.json() : {}) as { assetId?: string; url?: string }) }
 }
 
-function upload(url: string, body: Uint8Array | ReadableStream, contentType = 'image/png') {
-  return app.request(url, { method: 'PUT', headers: { 'content-type': contentType }, body }, env)
+/** バイト列の本文には実際のクライアントと同じく Content-Length を付け、ストリームの本文には付けない */
+function upload(
+  url: string,
+  body: Uint8Array | ReadableStream,
+  contentType = 'image/png',
+  bindings: Env = env,
+) {
+  // workerd の Request はバイト列の本文から Content-Length ヘッダを作らない
+  const headers: Record<string, string> = { 'content-type': contentType }
+  if (body instanceof Uint8Array) headers['content-length'] = String(body.byteLength)
+  return app.request(url, { method: 'PUT', headers, body }, bindings)
+}
+
+/**
+ * put に渡された本文を読み切ってから R2 に書く ASSETS を持つ env。
+ * 本文が途中で失敗する PUT はこれで送る。miniflare の R2 シミュレータは途中で失敗した本文を受けると、
+ * 本番の R2 と同じく put を reject させたうえで、シミュレータ側の isolate でも Uncaught (in promise) を
+ * workerd のログに出す。本文を先に読み切れば、同じ失敗が R2 に届く前に put の reject として起きる。
+ */
+function envReadingBodyBeforeR2(): Env {
+  const assets = new Proxy(env.ASSETS, {
+    get(target, prop) {
+      if (prop === 'put') {
+        return async (key: string, value: Parameters<R2Bucket['put']>[1], options?: R2PutOptions) =>
+          target.put(
+            key,
+            value instanceof ReadableStream ? await new Response(value).arrayBuffer() : value,
+            options,
+          )
+      }
+      const member = Reflect.get(target, prop)
+      return typeof member === 'function' ? member.bind(target) : member
+    },
+  })
+  return { ...env, ASSETS: assets }
 }
 
 async function issue(projectId: string, size: number) {
@@ -153,13 +187,15 @@ describe('asset upload with a signed URL', () => {
     expect((await upload(url, pngOfSize(1024), 'text/html')).status).toBe(400)
     expect((await upload(url, pngOfSize(1023))).status).toBe(400)
     expect((await upload(url, pngOfSize(1025))).status).toBe(400)
-    const short = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(pngOfSize(1000))
-        controller.close()
-      },
-    })
-    expect((await upload(url, short)).status).toBe(400)
+    for (const size of [1000, 1025]) {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(pngOfSize(size))
+          controller.close()
+        },
+      })
+      expect((await upload(url, stream, 'image/png', envReadingBodyBeforeR2())).status).toBe(400)
+    }
     expect((await call(`/v1/projects/${projectId}/assets/${assetId}`)).status).toBe(404)
 
     expect((await upload(url, pngOfSize(1024))).status).toBe(201)

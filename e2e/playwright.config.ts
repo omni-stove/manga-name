@@ -82,6 +82,9 @@ export default defineConfig({
             `--var WEB_ORIGINS:http://localhost:${CLOUD_PORT}`,
             '--var BETTER_AUTH_SECRET:e2e-better-auth-secret-0123456789abcdef',
             '--var ASSET_URL_SECRET:e2e-asset-url-secret-0123456789abcdef',
+            // workers/api/.env の実キーを空で上書きして Fake で生成させる。実 API は遅くて結果も揺れ、手元で走らせるたびに課金される
+            '--var GEMINI_API_KEY:',
+            '--var ANTHROPIC_API_KEY:',
           ].join(' '),
         ),
       ].join(' && '),

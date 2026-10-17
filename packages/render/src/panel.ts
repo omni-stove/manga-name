@@ -1,7 +1,7 @@
 import { cornerAnchor } from '@manga/schema'
 import { FONT_FAMILY } from './backend'
 import type { PxPoint, PxRect } from './geometry'
-import { wrapHorizontal } from './text'
+import { alphabeticY, wrapHorizontal } from './text'
 
 type Ctx = CanvasRenderingContext2D
 
@@ -63,9 +63,9 @@ export function drawPlaceholder(
   ctx.clip()
   ctx.fillStyle = '#000'
   ctx.textAlign = 'left'
-  ctx.textBaseline = 'top'
+  ctx.textBaseline = 'alphabetic'
   ctx.font = `${numberPx}px "${FONT_FAMILY}"`
-  ctx.fillText(String(panel.order), rect.x + pad, rect.y + pad)
+  ctx.fillText(String(panel.order), rect.x + pad, alphabeticY(rect.y + pad, numberPx, 'top'))
 
   ctx.font = `${fontPx}px "${FONT_FAMILY}"`
   const lineHeight = fontPx * 1.4
@@ -74,7 +74,7 @@ export function drawPlaceholder(
   const text = [panel.camera && `[${panel.camera}]`, panel.note].filter(Boolean).join('\n')
   for (const line of wrapHorizontal(ctx, text, rect.w - pad * 2)) {
     if (y + lineHeight > bottom) break
-    ctx.fillText(line, rect.x + pad, y)
+    ctx.fillText(line, rect.x + pad, alphabeticY(y, fontPx, 'top'))
     y += lineHeight
   }
   ctx.restore()
@@ -100,9 +100,9 @@ export function drawPanelNumber(
   ctx.stroke()
   ctx.fillStyle = '#000'
   ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
+  ctx.textBaseline = 'alphabetic'
   ctx.font = `${fontPx}px "${FONT_FAMILY}"`
-  ctx.fillText(String(order), cx, cy)
+  ctx.fillText(String(order), cx, alphabeticY(cy, fontPx, 'middle'))
   ctx.restore()
 }
 
@@ -122,18 +122,18 @@ export function drawNotesMargin(
   ctx.clip()
   ctx.fillStyle = '#000'
   ctx.textAlign = 'left'
-  ctx.textBaseline = 'top'
+  ctx.textBaseline = 'alphabetic'
   let y = area.y + pad
   for (const panel of panels) {
     ctx.font = `bold ${fontPx}px "${FONT_FAMILY}"`
     const head = [String(panel.order), panel.camera].filter(Boolean).join(' ')
     for (const line of wrapHorizontal(ctx, head, area.w - pad * 2)) {
-      ctx.fillText(line, area.x + pad, y)
+      ctx.fillText(line, area.x + pad, alphabeticY(y, fontPx, 'top'))
       y += lineHeight
     }
     ctx.font = `${fontPx}px "${FONT_FAMILY}"`
     for (const line of wrapHorizontal(ctx, panel.note ?? '', area.w - pad * 2)) {
-      ctx.fillText(line, area.x + pad, y)
+      ctx.fillText(line, area.x + pad, alphabeticY(y, fontPx, 'top'))
       y += lineHeight
     }
     y += lineHeight * 0.5
