@@ -13,6 +13,7 @@ import {
 } from './critique'
 import styles from './critique-panel.module.css'
 import { errorMessage } from './route-error'
+import { FailureAlert } from './sign-in'
 import type { ProjectStore } from './store/project-store'
 
 /** 相談した時点の診断の件数。適用後の診断と比べて減ったかを見せる */
@@ -25,7 +26,7 @@ interface Counts {
 type Consultation =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'error'; message: string }
+  | { status: 'error'; error: unknown }
   | { status: 'done'; response: CritiqueResponse; before: Counts }
 
 /** 絵があるコマに提案を入れた記録。そのコマの絵が描き直されるか、提案が Undo で外れるまで再生成を促す */
@@ -89,7 +90,7 @@ export function CritiquePanel(props: CritiquePanelProps) {
       const response = await llmProvider.critique(critiqueRequest(page, diagnosis))
       if (requestId.current === id) setConsultation({ status: 'done', response, before })
     } catch (e) {
-      if (requestId.current === id) setConsultation({ status: 'error', message: errorMessage(e) })
+      if (requestId.current === id) setConsultation({ status: 'error', error: e })
     }
   }
 
@@ -122,9 +123,7 @@ export function CritiquePanel(props: CritiquePanelProps) {
         </Button>
       </div>
       {consultation.status === 'error' && (
-        <p className={common.error} role="alert">
-          AI に相談できませんでした: {consultation.message}
-        </p>
+        <FailureAlert failure="AI に相談できませんでした" error={consultation.error} />
       )}
       {consultation.status === 'done' && (
         <Result
