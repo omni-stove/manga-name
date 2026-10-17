@@ -21,6 +21,8 @@ export const PROJECT_ROOT = 'project'
 export interface YjsProjectStoreOptions extends ProjectStoreOptions {
   /** Project を置く Y.Doc。既に Project を持っていればそれを起点にし、`initial` は使わない。省略時は新しく作る */
   doc?: Y.Doc
+  /** 古い版の Y.Doc を開いたとき版を書き戻すか。既定 true。サーバが版の変更を許さないロールでは false にして、読むだけにする */
+  writeBackVersion?: boolean
 }
 
 /** Yjs 版の ProjectStore。同期プロバイダは `doc` をつなぐ */
@@ -50,6 +52,7 @@ export function createYjsProjectStore(
     historyLimit = 200,
     now = () => new Date().toISOString(),
     doc = new Y.Doc(),
+    writeBackVersion = true,
   } = options
 
   const root = doc.getMap<unknown>(PROJECT_ROOT)
@@ -64,7 +67,7 @@ export function createYjsProjectStore(
   } else {
     const stored = root.toJSON()
     project = parseProject(stored)
-    if (stored.schemaVersion !== project.schemaVersion) {
+    if (writeBackVersion && stored.schemaVersion !== project.schemaVersion) {
       doc.transact(() => root.set('schemaVersion', project.schemaVersion), untracked)
     }
   }
