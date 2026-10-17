@@ -12,12 +12,12 @@ import {
   PDFRawStream,
 } from 'pdf-lib'
 
-/** 6 コマ、右綴じ 1 ページのフィクスチャ。Fake の生成結果は docs/fixtures/art と同じバイト列になる */
+/** 6 コマ、右綴じ 1 ページのフィクスチャ。Fake の生成結果は fixtures/art と同じバイト列になる */
 export const FIXTURE_PROJECT = fileURLToPath(
-  new URL('../../docs/fixtures/sample-page-01.json', import.meta.url),
+  new URL('../../fixtures/sample-page-01.json', import.meta.url),
 )
 
-/** packages/render のテストが描いた、フィクスチャに docs/fixtures/art を採用させたページ（コマ番号つき） */
+/** packages/render のテストが描いた、フィクスチャに fixtures/art を採用させたページ（コマ番号つき） */
 export const RENDER_SNAPSHOT_ARTS = fileURLToPath(
   new URL('../../packages/render/src/__snapshots__/page-arts.png', import.meta.url),
 )

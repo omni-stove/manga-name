@@ -13,9 +13,9 @@ const project = fixtures.samplePage01
 const samplePage = project.episodes[0]?.pages[0] as Page
 
 const fixtureArtUrl = (panelId: string) =>
-  new URL(`../../../docs/fixtures/art/${panelId}.png`, import.meta.url).href
+  new URL(`../../../fixtures/art/${panelId}.png`, import.meta.url).href
 
-/** 全コマに docs/fixtures/art/<panelId>.png を採用したページ */
+/** 全コマに fixtures/art/<panelId>.png を採用したページ */
 const pageWithArts: Page = {
   ...samplePage,
   panels: samplePage.panels.map((panel) => ({

@@ -56,7 +56,7 @@ jobs:
           # test: typecheck の除外に加え、vitest と vite build が読まない .github/ と、ルートの vitest が外している workers/
           filters: |
             lint:
-              - "!docs/**"
+              - "!fixtures/**"
               - "!**/*.md"
               - "!**/*.rs"
               - "!**/*.toml"
@@ -77,7 +77,7 @@ jobs:
               - "!.github/**"
               - "!workers/**"
 
-      # test-workers: workers/api と、それが import するパッケージ（packages/schema と packages/ai は docs/fixtures を読む）
+      # test-workers: workers/api と、それが import するパッケージ（packages/schema と packages/ai は fixtures を読む）
       - uses: dorny/paths-filter@v3
         id: include
         if: github.event_name == 'pull_request'
@@ -88,7 +88,7 @@ jobs:
               - "packages/schema/**"
               - "packages/ai/**"
               - "packages/diagnosis/**"
-              - "docs/fixtures/**"
+              - "fixtures/**"
               - "package.json"
               - "pnpm-lock.yaml"
               - "pnpm-workspace.yaml"
@@ -174,7 +174,7 @@ jobs:
       - name: Bundle size
         run: pnpm --filter @manga/web size
 
-      # テストが docs/fixtures/art を、vite build が routeTree.gen.ts を作り直すので、ソースと食い違う生成物はここで差分になる
+      # テストが fixtures/art を、vite build が routeTree.gen.ts を作り直すので、ソースと食い違う生成物はここで差分になる
       - name: Generated files are up to date
         run: |
           git status --porcelain

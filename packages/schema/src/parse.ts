@@ -13,7 +13,7 @@ if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
   test('parseProject accepts the sample fixture', async () => {
-    const { default: fixture } = await import('../../../docs/fixtures/sample-page-01.json')
+    const { default: fixture } = await import('../../../fixtures/sample-page-01.json')
     expect(parseProject(fixture.project).id).toBe('prj_sample')
   })
 

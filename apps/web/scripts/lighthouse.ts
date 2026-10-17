@@ -11,9 +11,7 @@ import puppeteer from 'puppeteer-core'
 import { preview } from 'vite'
 
 const TTI_BUDGET_MS = 3000
-const FIXTURE = fileURLToPath(
-  new URL('../../../docs/fixtures/sample-page-01.json', import.meta.url),
-)
+const FIXTURE = fileURLToPath(new URL('../../../fixtures/sample-page-01.json', import.meta.url))
 const out = new URL('../dist/lighthouse/', import.meta.url)
 
 const server = await preview({

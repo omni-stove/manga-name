@@ -1,5 +1,5 @@
 {
-  "$comment": "createFakeLlmProvider().critique の固定応答。docs/fixtures/sample-page-01.json の pg_1 に対する提案で、patch の path は Project を根にする。",
+  "$comment": "createFakeLlmProvider().critique の固定応答。fixtures/sample-page-01.json の pg_1 に対する提案で、patch の path は Project を根にする。",
   "summary": "視線はおおむね右上から左下へ流れています。Panel 4 の E が経路の下端ぎりぎりにあり、Panel 5 には誘導線がないため、目元の焦点が弱くなっています。",
   "suggestions": [
     {

@@ -15,7 +15,7 @@ const page = project.episodes[0]?.pages[0] as Page
 const character = project.characters[0]
 const panelIds = page.panels.map((p) => p.id)
 
-/** 各コマに docs/fixtures/art/<panelId>.png を 3 版ずつ持たせ、2 版目を採用した状態 */
+/** 各コマに fixtures/art/<panelId>.png を 3 版ずつ持たせ、2 版目を採用した状態 */
 const withArts = (panel: Page['panels'][number]) => ({
   ...panel,
   arts: [1, 2, 3].map((n) => ({
@@ -30,7 +30,7 @@ const withArts = (panel: Page['panels'][number]) => ({
 })
 
 const resolveAsset = async (ref: string) =>
-  new URL(`../../../../docs/fixtures/art/${ref.replace(/^fixture:/, '')}.png`, import.meta.url).href
+  new URL(`../../../../fixtures/art/${ref.replace(/^fixture:/, '')}.png`, import.meta.url).href
 
 type View = { kind: 'panel' | 'bubble'; id: string } | { kind: 'page' | 'character' | 'settings' }
 

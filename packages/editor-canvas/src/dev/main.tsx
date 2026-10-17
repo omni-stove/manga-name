@@ -10,7 +10,7 @@ import '@manga/ui/tokens.css'
 import '@manga/ui/base.css'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import diagnosisFixture from '../../../../docs/fixtures/sample-page-01.diagnosis.json'
+import diagnosisFixture from '../../../../fixtures/sample-page-01.diagnosis.json'
 import { EditorCanvas } from '../editor-canvas'
 import type { Layers, Selection, Tool } from '../types'
 
@@ -19,7 +19,7 @@ const samplePage = project.episodes[0]?.pages[0] as Page
 // 診断の計算はアプリ側の仕事なので、プレイグラウンドは編集前のページの診断だけを出す
 const sampleDiagnosis = PageDiagnosisSchema.parse(diagnosisFixture.diagnosis)
 
-/** 全コマに docs/fixtures/art/<panelId>.png を採用したページ */
+/** 全コマに fixtures/art/<panelId>.png を採用したページ */
 function withFixtureArts(page: Page): Page {
   return {
     ...page,
@@ -40,7 +40,7 @@ function withFixtureArts(page: Page): Page {
 }
 
 const resolveAsset = async (ref: string) =>
-  new URL(`../../../../docs/fixtures/art/${ref.replace(/^fixture:/, '')}.png`, import.meta.url).href
+  new URL(`../../../../fixtures/art/${ref.replace(/^fixture:/, '')}.png`, import.meta.url).href
 
 /** page を root とした JSON Patch を当てる。プレイグラウンドで onChange を確かめるためだけのもの */
 function applyPatch(page: Page, patch: Patch): Page {

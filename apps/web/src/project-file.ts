@@ -16,7 +16,7 @@ export function exportFileName(project: Project): string {
 
 /**
  * JSON テキストを読んでプロジェクトにする。
- * `exportProjectJson` の出力と、`{ "project": ... }` で包んだ docs/fixtures の形式の両方を受け付ける。
+ * `exportProjectJson` の出力と、`{ "project": ... }` で包んだ fixtures の形式の両方を受け付ける。
  * JSON でない、またはスキーマを通らないときは throw する。
  */
 export function parseProjectFile(text: string): Project {
@@ -46,8 +46,8 @@ if (import.meta.vitest) {
     expect(parseProjectFile(json)).toEqual(fixtures.samplePage01)
   })
 
-  test('the fixture file in docs/fixtures can be imported', async () => {
-    const { default: text } = await import('../../../docs/fixtures/sample-page-01.json?raw')
+  test('the fixture file in fixtures can be imported', async () => {
+    const { default: text } = await import('../../../fixtures/sample-page-01.json?raw')
     const project = parseProjectFile(text)
     expect(project.id).toBe('prj_sample')
     expect(project.episodes[0]?.pages[0]?.panels).toHaveLength(6)
