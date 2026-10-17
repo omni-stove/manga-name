@@ -13,7 +13,7 @@ import {
 } from '@manga/schema'
 
 /**
- * ページ一覧・キャラクター・設定の画面が使う操作。どれも Project を変えず、
+ * エピソード一覧・ページ一覧・キャラクター・設定の画面が使う操作。どれも Project を変えず、
  * ProjectStore.applyPatch に渡す JSON Patch を返す。
  */
 
@@ -63,8 +63,10 @@ const newEpisode = (project: Project, pages: Page[] = []): Episode => ({
   pages,
 })
 
-export function addEpisodePatch(project: Project): Patch {
-  return [{ op: 'add', path: '/episodes/-', value: newEpisode(project) }]
+/** 空のエピソードを末尾に足す。足したエピソードも返すので、追加のあとにそこへ移れる */
+export function addEpisodePatch(project: Project): { patch: Patch; episode: Episode } {
+  const episode = newEpisode(project)
+  return { patch: [{ op: 'add', path: '/episodes/-', value: episode }], episode }
 }
 
 /**
@@ -239,7 +241,7 @@ if (import.meta.vitest) {
 
     test('addPage appends to the given or last episode', () => {
       const store = storeOf(sample)
-      store.applyPatch(addEpisodePatch(store.get()))
+      store.applyPatch(addEpisodePatch(store.get()).patch)
       const [first, second] = store.get().episodes
       if (!first || !second) throw new Error('episode が 2 つない')
       store.applyPatch(addPagePatch(store.get(), 'blank').patch)

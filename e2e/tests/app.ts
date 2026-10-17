@@ -22,22 +22,32 @@ export const RENDER_SNAPSHOT_ARTS = fileURLToPath(
   new URL('../../packages/render/src/__snapshots__/page-arts.png', import.meta.url),
 )
 
-/** 一覧からプロジェクトを作り、ページ一覧に移る */
+/** 一覧からプロジェクトを作り、1 話目を足して開く */
 export async function createProject(page: Page, title: string): Promise<void> {
   await page.goto('/')
   await page.getByLabel('タイトル').fill(title)
   await page.getByRole('button', { name: '新規作成' }).click()
-  await expect(page.getByText('エピソード', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'エピソードを追加' }).click()
+  await expect(page.getByRole('button', { name: 'ページを追加' })).toBeVisible()
 }
 
-/** 一覧のファイル選択からプロジェクト JSON を読み込み、ページ一覧に移る */
+/** 一覧のファイル選択からプロジェクト JSON を読み込み、FIXTURE_PROJECT の 1 話目を開く */
 export async function importProject(page: Page, file: string): Promise<void> {
   await page.goto('/')
   await page.locator('input[type="file"]').setInputFiles(file)
-  await expect(page.getByText('エピソード', { exact: true })).toBeVisible()
+  await openEpisode(page, FIXTURE_EPISODE)
 }
 
-/** ページ一覧から n ページ目のエディタを開く */
+/** FIXTURE_PROJECT の 1 話目の題 */
+export const FIXTURE_EPISODE = 'sample episode'
+
+/** エピソード一覧から題が title の話を開く */
+export async function openEpisode(page: Page, title: string): Promise<void> {
+  await page.getByRole('link', { name: title }).click()
+  await expect(page.getByRole('button', { name: 'ページを追加' })).toBeVisible()
+}
+
+/** エピソードのページ一覧から n ページ目のエディタを開く */
 export async function openPage(page: Page, n: number): Promise<void> {
   await page.getByRole('link', { name: `${n} ページ` }).click()
   await expect(canvas(page)).toBeVisible()

@@ -78,6 +78,7 @@ if (import.meta.vitest) {
 
   const project = fixtures.samplePage01
   const projectId = project.id
+  const episodeId = project.episodes[0]?.id ?? ''
   const pageId = project.episodes[0]?.pages[0]?.id ?? ''
 
   let library: ProjectLibrary
@@ -87,10 +88,11 @@ if (import.meta.vitest) {
     library = createProjectLibrary(storage)
   })
 
-  describe('6 ルートが描画される', () => {
+  describe('7 ルートが描画される', () => {
     test.each([
       ['/', 'プロジェクト一覧'],
       [`/p/${projectId}`, 'エピソードを追加'],
+      [`/p/${projectId}/episodes/${episodeId}`, '脚本から下書き'],
       [`/p/${projectId}/pages/${pageId}`, 'インスペクタ'],
       [`/p/${projectId}/characters`, 'キャラクター一覧'],
       [`/p/${projectId}/settings`, 'プロジェクト設定'],
@@ -104,15 +106,25 @@ if (import.meta.vitest) {
     expect(await render(library, '/')).toContain(project.title)
   })
 
-  test('ページ一覧にページと生成状況が出る', async () => {
+  test('エピソード一覧にエピソードとページ数が出て、ページの追加はエピソードを開いた先にある', async () => {
     const html = await render(library, `/p/${projectId}`)
-    expect(html).toContain(`/p/${projectId}/pages/${pageId}`)
-    expect(html).toContain('未生成')
-    expect(html).toContain('脚本から下書き')
+    expect(html).toContain(`/p/${projectId}/episodes/${episodeId}`)
+    expect(html).toContain(project.episodes[0]?.title)
+    expect(html).toContain('1 ページ')
+    expect(html).not.toContain('ページを追加')
+    expect(html).not.toContain('脚本から下書き')
   })
 
-  test('知らないプロジェクトとページは見つからない旨を出す', async () => {
+  test('エピソードにページと生成状況が出る', async () => {
+    const html = await render(library, `/p/${projectId}/episodes/${episodeId}`)
+    expect(html).toContain(`/p/${projectId}/pages/${pageId}`)
+    expect(html).toContain('未生成')
+    expect(html).toContain('ページを追加')
+  })
+
+  test('知らないプロジェクトとエピソードとページは見つからない旨を出す', async () => {
     expect(await render(library, '/p/nope')).toContain('見つかりません')
+    expect(await render(library, `/p/${projectId}/episodes/nope`)).toContain('見つかりません')
     expect(await render(library, `/p/${projectId}/pages/nope`)).toContain('見つかりません')
   })
 
@@ -129,7 +141,8 @@ if (import.meta.vitest) {
     // 別のアダプタとライブラリで開き直すことで、メモリ上の状態を持ち越さないリロードを再現する
     const after = createProjectLibrary(createIndexedDbStorage(name))
     expect(await render(after, '/')).toContain('復元テスト')
-    const html = await render(after, `/p/${created.id}`)
+    const episode = (await after.open(created.id))?.get().episodes[0]
+    const html = await render(after, `/p/${created.id}/episodes/${episode?.id}`)
     expect(html).toContain(`/p/${created.id}/pages/${page.id}`)
     expect((await after.open(created.id))?.get().episodes[0]?.pages[0]?.panels).toHaveLength(6)
   })

@@ -300,6 +300,9 @@ function Editor() {
         <Typography as="span" variant="label" tone="muted">
           {project.title || '無題'}
         </Typography>
+        <Link to="/p/$projectId/episodes/$episodeId" params={{ projectId, episodeId: episode.id }}>
+          {episode.title}
+        </Link>
         <Typography as="span" weight="bold">
           {pageIndex + 1} ページ
         </Typography>
@@ -826,7 +829,7 @@ function PageNotFound() {
       </Typography>
       {projectId ? (
         <Link to="/p/$projectId" params={{ projectId }}>
-          ページ一覧へ
+          エピソード一覧へ
         </Link>
       ) : (
         <Link to="/">プロジェクト一覧へ</Link>
