@@ -4,6 +4,7 @@ import { CollaborationBar } from '../collaboration-view'
 import { HistoryButtons } from '../history-buttons'
 import { SaveStatusIndicator } from '../save-status'
 import { useProject } from '../use-project'
+import { useUndoShortcuts } from '../use-undo-shortcuts'
 import styles from './project.module.css'
 
 export const Route = createFileRoute('/p/$projectId')({
@@ -19,6 +20,7 @@ export const Route = createFileRoute('/p/$projectId')({
 function ProjectLayout() {
   const { store, collab } = Route.useLoaderData()
   const project = useProject(store)
+  useUndoShortcuts(store)
   return (
     <section>
       <XStack wrap gap={24} rowGap={8} className={styles.toolbar}>
