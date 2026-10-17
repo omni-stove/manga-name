@@ -42,6 +42,8 @@ const MAX_ATTEMPTS = 2
 const MAX_SCRIPT_LENGTH = 20_000
 /** ページ数の目安の上限 */
 const MAX_PAGE_COUNT = 64
+/** 1 分あたりの生成上限(10)に、ページ割り 1 回とコマ割りのまとまりが収まる最大ページ数。Web の MAX_PAGE_COUNT と揃える */
+const MAX_PLANNED_PAGES = 32
 /**
  * critique の本文の上限。ページの JSON は手描きの線や絵の履歴で際限なく膨らむので、
  * LLM に渡すトークン数を抑えるため本文の大きさで切る。Web は線と絵を外して送る
@@ -266,6 +268,12 @@ export function createApp(options: AppOptions = {}) {
       // 居ないキャラを指す割り振りも、ページの登場キャラがスキーマを通らなくなるので不正として作り直させる
       const result = PagePlanResponseSchema.safeParse(await provider.planPages(parsed.data))
       if (!result.success) return undefined
+      // 割り振りの枚数がコマ割りの要求数を決めるので、上限超過と指定枚数との不一致は作り直させる
+      const expected = parsed.data.pageCount
+      const count = result.data.pages.length
+      if (count > MAX_PLANNED_PAGES || (expected !== undefined && count !== expected)) {
+        return undefined
+      }
       const known = result.data.pages.every((p) => p.cast.every((id) => characterIds.has(id)))
       return known ? result.data : undefined
     })
