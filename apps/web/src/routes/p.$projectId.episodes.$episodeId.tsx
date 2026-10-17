@@ -1,6 +1,6 @@
 import { type Episode, type PageTemplate, pageCharacterIds } from '@manga/schema'
-import { Button, Input, Select, Typography, XStack, YStack } from '@manga/ui'
-import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
+import { Button, ConfirmDialog, Input, Select, Typography, XStack, YStack } from '@manga/ui'
+import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { PeerBadge, usePeers } from '../collaboration-view'
@@ -12,9 +12,11 @@ import {
   artStatus,
   movePagePatch,
   PAGE_TEMPLATES,
+  removeEpisodePatch,
   removePagePatch,
   renameEpisodePatch,
 } from '../project-ops'
+import { RemoveEpisodeDialog } from '../remove-episode-dialog'
 import { ScriptDraftDialog } from '../script-draft-dialog'
 import type { ProjectStore } from '../store/project-store'
 import { useApplyPatch, useProject } from '../use-project'
@@ -38,6 +40,10 @@ function EpisodePages() {
   useUndoShortcuts(store)
   const [template, setTemplate] = useState<PageTemplate>('3rows')
   const [drafting, setDrafting] = useState(false)
+  const [removingEpisode, setRemovingEpisode] = useState(false)
+  /** 確認中のページの id と、確認の文言に出すページ番号 */
+  const [removingPage, setRemovingPage] = useState<{ id: string; number: number }>()
+  const navigate = useNavigate()
   const episode = project.episodes.find((e) => e.id === episodeId)
   // 開いている間に Undo や他の人の操作でエピソードが消えることがある
   if (!episode) return <EpisodeNotFound projectId={projectId} />
@@ -50,7 +56,21 @@ function EpisodePages() {
           エピソード一覧
         </Link>
         <EpisodeTitle episode={episode} apply={apply} />
+        <Button size="small" variant="ghost" onClick={() => setRemovingEpisode(true)}>
+          エピソードを削除
+        </Button>
       </XStack>
+      {removingEpisode && (
+        <RemoveEpisodeDialog
+          episode={episode}
+          onConfirm={() => {
+            setRemovingEpisode(false)
+            if (apply('エピソードを削除', (p) => removeEpisodePatch(p, episode.id)))
+              void navigate({ to: '/p/$projectId', params: { projectId } })
+          }}
+          onCancel={() => setRemovingEpisode(false)}
+        />
+      )}
       {error && (
         <Typography tone="alert" role="alert">
           {error}
@@ -170,10 +190,7 @@ function EpisodePages() {
                 <Button
                   size="small"
                   variant="ghost"
-                  onClick={() => {
-                    if (!window.confirm(`${index + 1} ページを削除しますか？`)) return
-                    apply('ページを削除', (p) => removePagePatch(p, page.id))
-                  }}
+                  onClick={() => setRemovingPage({ id: page.id, number: index + 1 })}
                 >
                   削除
                 </Button>
@@ -182,6 +199,18 @@ function EpisodePages() {
           )
         })}
       </ol>
+      {removingPage && (
+        <ConfirmDialog
+          title="ページを削除"
+          message={`${removingPage.number} ページを削除しますか？`}
+          confirmLabel="削除"
+          onConfirm={() => {
+            apply('ページを削除', (p) => removePagePatch(p, removingPage.id))
+            setRemovingPage(undefined)
+          }}
+          onCancel={() => setRemovingPage(undefined)}
+        />
+      )}
     </YStack>
   )
 }

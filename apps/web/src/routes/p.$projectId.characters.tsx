@@ -1,4 +1,5 @@
-import { Button, Input, Typography, XStack, YStack } from '@manga/ui'
+import type { Character } from '@manga/schema'
+import { Button, ConfirmDialog, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi } from '@tanstack/react-router'
 import { useState } from 'react'
 import { CharacterPane } from '../character-pane'
@@ -27,6 +28,7 @@ function CharacterList() {
   const project = useProject(store)
   const { apply, error } = useApplyPatch(store)
   const resolveAsset = useAssetResolver(library.resolveAsset)
+  const [removing, setRemoving] = useState<Character>()
   return (
     <YStack gap={8}>
       <Typography variant="heading">キャラクター一覧</Typography>
@@ -54,20 +56,25 @@ function CharacterList() {
               使用コマ {characterUsage(project, character.id)}
             </Typography>
             <XStack as="span" wrap gap={6} className={common.cardActions}>
-              <Button
-                size="small"
-                variant="ghost"
-                onClick={() => {
-                  if (!window.confirm(`${character.name} を削除しますか？`)) return
-                  apply('キャラクターを削除', (p) => removeCharacterPatch(p, character.id))
-                }}
-              >
+              <Button size="small" variant="ghost" onClick={() => setRemoving(character)}>
                 削除
               </Button>
             </XStack>
           </YStack>
         ))}
       </ul>
+      {removing && (
+        <ConfirmDialog
+          title="キャラクターを削除"
+          message={`${removing.name} を削除しますか？`}
+          confirmLabel="削除"
+          onConfirm={() => {
+            apply('キャラクターを削除', (p) => removeCharacterPatch(p, removing.id))
+            setRemoving(undefined)
+          }}
+          onCancel={() => setRemoving(undefined)}
+        />
+      )}
       <YStack as="section" gap={8} className={styles.addSection}>
         <Typography variant="subheading">キャラクターを追加</Typography>
         <div className={styles.add}>
