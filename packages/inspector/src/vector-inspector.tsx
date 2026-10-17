@@ -1,4 +1,5 @@
 import type { Vector } from '@manga/schema'
+import { Typography } from '@manga/ui'
 import { SelectField } from './fields'
 import { optionalString, replace } from './patch'
 import section from './section.module.css'
@@ -23,7 +24,9 @@ export function VectorInspector({ vector, targets, onChange }: VectorInspectorPr
   }
   return (
     <div className={section.section} data-inspector="vector">
-      <h3 className={section.title}>ベクトル</h3>
+      <Typography variant="subheading" className={section.title}>
+        ベクトル
+      </Typography>
       <SelectField
         label="種別"
         value={vector.kind}

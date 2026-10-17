@@ -4,9 +4,9 @@ import { Button } from './button'
 import { Checkbox, Field, FieldGroup, Input, Select, TextArea } from './field'
 
 const meta = {
-  component: Field,
-  args: { label: 'タイトル', children: <Input /> },
-} satisfies Meta<typeof Field>
+  component: Input,
+  args: { label: 'タイトル' },
+} satisfies Meta<typeof Input>
 
 export default meta
 type Story = StoryObj<typeof meta>
@@ -18,20 +18,53 @@ export const WithError: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('入力してください')).toBeVisible()
     await expect(canvas.queryByText('表紙に出ます')).toBeNull()
+    const input = canvas.getByRole('textbox', { name: 'タイトル' })
+    await expect(input).toHaveAttribute('aria-invalid', 'true')
+    await expect(input).toHaveAccessibleDescription('入力してください')
   },
 }
 
-export const WithTextArea: Story = { args: { label: 'メモ', children: <TextArea rows={3} /> } }
+export const Inline: Story = {
+  args: { inline: true },
+  play: async ({ canvas }) => {
+    const label = canvas.getByText('タイトル').getBoundingClientRect()
+    const input = canvas.getByRole('textbox').getBoundingClientRect()
+    await expect(input.left).toBeGreaterThan(label.right)
+  },
+}
 
-export const WithSelect: Story = {
+export const HiddenLabel: Story = {
+  args: { hideLabel: true, placeholder: 'タイトル' },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText('タイトル')).toBeNull()
+    await expect(canvas.getByRole('textbox', { name: 'タイトル' })).toBeVisible()
+  },
+}
+
+export const WithTextArea: StoryObj<typeof TextArea> = {
+  render: (args) => <TextArea {...args} />,
+  args: { label: 'メモ', rows: 3 },
+}
+
+export const WithSelect: StoryObj<typeof Select> = {
+  render: (args) => (
+    <Select {...args}>
+      <option value="a4">A4</option>
+      <option value="b5">B5</option>
+    </Select>
+  ),
+  args: { label: '判型', defaultValue: 'b5' },
+}
+
+export const CustomControl: StoryObj<typeof Field> = {
+  render: (args) => <Field {...args} />,
   args: {
-    label: '判型',
-    children: (
-      <Select defaultValue="b5">
-        <option value="a4">A4</option>
-        <option value="b5">B5</option>
-      </Select>
-    ),
+    label: '重み',
+    hint: '0.50',
+    children: (described) => <input type="range" min={0} max={1} step={0.01} {...described} />,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('slider', { name: '重み' })).toHaveAccessibleDescription('0.50')
   },
 }
 
@@ -63,14 +96,14 @@ export const CheckboxField: StoryObj<typeof Checkbox> = {
 export const InputAcceptsTyping: Story = {
   ...WithInput,
   play: async ({ canvas, userEvent }) => {
-    // hint も label の内側にあるので、名前は「タイトル表紙に出ます」になる
-    const input = canvas.getByRole('textbox', { name: /^タイトル/ })
+    const input = canvas.getByRole('textbox', { name: 'タイトル' })
+    await expect(input).toHaveAccessibleDescription('表紙に出ます')
     await userEvent.type(input, '第一話')
     await expect(input).toHaveValue('第一話')
   },
 }
 
-export const TextAreaAcceptsNewlines: Story = {
+export const TextAreaAcceptsNewlines: typeof WithTextArea = {
   ...WithTextArea,
   play: async ({ canvas, userEvent }) => {
     const textarea = canvas.getByRole('textbox', { name: 'メモ' })
@@ -79,7 +112,7 @@ export const TextAreaAcceptsNewlines: Story = {
   },
 }
 
-export const SelectChangesValue: Story = {
+export const SelectChangesValue: typeof WithSelect = {
   ...WithSelect,
   play: async ({ canvas, userEvent }) => {
     const select = canvas.getByRole('combobox', { name: '判型' })

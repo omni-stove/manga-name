@@ -49,7 +49,7 @@ test('ログインしてクラウドに保存し、別のブラウザで開く�
   // 手元に無いプロジェクトはクラウドの一覧から開く
   await signIn(b)
   await b.getByRole('link', { name: title }).click()
-  await expect(b.getByRole('heading', { name: 'ページ一覧' })).toBeVisible()
+  await expect(b.getByText('ページ一覧', { exact: true })).toBeVisible()
   await openPage(b, 1)
   await expect(inspector(b).getByRole('button', { name: 'フキダシ 1 こんにちは' })).toBeVisible()
   // 生成画像は r2: の ref で届き、API から読んで描く

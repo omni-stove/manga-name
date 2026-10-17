@@ -1,19 +1,11 @@
 .form {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--space-12) var(--space-20);
-  align-items: center;
+  display: flex;
+  flex-direction: column;
   max-width: 40rem;
 }
 
-.form > label {
-  font-size: var(--text-s);
-  color: var(--text-muted);
-}
-
 .form > button {
-  grid-column: 2;
-  justify-self: start;
+  align-self: flex-start;
 }
 
 .size {

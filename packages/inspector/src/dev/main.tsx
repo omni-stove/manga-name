@@ -1,4 +1,5 @@
 import { fixtures, type Page, type Patch } from '@manga/schema'
+import { Typography } from '@manga/ui'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@manga/ui/tokens.css'
@@ -107,7 +108,7 @@ function Playground() {
         )}
       </div>
       <div>
-        <h3>onChange</h3>
+        <Typography variant="subheading">onChange</Typography>
         <pre>{log.join('\n')}</pre>
       </div>
     </div>

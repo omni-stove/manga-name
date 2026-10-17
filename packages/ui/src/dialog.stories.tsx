@@ -2,7 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn, screen, userEvent, waitFor } from 'storybook/test'
 import { Button } from './button'
 import { Dialog } from './dialog'
-import { Field, Input } from './field'
+import { Input } from './field'
+import { Typography } from './typography'
 
 const meta = {
   component: Dialog,
@@ -14,18 +15,14 @@ type Story = StoryObj<typeof meta>
 
 export const Message: Story = {
   args: {
-    children: <p>新しいページを末尾に追加します。</p>,
+    children: <Typography>新しいページを末尾に追加します。</Typography>,
   },
 }
 
 export const WithForm: Story = {
   args: {
     onSubmit: fn(),
-    children: (
-      <Field label="ページ名">
-        <Input name="name" />
-      </Field>
-    ),
+    children: <Input label="ページ名" name="name" />,
     actions: (
       <>
         <Button>キャンセル</Button>

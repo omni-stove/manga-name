@@ -1,8 +1,7 @@
 import type { CritiqueResponse, LlmProvider } from '@manga/ai'
 import type { ID, Page, PageDiagnosis, Patch } from '@manga/schema'
-import { Button, XStack, YStack } from '@manga/ui'
+import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { useEffect, useRef, useState } from 'react'
-import common from './common.module.css'
 import {
   applySuggestion,
   critiqueRequest,
@@ -189,17 +188,17 @@ function Result({
     before.issues !== now.issues || before.miss !== now.miss || before.weak !== now.weak
   return (
     <>
-      <p className={styles.summary} data-critique-summary>
+      <Typography className={styles.summary} data-critique-summary>
         {response.summary}
-      </p>
+      </Typography>
       {changed && (
-        <p className={styles.delta} data-critique-delta>
+        <Typography variant="caption" tone="muted" data-critique-delta>
           問題 {before.issues} → {now.issues} 件、miss {before.miss} → {now.miss}、weak{' '}
           {before.weak} → {now.weak}
-        </p>
+        </Typography>
       )}
       {response.suggestions.length === 0 ? (
-        <p className={common.placeholder}>提案はありません</p>
+        <Typography tone="muted">提案はありません</Typography>
       ) : (
         <YStack as="ol" gap={6} className={styles.cards}>
           {response.suggestions.map((suggestion, i) => {
@@ -219,15 +218,17 @@ function Result({
                 onFocus={preview}
                 onBlur={() => onPreview(null)}
               >
-                <p className={styles.message}>{suggestion.message}</p>
+                <Typography>{suggestion.message}</Typography>
                 {state.kind === 'rejected' && (
-                  <p className={styles.warning} role="alert">
+                  <Typography variant="caption" tone="alert" role="alert">
                     {state.reason}
-                  </p>
+                  </Typography>
                 )}
                 <XStack wrap>
                   {state.kind === 'applied' ? (
-                    <span className={styles.applied}>適用済み（Undo で戻せます）</span>
+                    <Typography as="span" variant="caption" tone="muted">
+                      適用済み（Undo で戻せます）
+                    </Typography>
                   ) : (
                     <Button
                       size="small"
@@ -244,9 +245,9 @@ function Result({
         </YStack>
       )}
       {applyError && (
-        <p className={common.error} role="alert">
+        <Typography tone="alert" role="alert">
           適用できませんでした: {applyError}
-        </p>
+        </Typography>
       )}
       {stale.length > 0 && (
         <YStack as="ul" gap={6} className={styles.regenerate} data-critique-regenerate>

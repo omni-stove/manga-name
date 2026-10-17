@@ -1,5 +1,5 @@
 import type { Episode, PageTemplate } from '@manga/schema'
-import { Button, Select, XStack, YStack } from '@manga/ui'
+import { Button, Select, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
@@ -41,8 +41,8 @@ function PageList() {
   const [earlier, later] = project.settings.direction === 'rtl' ? ['→', '←'] : ['←', '→']
 
   return (
-    <>
-      <h2>ページ一覧</h2>
+    <YStack gap={8}>
+      <Typography variant="heading">ページ一覧</Typography>
       <XStack
         as="form"
         wrap
@@ -53,30 +53,31 @@ function PageList() {
           apply('ページを追加', (p) => addPagePatch(p, template, targetEpisode?.id).patch)
         }}
       >
-        <XStack as="label" className={styles.inline}>
-          テンプレート
+        <Select
+          label="テンプレート"
+          inline
+          value={template}
+          onChange={(e) => setTemplate(e.currentTarget.value as PageTemplate)}
+        >
+          {PAGE_TEMPLATES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </Select>
+        {project.episodes.length > 1 && (
           <Select
-            value={template}
-            onChange={(e) => setTemplate(e.currentTarget.value as PageTemplate)}
+            label="追加先"
+            inline
+            value={targetEpisode?.id}
+            onChange={(e) => setEpisodeId(e.currentTarget.value)}
           >
-            {PAGE_TEMPLATES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
+            {project.episodes.map((episode) => (
+              <option key={episode.id} value={episode.id}>
+                {episode.title}
               </option>
             ))}
           </Select>
-        </XStack>
-        {project.episodes.length > 1 && (
-          <XStack as="label" className={styles.inline}>
-            追加先
-            <Select value={targetEpisode?.id} onChange={(e) => setEpisodeId(e.currentTarget.value)}>
-              {project.episodes.map((episode) => (
-                <option key={episode.id} value={episode.id}>
-                  {episode.title}
-                </option>
-              ))}
-            </Select>
-          </XStack>
         )}
         <Button type="submit" variant="primary">
           ページを追加
@@ -94,18 +95,18 @@ function PageList() {
         />
       )}
       {error && (
-        <p className={common.error} role="alert">
+        <Typography tone="alert" role="alert">
           {error}
-        </p>
+        </Typography>
       )}
       {project.episodes.length === 0 && (
-        <p className={common.placeholder}>まだページがありません。</p>
+        <Typography tone="muted">まだページがありません。</Typography>
       )}
       {project.episodes.map((episode) => (
-        <article key={episode.id} className={styles.episode}>
-          <h3 className={styles.episodeTitle}>{episode.title}</h3>
+        <YStack as="article" gap={8} key={episode.id} className={styles.episode}>
+          <Typography variant="subheading">{episode.title}</Typography>
           <EpisodeBatch episode={episode} projectId={projectId} store={store} />
-          {episode.pages.length === 0 && <p className={common.placeholder}>ページがありません。</p>}
+          {episode.pages.length === 0 && <Typography tone="muted">ページがありません。</Typography>}
           <ol
             className={`${common.cards} ${styles.pages}`}
             data-direction={project.settings.direction}
@@ -143,12 +144,12 @@ function PageList() {
                       ))}
                     </XStack>
                   )}
-                  <small className={styles.meta}>
+                  <Typography as="small" variant="caption" tone="muted">
                     コマ {page.panels.length} / 生成{' '}
                     <span className={styles.status} data-status={status}>
                       {status}
                     </span>
-                  </small>
+                  </Typography>
                   <XStack as="span" wrap gap={6} className={common.cardActions}>
                     <Button
                       size="small"
@@ -183,9 +184,9 @@ function PageList() {
               )
             })}
           </ol>
-        </article>
+        </YStack>
       ))}
-    </>
+    </YStack>
   )
 }
 

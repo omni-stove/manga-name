@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef } from 'react'
 import styles from './dialog.module.css'
+import { Typography } from './typography'
 
 interface DialogProps {
   title: string
@@ -22,7 +23,9 @@ export function Dialog({ title, onClose, onSubmit, actions, children }: DialogPr
   }, [])
   const body = (
     <>
-      <h2 className={styles.title}>{title}</h2>
+      <Typography variant="heading" className={styles.title}>
+        {title}
+      </Typography>
       {children}
       {actions && <div className={styles.actions}>{actions}</div>}
     </>

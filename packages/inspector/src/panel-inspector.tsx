@@ -6,7 +6,7 @@ import {
   PanelSchema,
   type Patch,
 } from '@manga/schema'
-import { Button, Checkbox, Field, IconButton, TextArea, XStack, YStack } from '@manga/ui'
+import { Button, Checkbox, IconButton, TextArea, Typography, XStack, YStack } from '@manga/ui'
 import { useId, useMemo, useState } from 'react'
 import { DEBOUNCE_MS, NumberField, TextField } from './fields'
 import styles from './panel-inspector.module.css'
@@ -57,7 +57,9 @@ export function PanelInspector({
 
   return (
     <div className={section.section} data-inspector="panel">
-      <h3 className={section.title}>コマ {panel.order}</h3>
+      <Typography variant="subheading" className={section.title}>
+        コマ {panel.order}
+      </Typography>
       <NumberField
         label="読み順"
         value={panel.order}
@@ -92,11 +94,11 @@ export function PanelInspector({
         </p>
       )}
 
-      <XStack as="h4" className={section.heading}>
+      <Typography variant="label" tone="muted" className={section.heading}>
         フキダシ
-      </XStack>
+      </Typography>
       {bubbles.length === 0 ? (
-        <p className={section.muted}>フキダシはありません</p>
+        <Typography tone="muted">フキダシはありません</Typography>
       ) : (
         <YStack as="ol" gap={2} className={styles.bubbles}>
           {bubbles.map(({ bubble, index }, i) => {
@@ -149,13 +151,17 @@ export function PanelInspector({
         </YStack>
       )}
 
-      <XStack as="h4" className={section.heading}>
+      <Typography variant="label" tone="muted" className={section.heading}>
         生成
-      </XStack>
+      </Typography>
       {diagnosis && (
         <>
           <p className={styles.hint} data-hint data-used={useHint}>
-            {diagnosis.hint || <span className={section.muted}>ヒントはありません</span>}
+            {diagnosis.hint || (
+              <Typography as="span" tone="muted">
+                ヒントはありません
+              </Typography>
+            )}
           </p>
           <Checkbox
             label="ヒントを使う"
@@ -176,14 +182,13 @@ export function PanelInspector({
           {generating ? '生成中…' : '生成'}
         </Button>
       </XStack>
-      <Field label="修正指示">
-        <TextArea
-          rows={3}
-          value={instruction}
-          placeholder="採用中の絵に対する直し方"
-          onChange={(e) => setInstruction(e.target.value)}
-        />
-      </Field>
+      <TextArea
+        label="修正指示"
+        rows={3}
+        value={instruction}
+        placeholder="採用中の絵に対する直し方"
+        onChange={(e) => setInstruction(e.target.value)}
+      />
       <XStack wrap className={section.group}>
         <Button
           disabled={generating || !current || instruction.trim() === ''}
@@ -193,11 +198,11 @@ export function PanelInspector({
         </Button>
       </XStack>
 
-      <XStack as="h4" className={section.heading}>
+      <Typography variant="label" tone="muted" className={section.heading}>
         履歴
-      </XStack>
+      </Typography>
       {arts.length === 0 ? (
-        <p className={section.muted}>まだ生成していません</p>
+        <Typography tone="muted">まだ生成していません</Typography>
       ) : (
         <YStack as="ol" className={styles.arts}>
           {arts.map((art) => (

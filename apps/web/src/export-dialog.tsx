@@ -1,6 +1,6 @@
 import type { RenderOptions } from '@manga/render'
 import type { Page } from '@manga/schema'
-import { Button, Checkbox, Dialog, Field, FieldGroup, Input, Select } from '@manga/ui'
+import { Button, Checkbox, Dialog, FieldGroup, Input, Select, Typography } from '@manga/ui'
 import { useState } from 'react'
 import { countMissingArts, type ExportFormat } from './export-page-job'
 
@@ -109,29 +109,30 @@ export function ExportDialog({
         </>
       }
     >
-      <Field label="形式">
-        <Select value={format} onChange={(e) => setFormat(e.target.value as ExportFormat)}>
-          {FORMATS.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="範囲">
-        <Select value={range} onChange={(e) => setRange(e.target.value as Range)}>
-          {RANGES.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.label}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      <Select
+        label="形式"
+        value={format}
+        onChange={(e) => setFormat(e.target.value as ExportFormat)}
+      >
+        {FORMATS.map((f) => (
+          <option key={f.value} value={f.value}>
+            {f.label}
+          </option>
+        ))}
+      </Select>
+      <Select label="範囲" value={range} onChange={(e) => setRange(e.target.value as Range)}>
+        {RANGES.map((r) => (
+          <option key={r.value} value={r.value}>
+            {r.label}
+          </option>
+        ))}
+      </Select>
       {range === 'custom' && (
         <FieldGroup label="ページ" error={rangeError}>
           <Input
             type="number"
-            aria-label="開始ページ"
+            label="開始ページ"
+            hideLabel
             min={1}
             max={pages.length}
             value={custom.from}
@@ -140,7 +141,8 @@ export function ExportDialog({
           〜
           <Input
             type="number"
-            aria-label="終了ページ"
+            label="終了ページ"
+            hideLabel
             min={1}
             max={pages.length}
             value={custom.to}
@@ -148,18 +150,17 @@ export function ExportDialog({
           />
         </FieldGroup>
       )}
-      <Field label="指示メモ">
-        <Select
-          value={effectiveNotes}
-          onChange={(e) => setNotes(e.target.value as RenderOptions['notes'])}
-        >
-          {NOTES.filter((n) => format === 'pdf' || !n.pdfOnly).map((n) => (
-            <option key={n.value} value={n.value}>
-              {n.label}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      <Select
+        label="指示メモ"
+        value={effectiveNotes}
+        onChange={(e) => setNotes(e.target.value as RenderOptions['notes'])}
+      >
+        {NOTES.filter((n) => format === 'pdf' || !n.pdfOnly).map((n) => (
+          <option key={n.value} value={n.value}>
+            {n.label}
+          </option>
+        ))}
+      </Select>
       <Checkbox
         label="コマ番号を入れる"
         checked={panelNumbers}
@@ -172,17 +173,19 @@ export function ExportDialog({
           onChange={(e) => setSpread(e.target.checked)}
         />
       )}
-      <Field label="dpi" error={dpiError}>
-        <Input
-          type="number"
-          min={72}
-          max={1200}
-          value={dpiText}
-          onChange={(e) => setDpiText(e.target.value)}
-        />
-      </Field>
+      <Input
+        label="dpi"
+        error={dpiError}
+        type="number"
+        min={72}
+        max={1200}
+        value={dpiText}
+        onChange={(e) => setDpiText(e.target.value)}
+      />
       {missing > 0 && (
-        <p role="status">未生成のコマが {missing} 個あります。枠だけのまま書き出します。</p>
+        <Typography role="status">
+          未生成のコマが {missing} 個あります。枠だけのまま書き出します。
+        </Typography>
       )}
     </Dialog>
   )

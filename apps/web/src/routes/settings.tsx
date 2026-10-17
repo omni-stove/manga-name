@@ -2,8 +2,10 @@ import {
   Button,
   SegmentedControl,
   type ThemePreference,
+  Typography,
   useThemePreference,
   XStack,
+  YStack,
 } from '@manga/ui'
 import { createFileRoute } from '@tanstack/react-router'
 import common from '../common.module.css'
@@ -22,9 +24,9 @@ function AppSettings() {
   const [theme, setTheme] = useThemePreference()
   const { user, signOut } = useAuth()
   return (
-    <section>
-      <h1>アプリ設定</h1>
-      <p className={common.placeholder}>設定の保存はここに入る。</p>
+    <YStack as="section" gap={16} align="start">
+      <Typography variant="title">アプリ設定</Typography>
+      <Typography tone="muted">設定の保存はここに入る。</Typography>
       <dl className={common.fields}>
         <dt>ストレージ</dt>
         <dd>memory / indexeddb</dd>
@@ -51,6 +53,6 @@ function AppSettings() {
           <SegmentedControl label="テーマ" value={theme} options={THEMES} onChange={setTheme} />
         </dd>
       </dl>
-    </section>
+    </YStack>
   )
 }

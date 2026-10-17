@@ -29,13 +29,12 @@ import type {
   Patch,
   Project,
 } from '@manga/schema'
-import { Button, Checkbox, SegmentedControl, XStack, YStack } from '@manga/ui'
+import { Button, Checkbox, SegmentedControl, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { CollaborationBar, PeerBadge, peerColor, usePeers } from '../collaboration-view'
-import common from '../common.module.css'
 import { previewPage } from '../critique'
 import { CritiquePanel } from '../critique-panel'
 import { ExportDialog, type ExportSettings } from '../export-dialog'
@@ -277,9 +276,15 @@ function Editor() {
         <Link to="/p/$projectId" params={{ projectId }} className={styles.back}>
           ← {project.title || '無題'}
         </Link>
-        <span className={styles.pageNumber}>{pageIndex + 1} ページ</span>
+        <Typography as="span" weight="bold">
+          {pageIndex + 1} ページ
+        </Typography>
         <CollaborationBar collab={collab} project={project} />
-        {!canEdit && <span className={common.placeholder}>{ROLE_LABELS[role]}</span>}
+        {!canEdit && (
+          <Typography as="span" tone="muted">
+            {ROLE_LABELS[role]}
+          </Typography>
+        )}
         <SegmentedControl
           label="ツール"
           value={tool}
@@ -303,9 +308,9 @@ function Editor() {
           />
         )}
         <XStack role="group" aria-label="レイヤー">
-          <span className={styles.groupLabel} aria-hidden>
+          <Typography as="span" variant="label" tone="muted" aria-hidden>
             レイヤー
-          </span>
+          </Typography>
           {LAYERS.map((l) => (
             <Checkbox
               key={l.key}
@@ -344,7 +349,11 @@ function Editor() {
           onExport={(settings) => void exportPages(settings)}
         />
       )}
-      {error && <p className={`${common.error} ${styles.error}`}>{error}</p>}
+      {error && (
+        <Typography tone="alert" className={styles.error}>
+          {error}
+        </Typography>
+      )}
       <div className={styles.body}>
         <div
           className={styles.canvas}
@@ -379,7 +388,9 @@ function Editor() {
           />
         </div>
         <aside className={styles.inspector}>
-          <h2 className={styles.inspectorTitle}>インスペクタ</h2>
+          <Typography variant="label" tone="muted">
+            インスペクタ
+          </Typography>
           <details open>
             <summary>要素（{page.panels.length}）</summary>
             <ElementOutline
@@ -421,12 +432,12 @@ function Editor() {
             <details>
               <summary>キャラクター（{project.characters.length}）</summary>
               {project.characters.length === 0 && (
-                <p className={common.placeholder}>
+                <Typography tone="muted">
                   <Link to="/p/$projectId/characters" params={{ projectId }}>
                     キャラクター一覧
                   </Link>
                   で追加できます
-                </p>
+                </Typography>
               )}
               {project.characters.map((character) => (
                 <CharacterPane
@@ -500,7 +511,7 @@ function ElementOutline({
   })
   const badges = (by: Peer[]) =>
     by.map((peer) => <PeerBadge key={peer.clientId} name={peer.name} color={peer.color} />)
-  if (page.panels.length === 0) return <p className={common.placeholder}>コマがありません</p>
+  if (page.panels.length === 0) return <Typography tone="muted">コマがありません</Typography>
   return (
     <ul className={styles.outline}>
       {[...page.panels]
@@ -577,14 +588,14 @@ function SelectionInspector({
 }) {
   if (selection === null) {
     return (
-      <p className={common.placeholder}>
+      <Typography tone="muted">
         キャンバスでコマ、フキダシ、焦点、ベクトルを選ぶと、ここで編集できます
-      </p>
+      </Typography>
     )
   }
   if (selection.kind === 'panel') {
     const found = findPanel(page, selection.id)
-    if (!found) return <p className={common.placeholder}>選んだコマはもうありません</p>
+    if (!found) return <Typography tone="muted">選んだコマはもうありません</Typography>
     return (
       <>
         <PanelInspector
@@ -609,7 +620,7 @@ function SelectionInspector({
   }
   if (selection.kind === 'bubble') {
     const found = findBubble(page, selection.id)
-    if (!found) return <p className={common.placeholder}>選んだフキダシはもうありません</p>
+    if (!found) return <Typography tone="muted">選んだフキダシはもうありません</Typography>
     return (
       <BubbleInspector
         key={selection.id}
@@ -623,7 +634,7 @@ function SelectionInspector({
   }
   if (selection.kind === 'focus') {
     const found = findFocus(page, selection.id)
-    if (!found) return <p className={common.placeholder}>選んだ焦点はもうありません</p>
+    if (!found) return <Typography tone="muted">選んだ焦点はもうありません</Typography>
     return (
       <FocusInspector
         key={selection.id}
@@ -641,7 +652,7 @@ function SelectionInspector({
     )
   }
   const found = findVector(page, selection.id)
-  if (!found) return <p className={common.placeholder}>選んだベクトルはもうありません</p>
+  if (!found) return <Typography tone="muted">選んだベクトルはもうありません</Typography>
   return (
     <VectorInspector
       key={selection.id}
@@ -773,9 +784,9 @@ function CharacterPane({
         resolveAsset={resolveAsset}
       />
       {pickError && (
-        <p className={common.error} role="alert">
+        <Typography tone="alert" role="alert">
           {pickError}
-        </p>
+        </Typography>
       )}
       {picker.input}
     </>
@@ -785,11 +796,11 @@ function CharacterPane({
 function PageNotFound() {
   const { projectId, pageId } = useParams({ strict: false })
   return (
-    <section>
-      <h1>ページが見つかりません</h1>
-      <p>
+    <YStack as="section" gap={16} align="start">
+      <Typography variant="title">ページが見つかりません</Typography>
+      <Typography>
         {projectId} / {pageId}
-      </p>
+      </Typography>
       {projectId ? (
         <Link to="/p/$projectId" params={{ projectId }}>
           ページ一覧へ
@@ -797,6 +808,6 @@ function PageNotFound() {
       ) : (
         <Link to="/">プロジェクト一覧へ</Link>
       )}
-    </section>
+    </YStack>
   )
 }

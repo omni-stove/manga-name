@@ -45,8 +45,6 @@ dialog:has(.result) {
 }
 
 .issue {
-  margin: 0;
-  font-size: var(--text-s);
   overflow-wrap: anywhere;
 }
 
@@ -56,9 +54,4 @@ dialog:has(.result) {
   align-self: start;
   font-size: var(--text-s);
   white-space: pre-line;
-}
-
-.rationaleTitle {
-  margin: 0 0 var(--space-8);
-  font-size: var(--text-m);
 }

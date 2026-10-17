@@ -1,7 +1,6 @@
 import type { ID } from '@manga/schema'
-import { Button, Input, Select, XStack, YStack } from '@manga/ui'
-import { useCallback, useEffect, useId, useState } from 'react'
-import common from './common.module.css'
+import { Button, Input, Select, Typography, XStack, YStack } from '@manga/ui'
+import { useCallback, useEffect, useState } from 'react'
 import { errorMessage } from './route-error'
 import { type MemberRole, type Members, ROLE_LABELS, type SharingClient } from './sharing'
 import styles from './sharing-panel.module.css'
@@ -20,7 +19,6 @@ const RoleOptions = () =>
  * アプリはメールを送らないので、作ったリンクは owner がコピーして招待先に渡す
  */
 export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: SharingClient }) {
-  const id = useId()
   const [members, setMembers] = useState<Members | null | undefined>()
   const [link, setLink] = useState<string>()
   const [error, setError] = useState<string>()
@@ -49,19 +47,19 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
     }
   }
 
-  if (members === undefined) return <p className={common.placeholder}>参加者を読み込み中…</p>
+  if (members === undefined) return <Typography tone="muted">参加者を読み込み中…</Typography>
   if (members === null) {
     return (
-      <p className={common.placeholder}>
+      <Typography tone="muted">
         ログインしてクラウドに保存されると、ほかの人を招待できます。
-      </p>
+      </Typography>
     )
   }
   const isOwner = members.role === 'owner'
 
   return (
     <YStack gap={12} className={styles.panel}>
-      <p>あなたのロール: {ROLE_LABELS[members.role]}</p>
+      <Typography>あなたのロール: {ROLE_LABELS[members.role]}</Typography>
       {isOwner && (
         <form
           className={styles.invite}
@@ -78,10 +76,8 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
             })
           }}
         >
-          <label htmlFor={`${id}-email`}>メールアドレス</label>
-          <Input id={`${id}-email`} name="email" type="email" required />
-          <label htmlFor={`${id}-role`}>ロール</label>
-          <Select id={`${id}-role`} name="role" defaultValue="editor">
+          <Input label="メールアドレス" name="email" type="email" required />
+          <Select label="ロール" name="role" defaultValue="editor">
             <RoleOptions />
           </Select>
           <Button type="submit" variant="primary" disabled={busy}>
@@ -91,21 +87,27 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
       )}
       {link && (
         <XStack as="p" wrap className={styles.link}>
-          <Input readOnly value={link} aria-label="招待リンク" onFocus={(e) => e.target.select()} />
+          <Input
+            label="招待リンク"
+            hideLabel
+            readOnly
+            value={link}
+            onFocus={(e) => e.target.select()}
+          />
           <Button size="small" onClick={() => void navigator.clipboard.writeText(link)}>
             コピー
           </Button>
-          <small className={common.placeholder}>
+          <Typography as="small" variant="caption" tone="muted">
             このリンクを招待先に渡してください。招待したメールアドレスでログインした人だけが参加できます。
-          </small>
+          </Typography>
         </XStack>
       )}
       {error && (
-        <p className={common.error} role="alert">
+        <Typography tone="alert" role="alert">
           {error}
-        </p>
+        </Typography>
       )}
-      <h3>参加者</h3>
+      <Typography variant="subheading">参加者</Typography>
       <YStack as="ul" className={styles.list}>
         {members.members.map((m) => (
           <XStack as="li" wrap key={m.userId}>
@@ -113,7 +115,8 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
             {isOwner && m.role !== 'owner' ? (
               <>
                 <Select
-                  aria-label={`${m.email ?? m.userId} のロール`}
+                  label={`${m.email ?? m.userId} のロール`}
+                  hideLabel
                   value={m.role}
                   disabled={busy}
                   onChange={(e) =>
@@ -141,7 +144,7 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
       </YStack>
       {isOwner && members.invites.length > 0 && (
         <>
-          <h3>未使用の招待</h3>
+          <Typography variant="subheading">未使用の招待</Typography>
           <YStack as="ul" className={styles.list}>
             {members.invites.map((invite) => (
               <XStack as="li" wrap key={invite.id}>

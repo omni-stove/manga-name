@@ -1,4 +1,4 @@
-import { Button, XStack, YStack } from '@manga/ui'
+import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { createRootRouteWithContext, Link, Outlet } from '@tanstack/react-router'
 import type { RouterContext } from '../router'
 import { Toasts } from '../toasts'
@@ -49,9 +49,9 @@ function Account() {
 
 function NotFound() {
   return (
-    <section>
-      <h1>ページが見つかりません</h1>
+    <YStack as="section" gap={16} align="start">
+      <Typography variant="title">ページが見つかりません</Typography>
       <Link to="/">プロジェクト一覧へ</Link>
-    </section>
+    </YStack>
   )
 }
