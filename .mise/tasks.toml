@@ -73,3 +73,32 @@ arg "[id]" help="task id, e.g. 12"
 flag "--decided" help="start a gated task whose question is decided in docs/06-open-questions.md"
 '''
 run = 'scripts/tasks.sh "$usage_cmd" ${usage_id:-} ${usage_decided:+--decided}'
+
+[dev]
+description = "Run workers/api and apps/web together for local development (web on :5173, api on :8787)"
+depends = ["dev-api", "dev-web"]
+
+[dev-desktop]
+description = "Run workers/api and apps/desktop (Tauri) together; Tauri starts apps/web on :5173 itself"
+depends = ["dev-api", "dev-tauri"]
+
+[dev-tauri]
+description = "apps/desktop (Tauri) only, with its apps/web pointed at the local workers/api"
+# tauri.conf.json の beforeDevCommand が apps/web を起動し、この env を引き継ぐ
+env = { VITE_API_BASE_URL = "http://localhost:8787" }
+run = "pnpm --filter @manga/desktop dev"
+
+[dev-web]
+description = "apps/web on :5173, pointed at the local workers/api"
+env = { VITE_API_BASE_URL = "http://localhost:8787" }
+run = "pnpm --filter @manga/web dev"
+
+[dev-api]
+description = "workers/api on :8787 with local D1/R2 and ENVIRONMENT=development"
+depends = ["db-migrate"]
+run = "pnpm --filter @manga/api exec wrangler dev --port 8787 --var ENVIRONMENT:development"
+
+[db-migrate]
+description = "Apply workers/api D1 migrations to the local database"
+dir = "workers/api"
+run = "pnpm exec wrangler d1 migrations apply DB --local"

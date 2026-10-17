@@ -20,6 +20,7 @@ import type { ProjectLibrary } from './project-library'
 import { findPage } from './project-ops'
 import { cropReference } from './reference-image'
 import { errorMessage } from './route-error'
+import { needsSignIn } from './sign-in'
 import type { ProjectStore } from './store/project-store'
 import { toasts } from './toasts'
 
@@ -109,8 +110,8 @@ export interface PanelGeneration {
 export interface PanelGenerationDeps {
   library: Pick<ProjectLibrary, 'isOpen' | 'loadAsset' | 'putAsset'>
   imageProvider: ImageProvider
-  /** 失敗の文言の出し先。既定はトースト */
-  notify?(message: string): void
+  /** 失敗の文言の出し先。既定はトースト。signIn は未ログインのせいで失敗したことを表す */
+  notify?(message: string, opts: { signIn: boolean }): void
   now?(): string
   /** ImageProvider に渡す配置図の長辺 px。既定 1024 */
   layoutLongSide?: number
@@ -195,7 +196,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
   const {
     library,
     imageProvider,
-    notify = (message) => toasts.push(message),
+    notify = (message, opts) => toasts.push(message, 'error', opts),
     now = () => new Date().toISOString(),
     layoutLongSide = 1024,
     batchConcurrency = 3,
@@ -348,7 +349,8 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     },
     async generate(req) {
       const { outcome, error } = await attempt(req)
-      if (outcome === 'failed') notify(`コマの生成に失敗しました: ${errorMessage(error)}`)
+      if (outcome === 'failed')
+        notify(`コマの生成に失敗しました: ${errorMessage(error)}`, { signIn: needsSignIn(error) })
       return outcome
     },
     async generateAll({ store, projectId, scope, pageIds, includeGenerated }) {
@@ -382,7 +384,9 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
         toggle('batches', key, false)
       }
       if (errors.length > 0)
-        notify(`コマ ${errors.length} 件の生成に失敗しました: ${errorMessage(errors[0])}`)
+        notify(`コマ ${errors.length} 件の生成に失敗しました: ${errorMessage(errors[0])}`, {
+          signIn: errors.some(needsSignIn),
+        })
       return counts
     },
     cancel(projectId, scope) {
@@ -393,7 +397,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
 
 if (import.meta.vitest) {
   const { describe, expect, test, vi } = import.meta.vitest
-  const { createFakeImageProvider } = await import('@manga/ai')
+  const { createFakeImageProvider, SignInRequiredError } = await import('@manga/ai')
   const { fixtures } = await import('@manga/schema')
   const { createMemoryStorage } = await import('@manga/storage')
   const { createProjectLibrary } = await import('./project-library')
@@ -411,7 +415,7 @@ if (import.meta.vitest) {
     const storage = createMemoryStorage()
     const library = createProjectLibrary(storage)
     const store = createProjectStore(sample, { saveProject: async () => {} })
-    const notify = vi.fn<(message: string) => void>()
+    const notify = vi.fn<(message: string, opts: { signIn: boolean }) => void>()
     let open = true
     const generation = createPanelGeneration({
       // store は library.open を通さず作るので、開いている扱いにする
@@ -478,7 +482,7 @@ if (import.meta.vitest) {
       expect(await generate('直して')).toBe('failed')
       expect(panelNow().arts).toHaveLength(0)
       expect(store.state.getState().canUndo).toBe(false)
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining('採用中の絵'))
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining('採用中の絵'), { signIn: false })
     })
 
     test('undo returns artId to the previous art and redo moves forward', async () => {
@@ -507,7 +511,21 @@ if (import.meta.vitest) {
       const before = store.get()
       expect(await generate()).toBe('failed')
       expect(store.get()).toBe(before)
-      expect(notify).toHaveBeenCalledWith('コマの生成に失敗しました: quota exceeded')
+      expect(notify).toHaveBeenCalledWith('コマの生成に失敗しました: quota exceeded', {
+        signIn: false,
+      })
+    })
+
+    test('a failure for want of sign-in asks for sign-in', async () => {
+      const { generate, notify } = setup({
+        generatePanelArt: async () => {
+          throw new SignInRequiredError()
+        },
+      })
+      expect(await generate()).toBe('failed')
+      expect(notify).toHaveBeenCalledWith('コマの生成に失敗しました: ログインが必要です', {
+        signIn: true,
+      })
     })
 
     test('the same panel is not generated twice at once', async () => {
@@ -592,7 +610,9 @@ if (import.meta.vitest) {
       const before = store.get()
       expect(await generate()).toBe('failed')
       expect(store.get()).toBe(before)
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining('削除されました'))
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining('削除されました'), {
+        signIn: false,
+      })
     })
 
     test('a panel removed while generating fails without a patch', async () => {
@@ -618,7 +638,9 @@ if (import.meta.vitest) {
       release()
       expect(await pending).toBe('failed')
       expect(store.get()).toBe(before)
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining('コマが消えました'))
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining('コマが消えました'), {
+        signIn: false,
+      })
     })
   })
 
