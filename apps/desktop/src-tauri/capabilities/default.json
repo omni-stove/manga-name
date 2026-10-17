@@ -1,10 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "メインウィンドウの権限。ファイルは createFileStorage の保存先（$APPDATA/projects）の中だけを読み書きできる",
+  "description": "メインウィンドウの権限。ファイルは createFileStorage の保存先（$APPDATA/projects）と、ダイアログで選んだファイルだけを読み書きできる",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "dialog:default",
+    "store:default",
     "fs:read-all",
     "fs:write-all",
     {

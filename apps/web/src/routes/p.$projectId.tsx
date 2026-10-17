@@ -2,8 +2,11 @@ import { Button } from '@manga/ui'
 import { createFileRoute, Link, notFound, Outlet, useParams } from '@tanstack/react-router'
 import { useStore } from 'zustand'
 import { CollaborationBar } from '../collaboration-view'
-import { downloadText, exportFileName, exportProjectJson } from '../project-file'
+import { exportFileName, exportProjectJson, PROJECT_FILE_FILTERS } from '../project-file'
+import { errorMessage } from '../route-error'
+import { saveFile } from '../save-file'
 import { SaveStatusIndicator } from '../save-status'
+import { toasts } from '../toasts'
 import { useProject } from '../use-project'
 import styles from './project.module.css'
 
@@ -48,7 +51,13 @@ function ProjectLayout() {
           </Button>
           <Button
             size="small"
-            onClick={() => downloadText(exportFileName(project), exportProjectJson(project))}
+            onClick={() =>
+              void saveFile(
+                new Blob([exportProjectJson(project)], { type: 'application/json' }),
+                exportFileName(project),
+                PROJECT_FILE_FILTERS,
+              ).catch((e: unknown) => toasts.push(`書き出せません: ${errorMessage(e)}`))
+            }
           >
             JSON 書き出し
           </Button>

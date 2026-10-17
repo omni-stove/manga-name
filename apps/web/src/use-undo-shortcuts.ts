@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import type { ProjectStore } from './store/project-store'
 
-function isEditable(target: EventTarget | null): boolean {
+/** 入力欄の中か。Undo / Redo を入力欄自身の取り消しに任せる判定に使う */
+export function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }

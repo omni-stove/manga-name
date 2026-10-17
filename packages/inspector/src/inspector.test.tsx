@@ -150,6 +150,47 @@ describe('PanelInspector', () => {
     expect(onGenerate).toHaveBeenLastCalledWith('もっと暗く')
   })
 
+  test('shows the hint read-only and the use-hint checkbox reports its state', async () => {
+    const onUseHintChange = vi.fn<(use: boolean) => void>()
+    const onChange = vi.fn<(patch: Patch) => void>()
+    const hint = '視線は中央の glass-crystal forest を大きく捉える'
+    const props = {
+      panel: samplePanel,
+      characters: project.characters,
+      diagnosis: {
+        panelId: samplePanel.id,
+        sweepPath: [],
+        focus: [],
+        bubbleOrderOk: true,
+        hint,
+      },
+      onChange,
+      onGenerate: () => {},
+      onUseHintChange,
+      resolveAsset,
+    }
+    const { container, root } = await render(<PanelInspector {...props} />)
+    const shown = must(container.querySelector('[data-hint]'))
+    expect(shown.textContent).toBe(hint)
+    expect(shown.querySelector('input, textarea')).toBeNull()
+    const checkbox = must(
+      [...container.querySelectorAll('label')]
+        .find((el) => el.textContent === 'ヒントを使う')
+        ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+    )
+    expect(checkbox.checked).toBe(true)
+
+    await act(async () => checkbox.click())
+    expect(onUseHintChange).toHaveBeenLastCalledWith(false)
+    expect(onChange).not.toHaveBeenCalled()
+
+    await act(async () => root.render(<PanelInspector {...props} useHint={false} />))
+    expect(checkbox.checked).toBe(false)
+    expect(shown.getAttribute('data-used')).toBe('false')
+    await act(async () => checkbox.click())
+    expect(onUseHintChange).toHaveBeenLastCalledWith(true)
+  })
+
   test('renders without diagnosis and with an empty panel', async () => {
     const { container } = await render(
       <PanelInspector
