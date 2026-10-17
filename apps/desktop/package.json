@@ -7,7 +7,9 @@
     "icons": "tauri icon app-icon.svg",
     "dev": "pnpm icons && tauri dev",
     "build": "pnpm icons && tauri build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "version:check": "node scripts/version.ts check",
+    "version:set": "node scripts/version.ts set"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.6"

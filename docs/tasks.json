@@ -1217,7 +1217,7 @@
       "group": "G5",
       "title": "Desktop ビルド CI",
       "detail": "macOS / Windows マトリクス。ビルドのみ",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "46"
       ],
@@ -1229,13 +1229,15 @@
       ],
       "spec": [
         "workstreams/WS-17-desktop-shell.md"
-      ]
+      ],
+      "startedAt": "2026-10-17",
+      "doneAt": "2026-10-17"
     },
     {
       "id": "48",
       "group": "G5",
       "title": "タグビルドとバージョン同期",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "47"
       ],
@@ -1249,14 +1251,16 @@
       ],
       "spec": [
         "workstreams/WS-18-desktop-distribution.md"
-      ]
+      ],
+      "startedAt": "2026-10-17",
+      "doneAt": "2026-10-17"
     },
     {
       "id": "49",
       "group": "G5",
       "title": "署名",
       "detail": "macOS Developer ID + notarize、Windows コード署名",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "48"
       ],
@@ -1269,13 +1273,15 @@
       ],
       "spec": [
         "workstreams/WS-18-desktop-distribution.md"
-      ]
+      ],
+      "startedAt": "2026-10-17",
+      "doneAt": "2026-10-17"
     },
     {
       "id": "50",
       "group": "G5",
       "title": "updater",
-      "status": "todo",
+      "status": "done",
       "deps": [
         "49"
       ],
@@ -1287,7 +1293,9 @@
       ],
       "spec": [
         "workstreams/WS-18-desktop-distribution.md"
-      ]
+      ],
+      "startedAt": "2026-10-17",
+      "doneAt": "2026-10-17"
     },
     {
       "id": "51",

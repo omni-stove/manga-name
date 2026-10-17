@@ -1,0 +1,152 @@
+name: Desktop release
+
+# v* タグの push で macOS（universal）と Windows のインストーラを作り、GitHub Releases に上げる。
+# 2 つの build job がそれぞれリリースを作ると同じタグに 2 つできることがあるので、先に下書きを 1 つ作って
+# そこへ上げ、両方そろってから公開する。
+#
+# 署名に使う secrets:
+# - macOS（必須。未署名のまま配ると Gatekeeper が開かせないので、欠けていればビルドごと落とす）
+#   APPLE_CERTIFICATE（Developer ID Application の .p12 を base64）、APPLE_CERTIFICATE_PASSWORD、
+#   APPLE_SIGNING_IDENTITY、notarize 用の APPLE_ID、APPLE_PASSWORD（App 用パスワード）、APPLE_TEAM_ID
+# - Windows（任意。証明書の調達先が未決なので、WINDOWS_CERTIFICATE がなければ未署名で出す）
+#   WINDOWS_CERTIFICATE（.pfx を base64）、WINDOWS_CERTIFICATE_PASSWORD
+# - updater（必須）: TAURI_SIGNING_PRIVATE_KEY、TAURI_SIGNING_PRIVATE_KEY_PASSWORD。公開鍵は tauri.conf.json の
+#   plugins.updater.pubkey。更新用の成果物と latest.json は秘密鍵がないと作れず、PR の Desktop ビルドを落とすので、
+#   作る設定は tauri.release.conf.json に分けてここでだけ足す
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      release-id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # タグと apps/desktop の version がずれたままインストーラに載らないよう、ビルド前に止める
+      - name: Version check
+        run: node apps/desktop/scripts/version.ts check "$GITHUB_REF_NAME"
+
+      - name: Create draft release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" --draft --generate-notes --title "Manga Name $GITHUB_REF_NAME"
+          echo "id=$(gh release view "$GITHUB_REF_NAME" --json databaseId --jq .databaseId)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: --target universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - os: windows-latest
+            args: ""
+            rust-targets: ""
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm & Node.js
+        uses: omni-stove/.github/actions/setup-pnpm-node@main
+        with:
+          node-version: "26"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      # tauri-action は tauri build だけを呼ぶので、package.json の build が先に作るアイコンをここで作る
+      - name: Icons
+        run: pnpm --filter @manga/desktop icons
+
+      - name: Check Apple secrets
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=0
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then echo "::error::secret $name がない"; missing=1; fi
+          done
+          exit "$missing"
+
+      # signtool は証明書ストアにある証明書を拇印で選ぶので、取り込んだ証明書の拇印を設定に足して渡す
+      - name: Import Windows certificate
+        id: windows-cert
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) {
+            Write-Output "::warning::WINDOWS_CERTIFICATE がないので Windows のインストーラは未署名になる"
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'certificate.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          Remove-Item $pfx
+          $config = Join-Path $env:RUNNER_TEMP 'sign.conf.json'
+          @{ bundle = @{ windows = @{ certificateThumbprint = $cert.Thumbprint } } } | ConvertTo-Json -Depth 4 | Set-Content $config
+          "args=--config $config" >> $env:GITHUB_OUTPUT
+
+      - name: Build and upload
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: pnpm tauri
+          releaseId: ${{ needs.create-release.outputs.release-id }}
+          args: ${{ matrix.args }} --config src-tauri/tauri.release.conf.json ${{ steps.windows-cert.outputs.args }}
+
+  publish:
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
