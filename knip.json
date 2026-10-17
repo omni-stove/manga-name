@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreBinaries": ["biome", "mise"],
+  "ignoreBinaries": ["biome", "mise", "tauri-driver"],
   "workspaces": {
     "packages/render": {
       "entry": ["src/backend-node.ts"]
