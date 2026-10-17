@@ -8,3 +8,20 @@ pnpm --filter @manga/e2e e2e
 ```
 
 webServer が apps/web をビルドして `vite preview`（4173 番）で配る。プロジェクト `collab` は `VITE_COLLAB_TABS=1` で別にビルドした apps/web（4174 番）に対して、シナリオ 1, 2, 3 と `collab-*.e2e.ts` を共同編集モードで流す。このビルドは同じブラウザのタブ同士を SharedWorker の同期サーバでつなぐので、workers/api もログインも要らない（仕様は `docs/workstreams/WS-19-collaboration.md`）。プロジェクト `cloud` は workers/api を `wrangler dev`（8789 番、`e2e/.wrangler` に D1 と R2 を置く）で立て、`VITE_API_BASE_URL` でそこにつなぐ apps/web（4175 番）で `cloud-*.e2e.ts`（シナリオ 7）を流す。Google のログインは通せないので、テストが `/v1/auth/*` の往復だけを答え、API には development の `X-Debug-User` でユーザーを名乗る（仕様は `docs/workstreams/WS-15-cloud-storage.md`）。CI（`.github/workflows/e2e.yml`）は毎晩 03:00 JST に main で走り、Actions の画面から手動でも起動できる。失敗したテストのスクリーンショットとトレースが artifact `e2e-report` に残り、`pnpm --filter @manga/e2e exec playwright show-trace <trace.zip>` で開ける。
+
+## Desktop（シナリオ 8）
+
+apps/desktop を `tauri-driver` の WebDriver で起動し、ファイルを開く → 生成 → 名前を付けて保存を通す。Playwright はランナーと report にだけ使う。メニューのショートカットとネイティブのファイルダイアログは `xdotool` で X にキーを送って操作する。tauri-driver が動くのは Linux と Windows だけで、この e2e は Linux（Xvfb）を前提にする。
+
+マシンに要るもの:
+
+- `cargo install tauri-driver`
+- apt の `webkit2gtk-driver`、`xdotool`、`xvfb`、`imagemagick`
+
+```sh
+pnpm --filter @manga/desktop icons  # 初回だけ
+pnpm --filter @manga/desktop exec tauri build --debug --no-bundle  # リリースビルドは起動時に更新の確認が出るので使わない
+xvfb-run -a pnpm --filter @manga/e2e e2e:desktop
+```
+
+先にアプリをビルドしておかないと、バイナリが無くて失敗する。CI は同じ `e2e.yml` の `desktop` ジョブ（ubuntu-24.04 + Xvfb）で回り、失敗時は X の画面、WebView のスクリーンショットと HTML、tauri-driver とアプリのログが artifact `e2e-desktop-report` に残る。
