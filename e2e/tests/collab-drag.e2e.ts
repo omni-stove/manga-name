@@ -22,9 +22,10 @@ test('2 つのタブで別々のフキダシを同時にドラッグしても、
     await selectTool(page, 'フキダシ')
   }
 
-  // 1 コマ目と 3 コマ目のフキダシ。同じページの bubbles を 2 人が同時に書き換える
+  // 6 コマ目と 3 コマ目のフキダシ。同じページの bubbles を 2 人が同時に書き換える。1 コマ目のフキダシは
+  // 枠からはみ出していて、動かすと枠に収まる分だけ縦にもずれるので使わない
   const before = {
-    first: await bubbleBox(alice, 'bb_1'),
+    first: await bubbleBox(alice, 'bb_6'),
     third: await bubbleBox(alice, 'bb_3'),
   }
   const grab = async (page: Page, id: string) => {
@@ -34,7 +35,7 @@ test('2 つのタブで別々のフキダシを同時にドラッグしても、
     await page.mouse.down()
     return at
   }
-  const a = await grab(alice, 'bb_1')
+  const a = await grab(alice, 'bb_6')
   const b = await grab(bob, 'bb_3')
   const steps = 8
   for (let i = 1; i <= steps; i++) {
@@ -45,7 +46,7 @@ test('2 つのタブで別々のフキダシを同時にドラッグしても、
 
   for (const page of [alice, bob]) {
     await expect(async () => {
-      const first = await bubbleBox(page, 'bb_1')
+      const first = await bubbleBox(page, 'bb_6')
       const third = await bubbleBox(page, 'bb_3')
       expect(first.x - before.first.x).toBeLessThan(-20)
       expect(Math.abs(first.y - before.first.y)).toBeLessThan(2)

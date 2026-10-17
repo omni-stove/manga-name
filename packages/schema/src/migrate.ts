@@ -5,6 +5,8 @@ const migrations: Record<number, (json: Record<string, unknown>) => Record<strin
   // v2 は Panel.shape を足しただけで、v1 の JSON はそのまま v2 として読める。版を上げるのは、
   // shape を知らない古いクライアントが v2 を読んで shape を落としたまま保存しないようにするため
   1: (json) => ({ ...json, schemaVersion: 2 }),
+  // v3 は Bubble.overflow を足しただけ。版を上げる理由は v2 と同じ
+  2: (json) => ({ ...json, schemaVersion: 3 }),
 }
 
 /**
@@ -33,17 +35,17 @@ export function migrate(json: unknown): unknown {
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('migrate v2 → v2 is a no-op', () => {
-    const json = { schemaVersion: 2, title: 't' }
+  test('migrate v3 → v3 is a no-op', () => {
+    const json = { schemaVersion: 3, title: 't' }
     expect(migrate(json)).toBe(json)
   })
 
-  test('migrate v1 → v2 only bumps the version', () => {
-    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 2, title: 't' })
+  test('migrate v1 → v3 only bumps the version', () => {
+    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 3, title: 't' })
   })
 
   test('migrate rejects unknown, newer or missing versions and non-objects', () => {
-    expect(() => migrate({ schemaVersion: 3 })).toThrow()
+    expect(() => migrate({ schemaVersion: 4 })).toThrow()
     expect(() => migrate({ schemaVersion: 0 })).toThrow()
     expect(() => migrate({})).toThrow()
     expect(() => migrate(null)).toThrow()

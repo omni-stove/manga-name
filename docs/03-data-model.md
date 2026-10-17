@@ -26,7 +26,7 @@ interface Rect  { x: number; y: number; w: number; h: number }
 type ReadingDirection = 'rtl' | 'ltr';   // rtl = 右綴じ縦書き（既定）
 
 interface Project {
-  schemaVersion: 2;
+  schemaVersion: 3;
   id: ID;
   title: string;
   createdAt: ISODate;
@@ -120,6 +120,12 @@ interface Bubble {
   size: Size;
   /** しっぽの先端。コマ内座標。省略時はしっぽなし */
   tail?: Point;
+  /**
+   * true なら本体をコマの枠からはみ出させてよい。省略時は、フキダシの作成・移動・リサイズ、
+   * コマのリサイズ・分割・結合・頂点の移動、AI の下書きと提案のたびに本体を枠の内側に収める
+   * （輪郭から 2mm 空け、収まらなければ縮める）。しっぽは枠の外へ出てよい
+   */
+  overflow?: boolean;
 }
 
 interface PanelArt {

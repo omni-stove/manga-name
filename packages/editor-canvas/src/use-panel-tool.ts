@@ -20,6 +20,7 @@ import {
   createPanelPatch,
   cutPanelPatch,
   draftRect,
+  fitBubblesPatch,
   type Handle,
   mergePanelsPatch,
   moveVertex,
@@ -116,8 +117,8 @@ function boxOf(el: Element): ClientBox {
  * 多角形のコマは頂点のドラッグで頂点を動かし、矩形のコマも Alt を押しながら隅を引けば頂点を動かす。
  * 縦横の分割は `split` で行う。`startCut` の後か Alt を押しながらのドラッグで線を引くと、
  * 選択中のコマをその線で割る（縦横に近い線はそろえる）。ドラッグ中は `draft` を描くだけで、
- * Patch は pointerup で 1 回だけ出す。動かずに離したときは何もせず、クリックの選択は useSelection に
- * 任せる。Escape でドラッグと線の分割を取り消す
+ * Patch は pointerup で 1 回だけ出す。形の変わったコマのフキダシは、overflow でない限り新しい枠に収める。
+ * 動かずに離したときは何もせず、クリックの選択は useSelection に任せる。Escape でドラッグと線の分割を取り消す
  */
 export function usePanelTool(opts: Options) {
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -128,6 +129,9 @@ export function usePanelTool(opts: Options) {
   const selected = active ? opts.page.panels.find((p) => p.id === selectedId) : undefined
   const cutting = selected !== undefined && cutFor === selected.id
   const handleSize = opts.view.w * HANDLE_RATIO
+  const commit = (patch: Patch) => {
+    if (patch.length > 0) opts.onChange(fitBubblesPatch(patch, { w: opts.width, h: opts.height }))
+  }
 
   const pointAt = (e: ReactPointerEvent<SVGSVGElement>) => {
     const mm = clientToPage(opts.view, boxOf(e.currentTarget), { x: e.clientX, y: e.clientY })
@@ -254,7 +258,7 @@ export function usePanelTool(opts: Options) {
       if (g.kind === 'merge') {
         if (selectedId === undefined) return
         const patch = mergePanelsPatch(opts.page, selectedId, g.targetId, opts.direction)
-        if (patch.length > 0) opts.onChange(patch)
+        commit(patch)
         return
       }
       const at = pointAt(e)
@@ -271,7 +275,7 @@ export function usePanelTool(opts: Options) {
         if (!g.dragging) return
         setCutFor(null)
         const patch = cutPanelPatch(opts.page, g.panelId, cutOf(g.from, at.n), opts.direction)
-        if (patch.length > 0) opts.onChange(patch)
+        commit(patch)
         return
       }
       const patch =
@@ -282,7 +286,7 @@ export function usePanelTool(opts: Options) {
               resizeRect(opts.page, g.panelId, g.start, g.handle, at.n),
             )
           : reshapePanelPatch(opts.page, g.panelId, reshaped(g, at.n))
-      if (patch.length > 0) opts.onChange(patch)
+      commit(patch)
     },
     onPointerCancel(e: ReactPointerEvent<SVGSVGElement>) {
       if (gesture.current?.pointerId === e.pointerId) end()
@@ -301,7 +305,7 @@ export function usePanelTool(opts: Options) {
   const split = (axis: SplitAxis) => {
     if (!selected) return
     const patch = splitPanelPatch(opts.page, selected.id, axis, opts.direction)
-    if (patch.length > 0) opts.onChange(patch)
+    commit(patch)
   }
 
   /** 選択中のコマを線で割るモードの切り替え。次のドラッグで引いた線で割る */

@@ -1,4 +1,5 @@
 export * from './ai'
+export * from './bubble-fit'
 export * from './diagnosis'
 export * from './factories'
 export * from './fixtures'

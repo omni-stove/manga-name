@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtures, type Panel, type Patch } from '@manga/schema'
+import { type Bubble, bubbleFits, fixtures, type Panel, type Patch } from '@manga/schema'
 import { act, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -252,6 +252,8 @@ describe('PanelInspector', () => {
 })
 
 describe('BubbleInspector', () => {
+  const frame = { panel: samplePanel, pageSize: project.settings.pageSize }
+
   test('clearing the speaker removes it and text is debounced', async () => {
     vi.useFakeTimers()
     const onChange = vi.fn<(patch: Patch) => void>()
@@ -260,6 +262,7 @@ describe('BubbleInspector', () => {
       <BubbleInspector
         bubble={{ ...bubble, speakerId: 'chr_e' }}
         characters={project.characters}
+        frame={frame}
         onChange={onChange}
       />,
     )
@@ -275,6 +278,30 @@ describe('BubbleInspector', () => {
     expect(onChange).toHaveBeenLastCalledWith([
       { op: 'replace', path: '/text', value: '新しいセリフ' },
     ])
+  })
+
+  test('allowing overflow adds it, and disallowing it removes it and fits the body back', async () => {
+    const onChange = vi.fn<(patch: Patch) => void>()
+    const bubble = must(samplePanel.bubbles[0])
+    const outside = { ...bubble, pos: { x: 1, y: 0 }, overflow: true }
+    const props = { bubble, characters: project.characters, frame, onChange }
+    const { container, root } = await render(<BubbleInspector {...props} />)
+    const checkbox = must(
+      [...container.querySelectorAll('label')]
+        .find((el) => el.textContent === '枠からはみ出す')
+        ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+    )
+    expect(checkbox.checked).toBe(false)
+    await act(async () => checkbox.click())
+    expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/overflow', value: true }])
+
+    await act(async () => root.render(<BubbleInspector {...props} bubble={outside} />))
+    expect(checkbox.checked).toBe(true)
+    await act(async () => checkbox.click())
+    const patch = must(onChange.mock.lastCall)[0]
+    expect(patch[0]).toEqual({ op: 'remove', path: '/overflow' })
+    const pos = must(patch.find((op) => op.path === '/pos')) as { value: Bubble['pos'] }
+    expect(bubbleFits({ ...bubble, pos: pos.value }, frame)).toBe(true)
   })
 })
 

@@ -1,5 +1,5 @@
 import { EditorCanvas, type Layers } from '@manga/editor-canvas'
-import type { ID, Page, Project } from '@manga/schema'
+import { fitPanelBubbles, type ID, type Page, type Project } from '@manga/schema'
 import { Button, Checkbox, Dialog, Input, TextArea, Typography, XStack, YStack } from '@manga/ui'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -86,7 +86,12 @@ export function ScriptDraftDialog({
     try {
       const req = proposalRequest(project, { script, tone, pageCount })
       const res = await requestProposal(llmProvider, req, controller.signal)
-      setPhase({ kind: 'result', pages: res.pages, rationale: res.rationale })
+      const { pageSize } = project.settings
+      const pages = res.pages.map((page) => ({
+        ...page,
+        panels: page.panels.map((panel) => fitPanelBubbles(panel, pageSize)),
+      }))
+      setPhase({ kind: 'result', pages, rationale: res.rationale })
     } catch (e) {
       // 中止とモーダルを閉じたときは、そちらの操作が画面を決める
       if (controller.signal.aborted) return

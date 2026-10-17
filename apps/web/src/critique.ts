@@ -5,7 +5,16 @@ import {
   checkCritiquePatch,
   pageRootedPatch,
 } from '@manga/ai'
-import type { ID, Page, PageDiagnosis, Patch } from '@manga/schema'
+import {
+  type Bubble,
+  fitBubble,
+  type ID,
+  type Page,
+  type PageDiagnosis,
+  type Patch,
+  type Point,
+  type Size,
+} from '@manga/schema'
 import { applyPatches, produce } from 'immer'
 import { findPage, pagePatch } from './project-ops'
 import { toImmerPatch } from './store/json-patch'
@@ -54,6 +63,26 @@ export function previewPage(page: Page, patch: Patch): Page | undefined {
 const POS_PATH = /^\/panels\/(\d+)\/(focusPoints|bubbles)\/(\d+)\/pos$/
 const VECTOR_PATH = /^\/panels\/(\d+)\/vectors\/(-|\d+)$/
 
+type PageSize = Pick<Size, 'w' | 'h'>
+
+/**
+ * フキダシの pos を置き換える操作の値を、overflow でない限り本体が枠に収まる中心にした patch。
+ * 提案は pos しか触れないので、大きさは変えない。pageSize はページの大きさ（mm）
+ */
+function fitBubbleMoves(page: Page, patch: Patch, pageSize: PageSize): Patch {
+  return patch.map((op) => {
+    const pos = POS_PATH.exec(op.path)
+    if (!pos || pos[2] !== 'bubbles' || op.op !== 'replace') return op
+    const panel = page.panels[Number(pos[1])]
+    const bubble = panel?.bubbles[Number(pos[3])]
+    const value = op.value as Partial<Point> | undefined
+    if (!panel || !bubble || bubble.overflow || typeof value?.x !== 'number') return op
+    if (typeof value.y !== 'number') return op
+    const fitted = fitBubble({ ...bubble, pos: { x: value.x, y: value.y } }, { panel, pageSize })
+    return { ...op, value: fitted.pos }
+  })
+}
+
 /** ページを根にした patch の操作が、どれも今の page にすでに入っているか */
 function isApplied(page: Page, patch: Patch): boolean {
   return patch.every((op) => {
@@ -74,18 +103,24 @@ function isApplied(page: Page, patch: Patch): boolean {
 }
 
 /**
- * 提案が今の page に対してどの状態か。すでに入っているかを先に見るのは、
+ * 提案が今の page に対してどの状態か。フキダシの移動は枠に収まる位置へ直した patch にする。
+ * pageSize はページの大きさ（mm）。すでに入っているかを先に見るのは、
  * 適用済みのベクトルの追加は id の重なりとして checkCritiquePatch に拒否されるため
  */
-export function suggestionState(page: Page, suggestion: Suggestion): SuggestionState {
-  const rooted = pageRootedPatch(suggestion.patch)
+export function suggestionState(
+  page: Page,
+  suggestion: Suggestion,
+  pageSize: PageSize,
+): SuggestionState {
+  const rooted = fitBubbleMoves(page, pageRootedPatch(suggestion.patch), pageSize)
   if (rooted.length > 0 && isApplied(page, rooted)) return { kind: 'applied', patch: rooted }
   const checked: CritiquePatchCheck = checkCritiquePatch(page, suggestion.patch)
   if (!checked.ok) return { kind: 'rejected', reason: checked.reason }
-  if (!previewPage(page, checked.patch)) {
+  const patch = fitBubbleMoves(page, checked.patch, pageSize)
+  if (!previewPage(page, patch)) {
     return { kind: 'rejected', reason: '今のページに当てられない提案です' }
   }
-  return { kind: 'ready', patch: checked.patch }
+  return { kind: 'ready', patch }
 }
 
 /** ページを根にした patch が触るコマの id。重なりなく、出てきた順 */
@@ -106,7 +141,7 @@ export function applySuggestion(store: ProjectStore, pageId: ID, suggestion: Sug
   const project = store.get()
   const page = findPage(project, pageId)?.page
   if (!page) throw new Error('ページがもうありません')
-  const state = suggestionState(page, suggestion)
+  const state = suggestionState(page, suggestion, project.settings.pageSize)
   if (state.kind === 'rejected') throw new Error(state.reason)
   if (state.kind === 'applied') throw new Error('この提案はもう適用されています')
   store.applyPatch(pagePatch(project, pageId, state.patch), {
@@ -120,10 +155,11 @@ if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
   const { aiFixtures, createFakeLlmProvider } = await import('@manga/ai')
   const { diagnosePage } = await import('@manga/diagnosis')
-  const { fixtures } = await import('@manga/schema')
+  const { bubbleFits, fixtures } = await import('@manga/schema')
   const { createProjectStore } = await import('./store/project-store')
 
   const project = fixtures.samplePage01
+  const pageSize = project.settings.pageSize
   const page = project.episodes[0]?.pages[0] as Page
   const pageId = page.id
   const setup = () => createProjectStore(project, { saveProject: async () => {} })
@@ -165,7 +201,7 @@ if (import.meta.vitest) {
 
       for (const suggestion of res.suggestions) {
         const before = currentPage(store)
-        const state = suggestionState(before, suggestion)
+        const state = suggestionState(before, suggestion, pageSize)
         expect(state.kind).toBe('ready')
         if (state.kind !== 'ready') continue
         const ghost = previewPage(before, state.patch)
@@ -174,7 +210,7 @@ if (import.meta.vitest) {
         const after = currentPage(store)
         expect(after).toEqual(ghost)
         expect(after).not.toEqual(before)
-        expect(suggestionState(after, suggestion).kind).toBe('applied')
+        expect(suggestionState(after, suggestion, pageSize).kind).toBe('applied')
         // 診断は適用後のページで計算し直せる
         expect(diagnosePage(after, project.settings).pageId).toBe(pageId)
       }
@@ -182,7 +218,7 @@ if (import.meta.vitest) {
       for (let i = 0; i < res.suggestions.length; i++) store.undo()
       expect(currentPage(store)).toEqual(page)
       for (const suggestion of res.suggestions) {
-        expect(suggestionState(currentPage(store), suggestion).kind).toBe('ready')
+        expect(suggestionState(currentPage(store), suggestion, pageSize).kind).toBe('ready')
       }
     })
 
@@ -200,7 +236,7 @@ if (import.meta.vitest) {
 
   describe('rect を触る Patch を拒否する', () => {
     test('状態は rejected で、理由に rect を含む', () => {
-      const state = suggestionState(page, rectSuggestion)
+      const state = suggestionState(page, rectSuggestion, pageSize)
       expect(state.kind).toBe('rejected')
       if (state.kind === 'rejected') expect(state.reason).toContain('rect')
     })
@@ -235,7 +271,33 @@ if (import.meta.vitest) {
         },
       ],
     }
-    expect(suggestionState(page, suggestion).kind).toBe('rejected')
+    expect(suggestionState(page, suggestion, pageSize).kind).toBe('rejected')
+  })
+
+  test('a bubble move toward the frame stops inside it, and an overflow bubble goes past it', () => {
+    const index = page.panels.findIndex((p) => p.bubbles.length > 0)
+    const outside: Suggestion = {
+      message: 'フキダシを端へ',
+      patch: [{ op: 'replace', path: `/panels/${index}/bubbles/0/pos`, value: { x: 1, y: 0 } }],
+    }
+    const state = suggestionState(page, outside, pageSize)
+    expect(state.kind).toBe('ready')
+    const ghost = state.kind === 'ready' ? previewPage(page, state.patch) : undefined
+    const panel = ghost?.panels[index]
+    expect(panel && bubbleFits(panel.bubbles[0] as Bubble, { panel, pageSize })).toBe(true)
+
+    const store = setup()
+    applySuggestion(store, pageId, outside)
+    expect(suggestionState(currentPage(store), outside, pageSize).kind).toBe('applied')
+
+    const overflowing: Page = {
+      ...page,
+      panels: page.panels.map((p, i) =>
+        i === index ? { ...p, bubbles: p.bubbles.map((b) => ({ ...b, overflow: true })) } : p,
+      ),
+    }
+    const free = suggestionState(overflowing, outside, pageSize)
+    expect(free.kind === 'ready' && free.patch[0]).toMatchObject({ value: { x: 1, y: 0 } })
   })
 
   test('touchedPanelIds lists the panels a patch touches', () => {
