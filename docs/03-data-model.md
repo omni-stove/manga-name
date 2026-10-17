@@ -1,6 +1,6 @@
 # 03. データモデル（共有契約）
 
-このファイルは全ワークストリームが依存する契約。`packages/schema` はこの定義を Zod に写したものであり、このファイルが正。
+このファイルは全パッケージが依存する契約。`packages/schema` はこの定義を Zod に写したものであり、このファイルが正。
 変更は PR で提案し、`schemaVersion` を上げ、マイグレーションを同梱する。
 
 ## 設計原則
@@ -248,7 +248,7 @@ interface Issue {
 ## パッチ形式（store と AI 提案の共通インターフェース）
 
 store への変更はすべて JSON Patch（RFC 6902）で表現する。AI の提案も JSON Patch で返す。
-これにより Phase 4 で CRDT に置き換えるときも、呼び出し側のコードは変わらない。
+これにより store が Zustand でも Yjs（共同編集）でも、呼び出し側のコードは変わらない。
 
 ```ts
 type Patch = { op: 'add' | 'remove' | 'replace'; path: string; value?: unknown }[];

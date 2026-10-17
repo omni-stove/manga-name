@@ -56,7 +56,7 @@ function panelCharacters(panel: Panel, characters: Character[]): Character[] {
 }
 
 /**
- * 画像生成プロンプト。WS-03 の順に要素を改行で連結し、空の要素は飛ばす。
+ * 画像生成プロンプト。parts の順に要素を改行で連結し、空の要素は飛ばす。
  * negative は settings.style.negative（無ければ空文字）。
  */
 function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: string } {
