@@ -47,7 +47,7 @@ export interface Collaboration {
 }
 
 interface CollaborationOptions {
-  /** プロジェクトの同期サーバの WebSocket URL。まだつなげなければ null（CloudStorage.syncUrl） */
+  /** プロジェクトの同期サーバの WebSocket URL。接続のたびに呼ぶ。まだつなげなければ null（CloudStorage.syncUrl） */
   syncUrl(id: ID): Promise<string | null>
   /** Y.Doc の状態を置く場所 */
   ydocs: YDocStore

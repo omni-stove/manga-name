@@ -1,13 +1,8 @@
 .app {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
 .header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   height: var(--header-height);
   padding: 0 var(--space-16);
   border-bottom: 1px solid var(--border);
@@ -19,18 +14,6 @@
   font-weight: var(--weight-bold);
   letter-spacing: var(--tracking-label);
   text-decoration: none;
-}
-
-.nav {
-  display: flex;
-  align-items: center;
-  gap: var(--space-16);
-}
-
-.account {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
 }
 
 .nav a {

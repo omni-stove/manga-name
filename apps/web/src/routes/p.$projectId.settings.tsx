@@ -1,5 +1,5 @@
 import type { ProjectSettings } from '@manga/schema'
-import { Button, Input, Select, TextArea } from '@manga/ui'
+import { Button, Input, Select, TextArea, XStack } from '@manga/ui'
 import { createFileRoute, getRouteApi } from '@tanstack/react-router'
 import { useId } from 'react'
 import common from '../common.module.css'
@@ -63,7 +63,7 @@ function ProjectSettingsPage() {
         </Select>
 
         <label htmlFor={field('w')}>判型（mm）</label>
-        <span className={styles.size}>
+        <XStack as="span" className={styles.size}>
           <Input
             id={field('w')}
             name="w"
@@ -84,7 +84,7 @@ function ProjectSettingsPage() {
             aria-label="高さ"
             defaultValue={pageSize.h}
           />
-        </span>
+        </XStack>
 
         <label htmlFor={field('dpi')}>dpi</label>
         <Input

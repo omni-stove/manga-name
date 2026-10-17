@@ -33,6 +33,21 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhBOUQ2NUI5NEJDRDQwNEIKUldSTFFNMUx1V1dkaW9IZTRNMlZXR2xGZEp1YnRHN1pjZnlLYjlvSE5rdlhoNTQ2UnZnaTVtVnAK",
+      "endpoints": [
+        "https://github.com/omni-stove/manga-name/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

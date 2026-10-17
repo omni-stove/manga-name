@@ -1,6 +1,6 @@
 import type { CritiqueResponse, LlmProvider } from '@manga/ai'
 import type { ID, Page, PageDiagnosis, Patch } from '@manga/schema'
-import { Button } from '@manga/ui'
+import { Button, XStack, YStack } from '@manga/ui'
 import { useEffect, useRef, useState } from 'react'
 import common from './common.module.css'
 import {
@@ -13,6 +13,7 @@ import {
 } from './critique'
 import styles from './critique-panel.module.css'
 import { errorMessage } from './route-error'
+import { FailureAlert } from './sign-in'
 import type { ProjectStore } from './store/project-store'
 
 /** 相談した時点の診断の件数。適用後の診断と比べて減ったかを見せる */
@@ -25,7 +26,7 @@ interface Counts {
 type Consultation =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'error'; message: string }
+  | { status: 'error'; error: unknown }
   | { status: 'done'; response: CritiqueResponse; before: Counts }
 
 /** 絵があるコマに提案を入れた記録。そのコマの絵が描き直されるか、提案が Undo で外れるまで再生成を促す */
@@ -89,7 +90,7 @@ export function CritiquePanel(props: CritiquePanelProps) {
       const response = await llmProvider.critique(critiqueRequest(page, diagnosis))
       if (requestId.current === id) setConsultation({ status: 'done', response, before })
     } catch (e) {
-      if (requestId.current === id) setConsultation({ status: 'error', message: errorMessage(e) })
+      if (requestId.current === id) setConsultation({ status: 'error', error: e })
     }
   }
 
@@ -110,8 +111,8 @@ export function CritiquePanel(props: CritiquePanelProps) {
 
   const loading = consultation.status === 'loading'
   return (
-    <section className={styles.panel} data-critique={consultation.status}>
-      <div className={common.actions}>
+    <YStack as="section" className={styles.panel} data-critique={consultation.status}>
+      <XStack wrap>
         <Button
           size="small"
           variant="primary"
@@ -120,11 +121,9 @@ export function CritiquePanel(props: CritiquePanelProps) {
         >
           {loading ? '相談中…' : consultation.status === 'done' ? 'もう一度相談' : 'AI に相談'}
         </Button>
-      </div>
+      </XStack>
       {consultation.status === 'error' && (
-        <p className={common.error} role="alert">
-          AI に相談できませんでした: {consultation.message}
-        </p>
+        <FailureAlert failure="AI に相談できませんでした" error={consultation.error} />
       )}
       {consultation.status === 'done' && (
         <Result
@@ -144,7 +143,7 @@ export function CritiquePanel(props: CritiquePanelProps) {
           }
         />
       )}
-    </section>
+    </YStack>
   )
 }
 
@@ -202,12 +201,14 @@ function Result({
       {response.suggestions.length === 0 ? (
         <p className={common.placeholder}>提案はありません</p>
       ) : (
-        <ol className={styles.cards}>
+        <YStack as="ol" gap={6} className={styles.cards}>
           {response.suggestions.map((suggestion, i) => {
             const state: SuggestionState = states[i] ?? { kind: 'rejected', reason: '' }
             const preview = () => onPreview(state.kind === 'ready' ? state.patch : null)
             return (
-              <li
+              <YStack
+                as="li"
+                gap={6}
                 // biome-ignore lint/suspicious/noArrayIndexKey: 提案の列は相談の応答ごとに固定で並び替わらず、同じ文言の提案も並びうる
                 key={i}
                 className={styles.card}
@@ -224,7 +225,7 @@ function Result({
                     {state.reason}
                   </p>
                 )}
-                <div className={common.actions}>
+                <XStack wrap>
                   {state.kind === 'applied' ? (
                     <span className={styles.applied}>適用済み（Undo で戻せます）</span>
                   ) : (
@@ -236,11 +237,11 @@ function Result({
                       適用
                     </Button>
                   )}
-                </div>
-              </li>
+                </XStack>
+              </YStack>
             )
           })}
-        </ol>
+        </YStack>
       )}
       {applyError && (
         <p className={common.error} role="alert">
@@ -248,11 +249,11 @@ function Result({
         </p>
       )}
       {stale.length > 0 && (
-        <ul className={styles.regenerate} data-critique-regenerate>
+        <YStack as="ul" gap={6} className={styles.regenerate} data-critique-regenerate>
           {stale.map(({ panelId }) => {
             const order = page.panels.find((p) => p.id === panelId)?.order
             return (
-              <li key={panelId}>
+              <XStack as="li" wrap key={panelId}>
                 <span>コマ {order} の絵は提案前の配置で描かれています</span>
                 <Button
                   size="small"
@@ -265,10 +266,10 @@ function Result({
                 <Button size="small" variant="ghost" onClick={() => onDismiss(panelId)}>
                   閉じる
                 </Button>
-              </li>
+              </XStack>
             )
           })}
-        </ul>
+        </YStack>
       )}
     </>
   )

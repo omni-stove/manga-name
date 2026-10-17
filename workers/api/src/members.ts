@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { MEMBER_ROLES, type ProjectRole, projectRole, userEmail } from './access'
 import { readJson } from './body'
 import type { Env } from './env'
+import { hashToken, newToken } from './token'
 import { requireUser, type UserEnv } from './user'
 
 /** 招待リンクの有効期間 */
@@ -16,20 +17,6 @@ const InviteSchema = z.object({
 const RoleSchema = z.object({ role: z.enum(MEMBER_ROLES) })
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
-
-/** 招待リンクに載せるトークン。256 ビットの乱数を base64url にしたもの */
-function newToken() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32))
-  return btoa(String.fromCharCode(...bytes))
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replace(/=+$/, '')
-}
-
-async function hashToken(token: string) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
 
 /** プロジェクトの同期サーバに、user の接続を閉じさせる。新しいロールでつなぎ直させるため */
 async function revokeSync(env: Env, projectId: string, userId: string) {

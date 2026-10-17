@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import common from '../common.module.css'
 import { errorMessage } from '../route-error'
 import { type InvitePreview, ROLE_LABELS } from '../sharing'
-import { toasts } from '../toasts'
+import { SignInButton } from '../sign-in'
 import { useAuth } from '../use-auth'
 
 export const Route = createFileRoute('/invite/$token')({ component: AcceptInvite })
@@ -16,7 +16,7 @@ export const Route = createFileRoute('/invite/$token')({ component: AcceptInvite
 function AcceptInvite() {
   const { token } = Route.useParams()
   const { sharing } = Route.useRouteContext()
-  const { user, signIn, signOut } = useAuth()
+  const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const [invite, setInvite] = useState<InvitePreview | null>()
   const [error, setError] = useState<string>()
@@ -35,14 +35,7 @@ function AcceptInvite() {
         <p>
           招待を受け取るには、招待されたメールアドレスの Google アカウントでログインしてください。
         </p>
-        <Button
-          variant="primary"
-          onClick={() =>
-            signIn().catch((e: unknown) => toasts.push(`ログインできません: ${String(e)}`))
-          }
-        >
-          ログイン
-        </Button>
+        <SignInButton variant="primary" />
       </section>
     )
   }

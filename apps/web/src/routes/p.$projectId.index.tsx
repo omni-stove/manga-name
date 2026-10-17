@@ -1,5 +1,5 @@
 import type { Episode, PageTemplate } from '@manga/schema'
-import { Button, Select } from '@manga/ui'
+import { Button, Select, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
@@ -43,15 +43,17 @@ function PageList() {
   return (
     <>
       <h2>ページ一覧</h2>
-      <form
+      <XStack
+        as="form"
+        wrap
+        gap={12}
         className={common.toolbar}
         onSubmit={(e) => {
           e.preventDefault()
           apply('ページを追加', (p) => addPagePatch(p, template, targetEpisode?.id).patch)
         }}
       >
-        {/* biome-ignore lint/a11y/noLabelWithoutControl: Select は label の内側に入る */}
-        <label className={styles.inline}>
+        <XStack as="label" className={styles.inline}>
           テンプレート
           <Select
             value={template}
@@ -63,10 +65,9 @@ function PageList() {
               </option>
             ))}
           </Select>
-        </label>
+        </XStack>
         {project.episodes.length > 1 && (
-          // biome-ignore lint/a11y/noLabelWithoutControl: Select は label の内側に入る
-          <label className={styles.inline}>
+          <XStack as="label" className={styles.inline}>
             追加先
             <Select value={targetEpisode?.id} onChange={(e) => setEpisodeId(e.currentTarget.value)}>
               {project.episodes.map((episode) => (
@@ -75,14 +76,14 @@ function PageList() {
                 </option>
               ))}
             </Select>
-          </label>
+          </XStack>
         )}
         <Button type="submit" variant="primary">
           ページを追加
         </Button>
         <Button onClick={() => apply('エピソードを追加', addEpisodePatch)}>エピソードを追加</Button>
         <Button onClick={() => setDrafting(true)}>脚本から下書き</Button>
-      </form>
+      </XStack>
       {drafting && (
         <ScriptDraftDialog
           project={project}
@@ -113,25 +114,34 @@ function PageList() {
               const status = artStatus(page)
               const editing = peers.filter((peer) => peer.pageId === page.id)
               return (
-                <li key={page.id} className={common.card}>
+                <YStack as="li" gap={6} key={page.id} className={common.card}>
                   <Link
                     to="/p/$projectId/pages/$pageId"
                     params={{ projectId, pageId: page.id }}
                     className={common.cardLink}
                   >
-                    <PageThumbnail
-                      page={page}
-                      pageSize={project.settings.pageSize}
-                      resolveAsset={library.resolveAsset}
-                    />
-                    <strong>{index + 1} ページ</strong>
+                    <YStack gap={4}>
+                      <PageThumbnail
+                        page={page}
+                        pageSize={project.settings.pageSize}
+                        resolveAsset={library.resolveAsset}
+                      />
+                      <strong>{index + 1} ページ</strong>
+                    </YStack>
                   </Link>
                   {editing.length > 0 && (
-                    <fieldset className={collabStyles.peers} aria-label="編集中の人">
+                    <XStack
+                      as="fieldset"
+                      wrap
+                      gap={4}
+                      align="stretch"
+                      className={collabStyles.peers}
+                      aria-label="編集中の人"
+                    >
                       {editing.map((peer) => (
                         <PeerBadge key={peer.clientId} name={peer.name} color={peer.color} />
                       ))}
-                    </fieldset>
+                    </XStack>
                   )}
                   <small className={styles.meta}>
                     コマ {page.panels.length} / 生成{' '}
@@ -139,7 +149,7 @@ function PageList() {
                       {status}
                     </span>
                   </small>
-                  <span className={common.cardActions}>
+                  <XStack as="span" wrap gap={6} className={common.cardActions}>
                     <Button
                       size="small"
                       variant="ghost"
@@ -168,8 +178,8 @@ function PageList() {
                     >
                       削除
                     </Button>
-                  </span>
-                </li>
+                  </XStack>
+                </YStack>
               )
             })}
           </ol>
@@ -198,11 +208,11 @@ function EpisodeBatch({
     pageIds: episode.pages.map((page) => page.id),
   })
   return (
-    <div className={common.toolbar}>
+    <XStack wrap gap={12} className={common.toolbar}>
       <Button disabled={batch.running || episode.pages.length === 0} onClick={batch.start}>
         {batch.running ? '生成中…' : '全部生成'}
       </Button>
       <BatchOptions batch={batch} />
-    </div>
+    </XStack>
   )
 }

@@ -1,7 +1,7 @@
-import { Button } from '@manga/ui'
+import { Button, XStack, YStack } from '@manga/ui'
 import { createRootRouteWithContext, Link, Outlet } from '@tanstack/react-router'
 import type { RouterContext } from '../router'
-import { Toasts, toasts } from '../toasts'
+import { Toasts } from '../toasts'
 import { useAuth } from '../use-auth'
 import styles from './root.module.css'
 
@@ -12,46 +12,38 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
 function RootLayout() {
   return (
-    <div className={styles.app}>
-      <header className={styles.header}>
+    <YStack gap={0} className={styles.app}>
+      <XStack as="header" justify="between" className={styles.header}>
         <Link to="/" className={styles.brand}>
           manga
         </Link>
-        <nav className={styles.nav}>
+        <XStack as="nav" gap={16} className={styles.nav}>
           <Link to="/settings">アプリ設定</Link>
           <Account />
-        </nav>
-      </header>
+        </XStack>
+      </XStack>
       <main className={styles.main}>
         <Outlet />
       </main>
       <Toasts />
-    </div>
+    </YStack>
   )
 }
 
-/** ログイン中ならユーザー名とサインアウト、未ログインならログイン */
+/**
+ * ログイン中のユーザー名とサインアウト。ログインは生成とクラウド保存にだけ要るので、
+ * 未ログインの間はヘッダーに入口を置かず、アプリ設定と、ログインが要る操作の失敗表示から入る
+ */
 function Account() {
-  const { user, signIn, signOut } = useAuth()
-  if (user === null) {
-    return (
-      <Button
-        size="small"
-        onClick={() =>
-          signIn().catch((e: unknown) => toasts.push(`ログインできません: ${String(e)}`))
-        }
-      >
-        ログイン
-      </Button>
-    )
-  }
+  const { user, signOut } = useAuth()
+  if (user === null) return null
   return (
-    <span className={styles.account}>
+    <XStack as="span">
       <span title={user.email}>{user.name}</span>
       <Button size="small" variant="ghost" onClick={() => void signOut()}>
         サインアウト
       </Button>
-    </span>
+    </XStack>
   )
 }
 

@@ -1,6 +1,6 @@
 import { EditorCanvas, type Layers } from '@manga/editor-canvas'
 import type { ID, Page, Project } from '@manga/schema'
-import { Button, Checkbox, Dialog, Field, Input, TextArea } from '@manga/ui'
+import { Button, Checkbox, Dialog, Field, Input, TextArea, XStack, YStack } from '@manga/ui'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import common from './common.module.css'
 import {
@@ -15,12 +15,13 @@ import type { LlmProvider } from './llm-provider'
 import { appendPagesPatch } from './project-ops'
 import { errorMessage } from './route-error'
 import styles from './script-draft-dialog.module.css'
+import { FailureAlert } from './sign-in'
 import type { ProjectStore } from './store/project-store'
 
 type Phase =
   | { kind: 'input' }
   | { kind: 'running' }
-  | { kind: 'failed'; message: string }
+  | { kind: 'failed'; error: unknown }
   | { kind: 'result'; pages: Page[]; rationale: string }
 
 const PREVIEW_LAYERS: Layers = {
@@ -90,7 +91,7 @@ export function ScriptDraftDialog({
     } catch (e) {
       // 中止とモーダルを閉じたときは、そちらの操作が画面を決める
       if (controller.signal.aborted) return
-      setPhase({ kind: 'failed', message: errorMessage(e) })
+      setPhase({ kind: 'failed', error: e })
     } finally {
       if (running.current === controller) running.current = null
     }
@@ -149,7 +150,7 @@ export function ScriptDraftDialog({
             {phase.pages.map((page, index) => {
               const issue = issues[index]
               return (
-                <li key={page.id} className={styles.page} data-proposal-page={index + 1}>
+                <YStack as="li" gap={6} key={page.id} data-proposal-page={index + 1}>
                   <Checkbox
                     label={`${index + 1} ページ（コマ ${page.panels.length}）`}
                     checked={issue === undefined && !unchecked.has(index)}
@@ -184,7 +185,7 @@ export function ScriptDraftDialog({
                       {issue}
                     </p>
                   )}
-                </li>
+                </YStack>
               )
             })}
           </ol>
@@ -231,7 +232,7 @@ export function ScriptDraftDialog({
         </>
       }
     >
-      <fieldset className={styles.inputs} disabled={isRunning}>
+      <YStack as="fieldset" gap={12} className={styles.inputs} disabled={isRunning}>
         <Field label="脚本" hint="セリフとト書きをそのまま貼り付けます">
           <TextArea
             className={styles.script}
@@ -256,17 +257,15 @@ export function ScriptDraftDialog({
             onChange={(e) => setTone(e.target.value)}
           />
         </Field>
-      </fieldset>
+      </YStack>
       {isRunning && (
-        <p className={styles.progress} role="status">
+        <XStack as="p" className={styles.progress} role="status">
           提案を作っています…
           <progress aria-label="提案の進行" />
-        </p>
+        </XStack>
       )}
       {phase.kind === 'failed' && (
-        <p className={common.error} role="alert">
-          提案を作れませんでした: {phase.message}
-        </p>
+        <FailureAlert failure="提案を作れませんでした" error={phase.error} signInButton={false} />
       )}
     </Dialog>
   )

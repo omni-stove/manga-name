@@ -75,9 +75,13 @@ export interface SyncStatus {
 export interface CloudStorage extends StorageAdapter {
   /**
    * ローカルの id のプロジェクトの共同編集（`GET /v1/projects/:id/sync`）の WebSocket URL。
-   * まだクラウドに作られていないか、未ログインなら null
+   * ブラウザの WebSocket はヘッダを付けられないので、呼ぶたびに使い捨ての接続チケットを発行して `?ticket=` に載せる。
+   * チケットは 1 回の接続にしか使えず期限も短いので、つなぐ直前に毎回呼ぶ。
+   * まだクラウドに作られていないか、未ログインなら null。チケットを発行できなければ throw する
    */
   syncUrl(localId: ID): Promise<string | null>
+  /** ローカルの id のプロジェクトのクラウド側の id。まだクラウドに作られていないか、未ログインなら null */
+  cloudId(localId: ID): Promise<ID | null>
   /** 今の同期状態。変わらない間は同じオブジェクトを返す */
   getSyncStatus(): SyncStatus
   /** 同期状態が変わるたびに listener を呼ぶ。戻り値で解除する */
@@ -856,11 +860,21 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       conflict = false
       notify()
     },
+    async cloudId(localId) {
+      const link = await links.get(localId)
+      return link && (await getToken()) !== null ? link.cloudId : null
+    },
     async syncUrl(localId) {
       const link = await links.get(localId)
-      if (!link || (await getToken()) === null) return null
-      const url = new URL(`${baseUrl}/v1/projects/${encodeURIComponent(link.cloudId)}/sync`)
+      if (!link) return null
+      const path = `/${encodeURIComponent(link.cloudId)}`
+      const res = await request(`${path}/sync-ticket`, { method: 'POST' })
+      if (res === null) return null
+      if (!res.ok) throw await unexpected(res, 'sync-ticket')
+      const { ticket } = (await res.json()) as { ticket: string }
+      const url = new URL(`${baseUrl}/v1/projects${path}/sync`)
       url.protocol = url.protocol === 'http:' ? 'ws:' : 'wss:'
+      url.searchParams.set('ticket', ticket)
       return url.toString()
     },
     async flush() {
@@ -898,6 +912,7 @@ if (import.meta.vitest) {
     const rows = new Map<ID, Project>()
     const assets = new Map<string, Blob>()
     const requests: string[] = []
+    let tickets = 0
     let clock = Date.now()
     const tick = () => {
       clock += 1000
@@ -962,6 +977,12 @@ if (import.meta.vitest) {
         if (request.headers.has('authorization')) return unauthorized()
         assets.set(`${params.id}/${params.assetId}`, await request.blob())
         return HttpResponse.json({ assetId: params.assetId }, { status: 201 })
+      }),
+      http.post(`${BASE}/v1/projects/:id/sync-ticket`, ({ request, params }) => {
+        if (!accept(request)) return unauthorized()
+        if (!rows.has(String(params.id))) return notFound()
+        tickets += 1
+        return HttpResponse.json({ ticket: `ticket-${tickets}` }, { status: 201 })
       }),
       http.get(`${BASE}/v1/projects/:id/assets/:assetId`, ({ request, params }) => {
         if (!accept(request)) return unauthorized()
@@ -1468,7 +1489,30 @@ if (import.meta.vitest) {
       expect(await storage.syncUrl(p.id)).toBeNull()
       await storage.flush()
       const cloudId = await cloudIdOf(links, p.id)
-      expect(await storage.syncUrl(p.id)).toBe(`wss://api.test/v1/projects/${cloudId}/sync`)
+      expect(await storage.syncUrl(p.id)).toBe(
+        `wss://api.test/v1/projects/${cloudId}/sync?ticket=ticket-1`,
+      )
+    })
+
+    test('issues a new ticket on every call, since a ticket works for one connection', async () => {
+      const api = useApi()
+      const { storage } = createDevice()
+      const p = createEmptyProject('A')
+      await storage.saveProject(p)
+      await storage.flush()
+      const first = await storage.syncUrl(p.id)
+      const second = await storage.syncUrl(p.id)
+      expect(new URL(first ?? '').searchParams.get('ticket')).toBe('ticket-1')
+      expect(new URL(second ?? '').searchParams.get('ticket')).toBe('ticket-2')
+      expect(api.requests.filter((r) => r.endsWith('/sync-ticket'))).toHaveLength(2)
+    })
+
+    test('rejects when the ticket cannot be issued', async () => {
+      useApi()
+      const links = createMemoryLinkStore()
+      await links.set('p', { cloudId: 'gone', etag: 'e', syncedUpdatedAt: null })
+      const { storage } = createDevice({ links })
+      await expect(storage.syncUrl('p')).rejects.toThrow(/sync-ticket failed: 404/)
     })
 
     test('is null while signed out', async () => {
@@ -1477,6 +1521,17 @@ if (import.meta.vitest) {
       await links.set('p', { cloudId: 'c', etag: 'e', syncedUpdatedAt: null })
       const { storage } = createDevice({ links, getToken: async () => null })
       expect(await storage.syncUrl('p')).toBeNull()
+      expect(await storage.cloudId('p')).toBeNull()
+    })
+
+    test('cloudId tells the cloud id without issuing a ticket', async () => {
+      const api = useApi()
+      const links = createMemoryLinkStore()
+      await links.set('p', { cloudId: 'c', etag: 'e', syncedUpdatedAt: null })
+      const { storage } = createDevice({ links })
+      expect(await storage.cloudId('p')).toBe('c')
+      expect(await storage.cloudId('unknown')).toBeNull()
+      expect(api.requests).toEqual([])
     })
   })
 }

@@ -14,6 +14,7 @@ import {
   saveProject,
 } from './project-store'
 import { PROJECT_ID_HEADER, ROLE_HEADER, USER_ID_HEADER } from './room'
+import { issueSyncTicket, requireSyncUser } from './sync-ticket'
 import { requireUser, type UserEnv } from './user'
 
 /** 1 Project JSON の上限（バイト） */
@@ -42,13 +43,41 @@ const readProjectJson = (request: Request) =>
  * GET / PUT は ETag に updated_at を載せ、PUT は If-Match が一致しないと 409。
  * PUT は owner と editor、commenter はページの scribbles だけを変える PUT を通し、それ以外は 403。
  * DELETE は owner ならプロジェクトを消し、参加者なら自分の参加を外す。
- * `GET /:id/sync` は WebSocket を ProjectRoom（y-websocket プロトコル）にロール付きでつなぐ。
+ * `GET /:id/sync` は WebSocket を ProjectRoom（y-websocket プロトコル）にロール付きでつなぐ。ヘッダのほか、
+ * `POST /:id/sync-ticket` で発行した使い捨てのチケットを `?ticket=` で渡しても認証できる。
  * `/:id/assets` と参加者・招待（createMemberRoutes）も同じ認証とレート制限の下に置く。now は現在時刻（Unix ミリ秒）。
  */
 export function createProjectsApp(now: () => number = Date.now) {
   const app = new Hono<UserEnv>()
 
+  // requireUser より前に置くのは、ヘッダの無いブラウザの WebSocket をチケットで通すため
+  app.get('/:id/sync', requireSyncUser(now), async (c) => {
+    if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') {
+      return c.json({ error: 'expected a WebSocket upgrade' }, 426)
+    }
+    const id = c.req.param('id')
+    const userId = c.get('userId')
+    const role = await projectRole(c.env.DB, userId, id)
+    if (role === null) return c.json({ error: 'not found' }, 404)
+    const headers = new Headers(c.req.raw.headers)
+    headers.set(PROJECT_ID_HEADER, id)
+    headers.set(USER_ID_HEADER, userId)
+    headers.set(ROLE_HEADER, role)
+    const room = c.env.PROJECT_ROOMS.get(c.env.PROJECT_ROOMS.idFromName(id))
+    return room.fetch(c.req.url, { headers })
+  })
+
   app.use('*', requireUser(now))
+
+  app.post('/:id/sync-ticket', async (c) => {
+    const id = c.req.param('id')
+    const userId = c.get('userId')
+    if ((await projectRole(c.env.DB, userId, id)) === null) {
+      return c.json({ error: 'not found' }, 404)
+    }
+    const { ticket, expiresAt } = await issueSyncTicket(c.env.DB, id, userId, now())
+    return c.json({ ticket, expiresAt: new Date(expiresAt).toISOString() }, 201)
+  })
 
   app.get('/', async (c) => {
     return c.json({ projects: await listProjects(c.env.DB, c.get('userId')) })
@@ -120,22 +149,6 @@ export function createProjectsApp(now: () => number = Date.now) {
       case 'not-found':
         return c.json({ error: 'not found' }, 404)
     }
-  })
-
-  app.get('/:id/sync', async (c) => {
-    if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') {
-      return c.json({ error: 'expected a WebSocket upgrade' }, 426)
-    }
-    const id = c.req.param('id')
-    const userId = c.get('userId')
-    const role = await projectRole(c.env.DB, userId, id)
-    if (role === null) return c.json({ error: 'not found' }, 404)
-    const headers = new Headers(c.req.raw.headers)
-    headers.set(PROJECT_ID_HEADER, id)
-    headers.set(USER_ID_HEADER, userId)
-    headers.set(ROLE_HEADER, role)
-    const room = c.env.PROJECT_ROOMS.get(c.env.PROJECT_ROOMS.idFromName(id))
-    return room.fetch(c.req.url, { headers })
   })
 
   app.delete('/:id', async (c) => {

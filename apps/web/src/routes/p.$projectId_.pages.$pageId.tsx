@@ -29,7 +29,7 @@ import type {
   Patch,
   Project,
 } from '@manga/schema'
-import { Button, Checkbox, SegmentedControl, ToolGroup } from '@manga/ui'
+import { Button, Checkbox, SegmentedControl, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, notFound, useParams } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from 'zustand'
@@ -95,12 +95,17 @@ const SCRIBBLE_TOOLS: readonly { value: ScribbleTool; label: string }[] = [
   { value: 'eraser', label: '消しゴム' },
 ]
 
+// 診断の経路はコマ単位の centre sweep で、読者の目が実際に追うコマ内の顔などを見ていないので、
+// 読み順 OK や miss は評価として当てにならない。LLM に評価させるのも費用に見合わない。
+// そのため診断レイヤー、読み順と焦点の集計、診断の問題、AI に相談を出さない。生成プロンプトのヒントは残す
+const GAZE_EVALUATION = false
+
 const LAYERS: readonly { key: keyof Layers; label: string }[] = [
   { key: 'reference', label: '参考' },
   { key: 'art', label: '絵' },
   { key: 'scribble', label: '手描き' },
   { key: 'hints', label: 'ヒント' },
-  { key: 'diagnosis', label: '診断' },
+  ...(GAZE_EVALUATION ? [{ key: 'diagnosis' as const, label: '診断' }] : []),
 ]
 
 const ALL_LAYERS: Layers = {
@@ -108,7 +113,7 @@ const ALL_LAYERS: Layers = {
   art: true,
   scribble: true,
   hints: true,
-  diagnosis: true,
+  diagnosis: GAZE_EVALUATION,
 }
 
 type Apply = (label: string, build: (project: Project) => Patch) => boolean
@@ -267,8 +272,8 @@ function Editor() {
     }
   }
   return (
-    <section className={styles.editor}>
-      <header className={styles.toolbar}>
+    <YStack as="section" gap={0} className={styles.editor}>
+      <XStack as="header" gap={20} rowGap={12} wrap className={styles.toolbar}>
         <Link to="/p/$projectId" params={{ projectId }} className={styles.back}>
           ← {project.title || '無題'}
         </Link>
@@ -297,7 +302,10 @@ function Editor() {
             onChange={(k) => setFocusKind(k)}
           />
         )}
-        <ToolGroup label="レイヤー">
+        <XStack role="group" aria-label="レイヤー">
+          <span className={styles.groupLabel} aria-hidden>
+            レイヤー
+          </span>
           {LAYERS.map((l) => (
             <Checkbox
               key={l.key}
@@ -306,8 +314,8 @@ function Editor() {
               onChange={(e) => setLayers({ ...layers, [l.key]: e.target.checked })}
             />
           ))}
-        </ToolGroup>
-        <span className={styles.actions}>
+        </XStack>
+        <XStack as="span" gap={6} className={styles.actions}>
           <SaveStatusIndicator store={store} />
           <Button size="small" variant="ghost" disabled={!canUndo} onClick={() => store.undo()}>
             Undo
@@ -316,17 +324,17 @@ function Editor() {
             Redo
           </Button>
           {typeof exporting === 'object' ? (
-            <span className={styles.exportProgress} role="status">
+            <XStack as="span" className={styles.exportProgress} role="status">
               書き出し中… {exporting.done} / {exporting.total}
               <progress aria-label="書き出しの進捗" value={exporting.done} max={exporting.total} />
-            </span>
+            </XStack>
           ) : (
             <Button size="small" variant="primary" onClick={() => setExporting('dialog')}>
               書き出し
             </Button>
           )}
-        </span>
-      </header>
+        </XStack>
+      </XStack>
       {exporting === 'dialog' && (
         <ExportDialog
           pages={episode.pages}
@@ -399,7 +407,7 @@ function Editor() {
               <summary>ページ</summary>
               <PageInspector
                 page={page}
-                diagnosis={diagnosis ?? undefined}
+                diagnosis={GAZE_EVALUATION ? (diagnosis ?? undefined) : undefined}
                 generating={
                   pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
                 }
@@ -441,7 +449,7 @@ function Editor() {
               />
             </details>
           </fieldset>
-          {diagnosis && (
+          {GAZE_EVALUATION && diagnosis && (
             <details open data-section="issues">
               <summary>診断の問題（{diagnosis.issues.length}）</summary>
               <IssueList
@@ -467,7 +475,7 @@ function Editor() {
           )}
         </aside>
       </div>
-    </section>
+    </YStack>
   )
 }
 
@@ -621,9 +629,13 @@ function SelectionInspector({
         key={selection.id}
         focus={found.focus}
         characters={characters}
-        diagnosis={diagnosis?.panels
-          .find((d) => d.panelId === found.panel.id)
-          ?.focus.find((f) => f.focusPointId === selection.id)}
+        diagnosis={
+          GAZE_EVALUATION
+            ? diagnosis?.panels
+                .find((d) => d.panelId === found.panel.id)
+                ?.focus.find((f) => f.focusPointId === selection.id)
+            : undefined
+        }
         onChange={(patch) => apply('焦点を編集', (p) => focusPatch(p, pageId, selection.id, patch))}
       />
     )
@@ -655,9 +667,9 @@ function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply:
   return (
     <details className={styles.section} data-inspector="art-removal">
       <summary>履歴の削除（{removable.length}）</summary>
-      <ul className={styles.artRemove}>
+      <YStack as="ul" gap={4} className={styles.artRemove}>
         {removable.map((art) => (
-          <li key={art.id} data-art-id={art.id}>
+          <XStack as="li" key={art.id} data-art-id={art.id}>
             <span className={styles.ellipsis}>
               <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
               {art.instruction && ` ${art.instruction}`}
@@ -669,9 +681,9 @@ function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply:
             >
               削除
             </Button>
-          </li>
+          </XStack>
         ))}
-      </ul>
+      </YStack>
     </details>
   )
 }

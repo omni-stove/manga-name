@@ -8,6 +8,14 @@ export interface HttpProviderOptions {
   getToken(): Promise<string | null>
 }
 
+/** トークンが無いか、プロキシが 401 を返したときに throw する。画面はこれを見てログインを促す */
+export class SignInRequiredError extends Error {
+  constructor() {
+    super('ログインが必要です')
+    this.name = 'SignInRequiredError'
+  }
+}
+
 /** プロキシが応答ヘッダに載せる、実際に使ったプロバイダ名とプロンプト（URI エンコード） */
 export const PROVIDER_HEADER = 'x-ai-provider'
 export const PROMPT_HEADER = 'x-ai-prompt'
@@ -15,7 +23,7 @@ export const PROMPT_HEADER = 'x-ai-prompt'
 /**
  * Workers のプロキシ `POST /v1/ai/panel-art` を叩く ImageProvider。
  * multipart は json（Blob を除いた PanelArtRequest）/ layout / reference / character_<id> / previous で組み立てる。
- * トークン無しと HTTP エラーは throw する。
+ * トークン無しと 401 は SignInRequiredError、ほかの HTTP エラーは Error を throw する。
  */
 export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvider {
   const url = `${opts.baseUrl.replace(/\/+$/, '')}/v1/ai/panel-art`
@@ -23,7 +31,7 @@ export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvide
   return {
     async generatePanelArt(req) {
       const token = await opts.getToken()
-      if (token === null) throw new Error('access token is not set')
+      if (token === null) throw new SignInRequiredError()
 
       const form = new FormData()
       form.set(
@@ -48,6 +56,7 @@ export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvide
         headers: { authorization: `Bearer ${token}` },
         body: form,
       })
+      if (res.status === 401) throw new SignInRequiredError()
       if (!res.ok) throw new Error(`panel-art request failed: ${res.status}`)
 
       const encodedPrompt = res.headers.get(PROMPT_HEADER)
@@ -120,7 +129,12 @@ if (import.meta.vitest) {
   test('generatePanelArt throws without a token and on HTTP errors', async () => {
     await expect(
       createHttpImageProvider({ baseUrl: 'x', getToken: async () => null }).generatePanelArt(req),
-    ).rejects.toThrow('access token')
+    ).rejects.toBeInstanceOf(SignInRequiredError)
+
+    vi.stubGlobal('fetch', async () => new Response('no', { status: 401 }))
+    await expect(
+      createHttpImageProvider({ baseUrl: 'x', getToken: async () => 't' }).generatePanelArt(req),
+    ).rejects.toBeInstanceOf(SignInRequiredError)
 
     vi.stubGlobal('fetch', async () => new Response('no', { status: 502 }))
     await expect(
