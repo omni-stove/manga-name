@@ -30,7 +30,7 @@ try {
   await page.goto(base)
   const input = await page.waitForSelector('input[type="file"]')
   await input?.uploadFile(FIXTURE)
-  await page.locator('::-p-text(ページ一覧)').wait()
+  await page.locator('::-p-text(エピソードを追加)').wait()
   await page.locator('a::-p-text(1 ページ)').click()
   await page.locator('[aria-label="キャンバス"]').wait()
   const editorUrl = page.url()

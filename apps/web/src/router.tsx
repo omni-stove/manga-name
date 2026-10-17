@@ -90,7 +90,7 @@ if (import.meta.vitest) {
   describe('6 ルートが描画される', () => {
     test.each([
       ['/', 'プロジェクト一覧'],
-      [`/p/${projectId}`, 'ページ一覧'],
+      [`/p/${projectId}`, 'エピソードを追加'],
       [`/p/${projectId}/pages/${pageId}`, 'インスペクタ'],
       [`/p/${projectId}/characters`, 'キャラクター一覧'],
       [`/p/${projectId}/settings`, 'プロジェクト設定'],
