@@ -1,22 +1,8 @@
 # CONTRIBUTING
 
-## セットアップ
+## コマンド
 
-```sh
-make setup      # mise で node / pnpm を入れ、pnpm install まで行う
-pnpm check      # lint + typecheck + test
-```
-
-| コマンド | 内容 |
-|---|---|
-| `pnpm lint` | Biome の lint と format 検査 |
-| `pnpm lint:fix` | 自動修正 |
-| `pnpm format` | format のみ |
-| `pnpm typecheck` | 全パッケージの `tsc --noEmit` |
-| `pnpm test` | 全パッケージの Vitest |
-| `pnpm --filter @manga/<dir> <script>` | 1 パッケージだけ |
-
-`make <task>` は `mise run <task>` の別名で、同じタスクが `.mise/tasks.toml` にある。
+セットアップは [README](README.md)。`make <task>` は `mise run <task>` の別名で、タスクの一覧は `mise tasks`（`.mise/tasks.toml`）。1 パッケージだけ動かすときは `pnpm --filter @manga/<dir> <script>` で、script はそのパッケージの `package.json` にある。
 
 ## ブランチと PR
 
@@ -75,7 +61,7 @@ pnpm check      # lint + typecheck + test
      })
    }
    ```
-5. `README.md` を置く。何のパッケージか、仕様はどこか、どう動かすかだけを書く。公開 API や振る舞いは書かず、`src/index.ts` と docblock に任せる。
+5. `README.md` を置く。
 
 ### 規約
 
