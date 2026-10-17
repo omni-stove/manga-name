@@ -1,3 +1,4 @@
+import { readApiError } from '@manga/schema'
 import { prompts } from './prompts'
 import type { ImageProvider } from './provider'
 
@@ -24,7 +25,7 @@ export const PROMPT_HEADER = 'x-ai-prompt'
  * Workers のプロキシ `POST /v1/ai/panel-art` と `POST /v1/ai/character-art` を叩く ImageProvider。
  * panel-art の multipart は json（Blob を除いた PanelArtRequest）/ layout / reference / character_<id> / previous で組み立て、
  * character-art は CharacterArtRequest を JSON で送る。
- * トークン無しと 401 は SignInRequiredError、ほかの HTTP エラーは Error を throw する。
+ * トークン無しと 401 は SignInRequiredError、ほかの HTTP エラーは readApiError の Error（多くは ApiError）を throw する。
  */
 export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvider {
   const base = opts.baseUrl.replace(/\/+$/, '')
@@ -38,7 +39,7 @@ export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvide
       body: init.body,
     })
     if (res.status === 401) throw new SignInRequiredError()
-    if (!res.ok) throw new Error(`${path} request failed: ${res.status}`)
+    if (!res.ok) throw await readApiError(res, `POST ${path}`)
     const encodedPrompt = res.headers.get(PROMPT_HEADER)
     return {
       image: new Blob([await res.arrayBuffer()], { type: 'image/png' }),

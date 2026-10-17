@@ -81,7 +81,12 @@ describe('POST /v1/projects', () => {
     const post = (body: string) => call('/v1/projects', { method: 'POST', body })
     expect((await post('{}')).status).toBe(400)
     expect((await post(JSON.stringify({ title: '  ' }))).status).toBe(400)
-    expect((await post('{')).status).toBe(400)
+    const invalid = await post('{')
+    expect(invalid.status).toBe(400)
+    expect(await invalid.json()).toEqual({
+      code: 'invalid_request',
+      detail: 'body is not valid JSON',
+    })
   })
 })
 
@@ -125,7 +130,9 @@ describe('GET /v1/projects/:id', () => {
 
   test('404 for an unknown id and for another user’s project', async () => {
     const { project } = await create()
-    expect((await call('/v1/projects/missing')).status).toBe(404)
+    const missing = await call('/v1/projects/missing')
+    expect(missing.status).toBe(404)
+    expect(await missing.json()).toEqual({ code: 'not_found' })
     expect((await call(`/v1/projects/${project.id}`, { user: 'bob' })).status).toBe(404)
   })
 })
@@ -155,6 +162,8 @@ describe('PUT /v1/projects/:id', () => {
     const stale = await put({ ...project, title: 'second' }, etag)
     expect(stale.status).toBe(409)
     expect(stale.headers.get('etag')).toBe(saved.headers.get('etag'))
+    const { updatedAt } = (await saved.json()) as { updatedAt: string }
+    expect(await stale.json()).toEqual({ code: 'conflict', params: { updatedAt } })
 
     const got = await call(`/v1/projects/${project.id}`)
     expect(((await got.json()) as Project).title).toBe('first')

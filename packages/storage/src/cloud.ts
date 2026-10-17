@@ -1,4 +1,11 @@
-import { type ID, type ISODate, newId, type Project, parseProject } from '@manga/schema'
+import {
+  type ID,
+  type ISODate,
+  newId,
+  type Project,
+  parseProject,
+  readApiError,
+} from '@manga/schema'
 import { byUpdatedAtDesc, type ProjectSummary, type StorageAdapter } from './adapter'
 
 /** ローカルのプロジェクト 1 件と、それに対応するクラウドのプロジェクトの同期記録 */
@@ -342,15 +349,12 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     return doFetch(`${baseUrl}/v1/projects${path}`, { ...init, headers })
   }
 
-  const unexpected = async (res: Response, what: string) =>
-    new Error(`${what} failed: ${res.status} ${await res.text().catch(() => '')}`.trim())
-
   /** トークンが無ければ null */
   async function fetchProject(cloudId: ID): Promise<Fetched | null> {
     const res = await request(`/${encodeURIComponent(cloudId)}`)
     if (res === null) return null
     if (res.status === 404) return { status: 'not-found' }
-    if (!res.ok) throw await unexpected(res, `GET project ${cloudId}`)
+    if (!res.ok) throw await readApiError(res, `GET project ${cloudId}`)
     const project = parseProject(await res.json())
     // ETag を読めない CORS 設定でも、サーバは本文の updatedAt を updated_at に揃えて保存している
     return { status: 'ok', project, etag: parseEtag(res.headers.get('etag')) ?? project.updatedAt }
@@ -399,7 +403,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       body: JSON.stringify({ title: postTitle(title) }),
     })
     if (res === null) return null
-    if (!res.ok) throw await unexpected(res, 'POST project')
+    if (!res.ok) throw await readApiError(res, 'POST project')
     const created = parseProject(await res.json())
     const link = {
       cloudId: created.id,
@@ -428,7 +432,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     if (res.status === 413) return { status: 'quota' }
     if (res.status === 404) return { status: 'missing' }
     if (!res.ok) {
-      onError(await unexpected(res, 'POST upload-url'))
+      onError(await readApiError(res, 'POST upload-url'))
       return { status: 'rejected' }
     }
     const { assetId, url } = (await res.json()) as { assetId: string; url: string }
@@ -440,7 +444,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     })
     if (isTransient(put)) return { status: 'retry' }
     if (!put.ok) {
-      onError(await unexpected(put, `PUT asset ${assetId}`))
+      onError(await readApiError(put, `PUT asset ${assetId}`))
       return { status: 'rejected' }
     }
     return { status: 'ok', ref: toCloudAssetRef(cloudId, assetId) }
@@ -606,7 +610,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
         continue
       }
       if (isTransient(res)) return 'retry'
-      onError(await unexpected(res, `PUT project ${link.cloudId}`))
+      onError(await readApiError(res, `PUT project ${link.cloudId}`))
       return 'failed'
     }
     return 'retry'
@@ -710,7 +714,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     )
     if (res === null) throw new Error(`Asset ${ref} needs a token`)
     if (res.status === 404) throw new Error(`Asset not found: ${ref}`)
-    if (!res.ok) throw await unexpected(res, `GET asset ${ref}`)
+    if (!res.ok) throw await readApiError(res, `GET asset ${ref}`)
     const blob = await res.blob()
     cacheAsset(ref, blob)
     return blob
@@ -827,7 +831,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
             throw new Error(`DELETE project ${cloudId} needs a token`)
           }
           if (!res.ok && res.status !== 404) {
-            throw await unexpected(res, `DELETE project ${cloudId}`)
+            throw await readApiError(res, `DELETE project ${cloudId}`)
           }
         } catch (e) {
           if (guessed) return
@@ -870,7 +874,7 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
       const path = `/${encodeURIComponent(link.cloudId)}`
       const res = await request(`${path}/sync-ticket`, { method: 'POST' })
       if (res === null) return null
-      if (!res.ok) throw await unexpected(res, 'sync-ticket')
+      if (!res.ok) throw await readApiError(res, 'sync-ticket')
       const { ticket } = (await res.json()) as { ticket: string }
       const url = new URL(`${baseUrl}/v1/projects${path}/sync`)
       url.protocol = url.protocol === 'http:' ? 'ws:' : 'wss:'
@@ -923,8 +927,8 @@ if (import.meta.vitest) {
       requests.push(`${request.method} ${new URL(request.url).pathname}`)
       return request.headers.get('authorization') === `Bearer ${TOKEN}`
     }
-    const unauthorized = () => HttpResponse.json({ error: 'unauthorized' }, { status: 401 })
-    const notFound = () => HttpResponse.json({ error: 'not found' }, { status: 404 })
+    const unauthorized = () => HttpResponse.json({ code: 'unauthorized' }, { status: 401 })
+    const notFound = () => HttpResponse.json({ code: 'not_found' }, { status: 404 })
 
     const handlers = [
       http.get(`${BASE}/v1/projects`, ({ request }) => {
@@ -949,12 +953,13 @@ if (import.meta.vitest) {
         if (!current) return notFound()
         if (request.headers.get('if-match') !== `"${current.updatedAt}"`) {
           return HttpResponse.json(
-            { error: 'project was updated elsewhere', updatedAt: current.updatedAt },
+            { code: 'conflict', params: { updatedAt: current.updatedAt } },
             { status: 409, headers: etag(current) },
           )
         }
         const saved = { ...parseProject(await request.json()), updatedAt: tick() }
-        if (saved.id !== current.id) return HttpResponse.json({ error: 'id' }, { status: 400 })
+        if (saved.id !== current.id)
+          return HttpResponse.json({ code: 'invalid_request' }, { status: 400 })
         rows.set(saved.id, saved)
         return HttpResponse.json({ updatedAt: saved.updatedAt }, { headers: etag(saved) })
       }),
@@ -1444,7 +1449,12 @@ if (import.meta.vitest) {
       let full = true
       server.use(
         http.post(`${BASE}/v1/projects/:id/assets/upload-url`, () =>
-          full ? HttpResponse.json({ error: 'quota' }, { status: 413 }) : undefined,
+          full
+            ? HttpResponse.json(
+                { code: 'asset_too_large', params: { maxBytes: 1 } },
+                { status: 413 },
+              )
+            : undefined,
         ),
       )
       const ref = await a.storage.putAsset(p.id, png())
@@ -1512,7 +1522,7 @@ if (import.meta.vitest) {
       const links = createMemoryLinkStore()
       await links.set('p', { cloudId: 'gone', etag: 'e', syncedUpdatedAt: null })
       const { storage } = createDevice({ links })
-      await expect(storage.syncUrl('p')).rejects.toThrow(/sync-ticket failed: 404/)
+      await expect(storage.syncUrl('p')).rejects.toThrow('sync-ticket: 404 not_found')
     })
 
     test('is null while signed out', async () => {

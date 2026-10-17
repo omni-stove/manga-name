@@ -16,6 +16,7 @@
     "@manga/ai": "workspace:*",
     "@manga/diagnosis": "workspace:*",
     "@manga/editor-canvas": "workspace:*",
+    "@manga/i18n": "workspace:*",
     "@manga/inspector": "workspace:*",
     "@manga/render": "workspace:*",
     "@manga/schema": "workspace:*",
@@ -36,6 +37,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@inlang/paraglide-js": "^2.29.0",
     "@tanstack/router-plugin": "^1.168.46",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",

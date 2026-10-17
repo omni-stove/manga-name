@@ -8,6 +8,9 @@
     "apps/web": {
       "entry": ["src/store/project-store.ts", "src/store/yjs-project-store.ts"]
     },
+    "packages/i18n": {
+      "ignoreDependencies": ["@inlang/plugin-message-format"]
+    },
     "workers/api": {
       "ignoreDependencies": ["cloudflare"]
     }
