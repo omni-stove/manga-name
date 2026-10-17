@@ -1,4 +1,5 @@
 import { ProjectSettingsSchema, type ReadingDirection } from '@manga/schema'
+import { Typography } from '@manga/ui'
 import { NumberField, SelectField, TextField } from './fields'
 import { optionalString, replace } from './patch'
 import section from './section.module.css'
@@ -16,7 +17,9 @@ const isDpi = (n: number) => dpi.safeParse(n).success
 export function ProjectSettingsInspector({ settings, onChange }: ProjectSettingsInspectorProps) {
   return (
     <div className={section.section} data-inspector="settings">
-      <h3 className={section.title}>プロジェクト設定</h3>
+      <Typography variant="subheading" className={section.title}>
+        プロジェクト設定
+      </Typography>
       <SelectField
         label="読む方向"
         value={settings.direction}

@@ -12,9 +12,9 @@
   background: color-mix(in srgb, #000 35%, transparent);
 }
 
-.title {
-  font-size: var(--text-xl);
-  margin: 0 0 var(--space-16);
+/* Typography の margin: 0 より後に効かせるため、dialog の下に絞る */
+.dialog .title {
+  margin-bottom: var(--space-16);
 }
 
 .actions {

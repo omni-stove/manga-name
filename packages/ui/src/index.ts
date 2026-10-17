@@ -1,6 +1,17 @@
 export { Button, type ButtonProps, IconButton, type IconButtonProps } from './button'
 export { Dialog } from './dialog'
-export { Checkbox, type CheckboxProps, Field, FieldGroup, Input, Select, TextArea } from './field'
+export {
+  Checkbox,
+  type CheckboxProps,
+  Field,
+  FieldGroup,
+  Input,
+  type InputProps,
+  Select,
+  type SelectProps,
+  TextArea,
+  type TextAreaProps,
+} from './field'
 export { SegmentedControl, type SegmentedOption } from './segmented-control'
 export { type Space, XStack, type XStackProps, YStack } from './stack'
 export {
@@ -10,3 +21,4 @@ export {
   useThemePreference,
 } from './theme'
 export { type ToastItem, ToastList } from './toast-list'
+export { Typography, type TypographyProps, type TypographyVariant } from './typography'

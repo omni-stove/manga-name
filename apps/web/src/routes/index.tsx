@@ -1,4 +1,4 @@
-import { Button, Input, XStack, YStack } from '@manga/ui'
+import { Button, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { type DragEvent, useState } from 'react'
 import common from '../common.module.css'
@@ -51,8 +51,8 @@ function ProjectList() {
   }
 
   return (
-    <section>
-      <h1>プロジェクト一覧</h1>
+    <YStack as="section" gap={16}>
+      <Typography variant="title">プロジェクト一覧</Typography>
       <form
         className={styles.create}
         onSubmit={(e) => {
@@ -65,7 +65,7 @@ function ProjectList() {
         }}
       >
         <XStack align="stretch">
-          <Input name="title" placeholder="タイトル" aria-label="タイトル" />
+          <Input name="title" placeholder="タイトル" label="タイトル" hideLabel />
           <Button type="submit" variant="primary" disabled={busy}>
             新規作成
           </Button>
@@ -98,12 +98,12 @@ function ProjectList() {
         </label>
       </fieldset>
       {error && (
-        <p className={common.error} role="alert">
+        <Typography tone="alert" role="alert">
           {error}
-        </p>
+        </Typography>
       )}
       {projects.length === 0 && (
-        <p className={common.placeholder}>まだプロジェクトがありません。</p>
+        <Typography tone="muted">まだプロジェクトがありません。</Typography>
       )}
       <ul className={common.cards}>
         {projects.map((project) => (
@@ -111,9 +111,9 @@ function ProjectList() {
             <Link to="/p/$projectId" params={{ projectId: project.id }} className={common.cardLink}>
               <YStack gap={4}>
                 <strong>{project.title || '無題'}</strong>
-                <small className={styles.updated}>
+                <Typography as="small" variant="caption" tone="muted">
                   更新 {new Date(project.updatedAt).toLocaleString()}
-                </small>
+                </Typography>
               </YStack>
             </Link>
             <XStack as="span" wrap gap={6} className={common.cardActions}>
@@ -137,6 +137,6 @@ function ProjectList() {
           </YStack>
         ))}
       </ul>
-    </section>
+    </YStack>
   )
 }

@@ -1,8 +1,7 @@
 import { EditorCanvas, type Layers } from '@manga/editor-canvas'
 import type { ID, Page, Project } from '@manga/schema'
-import { Button, Checkbox, Dialog, Field, Input, TextArea, XStack, YStack } from '@manga/ui'
+import { Button, Checkbox, Dialog, Input, TextArea, Typography, XStack, YStack } from '@manga/ui'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import common from './common.module.css'
 import {
   checkProposedPage,
   MAX_PAGE_COUNT,
@@ -179,31 +178,36 @@ export function ScriptDraftDialog({
                     />
                   </div>
                   {issue !== undefined && (
-                    <p className={`${common.error} ${styles.issue}`} role="alert">
+                    <Typography
+                      variant="caption"
+                      tone="alert"
+                      className={styles.issue}
+                      role="alert"
+                    >
                       スキーマを通らないため追加できません。
                       {'\n'}
                       {issue}
-                    </p>
+                    </Typography>
                   )}
                 </YStack>
               )
             })}
           </ol>
-          <aside className={styles.rationale}>
-            <h3 className={styles.rationaleTitle}>割り方の説明</h3>
-            <p>{phase.rationale}</p>
-          </aside>
+          <YStack as="aside" gap={8} className={styles.rationale}>
+            <Typography weight="bold">割り方の説明</Typography>
+            <Typography>{phase.rationale}</Typography>
+          </YStack>
         </div>
-        {phase.pages.length === 0 && <p className={common.placeholder}>提案にページがありません</p>}
+        {phase.pages.length === 0 && <Typography tone="muted">提案にページがありません</Typography>}
         {failed > 0 && (
-          <p className={common.placeholder}>
+          <Typography tone="muted">
             {failed} ページはキャラクターや参照が合わないため追加できません
-          </p>
+          </Typography>
         )}
         {addError && (
-          <p className={common.error} role="alert">
+          <Typography tone="alert" role="alert">
             {addError}
-          </p>
+          </Typography>
         )}
       </Dialog>
     )
@@ -233,30 +237,30 @@ export function ScriptDraftDialog({
       }
     >
       <YStack as="fieldset" gap={12} className={styles.inputs} disabled={isRunning}>
-        <Field label="脚本" hint="セリフとト書きをそのまま貼り付けます">
-          <TextArea
-            className={styles.script}
-            rows={10}
-            value={script}
-            onChange={(e) => setScript(e.target.value)}
-          />
-        </Field>
-        <Field label="ページ数の目安" hint="空なら脚本に合わせます" error={pageCountError}>
-          <Input
-            type="number"
-            min={1}
-            max={MAX_PAGE_COUNT}
-            value={pageCountText}
-            onChange={(e) => setPageCountText(e.target.value)}
-          />
-        </Field>
-        <Field label="トーンのヒント">
-          <Input
-            value={tone}
-            placeholder="例: 静かで寂しい"
-            onChange={(e) => setTone(e.target.value)}
-          />
-        </Field>
+        <TextArea
+          label="脚本"
+          hint="セリフとト書きをそのまま貼り付けます"
+          className={styles.script}
+          rows={10}
+          value={script}
+          onChange={(e) => setScript(e.target.value)}
+        />
+        <Input
+          label="ページ数の目安"
+          hint="空なら脚本に合わせます"
+          error={pageCountError}
+          type="number"
+          min={1}
+          max={MAX_PAGE_COUNT}
+          value={pageCountText}
+          onChange={(e) => setPageCountText(e.target.value)}
+        />
+        <Input
+          label="トーンのヒント"
+          value={tone}
+          placeholder="例: 静かで寂しい"
+          onChange={(e) => setTone(e.target.value)}
+        />
       </YStack>
       {isRunning && (
         <XStack as="p" className={styles.progress} role="status">

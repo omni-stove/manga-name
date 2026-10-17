@@ -1,4 +1,4 @@
-import { Button } from '@manga/ui'
+import { Button, Typography } from '@manga/ui'
 import styles from './character-inspector.module.css'
 import { DEBOUNCE_MS, Group, TextField } from './fields'
 import { optionalString, replace } from './patch'
@@ -17,7 +17,9 @@ export function CharacterInspector({
   const url = ref === undefined ? undefined : urls.get(ref)
   return (
     <div className={section.section} data-inspector="character">
-      <h3 className={section.title}>{character.name || 'キャラクター'}</h3>
+      <Typography variant="subheading" className={section.title}>
+        {character.name || 'キャラクター'}
+      </Typography>
       <TextField
         label="名前"
         value={character.name}
@@ -40,11 +42,15 @@ export function CharacterInspector({
       />
       <Group label="参照画像">
         {ref === undefined ? (
-          <span className={section.muted}>なし</span>
+          <Typography as="span" tone="muted">
+            なし
+          </Typography>
         ) : url ? (
           <img className={styles.reference} src={url} alt={`${character.name} の参照画像`} />
         ) : (
-          <span className={section.muted}>{url === null ? '読み込めません' : '読み込み中…'}</span>
+          <Typography as="span" tone="muted">
+            {url === null ? '読み込めません' : '読み込み中…'}
+          </Typography>
         )}
         <Button size="small" onClick={onPickReference}>
           {ref === undefined ? '選ぶ' : '差し替え'}

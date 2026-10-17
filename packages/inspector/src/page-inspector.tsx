@@ -1,5 +1,5 @@
 import type { Page } from '@manga/schema'
-import { Button, Checkbox, Field, XStack } from '@manga/ui'
+import { Button, Checkbox, Field, Typography, XStack } from '@manga/ui'
 import { DEBOUNCE_MS, SelectField, TextField } from './fields'
 import styles from './page-inspector.module.css'
 import { optionalString, replace } from './patch'
@@ -23,7 +23,9 @@ export function PageInspector({
   const { reference } = page
   return (
     <div className={section.section} data-inspector="page">
-      <h3 className={section.title}>ページ</h3>
+      <Typography variant="subheading" className={section.title}>
+        ページ
+      </Typography>
       <SelectField
         label="見開き"
         value={page.side}
@@ -37,25 +39,28 @@ export function PageInspector({
         delayMs={DEBOUNCE_MS}
         onCommit={(v) => onChange(optionalString('/note', page.note, v))}
       />
-      <XStack as="h4" className={section.heading}>
+      <Typography variant="label" tone="muted" className={section.heading}>
         参考画像
-      </XStack>
+      </Typography>
       {reference === undefined ? (
-        <p className={section.muted}>
+        <Typography tone="muted">
           なし。PNG、JPEG、PDF。キャンバスへのドロップと貼り付けでも読み込めます
-        </p>
+        </Typography>
       ) : (
         <>
           <Field label="不透明度" hint={`${Math.round(reference.opacity * 100)}%`}>
-            <input
-              type="range"
-              className={styles.opacity}
-              min={0}
-              max={1}
-              step={0.05}
-              value={reference.opacity}
-              onChange={(e) => onChange(replace('/reference/opacity', Number(e.target.value)))}
-            />
+            {(described) => (
+              <input
+                type="range"
+                className={styles.opacity}
+                min={0}
+                max={1}
+                step={0.05}
+                value={reference.opacity}
+                onChange={(e) => onChange(replace('/reference/opacity', Number(e.target.value)))}
+                {...described}
+              />
+            )}
           </Field>
           <Checkbox
             label="表示"
@@ -86,7 +91,9 @@ export function PageInspector({
         >
           {generating ? '生成中…' : 'このページを全部生成'}
         </Button>
-        <span className={section.muted}>コマ {page.panels.length}</span>
+        <Typography as="span" tone="muted">
+          コマ {page.panels.length}
+        </Typography>
       </XStack>
       {diagnosis && (
         <dl className={styles.diagnosis}>

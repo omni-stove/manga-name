@@ -1,4 +1,4 @@
-import { Button, XStack } from '@manga/ui'
+import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, notFound, Outlet, useParams } from '@tanstack/react-router'
 import { useStore } from 'zustand'
 import { CollaborationBar } from '../collaboration-view'
@@ -28,7 +28,7 @@ function ProjectLayout() {
   return (
     <section>
       <XStack as="header" wrap gap={24} rowGap={8} className={styles.header}>
-        <h1 className={styles.title}>{project.title || '無題'}</h1>
+        <Typography variant="heading">{project.title || '無題'}</Typography>
         <CollaborationBar collab={collab} project={project} />
         <XStack as="nav" gap={4} align="stretch" className={styles.tabs}>
           <Link to="/p/$projectId" params={{ projectId }} activeOptions={{ exact: true }}>
@@ -71,10 +71,10 @@ function ProjectLayout() {
 function ProjectNotFound() {
   const { projectId } = useParams({ strict: false })
   return (
-    <section>
-      <h1>プロジェクトが見つかりません</h1>
-      <p>{projectId}</p>
+    <YStack as="section" gap={16} align="start">
+      <Typography variant="title">プロジェクトが見つかりません</Typography>
+      <Typography>{projectId}</Typography>
       <Link to="/">プロジェクト一覧へ</Link>
-    </section>
+    </YStack>
   )
 }

@@ -3,24 +3,15 @@
   color: var(--text);
 }
 
-.title {
-  font-size: var(--text-l);
-  font-weight: var(--weight-bold);
-  margin: 0 0 var(--space-12);
+/* 見出しは Typography で、その margin: 0 より後に効かせるため .section の下に絞る */
+.section .title {
+  margin-bottom: var(--space-12);
 }
 
-.heading {
+.section .heading {
   margin: var(--space-24) 0 var(--space-8);
   padding-top: var(--space-16);
   border-top: 1px solid var(--border);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-bold);
-  letter-spacing: var(--tracking-label);
-  color: var(--text-muted);
-}
-
-.muted {
-  color: var(--text-muted);
 }
 
 .group {

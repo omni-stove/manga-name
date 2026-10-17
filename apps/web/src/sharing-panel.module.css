@@ -3,20 +3,12 @@
 }
 
 .invite {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--space-8) var(--space-20);
-  align-items: center;
-}
-
-.invite > label {
-  font-size: var(--text-s);
-  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
 }
 
 .invite > button {
-  grid-column: 2;
-  justify-self: start;
+  align-self: flex-start;
 }
 
 .link {

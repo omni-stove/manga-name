@@ -23,17 +23,6 @@ a {
   text-underline-offset: 0.2em;
 }
 
-h1 {
-  font-size: var(--text-2xl);
-  font-weight: var(--weight-bold);
-  margin: 0 0 var(--space-16);
-}
-
-h2 {
-  font-size: var(--text-xl);
-  margin: 0 0 var(--space-8);
-}
-
 button,
 input,
 select,

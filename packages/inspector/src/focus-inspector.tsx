@@ -1,5 +1,5 @@
 import type { FocusKind } from '@manga/schema'
-import { Field } from '@manga/ui'
+import { Field, Typography } from '@manga/ui'
 import { SelectField, TextField } from './fields'
 import styles from './hint-inspector.module.css'
 import { optionalString, replace } from './patch'
@@ -15,7 +15,9 @@ export const FOCUS_KINDS: readonly { value: FocusKind; label: string }[] = [
 export function FocusInspector({ focus, characters, diagnosis, onChange }: FocusInspectorProps) {
   return (
     <div className={section.section} data-inspector="focus">
-      <h3 className={section.title}>焦点 {focus.label}</h3>
+      <Typography variant="subheading" className={section.title}>
+        焦点 {focus.label}
+      </Typography>
       <SelectField
         label="種別"
         value={focus.kind}
@@ -28,15 +30,18 @@ export function FocusInspector({ focus, characters, diagnosis, onChange }: Focus
         onCommit={(v) => v !== focus.label && onChange(replace('/label', v))}
       />
       <Field label="重み" hint={focus.weight.toFixed(2)}>
-        <input
-          type="range"
-          className={styles.slider}
-          min={0}
-          max={1}
-          step={0.05}
-          value={focus.weight}
-          onChange={(e) => onChange(replace('/weight', Number(e.target.value)))}
-        />
+        {(described) => (
+          <input
+            type="range"
+            className={styles.slider}
+            min={0}
+            max={1}
+            step={0.05}
+            value={focus.weight}
+            onChange={(e) => onChange(replace('/weight', Number(e.target.value)))}
+            {...described}
+          />
+        )}
       </Field>
       <SelectField
         label="キャラクター"

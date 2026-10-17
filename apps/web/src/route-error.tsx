@@ -1,19 +1,18 @@
-import { Button, XStack } from '@manga/ui'
+import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { type ErrorComponentProps, Link, useRouter } from '@tanstack/react-router'
-import common from './common.module.css'
 
 /** loader の失敗（ストレージが開けない、保存内容がスキーマを通らない等）を出す。ルーターの既定のエラー画面 */
 export function RouteError({ error }: ErrorComponentProps) {
   const router = useRouter()
   return (
-    <section role="alert">
-      <h1>読み込めませんでした</h1>
-      <p className={common.error}>{errorMessage(error)}</p>
+    <YStack as="section" gap={16} align="start" role="alert">
+      <Typography variant="title">読み込めませんでした</Typography>
+      <Typography tone="alert">{errorMessage(error)}</Typography>
       <XStack as="p" wrap>
         <Button onClick={() => void router.invalidate()}>再試行</Button>
         <Link to="/">プロジェクト一覧へ</Link>
       </XStack>
-    </section>
+    </YStack>
   )
 }
 

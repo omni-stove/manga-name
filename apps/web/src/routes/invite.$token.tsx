@@ -1,7 +1,6 @@
-import { Button } from '@manga/ui'
+import { Button, Typography, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import common from '../common.module.css'
 import { errorMessage } from '../route-error'
 import { type InvitePreview, ROLE_LABELS } from '../sharing'
 import { SignInButton } from '../sign-in'
@@ -30,43 +29,45 @@ function AcceptInvite() {
 
   if (user === null) {
     return (
-      <section>
-        <h1>プロジェクトへの招待</h1>
-        <p>
+      <YStack as="section" gap={16} align="start">
+        <Typography variant="title">プロジェクトへの招待</Typography>
+        <Typography>
           招待を受け取るには、招待されたメールアドレスの Google アカウントでログインしてください。
-        </p>
+        </Typography>
         <SignInButton variant="primary" />
-      </section>
+      </YStack>
     )
   }
   if (error) {
     return (
-      <section>
-        <h1>プロジェクトへの招待</h1>
-        <p className={common.error} role="alert">
+      <YStack as="section" gap={16} align="start">
+        <Typography variant="title">プロジェクトへの招待</Typography>
+        <Typography tone="alert" role="alert">
           {error}
-        </p>
-      </section>
+        </Typography>
+      </YStack>
     )
   }
-  if (invite === undefined) return <p className={common.placeholder}>招待を確かめています…</p>
+  if (invite === undefined) return <Typography tone="muted">招待を確かめています…</Typography>
   if (invite === null) {
     return (
-      <section>
-        <h1>プロジェクトへの招待</h1>
-        <p>招待が見つからないか、期限が切れています。招待した人に新しいリンクを頼んでください。</p>
+      <YStack as="section" gap={16} align="start">
+        <Typography variant="title">プロジェクトへの招待</Typography>
+        <Typography>
+          招待が見つからないか、期限が切れています。招待した人に新しいリンクを頼んでください。
+        </Typography>
         <Link to="/">プロジェクト一覧へ</Link>
-      </section>
+      </YStack>
     )
   }
   const matches = user.email.trim().toLowerCase() === invite.email
   return (
-    <section>
-      <h1>「{invite.projectTitle || '無題'}」への招待</h1>
-      <p>
+    <YStack as="section" gap={16} align="start">
+      <Typography variant="title">「{invite.projectTitle || '無題'}」への招待</Typography>
+      <Typography>
         {invite.email} を{ROLE_LABELS[invite.role]}として招待しています（
         {new Date(invite.expiresAt).toLocaleDateString()} まで）。
-      </p>
+      </Typography>
       {matches ? (
         <Button
           variant="primary"
@@ -84,13 +85,13 @@ function AcceptInvite() {
         </Button>
       ) : (
         <>
-          <p className={common.error}>
+          <Typography tone="alert">
             いまは {user.email} でログインしています。{invite.email}{' '}
             でログインし直すと受け取れます。
-          </p>
+          </Typography>
           <Button onClick={() => void signOut()}>サインアウト</Button>
         </>
       )}
-    </section>
+    </YStack>
   )
 }

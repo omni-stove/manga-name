@@ -1,4 +1,5 @@
 import { type Bubble, BubbleSchema } from '@manga/schema'
+import { Typography } from '@manga/ui'
 import { DEBOUNCE_MS, NumberField, SelectField, TextField } from './fields'
 import { optionalString, replace } from './patch'
 import section from './section.module.css'
@@ -16,7 +17,9 @@ const isOrder = (n: number) => BubbleSchema.shape.order.safeParse(n).success
 export function BubbleInspector({ bubble, characters, onChange }: BubbleInspectorProps) {
   return (
     <div className={section.section} data-inspector="bubble">
-      <h3 className={section.title}>フキダシ {bubble.order}</h3>
+      <Typography variant="subheading" className={section.title}>
+        フキダシ {bubble.order}
+      </Typography>
       <SelectField
         label="話者"
         value={bubble.speakerId ?? ''}

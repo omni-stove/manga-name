@@ -1,4 +1,4 @@
-import { Button, Field, Input, XStack, YStack } from '@manga/ui'
+import { Button, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi } from '@tanstack/react-router'
 import { CharacterPane } from '../character-pane'
 import common from '../common.module.css'
@@ -24,15 +24,15 @@ function CharacterList() {
   const { apply, error } = useApplyPatch(store)
   const resolveAsset = useAssetResolver(library.resolveAsset)
   return (
-    <>
-      <h2>キャラクター一覧</h2>
+    <YStack gap={8}>
+      <Typography variant="heading">キャラクター一覧</Typography>
       {error && (
-        <p className={common.error} role="alert">
+        <Typography tone="alert" role="alert">
           {error}
-        </p>
+        </Typography>
       )}
       {project.characters.length === 0 && (
-        <p className={common.placeholder}>まだキャラクターがいません。</p>
+        <Typography tone="muted">まだキャラクターがいません。</Typography>
       )}
       <ul className={`${common.cards} ${styles.cards}`}>
         {project.characters.map((character) => (
@@ -44,7 +44,9 @@ function CharacterList() {
               apply={apply}
               resolveAsset={resolveAsset}
             />
-            <small className={styles.usage}>使用コマ {characterUsage(project, character.id)}</small>
+            <Typography as="small" variant="caption" tone="muted">
+              使用コマ {characterUsage(project, character.id)}
+            </Typography>
             <XStack as="span" wrap gap={6} className={common.cardActions}>
               <Button
                 size="small"
@@ -60,13 +62,17 @@ function CharacterList() {
           </YStack>
         ))}
       </ul>
-      <h3 className={styles.addTitle}>キャラクターを追加</h3>
-      <div className={styles.add}>
-        <AddCharacterForm
-          onSubmit={(fields) => apply('キャラクターを追加', () => addCharacterPatch(fields).patch)}
-        />
-      </div>
-    </>
+      <YStack as="section" gap={8} className={styles.addSection}>
+        <Typography variant="subheading">キャラクターを追加</Typography>
+        <div className={styles.add}>
+          <AddCharacterForm
+            onSubmit={(fields) =>
+              apply('キャラクターを追加', () => addCharacterPatch(fields).patch)
+            }
+          />
+        </div>
+      </YStack>
+    </YStack>
   )
 }
 
@@ -101,9 +107,7 @@ function AddCharacterForm({
       }}
     >
       {FIELDS.map((field) => (
-        <Field key={field.name} label={field.label}>
-          <Input name={field.name} required={field.required} />
-        </Field>
+        <Input key={field.name} label={field.label} name={field.name} required={field.required} />
       ))}
       <Button type="submit" size="small" variant="primary">
         追加

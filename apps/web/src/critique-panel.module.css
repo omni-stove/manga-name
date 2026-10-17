@@ -3,14 +3,7 @@
 }
 
 .summary {
-  margin: 0;
   line-height: var(--leading-normal);
-}
-
-.delta {
-  margin: 0;
-  font-size: var(--text-s);
-  color: var(--text-muted);
 }
 
 .cards {
@@ -34,21 +27,6 @@
 .card[data-state="rejected"] {
   border-color: var(--alert);
   background: var(--alert-tint);
-}
-
-.message {
-  margin: 0;
-}
-
-.warning {
-  margin: 0;
-  font-size: var(--text-s);
-  color: var(--alert);
-}
-
-.applied {
-  font-size: var(--text-s);
-  color: var(--text-muted);
 }
 
 .regenerate {

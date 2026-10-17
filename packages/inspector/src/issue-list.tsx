@@ -1,7 +1,6 @@
 import type { Issue } from '@manga/schema'
-import { XStack, YStack } from '@manga/ui'
+import { Typography, XStack, YStack } from '@manga/ui'
 import styles from './issue-list.module.css'
-import section from './section.module.css'
 import type { IssueListProps } from './types'
 
 const SEVERITY_RANK: Record<Issue['severity'], number> = { error: 0, warning: 1, info: 2 }
@@ -20,9 +19,9 @@ const sortIssues = (issues: readonly Issue[]): Issue[] =>
 export function IssueList({ issues, onFocus }: IssueListProps) {
   if (issues.length === 0) {
     return (
-      <p className={section.muted} data-issue-list="empty">
+      <Typography tone="muted" data-issue-list="empty">
         問題はありません
-      </p>
+      </Typography>
     )
   }
   return (

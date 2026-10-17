@@ -1,8 +1,6 @@
 import type { ProjectSettings } from '@manga/schema'
-import { Button, Input, Select, TextArea, XStack } from '@manga/ui'
+import { Button, FieldGroup, Input, Select, TextArea, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi } from '@tanstack/react-router'
-import { useId } from 'react'
-import common from '../common.module.css'
 import { settingsPatch } from '../project-ops'
 import { SharingPanel } from '../sharing-panel'
 import { useApplyPatch, useProject } from '../use-project'
@@ -22,13 +20,11 @@ function ProjectSettingsPage() {
   const role = library.role(projectId) ?? 'owner'
   const project = useProject(store)
   const { apply, error } = useApplyPatch(store)
-  const id = useId()
   const { direction, pageSize, dpi, style } = project.settings
-  const field = (name: string) => `${id}-${name}`
 
   return (
-    <>
-      <h2>プロジェクト設定</h2>
+    <YStack gap={16}>
+      <Typography variant="heading">プロジェクト設定</Typography>
       <form
         // Undo や他の画面での変更の後に、入力欄を保存済みの値へ戻すため、内容が変わったら作り直す
         key={JSON.stringify([project.title, project.settings])}
@@ -53,72 +49,55 @@ function ProjectSettingsPage() {
           })
         }}
       >
-        <label htmlFor={field('title')}>タイトル</label>
-        <Input id={field('title')} name="title" defaultValue={project.title} />
-
-        <label htmlFor={field('direction')}>読む方向</label>
-        <Select id={field('direction')} name="direction" defaultValue={direction}>
+        <Input label="タイトル" name="title" defaultValue={project.title} />
+        <Select label="読む方向" name="direction" defaultValue={direction}>
           <option value="rtl">右から左（rtl）</option>
           <option value="ltr">左から右（ltr）</option>
         </Select>
-
-        <label htmlFor={field('w')}>判型（mm）</label>
-        <XStack as="span" className={styles.size}>
-          <Input
-            id={field('w')}
-            name="w"
-            type="number"
-            min="1"
-            step="any"
-            required
-            aria-label="幅"
-            defaultValue={pageSize.w}
-          />
-          ×
-          <Input
-            name="h"
-            type="number"
-            min="1"
-            step="any"
-            required
-            aria-label="高さ"
-            defaultValue={pageSize.h}
-          />
-        </XStack>
-
-        <label htmlFor={field('dpi')}>dpi</label>
-        <Input
-          id={field('dpi')}
-          name="dpi"
-          type="number"
-          min="1"
-          step="1"
-          required
-          defaultValue={dpi}
-        />
-
-        <label htmlFor={field('prompt')}>スタイル</label>
-        <TextArea id={field('prompt')} name="prompt" rows={3} defaultValue={style.prompt} />
-
-        <label htmlFor={field('negative')}>除外するもの</label>
+        <FieldGroup label="判型（mm）">
+          <XStack className={styles.size}>
+            <Input
+              label="幅"
+              hideLabel
+              name="w"
+              type="number"
+              min="1"
+              step="any"
+              required
+              defaultValue={pageSize.w}
+            />
+            ×
+            <Input
+              label="高さ"
+              hideLabel
+              name="h"
+              type="number"
+              min="1"
+              step="any"
+              required
+              defaultValue={pageSize.h}
+            />
+          </XStack>
+        </FieldGroup>
+        <Input label="dpi" name="dpi" type="number" min="1" step="1" required defaultValue={dpi} />
+        <TextArea label="スタイル" name="prompt" rows={3} defaultValue={style.prompt} />
         <TextArea
-          id={field('negative')}
+          label="除外するもの"
           name="negative"
           rows={2}
           defaultValue={style.negative ?? ''}
         />
-
         <Button type="submit" variant="primary" disabled={role !== 'owner' && role !== 'editor'}>
           保存
         </Button>
       </form>
       {error && (
-        <p className={common.error} role="alert">
+        <Typography tone="alert" role="alert">
           {error}
-        </p>
+        </Typography>
       )}
-      <h2>共有</h2>
+      <Typography variant="heading">共有</Typography>
       <SharingPanel projectId={projectId} sharing={sharing} />
-    </>
+    </YStack>
   )
 }

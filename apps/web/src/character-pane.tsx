@@ -1,7 +1,7 @@
 import { CharacterInspector } from '@manga/inspector'
 import type { Character, ID, Patch, Project } from '@manga/schema'
+import { Typography } from '@manga/ui'
 import { useState } from 'react'
-import common from './common.module.css'
 import { REFERENCE_ACCEPT, useFilePicker } from './file-picker'
 import { characterPatch } from './inspector-ops'
 import type { ProjectLibrary } from './project-library'
@@ -47,9 +47,9 @@ export function CharacterPane({
         resolveAsset={resolveAsset}
       />
       {pickError && (
-        <p className={common.error} role="alert">
+        <Typography tone="alert" role="alert">
           {pickError}
-        </p>
+        </Typography>
       )}
       {picker.input}
     </>

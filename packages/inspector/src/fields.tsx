@@ -1,4 +1,4 @@
-import { Field, FieldGroup, Input, Select, TextArea } from '@manga/ui'
+import { FieldGroup, Input, Select, TextArea } from '@manga/ui'
 import type { ReactNode } from 'react'
 import { useDraft } from './use-draft'
 
@@ -39,28 +39,26 @@ export function TextField({
     delayMs,
   )
   const invalid = !isValid(draft)
-  return (
-    <Field label={label}>
-      {rows === undefined ? (
-        <Input
-          value={draft}
-          placeholder={placeholder}
-          list={list}
-          aria-invalid={invalid || undefined}
-          onChange={(e) => set(e.target.value)}
-          onBlur={flush}
-        />
-      ) : (
-        <TextArea
-          value={draft}
-          rows={rows}
-          placeholder={placeholder}
-          aria-invalid={invalid || undefined}
-          onChange={(e) => set(e.target.value)}
-          onBlur={flush}
-        />
-      )}
-    </Field>
+  return rows === undefined ? (
+    <Input
+      label={label}
+      value={draft}
+      placeholder={placeholder}
+      list={list}
+      aria-invalid={invalid || undefined}
+      onChange={(e) => set(e.target.value)}
+      onBlur={flush}
+    />
+  ) : (
+    <TextArea
+      label={label}
+      value={draft}
+      rows={rows}
+      placeholder={placeholder}
+      aria-invalid={invalid || undefined}
+      onChange={(e) => set(e.target.value)}
+      onBlur={flush}
+    />
   )
 }
 
@@ -98,20 +96,19 @@ export function NumberField({
   const n = parse(draft)
   const invalid = !Number.isFinite(n) || !isValid(n)
   return (
-    <Field label={label}>
-      <Input
-        type="number"
-        value={draft}
-        min={min}
-        step={step}
-        aria-invalid={invalid || undefined}
-        onChange={(e) => set(e.target.value)}
-        onBlur={flush}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') flush()
-        }}
-      />
-    </Field>
+    <Input
+      label={label}
+      type="number"
+      value={draft}
+      min={min}
+      step={step}
+      aria-invalid={invalid || undefined}
+      onChange={(e) => set(e.target.value)}
+      onBlur={flush}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') flush()
+      }}
+    />
   )
 }
 
@@ -130,15 +127,13 @@ export function SelectField<T extends string>({
   onCommit,
 }: SelectFieldProps<T>) {
   return (
-    <Field label={label}>
-      <Select value={value} onChange={(e) => onCommit(e.target.value as T)}>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </Select>
-    </Field>
+    <Select label={label} value={value} onChange={(e) => onCommit(e.target.value as T)}>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </Select>
   )
 }
 
