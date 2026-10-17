@@ -67,6 +67,11 @@ import {
   settingsInspectorPatch,
   vectorPatch,
 } from '../inspector-ops'
+import {
+  exportProjectJson,
+  PROJECT_FILE_FILTERS,
+  exportFileName as projectFileName,
+} from '../project-file'
 import { findPage, pagePatch } from '../project-ops'
 import { firstFile, referencePatch, toReferenceImage } from '../reference-image'
 import { errorMessage } from '../route-error'
@@ -281,6 +286,14 @@ function Editor() {
       setExporting('closed')
     }
   }
+  const exportProject = () => {
+    setExporting('closed')
+    saveFile(
+      new Blob([exportProjectJson(project)], { type: 'application/json' }),
+      projectFileName(project),
+      PROJECT_FILE_FILTERS,
+    ).catch((e: unknown) => toasts.push(`書き出せません: ${errorMessage(e)}`))
+  }
   return (
     <YStack as="section" gap={0} className={styles.editor}>
       <XStack as="header" gap={20} rowGap={12} wrap className={styles.toolbar}>
@@ -358,6 +371,7 @@ function Editor() {
           dpi={project.settings.dpi}
           onCancel={() => setExporting('closed')}
           onExport={(settings) => void exportPages(settings)}
+          onExportProject={exportProject}
         />
       )}
       {error && (
