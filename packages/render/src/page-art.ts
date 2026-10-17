@@ -11,7 +11,7 @@ const DEFAULT_PAGE_SIZE = { w: 182, h: 257 }
 const FRAME_WIDTH = 0.003
 
 /**
- * ページ全体の生成に渡す配置図。白地に各コマの輪郭の内側を薄灰で塗り、フキダシ領域を白にし、輪郭に黒い枠線を引く。
+ * ページ全体の生成に渡す配置図。白地に各コマの輪郭の内側を薄灰で塗り、輪郭に黒い枠線を引いてから、フキダシ領域を白にする。
  * 幅は `width`、高さは判型の縦横比から決める。文字は描かない。`pageSize` の既定は 182x257。
  */
 export async function renderPageLayoutPng(
@@ -39,10 +39,6 @@ export async function renderPageLayoutPng(
     })
     c.closePath()
     c.fill()
-    const rect = rectToPx(panel.rect, pageRect)
-    for (const bubble of panel.bubbles) {
-      fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff')
-    }
   }
   const lineWidth = Math.max(1, Math.round(width * FRAME_WIDTH))
   for (const panel of page.panels) {
@@ -51,6 +47,13 @@ export async function renderPageLayoutPng(
       panelOutline(panel).map((p) => pointToPx(p, pageRect)),
       lineWidth,
     )
+  }
+  // はみ出したフキダシを後ろのコマの塗りと枠線が隠さないよう、全コマの後に塗る
+  for (const panel of page.panels) {
+    const rect = rectToPx(panel.rect, pageRect)
+    for (const bubble of panel.bubbles) {
+      fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff')
+    }
   }
   return surface.toPng()
 }
