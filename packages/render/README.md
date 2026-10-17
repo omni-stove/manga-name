@@ -1,9 +1,4 @@
 # @manga/render
 
-決定論的レンダラと PDF 書き出し。同じ `Page` と同じアセットからは同じ PNG が出る。`exportPdf` はエピソードのページを PDF に束ねる。
+決定論的レンダラと PDF 書き出し。
 仕様は `docs/03-data-model.md` の「レンダラ」。
-
-```sh
-pnpm --filter @manga/render test
-pnpm --filter @manga/render typecheck
-```

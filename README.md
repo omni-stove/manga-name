@@ -4,10 +4,9 @@
 
 ```sh
 make setup
-make dev     # workers/api (:8787) と apps/web (:5173) をまとめて起動。ローカル D1 のマイグレーションも当てる
-pnpm check
+make dev
 ```
 
-API は `ENVIRONMENT=development` で立つので、ログインせずに `X-Debug-User: you@example.com` ヘッダで叩ける。AI 生成を試すときは `workers/api/.env` に `GEMINI_API_KEY` などを書く。片方だけ起動するなら `make dev-web` / `make dev-api`。デスクトップアプリは `make dev-desktop`（API と Tauri を起動し、Tauri が apps/web を立てる。`make dev` とはポートがぶつかるので同時には動かさない）。
+ほかのコマンドは `mise tasks`。AI 生成を試すときは `workers/api/.env` に API キーを書く（名前は `workers/api/src/env.ts`）。
 
 開発の進め方とパッケージの追加手順は [CONTRIBUTING.md](CONTRIBUTING.md)。
