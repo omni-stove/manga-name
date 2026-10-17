@@ -39,6 +39,7 @@ import {
   IconButton,
   SegmentedControl,
   Select,
+  Sidebar,
   Typography,
   XStack,
   YStack,
@@ -82,6 +83,7 @@ import type { Peer } from '../store/presence'
 import { toasts } from '../toasts'
 import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
+import { useStoredFlag } from '../use-stored-flag'
 import { useUndoShortcuts } from '../use-undo-shortcuts'
 import styles from './editor.module.css'
 
@@ -199,6 +201,7 @@ function Editor() {
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
+  const [inspectorExpanded, setInspectorExpanded] = useStoredFlag('manga.inspector.expanded', true)
   useUndoShortcuts(store)
   const importReference = (file: Blob) => {
     toReferenceImage(file)
@@ -415,93 +418,98 @@ function Editor() {
             resolveAsset={resolveAsset}
           />
         </div>
-        <aside className={styles.inspector}>
-          <Typography variant="label" tone="muted">
-            インスペクタ
-          </Typography>
-          <details open>
-            <summary>要素（{page.panels.length}）</summary>
-            <ElementOutline
-              page={page}
-              selection={selection}
-              peers={peers.filter((peer) => peer.pageId === page.id)}
-              onSelect={setSelection}
-            />
-          </details>
-          <fieldset disabled={!canEdit} className={styles.inspectorFields}>
-            <SelectionInspector
-              page={page}
-              pageId={pageId}
-              characters={project.characters}
-              pageSize={project.settings.pageSize}
-              diagnosis={diagnosis}
-              selection={selection}
-              generating={generating}
-              apply={apply}
-              generate={generate}
-              referenceToggle={referenceToggle}
-              hintToggle={hintToggle}
-              resolveAsset={resolveAsset}
-            />
-            <details open={selection === null}>
-              <summary>ページ</summary>
-              <PageInspector
+        <Sidebar
+          title="インスペクタ"
+          side="right"
+          expanded={inspectorExpanded}
+          onExpandedChange={setInspectorExpanded}
+          className={styles.inspectorSidebar}
+        >
+          <div className={styles.inspector}>
+            <details open>
+              <summary>要素（{page.panels.length}）</summary>
+              <ElementOutline
                 page={page}
-                diagnosis={GAZE_EVALUATION ? (diagnosis ?? undefined) : undefined}
-                generating={
-                  pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
-                }
-                onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
-                onGenerateAll={pageBatch.start}
-                onPickReference={referencePicker.open}
-              />
-              {referencePicker.input}
-              <BatchOptions batch={pageBatch} />
-            </details>
-            <PageCast
-              page={page}
-              characters={project.characters}
-              projectId={projectId}
-              onChange={(patch) =>
-                apply('ページの登場キャラを変更', (p) => pagePatch(p, pageId, patch))
-              }
-            />
-            <details>
-              <summary>プロジェクト設定</summary>
-              <ProjectSettingsInspector
-                settings={project.settings}
-                onChange={(patch) =>
-                  apply('プロジェクト設定を変更', () => settingsInspectorPatch(patch))
-                }
+                selection={selection}
+                peers={peers.filter((peer) => peer.pageId === page.id)}
+                onSelect={setSelection}
               />
             </details>
-          </fieldset>
-          {GAZE_EVALUATION && diagnosis && (
-            <details open data-section="issues">
-              <summary>診断の問題（{diagnosis.issues.length}）</summary>
-              <IssueList
-                issues={diagnosis.issues}
-                onFocus={(issue) => {
-                  const target = issueTarget(page, issue)
-                  if (target) setSelection(target)
-                }}
-              />
-              <CritiquePanel
-                key={pageId}
-                store={store}
+            <fieldset disabled={!canEdit} className={styles.inspectorFields}>
+              <SelectionInspector
                 page={page}
                 pageId={pageId}
+                characters={project.characters}
                 pageSize={project.settings.pageSize}
                 diagnosis={diagnosis}
-                llmProvider={llmProvider}
-                canEdit={canEdit}
+                selection={selection}
                 generating={generating}
-                onPreview={setPreview}
-                onGenerate={generate}
+                apply={apply}
+                generate={generate}
+                referenceToggle={referenceToggle}
+                hintToggle={hintToggle}
+                resolveAsset={resolveAsset}
               />
-            </details>
-          )}
-        </aside>
+              <details open={selection === null}>
+                <summary>ページ</summary>
+                <PageInspector
+                  page={page}
+                  diagnosis={GAZE_EVALUATION ? (diagnosis ?? undefined) : undefined}
+                  generating={
+                    pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
+                  }
+                  onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
+                  onGenerateAll={pageBatch.start}
+                  onPickReference={referencePicker.open}
+                />
+                {referencePicker.input}
+                <BatchOptions batch={pageBatch} />
+              </details>
+              <PageCast
+                page={page}
+                characters={project.characters}
+                projectId={projectId}
+                onChange={(patch) =>
+                  apply('ページの登場キャラを変更', (p) => pagePatch(p, pageId, patch))
+                }
+              />
+              <details>
+                <summary>プロジェクト設定</summary>
+                <ProjectSettingsInspector
+                  settings={project.settings}
+                  onChange={(patch) =>
+                    apply('プロジェクト設定を変更', () => settingsInspectorPatch(patch))
+                  }
+                />
+              </details>
+            </fieldset>
+            {GAZE_EVALUATION && diagnosis && (
+              <details open data-section="issues">
+                <summary>診断の問題（{diagnosis.issues.length}）</summary>
+                <IssueList
+                  issues={diagnosis.issues}
+                  onFocus={(issue) => {
+                    const target = issueTarget(page, issue)
+                    if (target) setSelection(target)
+                  }}
+                />
+                <CritiquePanel
+                  key={pageId}
+                  store={store}
+                  page={page}
+                  pageId={pageId}
+                  pageSize={project.settings.pageSize}
+                  diagnosis={diagnosis}
+                  llmProvider={llmProvider}
+                  canEdit={canEdit}
+                  generating={generating}
+                  onPreview={setPreview}
+                  onGenerate={generate}
+                />
+              </details>
+            )}
+          </div>
+        </Sidebar>
       </div>
     </YStack>
   )

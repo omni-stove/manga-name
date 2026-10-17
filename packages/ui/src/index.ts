@@ -17,6 +17,7 @@ export {
   type TextAreaProps,
 } from './field'
 export { SegmentedControl, type SegmentedOption } from './segmented-control'
+export { Sidebar } from './sidebar'
 export { type Space, XStack, type XStackProps, YStack } from './stack'
 export {
   applyThemePreference,

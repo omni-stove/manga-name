@@ -1,11 +1,12 @@
 import { Button, IconButton, Typography, XStack, YStack } from '@manga/ui'
 import { Link, type LinkProps, useMatch } from '@tanstack/react-router'
-import { type ReactNode, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useOpenedProject } from './settings-dialog'
 import styles from './side-nav.module.css'
 import type { WebProjectStore } from './store/project-store'
 import { useAuth } from './use-auth'
 import { useProject } from './use-project'
+import { useStoredFlag } from './use-stored-flag'
 
 /**
  * 画面の左に縦に並べるナビゲーション。プロジェクト一覧、開いているプロジェクトのエピソード・キャラクター・設定、
@@ -16,7 +17,7 @@ export function SideNav() {
   const opened = useOpenedProject()
   const editor = useMatch({ from: '/p/$projectId_/pages/$pageId', shouldThrow: false })
   const episode = useMatch({ from: '/p/$projectId/episodes/$episodeId', shouldThrow: false })
-  const [expanded, setExpanded] = useExpanded()
+  const [expanded, setExpanded] = useStoredFlag('manga.sideNav.expanded', false)
   const collapsed = !expanded
   return (
     <YStack
@@ -112,35 +113,6 @@ function ProjectItems({
       />
     </YStack>
   )
-}
-
-const EXPANDED_KEY = 'manga.sideNav.expanded'
-
-/** ナビを開いているか。localStorage に覚え、覚えが無ければ畳んだ状態から始める */
-function useExpanded(): [boolean, (expanded: boolean) => void] {
-  const [expanded, setExpanded] = useState(() => readStorage() === 'true')
-  return [
-    expanded,
-    (next) => {
-      setExpanded(next)
-      writeStorage(String(next))
-    },
-  ]
-}
-
-// ストレージを塞いだブラウザでは参照だけで SecurityError になるので、覚えられないまま動かす
-function readStorage(): string | null {
-  try {
-    return localStorage.getItem(EXPANDED_KEY)
-  } catch {
-    return null
-  }
-}
-
-function writeStorage(value: string): void {
-  try {
-    localStorage.setItem(EXPANDED_KEY, value)
-  } catch {}
 }
 
 function NavItem({
