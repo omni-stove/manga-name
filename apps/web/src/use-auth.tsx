@@ -13,10 +13,17 @@ export function AuthProvider({ client, children }: { client: AuthClient; childre
 export function useAuth(): {
   user: AuthUser | null
   signIn(): Promise<void>
+  setName(name: string): Promise<void>
   signOut(): Promise<void>
   getToken(): Promise<string | null>
 } {
   const client = useContext(AuthContext)
   const user = useSyncExternalStore(client.subscribe, client.getUser, () => null)
-  return { user, signIn: client.signIn, signOut: client.signOut, getToken: client.getToken }
+  return {
+    user,
+    signIn: client.signIn,
+    setName: client.setName,
+    signOut: client.signOut,
+    getToken: client.getToken,
+  }
 }

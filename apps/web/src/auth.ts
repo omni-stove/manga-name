@@ -1,6 +1,9 @@
+import { readApiError } from '@manga/schema'
+
 /** ログイン中のユーザー。Better Auth の user の画面で使う分だけ */
 export interface AuthUser {
   id: string
+  /** 表示名。Google の名前は保存しないので、登録してから決めるまでは空 */
   name: string
   email: string
   image: string | null
@@ -15,6 +18,8 @@ export interface AuthClient {
   restore(): Promise<void>
   /** Google のログイン画面へ移る。戻ってくると今の URL に着く */
   signIn(): Promise<void>
+  /** 表示名を変える。未ログインか、API が名前を受け付けなければ throw */
+  setName(name: string): Promise<void>
   /** サーバのセッションを消し、手元のトークンとユーザーを捨てる */
   signOut(): Promise<void>
   /** 期限が近ければ取り直した Bearer トークン。未ログインか取り直せなければ null */
@@ -176,6 +181,17 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
       const { url } = (await res.json()) as { url?: string }
       if (!url) throw new Error('sign-in failed: no redirect URL')
       navigate(url)
+    },
+    async setName(name) {
+      if (session === null) throw new Error('ログインしていません')
+      const res = await fetchWithAuth(`${baseUrl}/v1/me`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (!res.ok) throw await readApiError(res, 'PUT me')
+      const body = (await res.json()) as { name: string }
+      if (session) setSession({ ...session, user: { ...session.user, name: body.name } })
     },
     async signOut() {
       try {
@@ -388,6 +404,34 @@ if (import.meta.vitest) {
       const empty = setup(() => new Response('{}'), { navigate })
       await expect(empty.client.signIn()).rejects.toThrow('no redirect URL')
       expect(navigate).not.toHaveBeenCalled()
+    })
+
+    test('setName sends the name and updates the user on success only', async () => {
+      let status = 200
+      const { client, fetch } = setup((url, init) => {
+        if (url.endsWith('/get-session')) return sessionResponse('t1', HOUR)
+        if (status !== 200)
+          return new Response(JSON.stringify({ code: 'invalid_request' }), { status })
+        const { name } = JSON.parse(String(init.body)) as { name: string }
+        return new Response(JSON.stringify({ name: name.trim() }))
+      })
+      await expect(client.setName('A')).rejects.toThrow()
+      expect(fetch).not.toHaveBeenCalled()
+
+      await client.restore()
+      const listener = vi.fn()
+      client.subscribe(listener)
+      await client.setName(' ペンネーム ')
+      expect(client.getUser()?.name).toBe('ペンネーム')
+      expect(listener).toHaveBeenCalledOnce()
+      const [url, init] = fetch.mock.calls.at(-1) ?? []
+      expect(url).toBe('https://api.test/v1/me')
+      expect(init?.method).toBe('PUT')
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer t1')
+
+      status = 400
+      await expect(client.setName('')).rejects.toThrow()
+      expect(client.getUser()?.name).toBe('ペンネーム')
     })
 
     test('signOut drops the session even when the server cannot be reached', async () => {

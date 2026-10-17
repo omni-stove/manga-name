@@ -62,11 +62,12 @@ export function createMemberRoutes(now: () => number) {
     const id = c.req.param('id')
     const role = await projectRole(c.env.DB, c.get('userId'), id)
     if (role === null) throw new ApiException('not_found')
+    // 表示名を決める前のユーザーは name が空なので、null にして Web にメールアドレスで代わりに出させる
     const { results } = await c.env.DB.prepare(
-      `SELECT p.owner_id AS userId, 'owner' AS role, u.email AS email, u.name AS name, 0 AS rank, 0 AS created_at
+      `SELECT p.owner_id AS userId, 'owner' AS role, u.email AS email, NULLIF(u.name, '') AS name, 0 AS rank, 0 AS created_at
        FROM projects p LEFT JOIN auth_users u ON u.id = p.owner_id WHERE p.id = ?1
        UNION ALL
-       SELECT m.user_id, m.role, u.email, u.name, 1, m.created_at
+       SELECT m.user_id, m.role, u.email, NULLIF(u.name, ''), 1, m.created_at
        FROM project_members m LEFT JOIN auth_users u ON u.id = m.user_id WHERE m.project_id = ?1
        ORDER BY rank, created_at`,
     )
