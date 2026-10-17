@@ -88,9 +88,10 @@ if (import.meta.vitest) {
     library = createProjectLibrary(storage)
   })
 
-  describe('7 ルートが描画される', () => {
+  describe('8 ルートが描画される', () => {
     test.each([
       ['/', 'プロジェクト一覧'],
+      ['/new', '新規プロジェクト'],
       [`/p/${projectId}`, 'エピソードを追加'],
       [`/p/${projectId}/episodes/${episodeId}`, '脚本から下書き'],
       [`/p/${projectId}/pages/${pageId}`, 'インスペクタ'],

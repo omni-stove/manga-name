@@ -4,15 +4,7 @@
   border: 1px solid var(--paper-edge);
 }
 
-/* 右綴じの本は 1 ページ目を右に置き、作品と同じ向きに並べる */
-.pages[data-direction="rtl"] {
-  direction: rtl;
-}
-
-.pages[data-direction="rtl"] > li {
-  direction: ltr;
-}
-
+/* 右綴じの本でも左から並べる。右から並べると最初のページや追加したページがツールバーから遠くなる */
 .pages {
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
 }

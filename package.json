@@ -10,8 +10,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "typecheck": "tsc --noEmit && pnpm -r --parallel --aggregate-output run typecheck",
-    "test": "vitest run && pnpm --filter \"./workers/*\" test",
+    "typecheck": "pnpm --filter @manga/i18n compile && tsc --noEmit && pnpm -r --parallel --aggregate-output run typecheck",
+    "test": "pnpm --filter @manga/i18n compile && vitest run && pnpm --filter \"./workers/*\" test",
     "test:watch": "vitest",
     "check": "mise run check"
   },

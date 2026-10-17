@@ -2,6 +2,7 @@ import { createEmptyProject, type Project, parseProject } from '@manga/schema'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { canEdit, changesOnlyScribbles, projectRole } from './access'
+import { ApiException, parseOrThrow } from './api-error'
 import { deleteAssetObjects } from './asset-store'
 import { createAssetRoutes } from './assets'
 import { readJson } from './body'
@@ -35,7 +36,11 @@ function describeError(e: unknown) {
 }
 
 const readProjectJson = (request: Request) =>
-  readJson(request, MAX_PROJECT_BYTES, 'project exceeds 5MB')
+  readJson(
+    request,
+    MAX_PROJECT_BYTES,
+    new ApiException('project_too_large', { params: { maxBytes: MAX_PROJECT_BYTES } }),
+  )
 
 /**
  * `/v1/projects` 以下。作ったユーザーを owner とし、参加していないプロジェクトは 404 にする。
@@ -53,12 +58,12 @@ export function createProjectsApp(now: () => number = Date.now) {
   // requireUser より前に置くのは、ヘッダの無いブラウザの WebSocket をチケットで通すため
   app.get('/:id/sync', requireSyncUser(now), async (c) => {
     if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') {
-      return c.json({ error: 'expected a WebSocket upgrade' }, 426)
+      throw new ApiException('websocket_required')
     }
     const id = c.req.param('id')
     const userId = c.get('userId')
     const role = await projectRole(c.env.DB, userId, id)
-    if (role === null) return c.json({ error: 'not found' }, 404)
+    if (role === null) throw new ApiException('not_found')
     const headers = new Headers(c.req.raw.headers)
     headers.set(PROJECT_ID_HEADER, id)
     headers.set(USER_ID_HEADER, userId)
@@ -72,9 +77,7 @@ export function createProjectsApp(now: () => number = Date.now) {
   app.post('/:id/sync-ticket', async (c) => {
     const id = c.req.param('id')
     const userId = c.get('userId')
-    if ((await projectRole(c.env.DB, userId, id)) === null) {
-      return c.json({ error: 'not found' }, 404)
-    }
+    if ((await projectRole(c.env.DB, userId, id)) === null) throw new ApiException('not_found')
     const { ticket, expiresAt } = await issueSyncTicket(c.env.DB, id, userId, now())
     return c.json({ ticket, expiresAt: new Date(expiresAt).toISOString() }, 201)
   })
@@ -84,12 +87,8 @@ export function createProjectsApp(now: () => number = Date.now) {
   })
 
   app.post('/', async (c) => {
-    const body = await readProjectJson(c.req.raw)
-    if (!body.ok) return c.json({ error: body.error }, body.status)
-    const parsed = CreateProjectSchema.safeParse(body.value)
-    if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
-
-    const project = createEmptyProject(parsed.data.title)
+    const { title } = parseOrThrow(CreateProjectSchema, await readProjectJson(c.req.raw))
+    const project = createEmptyProject(title)
     await insertProject(c.env.DB, c.get('userId'), project, now())
     return c.json(project, 201, {
       etag: etag(project.updatedAt),
@@ -101,7 +100,7 @@ export function createProjectsApp(now: () => number = Date.now) {
     const id = c.req.param('id')
     const found =
       (await projectRole(c.env.DB, c.get('userId'), id)) && (await readProject(c.env.DB, id))
-    if (!found) return c.json({ error: 'not found' }, 404)
+    if (!found) throw new ApiException('not_found')
     return c.body(found.doc, 200, {
       'content-type': 'application/json; charset=utf-8',
       etag: etag(found.updatedAt),
@@ -111,29 +110,32 @@ export function createProjectsApp(now: () => number = Date.now) {
   app.put('/:id', async (c) => {
     const id = c.req.param('id')
     const ifMatch = c.req.header('if-match')
-    if (ifMatch === undefined) return c.json({ error: 'If-Match is required' }, 428)
+    if (ifMatch === undefined) throw new ApiException('if_match_required')
     const expected = parseIfMatch(ifMatch)
-    if (expected === null) return c.json({ error: 'If-Match must be a strong ETag' }, 400)
+    if (expected === null) {
+      throw new ApiException('invalid_request', { detail: 'If-Match must be a strong ETag' })
+    }
 
     const role = await projectRole(c.env.DB, c.get('userId'), id)
-    if (role === null) return c.json({ error: 'not found' }, 404)
-    if (role === 'viewer') return c.json({ error: 'viewers cannot change the project' }, 403)
+    if (role === null) throw new ApiException('not_found')
+    if (role === 'viewer') throw new ApiException('edit_forbidden')
 
     const body = await readProjectJson(c.req.raw)
-    if (!body.ok) return c.json({ error: body.error }, body.status)
     let project: Project
     try {
-      project = parseProject(body.value)
+      project = parseProject(body)
     } catch (e) {
-      return c.json({ error: describeError(e) }, 400)
+      throw new ApiException('invalid_request', { detail: describeError(e) })
     }
-    if (project.id !== id) return c.json({ error: 'project id does not match the URL' }, 400)
+    if (project.id !== id) {
+      throw new ApiException('invalid_request', { detail: 'project id does not match the URL' })
+    }
 
     if (!canEdit(role)) {
       // 版が If-Match と違えば saveProject が 409 にする。違う版と比べると他人の変更まで commenter の変更に数えてしまう
       const saved = await readProject(c.env.DB, id)
       if (saved && saved.updatedAt === expected && !changesOnlyScribbles(saved.doc, project)) {
-        return c.json({ error: 'commenters can only change scribbles' }, 403)
+        throw new ApiException('commenter_scribbles_only')
       }
     }
     const result = await saveProject(c.env.DB, project, expected, now())
@@ -141,13 +143,12 @@ export function createProjectsApp(now: () => number = Date.now) {
       case 'saved':
         return c.json({ updatedAt: result.updatedAt }, 200, { etag: etag(result.updatedAt) })
       case 'conflict':
-        return c.json(
-          { error: 'project was updated elsewhere', updatedAt: result.updatedAt },
-          409,
-          { etag: etag(result.updatedAt) },
-        )
+        throw new ApiException('conflict', {
+          params: { updatedAt: result.updatedAt },
+          headers: { etag: etag(result.updatedAt) },
+        })
       case 'not-found':
-        return c.json({ error: 'not found' }, 404)
+        throw new ApiException('not_found')
     }
   })
 
@@ -155,13 +156,13 @@ export function createProjectsApp(now: () => number = Date.now) {
     const id = c.req.param('id')
     const userId = c.get('userId')
     const role = await projectRole(c.env.DB, userId, id)
-    if (role === null) return c.json({ error: 'not found' }, 404)
+    if (role === null) throw new ApiException('not_found')
     if (role !== 'owner') {
       await removeMember(c.env, id, userId)
       return c.body(null, 204)
     }
     const removed = await deleteProject(c.env.DB, userId, id)
-    if (!removed) return c.json({ error: 'not found' }, 404)
+    if (!removed) throw new ApiException('not_found')
     try {
       await c.env.PROJECT_ROOMS.get(c.env.PROJECT_ROOMS.idFromName(id)).purge()
     } catch (e) {

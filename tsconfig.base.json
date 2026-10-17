@@ -10,6 +10,8 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "resolveJsonModule": true,
+    // @manga/i18n が生成する Paraglide のメッセージは JSDoc で型を持つ .js で、TS 7 には .d.ts を出させる API が無い
+    "allowJs": true,
     "skipLibCheck": true,
     "noEmit": true,
     "types": ["vitest/importMeta"]

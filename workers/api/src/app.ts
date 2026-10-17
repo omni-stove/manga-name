@@ -22,8 +22,10 @@ import { type Context, Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
+import { ApiException, handleError, parseOrThrow } from './api-error'
 import { createUploadApp } from './assets'
 import { AUTH_BASE_PATH, getAuth } from './auth'
+import { requestJson } from './body'
 import type { Env } from './env'
 import { createInviteApp } from './members'
 import { allowedOrigins } from './origins'
@@ -136,22 +138,21 @@ const isFile = (v: unknown): v is File => typeof v !== 'string' && v !== null &&
 
 /**
  * 画像生成の multipart を読む。json 部を schema で検証し、layout と reference と character_<id> を取り出す。
- * 欠けや不正は 400 の応答を返す
+ * 欠けや不正は invalid_request を throw する
  */
 async function readImageForm<S extends z.ZodType>(c: Context<UserEnv>, schema: S) {
   const form = await c.req.formData().catch(() => null)
   const rawJson = form?.get('json')
   const layout = form?.get('layout')
   if (!form || typeof rawJson !== 'string' || !isFile(layout)) {
-    return c.json({ error: 'json and layout are required' }, 400)
+    throw new ApiException('invalid_request', { detail: 'json and layout are required' })
   }
-  let parsed: z.ZodSafeParseResult<z.infer<S>>
+  let json: unknown
   try {
-    parsed = schema.safeParse(JSON.parse(rawJson))
+    json = JSON.parse(rawJson)
   } catch {
-    return c.json({ error: 'json is not valid JSON' }, 400)
+    throw new ApiException('invalid_request', { detail: 'json is not valid JSON' })
   }
-  if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
   const reference = form.get('reference')
   const characterRefs = [...form.entries()].flatMap(([key, value]) =>
     key.startsWith('character_') && isFile(value)
@@ -160,7 +161,7 @@ async function readImageForm<S extends z.ZodType>(c: Context<UserEnv>, schema: S
   )
   return {
     form,
-    json: parsed.data,
+    json: parseOrThrow(schema, json),
     layoutPng: layout,
     referencePng: isFile(reference) ? reference : undefined,
     characterRefs: characterRefs.length > 0 ? characterRefs : undefined,
@@ -200,10 +201,11 @@ export function createApp(options: AppOptions = {}) {
   )
 
   /**
-   * ai_usage に 1 行予約し、その id を返す。月間上限なら 402、トークンの分あたり上限なら 429 の応答を返す。
+   * ai_usage に 1 行予約し、その id を返す。月間上限なら generation_limit_reached、トークンの分あたり上限なら
+   * rate_limited を throw する。
    * プロバイダを呼ぶ前に呼ぶ。呼び終えてから数えると、並行する要求がすべて判定を通ってしまう
    */
-  const reserve = async (c: Context<UserEnv>, kind: string): Promise<number | Response> => {
+  const reserve = async (c: Context<UserEnv>, kind: string): Promise<number> => {
     const at = now()
     const monthlyLimit = parseMonthlyLimit(c.env.MONTHLY_GENERATION_LIMIT)
     const reservation = await reserveUsage(c.env.DB, {
@@ -213,20 +215,17 @@ export function createApp(options: AppOptions = {}) {
       monthlyLimit,
     })
     if (reservation.status === 'monthly-limit') {
-      return c.json(
-        {
-          error: 'monthly generation limit reached',
-          limit: monthlyLimit,
-          resetsAt: new Date(monthRange(at).end).toISOString(),
-        },
-        402,
-      )
+      throw new ApiException('generation_limit_reached', {
+        params: { limit: monthlyLimit, resetsAt: new Date(monthRange(at).end).toISOString() },
+      })
     }
     if (reservation.status === 'rate-limited') {
-      return c.json({ error: 'rate limit exceeded' }, 429, { 'retry-after': '60' })
+      throw new ApiException('rate_limited', { headers: { 'retry-after': '60' } })
     }
     return reservation.id
   }
+
+  app.onError(handleError)
 
   app.get('/v1/health', (c) => c.json({ ok: true }))
 
@@ -246,7 +245,6 @@ export function createApp(options: AppOptions = {}) {
     call: (provider: ImageProvider) => Promise<PanelArtResponse>,
   ) => {
     const usageId = await reserve(c, kind)
-    if (usageId instanceof Response) return usageId
     const provider = createImage(c.env)
 
     const { value, attempts } = await retryUntilValid(async () => {
@@ -257,7 +255,9 @@ export function createApp(options: AppOptions = {}) {
     await settleUsage(c.env.DB, usageId, attempts)
 
     if (value === undefined) {
-      return c.json({ error: 'image provider returned an invalid image' }, 502)
+      throw new ApiException('provider_invalid_response', {
+        detail: 'image provider returned an invalid image',
+      })
     }
     return c.body(value.bytes, 200, {
       'content-type': 'image/png',
@@ -267,13 +267,13 @@ export function createApp(options: AppOptions = {}) {
   }
 
   app.post('/v1/ai/panel-art', async (c) => {
-    const read = await readImageForm(c, PanelArtJsonSchema)
-    if (read instanceof Response) return read
-    const { form, json, ...images } = read
+    const { form, json, ...images } = await readImageForm(c, PanelArtJsonSchema)
     const { previous, ...rest } = json
     const previousArt = form.get('previous')
     if (previous && !isFile(previousArt)) {
-      return c.json({ error: 'previous image is required with previous.instruction' }, 400)
+      throw new ApiException('invalid_request', {
+        detail: 'previous image is required with previous.instruction',
+      })
     }
     return respondImage(c, 'panel-art', (provider) =>
       provider.generatePanelArt({
@@ -289,47 +289,41 @@ export function createApp(options: AppOptions = {}) {
 
   // ページ 1 枚を 1 回の生成として数える。コマへの切り抜きは Web がする
   app.post('/v1/ai/page-art', async (c) => {
-    const read = await readImageForm(c, PageArtJsonSchema)
-    if (read instanceof Response) return read
-    const { json, layoutPng, referencePng, characterRefs } = read
+    const { json, layoutPng, referencePng, characterRefs } = await readImageForm(
+      c,
+      PageArtJsonSchema,
+    )
     return respondImage(c, 'page-art', (provider) =>
       provider.generatePageArt({ ...json, layoutPng, referencePng, characterRefs }),
     )
   })
 
   app.post('/v1/ai/character-art', async (c) => {
-    const body: unknown = await c.req.json().catch(() => undefined)
-    if (body === undefined) return c.json({ error: 'body is not valid JSON' }, 400)
-    const parsed = CharacterArtRequestSchema.safeParse(body)
-    if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
-    return respondImage(c, 'character-art', (provider) =>
-      provider.generateCharacterArt(parsed.data),
-    )
+    const req = parseOrThrow(CharacterArtRequestSchema, await requestJson(c.req.raw))
+    return respondImage(c, 'character-art', (provider) => provider.generateCharacterArt(req))
   })
 
   app.post('/v1/ai/plan-pages', async (c) => {
-    const body: unknown = await c.req.json().catch(() => undefined)
-    if (body === undefined) return c.json({ error: 'body is not valid JSON' }, 400)
-    const parsed = LayoutProposalRequestSchema.safeParse(body)
-    if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
+    const req = parseOrThrow(LayoutProposalRequestSchema, await requestJson(c.req.raw))
 
     // 上限を超える枚数は必ず弾かれるので、生成回数を予約する前に断る
-    if ((parsed.data.pageCount ?? 0) > MAX_PLANNED_PAGES) {
-      return c.json({ error: `pageCount must be at most ${MAX_PLANNED_PAGES}` }, 400)
+    if ((req.pageCount ?? 0) > MAX_PLANNED_PAGES) {
+      throw new ApiException('invalid_request', {
+        detail: `pageCount must be at most ${MAX_PLANNED_PAGES}`,
+      })
     }
 
     const usageId = await reserve(c, 'plan-pages')
-    if (usageId instanceof Response) return usageId
     const provider = createLlm(c.env)
-    const characterIds = new Set(parsed.data.project.characters.map((ch) => ch.id))
+    const characterIds = new Set(req.project.characters.map((ch) => ch.id))
 
     const { value, attempts } = await retryUntilValid(async () => {
       // proposeLayout と同じく、実プロバイダの応答は LLM の出力そのままなので検証し直す。
       // 居ないキャラを指す割り振りも、ページの登場キャラがスキーマを通らなくなるので不正として作り直させる
-      const result = PagePlanResponseSchema.safeParse(await provider.planPages(parsed.data))
+      const result = PagePlanResponseSchema.safeParse(await provider.planPages(req))
       if (!result.success) return undefined
       // 割り振りの枚数がコマ割りの要求数を決めるので、上限超過と指定枚数との不一致は作り直させる
-      const expected = parsed.data.pageCount
+      const expected = req.pageCount
       const count = result.data.pages.length
       if (count > MAX_PLANNED_PAGES || (expected !== undefined && count !== expected)) {
         return undefined
@@ -340,32 +334,30 @@ export function createApp(options: AppOptions = {}) {
     await settleUsage(c.env.DB, usageId, attempts)
 
     if (value === undefined) {
-      return c.json({ error: 'llm provider returned an invalid page plan' }, 502)
+      throw new ApiException('provider_invalid_response', {
+        detail: 'llm provider returned an invalid page plan',
+      })
     }
     return c.json(value)
   })
 
   app.post('/v1/ai/propose-layout', async (c) => {
-    const body: unknown = await c.req.json().catch(() => undefined)
-    if (body === undefined) return c.json({ error: 'body is not valid JSON' }, 400)
-    const parsed = LayoutProposalRequestSchema.safeParse(body)
-    if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
+    const req = parseOrThrow(LayoutProposalRequestSchema, await requestJson(c.req.raw))
 
     const usageId = await reserve(c, 'propose-layout')
-    if (usageId instanceof Response) return usageId
     const provider = createLlm(c.env)
 
     const { value, attempts } = await retryUntilValid(async () => {
       // 戻り型を信用せず検証し直すのは、実プロバイダの応答が LLM の出力をそのまま詰めたものだから
-      const result = LayoutProposalResponseSchema.safeParse(
-        await provider.proposeLayout(parsed.data),
-      )
+      const result = LayoutProposalResponseSchema.safeParse(await provider.proposeLayout(req))
       return result.success ? result.data : undefined
     })
     await settleUsage(c.env.DB, usageId, attempts)
 
     if (value === undefined) {
-      return c.json({ error: 'llm provider returned an invalid layout proposal' }, 502)
+      throw new ApiException('provider_invalid_response', {
+        detail: 'llm provider returned an invalid layout proposal',
+      })
     }
     return c.json(value)
   })
@@ -375,27 +367,27 @@ export function createApp(options: AppOptions = {}) {
     '/v1/ai/critique',
     bodyLimit({
       maxSize: MAX_CRITIQUE_BODY_BYTES,
-      onError: (c) => c.json({ error: 'body is too large' }, 413),
+      onError: () => {
+        throw new ApiException('body_too_large')
+      },
     }),
     async (c) => {
-      const body: unknown = await c.req.json().catch(() => undefined)
-      if (body === undefined) return c.json({ error: 'body is not valid JSON' }, 400)
-      const parsed = CritiqueRequestSchema.safeParse(body)
-      if (!parsed.success) return c.json({ error: z.prettifyError(parsed.error) }, 400)
+      const req = parseOrThrow(CritiqueRequestSchema, await requestJson(c.req.raw))
 
       const usageId = await reserve(c, 'critique')
-      if (usageId instanceof Response) return usageId
       const provider = createLlm(c.env)
 
       const { value, attempts } = await retryUntilValid(async () => {
         // proposeLayout と同じく、実プロバイダの応答は LLM の出力そのままなので検証し直す
-        const result = CritiqueResponseSchema.safeParse(await provider.critique(parsed.data))
+        const result = CritiqueResponseSchema.safeParse(await provider.critique(req))
         return result.success ? result.data : undefined
       })
       await settleUsage(c.env.DB, usageId, attempts)
 
       if (value === undefined) {
-        return c.json({ error: 'llm provider returned an invalid critique' }, 502)
+        throw new ApiException('provider_invalid_response', {
+          detail: 'llm provider returned an invalid critique',
+        })
       }
       return c.json(value)
     },

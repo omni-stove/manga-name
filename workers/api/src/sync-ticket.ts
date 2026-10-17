@@ -1,4 +1,5 @@
 import { createMiddleware } from 'hono/factory'
+import { ApiException } from './api-error'
 import { hashToken, newToken } from './token'
 import { requireUser, type UserEnv } from './user'
 
@@ -58,7 +59,7 @@ export function requireSyncUser(now: () => number) {
     const ticket = c.req.query(SYNC_TICKET_PARAM)
     if (ticket === undefined) return byHeaders(c, next)
     const userId = await consumeSyncTicket(c.env.DB, ticket, c.req.param('id') ?? '', now())
-    if (userId === null) return c.json({ error: 'unauthorized' }, 401)
+    if (userId === null) throw new ApiException('unauthorized')
     c.set('userId', userId)
     await next()
   })

@@ -1,4 +1,5 @@
 export * from './ai'
+export * from './api-error'
 export * from './bubble-fit'
 export * from './diagnosis'
 export * from './factories'

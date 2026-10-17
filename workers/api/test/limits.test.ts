@@ -131,7 +131,9 @@ describe('GET /v1/usage', () => {
   })
 
   test('401 without a user', async () => {
-    expect((await app.request('/v1/usage', {}, env)).status).toBe(401)
+    const res = await app.request('/v1/usage', {}, env)
+    expect(res.status).toBe(401)
+    expect(await res.json()).toEqual({ code: 'unauthorized' })
   })
 })
 
@@ -143,9 +145,9 @@ describe('monthly generation limit', () => {
 
     const res = await generate()
     expect(res.status).toBe(402)
-    expect(await res.json()).toMatchObject({
-      limit: monthlyLimit,
-      resetsAt: '2026-11-01T00:00:00.000Z',
+    expect(await res.json()).toEqual({
+      code: 'generation_limit_reached',
+      params: { limit: monthlyLimit, resetsAt: '2026-11-01T00:00:00.000Z' },
     })
     expect(provider.calls).toBe(1)
     expect(await usageCount()).toBe(monthlyLimit)
@@ -232,5 +234,15 @@ describe('CORS', () => {
     )
     expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
     expect(res.headers.get('access-control-expose-headers')).toContain('etag')
+  })
+
+  test('error responses carry the CORS headers so apps/web can read the code', async () => {
+    const res = await app.request(
+      '/v1/projects',
+      { headers: { origin: 'http://localhost:5173' } },
+      env,
+    )
+    expect(res.status).toBe(401)
+    expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
   })
 })

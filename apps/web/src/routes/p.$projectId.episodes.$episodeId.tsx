@@ -41,8 +41,6 @@ function EpisodePages() {
   // 開いている間に Undo や他の人の操作でエピソードが消えることがある
   if (!episode) return <EpisodeNotFound projectId={projectId} />
   const pages = episode.pages
-  // rtl の本では先のページが左にあるので、並べ替えのボタンを向きに合わせる
-  const [earlier, later] = project.settings.direction === 'rtl' ? ['→', '←'] : ['←', '→']
 
   return (
     <YStack gap={8}>
@@ -96,7 +94,7 @@ function EpisodePages() {
       )}
       <EpisodeBatch episode={episode} projectId={projectId} store={store} />
       {pages.length === 0 && <Typography tone="muted">ページがありません。</Typography>}
-      <ol className={`${common.cards} ${styles.pages}`} data-direction={project.settings.direction}>
+      <ol className={`${common.cards} ${styles.pages}`}>
         {pages.map((page, index) => {
           const status = artStatus(page)
           const cast = pageCharacterIds(page).flatMap((id) =>
@@ -157,7 +155,7 @@ function EpisodePages() {
                   disabled={index === 0}
                   onClick={() => apply('ページを移動', (p) => movePagePatch(p, page.id, -1))}
                 >
-                  {earlier}
+                  ←
                 </Button>
                 <Button
                   size="small"
@@ -166,7 +164,7 @@ function EpisodePages() {
                   disabled={index === pages.length - 1}
                   onClick={() => apply('ページを移動', (p) => movePagePatch(p, page.id, 1))}
                 >
-                  {later}
+                  →
                 </Button>
                 <Button
                   size="small"

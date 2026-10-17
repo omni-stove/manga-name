@@ -1,16 +1,18 @@
-export type JsonBody =
-  | { ok: true; value: unknown }
-  | { ok: false; status: 400 | 413; error: string }
+import { ApiException } from './api-error'
 
-/** 要求の本文を maxBytes まで読んで JSON として解釈する。超えれば 413 と tooLargeError */
+const notJson = () => new ApiException('invalid_request', { detail: 'body is not valid JSON' })
+
+/**
+ * 要求の本文を maxBytes まで読んで JSON として解釈する。超えれば tooLarge を、JSON でなければ invalid_request を throw する。
+ * tooLarge を渡さなければ body_too_large
+ */
 export async function readJson(
   request: Request,
   maxBytes: number,
-  tooLargeError: string,
-): Promise<JsonBody> {
-  const tooLarge = { ok: false, status: 413, error: tooLargeError } as const
+  tooLarge: ApiException = new ApiException('body_too_large'),
+): Promise<unknown> {
   // Content-Length で先に断るのは、上限を大きく超える本文をメモリに読み込まないため
-  if (Number(request.headers.get('content-length')) > maxBytes) return tooLarge
+  if (Number(request.headers.get('content-length')) > maxBytes) throw tooLarge
   // Content-Length の無い chunked 本文でも上限を超えた時点で読むのをやめるため、ストリームで読む
   const chunks: Uint8Array[] = []
   let total = 0
@@ -21,7 +23,7 @@ export async function readJson(
     total += value.byteLength
     if (total > maxBytes) {
       await reader.cancel()
-      return tooLarge
+      throw tooLarge
     }
     chunks.push(value)
   }
@@ -32,8 +34,14 @@ export async function readJson(
     offset += chunk.byteLength
   }
   try {
-    return { ok: true, value: JSON.parse(new TextDecoder().decode(body)) }
+    return JSON.parse(new TextDecoder().decode(body))
   } catch {
-    return { ok: false, status: 400, error: 'body is not valid JSON' }
+    throw notJson()
   }
 }
+
+/** 大きさを別に抑えた要求（bodyLimit の後ろなど）の本文を JSON として読む。JSON でなければ invalid_request を throw する */
+export const requestJson = (request: Request): Promise<unknown> =>
+  request.json().catch(() => {
+    throw notJson()
+  })
