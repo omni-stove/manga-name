@@ -27,6 +27,7 @@ import { createUploadApp } from './assets'
 import { AUTH_BASE_PATH, getAuth } from './auth'
 import { requestJson } from './body'
 import type { Env } from './env'
+import { createMeApp } from './me'
 import { createInviteApp } from './members'
 import { allowedOrigins } from './origins'
 import { isDecodablePng } from './png'
@@ -232,6 +233,7 @@ export function createApp(options: AppOptions = {}) {
   app.on(['GET', 'POST'], `${AUTH_BASE_PATH}/*`, (c) => getAuth(c.env).handler(c.req.raw))
 
   app.route('/v1/projects', createProjectsApp(now))
+  app.route('/v1/me', createMeApp(now))
   app.route('/v1/invites', createInviteApp(now))
   app.route('/v1/uploads', createUploadApp(now))
   app.route('/v1/usage', createUsageApp(now))

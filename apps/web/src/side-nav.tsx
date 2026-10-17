@@ -142,7 +142,7 @@ function Account() {
   if (user === null) return null
   return (
     <YStack as="li" gap={4} align="start" className={styles.account}>
-      <span title={user.email}>{user.name}</span>
+      <span title={user.email}>{user.name || user.email}</span>
       <Button size="small" variant="ghost" onClick={() => void signOut()}>
         サインアウト
       </Button>

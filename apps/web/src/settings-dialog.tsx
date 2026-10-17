@@ -15,6 +15,7 @@ import {
 } from '@manga/ui'
 import { useMatch, useNavigate, useRouteContext, useSearch } from '@tanstack/react-router'
 import common from './common.module.css'
+import { DisplayNameForm } from './display-name'
 import { settingsPatch } from './project-ops'
 import styles from './project-settings.module.css'
 import { SharingPanel } from './sharing-panel'
@@ -96,7 +97,7 @@ function AppSettings() {
         <XStack as="dd" wrap>
           {user ? (
             <>
-              {`${user.name}（${user.email}）`}
+              {user.email}
               <Button size="small" variant="ghost" onClick={() => void signOut()}>
                 サインアウト
               </Button>
@@ -108,6 +109,14 @@ function AppSettings() {
             </>
           )}
         </XStack>
+        {user && (
+          <>
+            <dt>表示名</dt>
+            <dd>
+              <DisplayNameForm key={user.id} name={user.name} />
+            </dd>
+          </>
+        )}
         <dt>テーマ</dt>
         <dd>
           <SegmentedControl label="テーマ" value={theme} options={THEMES} onChange={setTheme} />

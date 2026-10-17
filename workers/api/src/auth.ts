@@ -21,12 +21,22 @@ function createAuth(env: Env) {
     // クライアント ID が無くても組み立てるのは、Google の設定が無い wrangler dev でも X-Debug-User で API を通すため
     socialProviders:
       env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
-        ? { google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET } }
+        ? {
+            google: {
+              clientId: env.GOOGLE_CLIENT_ID,
+              clientSecret: env.GOOGLE_CLIENT_SECRET,
+              // Google の表示名は本名のことが多く、参加者一覧で他のユーザーに見えるので保存しない。
+              // 空のまま登録し、Web が表示名を決めさせて PUT /v1/me で入れる
+              mapProfileToUser: () => ({ name: '' }),
+            },
+          }
         : {},
     user: { modelName: 'auth_users' },
     session: { modelName: 'auth_sessions' },
     account: { modelName: 'auth_accounts' },
     verification: { modelName: 'auth_verifications' },
+    // 表示名を検証して入れる口を PUT /v1/me だけにするため。update-user は長さを問わず name と image を書ける
+    disabledPaths: ['/update-user'],
     plugins: [bearer()],
   })
 }
