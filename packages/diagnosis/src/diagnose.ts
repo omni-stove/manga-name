@@ -165,15 +165,23 @@ const overlapIssues = (panels: readonly Panel[]): Issue[] => {
       const b = panels[j]
       if (!a || !b) continue
       // 斜めに割ったコマは囲む矩形どうしが重なるので、輪郭どうしの共通部分で見る
-      const common = intersectPolygons(panelOutline(a), convexHull(panelOutline(b)))
-      const { w, h } = boundsOf(common)
-      // 辺を共有するだけの接し方は共通部分が線分になり、囲む矩形だけでは斜めの線分を重なりと誤る。
-      // 囲む矩形が OVERLAP_MIN 四方の正方形のとき面積 ÷ 対角線が最小になるので、その値を厚みの下限にする
-      const thickness = Math.hypot(w, h) > 0 ? polygonArea(common) / Math.hypot(w, h) : 0
+      const outlineA = panelOutline(a)
+      const outlineB = panelOutline(b)
+      // 凹んだ輪郭の凹みに接するだけのコマを重なりと誤らないよう、片方を凸包にした 2 通りのうち小さい方で見る
+      const overlaps = (common: Point[]): boolean => {
+        const { w, h } = boundsOf(common)
+        // 辺を共有するだけの接し方は共通部分が線分になり、囲む矩形だけでは斜めの線分を重なりと誤る。
+        // 囲む矩形が OVERLAP_MIN 四方の正方形のとき面積 ÷ 対角線が最小になるので、その値を厚みの下限にする
+        const thickness = Math.hypot(w, h) > 0 ? polygonArea(common) / Math.hypot(w, h) : 0
+        return (
+          w >= OVERLAP_MIN - EPSILON &&
+          h >= OVERLAP_MIN - EPSILON &&
+          thickness >= OVERLAP_MIN / Math.SQRT2 - EPSILON
+        )
+      }
       if (
-        w >= OVERLAP_MIN - EPSILON &&
-        h >= OVERLAP_MIN - EPSILON &&
-        thickness >= OVERLAP_MIN / Math.SQRT2 - EPSILON
+        overlaps(intersectPolygons(outlineA, convexHull(outlineB))) &&
+        overlaps(intersectPolygons(outlineB, convexHull(outlineA)))
       ) {
         issues.push({
           severity: 'error',
