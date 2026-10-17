@@ -281,7 +281,7 @@ const isNetworkError = (e: unknown) => e instanceof TypeError
 const isTransient = (res: Response) => res.status === 429 || res.status >= 500
 
 /**
- * ローカル優先でクラウドに同期する StorageAdapter（docs/workstreams/WS-15-cloud-storage.md）。
+ * ローカル優先でクラウドに同期する StorageAdapter。
  * - saveProject は local に書いて返し、クラウドへは debounceMs 後にバックグラウンドで PUT する。
  *   失敗は指数バックオフ（上限 5 分）で再試行し、オフラインなら online イベントで再開する。
  * - loadProject はクラウドの版と比べ、変更があった側を採用する。両方に変更があれば競合として扱う。

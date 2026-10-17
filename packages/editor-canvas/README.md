@@ -1,6 +1,6 @@
 # @manga/editor-canvas
 
-1 ページを SVG で描く React コンポーネント。仕様は `docs/workstreams/WS-04-editor-canvas.md`。
+1 ページを SVG で描く React コンポーネント。
 
 ```sh
 pnpm --filter @manga/editor-canvas dev        # フィクスチャを読むプレイグラウンド（src/dev）

@@ -1,6 +1,6 @@
 /**
  * 実プロバイダ（Anthropic `claude-haiku-5-5`）に critique をさせ、提案 Patch を当てると
- * diagnosePage の miss が減ることを確かめる（WS-16 の受け入れ条件）。
+ * diagnosePage の miss が減ることを確かめる。
  * 1 回ごとに課金されるので、`ANTHROPIC_API_KEY=... pnpm --filter @manga/api test critique-llm` のように
  * シェルからキーを渡したときだけ走る。
  */

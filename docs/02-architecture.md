@@ -6,21 +6,21 @@
 |---|---|---|
 | UI | React 19, TypeScript strict | |
 | ルーティング | TanStack Router (file-based) | Web と Desktop で同一ルート |
-| 状態 | Zustand + Immer | Phase 4 で CRDT に差し替えられるよう、store は `applyPatch` インターフェース越しに操作する |
+| 状態 | Zustand + Immer。共同編集時は Yjs | どちらの store も `applyPatch` インターフェース越しに操作するので、呼び出し側は同じコードで動く |
 | キャンバス | 自前 SVG | コマ割り、フキダシ、焦点は矩形と点とベクトルだけなので十分。生成画像は `<image>` で枠内にクリップ表示。tldraw や Konva は使わない |
 | レンダラ | Canvas 2D（`OffscreenCanvas`、Web Worker） | 出力画像の合成。縦書きは 1 文字ずつ配置する自前実装。フォントは Noto Sans JP を同梱 |
 | スキーマ | Zod | 型、バリデーション、JSON Schema 生成の元 |
-| Desktop | Tauri 2 | ファイル保存、ネイティブダイアログ。Phase 4 |
-| API | Cloudflare Workers + Hono | Phase 1 は AI プロキシのみ。プロジェクト CRUD は Phase 3 |
+| Desktop | Tauri 2 | ファイル保存、ネイティブダイアログ |
+| API | Cloudflare Workers + Hono | AI プロキシ、プロジェクト CRUD、アセット、共同編集の同期 |
 | DB | Cloudflare D1 | 利用量、プロジェクトのメタ情報とドキュメント JSON |
 | ファイル | Cloudflare R2 | 生成画像、参照画像、PDF |
-| 共同編集 | Durable Objects + Yjs | Phase 4 |
-| 認証 | Phase 1 は共有アクセストークン。正式な方式は未決。`06-open-questions.md` 参照 | |
+| 共同編集 | Durable Objects + Yjs | |
+| 認証 | Better Auth（workers/api 上、Google OAuth） | ユーザーとセッションは D1。`06-open-questions.md` 参照 |
 | 画像生成 | 外部 API。プロバイダ抽象の裏に置く | 参照画像入力が必須。コマ単位で呼ぶ |
-| LLM | 外部 API。プロバイダ抽象の裏に置く | 脚本からの下書きと診断の言語化。Phase 2 以降 |
+| LLM | 外部 API。プロバイダ抽象の裏に置く | 脚本からの下書きと診断の言語化 |
 | PDF | pdf-lib | レンダラが描いたページ画像を並べる |
 | モノレポ | pnpm workspaces。Turborepo は不採用 | パッケージ単位の build を持たず apps と Vitest がソースを直接読むため、タスク順序もキャッシュも不要 |
-| テスト | Vitest, Playwright（E2E は Phase 2 以降） | |
+| テスト | Vitest, Playwright | |
 | Lint / Format | Biome | |
 
 ## リポジトリ構成
@@ -29,7 +29,7 @@
 manga/
 ├── apps/
 │   ├── web/            # Vite + React + TanStack Router。Web ビルド
-│   └── desktop/        # Tauri 2。apps/web をラップし、ストレージアダプタだけ差し替える。Phase 4
+│   └── desktop/        # Tauri 2。apps/web をラップし、ストレージアダプタだけ差し替える
 ├── packages/
 │   ├── schema/         # Zod スキーマ、型、フィクスチャ、マイグレーション。全パッケージの唯一の共通依存
 │   ├── render/         # 決定論的レンダラ。Page -> PNG、配置図 PNG、Page[] -> PDF
@@ -40,21 +40,30 @@ manga/
 │   ├── storage/        # StorageAdapter インターフェースと実装（IndexedDB / Tauri FS / Cloud）
 │   └── ui/             # 共通コンポーネント、テーマ
 ├── workers/
-│   └── api/            # Hono。AI プロキシ、利用量。Phase 3 で認証、プロジェクト CRUD、R2 署名 URL
+│   └── api/            # Hono。AI プロキシ、利用量、認証、プロジェクト CRUD、アセット、同期
 └── docs/
 ```
 
 依存の向きは一方向に固定する。
 
-```
-schema  <-  render, ai, editor-canvas, inspector, diagnosis, storage
-                 ^
-                 |
-            apps/web  <-  apps/desktop
-            workers/api  (schema と ai にのみ依存)
+```mermaid
+graph BT
+  schema["@manga/schema"]
+  ui["@manga/ui"]
+
+  render["@manga/render"] --> schema
+  ai["@manga/ai"] --> schema
+  canvas["@manga/editor-canvas"] --> schema
+  inspector["@manga/inspector"] --> schema & ui
+  diagnosis["@manga/diagnosis"] --> schema
+  storage["@manga/storage"] --> schema
+
+  web["apps/web"] --> render & ai & canvas & inspector & diagnosis & storage & ui & schema
+  desktop["apps/desktop"] --> web
+  api["workers/api"] --> schema & ai
 ```
 
-`packages/*` 同士は互いに import しない。例外は `workers/api` が `packages/ai` のプロンプト構築を使うことだけ。横の連携は `apps/web` が props と callback で配線する。
+`packages/*` は `schema` 以外を import しない。例外は `inspector` が `ui` の部品を使うことと、`workers/api` が `packages/ai` のプロンプト構築を使うこと。横の連携は `apps/web` が props と callback で配線する。
 
 ## レイヤー構造（キャンバス）
 
@@ -64,7 +73,7 @@ schema  <-  render, ai, editor-canvas, inspector, diagnosis, storage
 |---|---|---|---|---|
 | Reference | 参考画像 | 不透明度と表示切替のみ | `Page.reference` (参照 + 不透明度)。本体は Blob / R2 | 出ない |
 | Art | コマごとの生成画像。コマ枠でクリップ | 生成、再生成、履歴の切替 | `Panel.arts[]`, `Panel.artId` | 出る |
-| Scribble | 手描きメモの線 | 描く、消す、取り消す | `Page.scribbles`。Phase 4 | 出ない |
+| Scribble | 手描きメモの線 | 描く、消す、取り消す | `Page.scribbles` | 出ない |
 | Panels | コマ枠 | 矩形操作、分割、結合、順序 | `Page.panels[].rect` | 出る |
 | Bubbles | フキダシとセリフ | ドラッグ、リサイズ、追加、削除 | `Panel.bubbles` | 出る |
 | Hints | 焦点、ベクトル | ドラッグ、追加、削除 | `Panel.focusPoints`, `Panel.vectors` | 出ない |

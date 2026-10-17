@@ -35,13 +35,13 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
-      // シナリオ 1, 2, 3 と同時編集を、同じブラウザのタブ同士で共同編集するビルドで通す
+      // cloud 以外を、同じブラウザのタブ同士で共同編集するビルドで通す
       name: 'collab',
       testIgnore: '**/cloud-*.e2e.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${COLLAB_PORT}` },
     },
     {
-      // シナリオ 7 を、workers/api につなぐビルドで通す
+      // cloud-*.e2e.ts を、workers/api につなぐビルドで通す
       name: 'cloud',
       testMatch: '**/cloud-*.e2e.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${CLOUD_PORT}` },
