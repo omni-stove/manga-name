@@ -68,7 +68,7 @@ schema  <-  render, ai, editor-canvas, inspector, diagnosis, storage
 | Panels | コマ枠 | 矩形操作、分割、結合、順序 | `Page.panels[].rect` | 出る |
 | Bubbles | フキダシとセリフ | ドラッグ、リサイズ、追加、削除 | `Panel.bubbles` | 出る |
 | Hints | 焦点、ベクトル | ドラッグ、追加、削除 | `Panel.focusPoints`, `Panel.vectors` | 出ない |
-| Diagnosis overlay | 視線経路、t 値、OK / miss、bubble chain | 表示のみ | 計算結果。保存しない | 出ない |
+| Diagnosis overlay | 視線経路、t 値、OK / miss、bubble chain。今は出さない（`06-open-questions.md` の 2026-10-17） | 表示のみ | 計算結果。保存しない | 出ない |
 
 キャンバスは編集のための表示であり、出力画像は `packages/render` が同じデータから別に作る。両者の見た目は「コマ枠、絵、フキダシ、セリフ」について一致させる。
 
