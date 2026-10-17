@@ -9,6 +9,7 @@ import {
   type Patch,
   type Project,
   type ProjectSettings,
+  panelCharacterIds,
 } from '@manga/schema'
 
 /**
@@ -147,44 +148,13 @@ export function addCharacterPatch(fields: CharacterFields): { patch: Patch; char
   return { patch: [{ op: 'add', path: '/characters/-', value: character }], character }
 }
 
-/** 変わった項目だけを書き換える。空にした任意項目は消す */
-export function updateCharacterPatch(project: Project, id: ID, fields: CharacterFields): Patch {
-  const index = project.characters.findIndex((c) => c.id === id)
-  const current = project.characters[index]
-  if (!current) throw new Error(`キャラクターが見つかりません: ${id}`)
-  const next = normalize(fields)
-  validate(next)
-  const base = `/characters/${index}`
-  const patch: Patch = []
-  for (const key of ['name', 'shortName'] as const) {
-    if (next[key] !== current[key]) {
-      patch.push({ op: 'replace', path: `${base}/${key}`, value: next[key] })
-    }
-  }
-  for (const key of OPTIONAL_FIELDS) {
-    const value = next[key]
-    if (value === current[key]) continue
-    patch.push(
-      value === undefined
-        ? { op: 'remove', path: `${base}/${key}` }
-        : { op: 'add', path: `${base}/${key}`, value },
-    )
-  }
-  return patch
-}
-
-/** セリフの話者かフォーカスポイントとして参照しているコマの数 */
+/** 登場キャラ、セリフの話者、フォーカスポイントのどれかとして参照しているコマの数 */
 export function characterUsage(project: Project, id: ID): number {
   let count = 0
   for (const episode of project.episodes) {
     for (const page of episode.pages) {
       for (const panel of page.panels) {
-        if (
-          panel.bubbles.some((b) => b.speakerId === id) ||
-          panel.focusPoints.some((f) => f.characterId === id)
-        ) {
-          count++
-        }
+        if (panelCharacterIds(panel).includes(id)) count++
       }
     }
   }
@@ -333,29 +303,6 @@ if (import.meta.vitest) {
       expect(() => addCharacterPatch({ name: 'x', shortName: ' ' })).toThrow('略称')
     })
 
-    test('update changes only what changed and removes cleared fields', () => {
-      const store = storeOf(createEmptyProject('t'))
-      const { patch, character } = addCharacterPatch({ name: 'A', shortName: 'A', note: 'n' })
-      store.applyPatch(patch)
-      const update = updateCharacterPatch(store.get(), character.id, {
-        name: 'A',
-        shortName: 'B',
-        appearance: '眼鏡',
-        note: '',
-      })
-      expect(update.map((op) => op.op)).toEqual(['replace', 'add', 'remove'])
-      store.applyPatch(update)
-      expect(store.get().characters[0]).toEqual({
-        id: character.id,
-        name: 'A',
-        shortName: 'B',
-        appearance: '眼鏡',
-      })
-      const saved = store.get().characters[0]
-      if (!saved) throw new Error('character が無い')
-      expect(updateCharacterPatch(store.get(), character.id, saved)).toEqual([])
-    })
-
     test('remove refuses a character that is still referenced', () => {
       const used = sample.characters.find((c) => characterUsage(sample, c.id) > 0)
       if (!used) throw new Error('fixture に参照されているキャラクターがない')
@@ -366,6 +313,17 @@ if (import.meta.vitest) {
       store.applyPatch(patch)
       store.applyPatch(removeCharacterPatch(store.get(), character.id))
       expect(store.get().characters).toEqual([])
+    })
+
+    test('a character only in a panel cast counts as used', () => {
+      const store = storeOf(structuredClone(sample))
+      const { patch, character } = addCharacterPatch({ name: 'A', shortName: 'A' })
+      store.applyPatch([
+        ...patch,
+        { op: 'add', path: '/episodes/0/pages/0/panels/0/cast', value: [character.id] },
+      ])
+      expect(characterUsage(store.get(), character.id)).toBe(1)
+      expect(() => removeCharacterPatch(store.get(), character.id)).toThrow('削除できません')
     })
   })
 

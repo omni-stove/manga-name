@@ -18,7 +18,7 @@ export function IssueList(...)                               // Phase 2（WS-11�
 Patch の path は渡されたオブジェクト root 基準。親への変換は `apps/web` が行う。
 
 ## 内容
-- PanelInspector: order（入替 UI）、camera、note（複数行）、Bubble 一覧（順序入替）。生成セクション: 「生成」ボタン、修正指示のテキスト欄と「修正して再生成」、`arts` のサムネイル一覧（`artId` の切替、`instruction` と `createdAt` を表示、採用中を強調）、実際に送った `prompt` の折りたたみ表示。
+- PanelInspector: order（入替 UI）、camera、note（複数行）、登場キャラ（話者と焦点から拾ったキャラは理由つきで表示、`cast` への追加と削除）、Bubble 一覧（順序入替）。生成セクション: 「生成」ボタン、修正指示のテキスト欄と「修正して再生成」、`arts` のサムネイル一覧（`artId` の切替、`instruction` と `createdAt` を表示、採用中を強調）、実際に送った `prompt` の折りたたみ表示。
 - BubbleInspector: speakerId、text（複数行）、shape、order。
 - CharacterInspector: name、shortName、appearance（複数行）、参照画像のサムネイルと差し替え、note。
 - PageInspector: side、note、「このページを全部生成」。

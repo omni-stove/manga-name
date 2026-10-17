@@ -24,7 +24,7 @@ export const newId: () => ID;                         // nanoid
 
 ## 制約
 - 契約との差分を出さない。差分が必要なら `03-data-model.md` の PR が先。
-- `refine` で参照整合を検証する: `Panel.artId` が `arts` 内に存在する、`PanelArt.parentId` が同 Panel の `arts` 内、`Vector.sourceFocusId` / `targetFocusId` が同 Panel の FocusPoint か Bubble、`Bubble.speakerId` と `FocusPoint.characterId` が `characters` 内、`Panel.order` と `Bubble.order` がそれぞれ一意、`Rect` / `Point` / `Size` が 0..1。
+- `refine` で参照整合を検証する: `Panel.artId` が `arts` 内に存在する、`PanelArt.parentId` が同 Panel の `arts` 内、`Vector.sourceFocusId` / `targetFocusId` が同 Panel の FocusPoint か Bubble、`Bubble.speakerId`、`FocusPoint.characterId`、`Panel.cast` が `characters` 内、`Panel.order` と `Bubble.order` がそれぞれ一意、`Rect` / `Point` / `Size` が 0..1。
 - ランタイム依存は `zod` と `nanoid` のみ。React に依存しない。
 
 ## 受け入れ条件

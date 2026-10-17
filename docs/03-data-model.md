@@ -98,6 +98,8 @@ interface Panel {
   vectors: Vector[];
   /** 視線経路の上書き。省略時は centre sweep（y = 0.5） */
   sweep?: Sweep;
+  /** 登場キャラ（Character.id）。台詞も焦点も無いキャラを生成に渡すために持つ。話者と焦点のキャラは書かなくても登場キャラに数える */
+  cast?: ID[];
 }
 
 interface Bubble {

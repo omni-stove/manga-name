@@ -15,7 +15,7 @@ POST /v1/ai/propose-layout    LayoutProposalRequest -> LayoutProposalResponse
 - 脚本を受け取り、ページ数とコマ数の目安を与え、`Page[]` を JSON Schema 準拠で返させる。ID は `tmp_` 接頭辞で仮発行。座標は 0..1。`arts` は空配列。
 - セリフは脚本から抜き出し、フキダシの `pos` と `size` は読み順（rtl なら右上から）に沿って置かせる。
 - `note` には脚本のト書きを、`camera` は推定を入れさせる。
-- キャラは `characters` の `name` と `shortName` を渡し、`speakerId` を引かせる。
+- キャラは `characters` の `name` と `shortName` を渡し、`speakerId` と、台詞の無いキャラも含めたコマの `cast` を引かせる。
 
 ## 実プロバイダ（06-open-questions.md #4 の決定）
 - Anthropic Claude Haiku 5.5（`claude-haiku-5-5`）。構造化出力に応答スキーマの JSON Schema を渡す。

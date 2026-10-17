@@ -10,7 +10,7 @@ Web アプリの骨格。ルーティング、store、ストレージアダプ�
 /                               プロジェクト一覧
 /p/$projectId                   エピソードとページのサムネイル一覧。ページ単位の生成状況（未生成 / 一部 / 全部）を表示
 /p/$projectId/pages/$pageId     エディタ（キャンバス + インスペクタ）
-/p/$projectId/characters        キャラクター一覧と編集
+/p/$projectId/characters        キャラクター一覧と編集（CharacterInspector で参照画像も扱う）
 /p/$projectId/settings          direction、pageSize、dpi、style
 /settings                       アプリ設定（ストレージ切替、AI プロキシの URL とアクセストークン、テーマ）
 ```

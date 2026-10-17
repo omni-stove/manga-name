@@ -1,14 +1,14 @@
-import type { Character } from '@manga/schema'
 import { Button, Field, Input, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi } from '@tanstack/react-router'
+import { CharacterPane } from '../character-pane'
 import common from '../common.module.css'
 import {
   addCharacterPatch,
   type CharacterFields,
   characterUsage,
   removeCharacterPatch,
-  updateCharacterPatch,
 } from '../project-ops'
+import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
 import styles from './characters.module.css'
 
@@ -17,9 +17,12 @@ export const Route = createFileRoute('/p/$projectId/characters')({ component: Ch
 const projectRoute = getRouteApi('/p/$projectId')
 
 function CharacterList() {
+  const { projectId } = Route.useParams()
   const { store } = projectRoute.useLoaderData()
+  const { library } = Route.useRouteContext()
   const project = useProject(store)
   const { apply, error } = useApplyPatch(store)
+  const resolveAsset = useAssetResolver(library.resolveAsset)
   return (
     <>
       <h2>キャラクター一覧</h2>
@@ -34,14 +37,12 @@ function CharacterList() {
       <ul className={`${common.cards} ${styles.cards}`}>
         {project.characters.map((character) => (
           <YStack as="li" gap={6} key={character.id} className={common.card}>
-            <CharacterForm
-              // 保存後に入力欄を保存済みの値へ戻すため、内容が変わったら作り直す
-              key={JSON.stringify(character)}
-              initial={character}
-              submitLabel="保存"
-              onSubmit={(fields) =>
-                apply('キャラクターを編集', (p) => updateCharacterPatch(p, character.id, fields))
-              }
+            <CharacterPane
+              character={character}
+              projectId={projectId}
+              library={library}
+              apply={apply}
+              resolveAsset={resolveAsset}
             />
             <small className={styles.usage}>使用コマ {characterUsage(project, character.id)}</small>
             <XStack as="span" wrap gap={6} className={common.cardActions}>
@@ -61,9 +62,7 @@ function CharacterList() {
       </ul>
       <h3 className={styles.addTitle}>キャラクターを追加</h3>
       <div className={styles.add}>
-        <CharacterForm
-          submitLabel="追加"
-          resetOnSuccess
+        <AddCharacterForm
           onSubmit={(fields) => apply('キャラクターを追加', () => addCharacterPatch(fields).patch)}
         />
       </div>
@@ -78,15 +77,9 @@ const FIELDS = [
   { name: 'note', label: 'メモ', required: false },
 ] as const
 
-function CharacterForm({
-  initial,
-  submitLabel,
-  resetOnSuccess = false,
+function AddCharacterForm({
   onSubmit,
 }: {
-  initial?: Character
-  submitLabel: string
-  resetOnSuccess?: boolean
   /** 反映できたら true */
   onSubmit(fields: CharacterFields): boolean
 }) {
@@ -104,20 +97,16 @@ function CharacterForm({
           appearance: text('appearance'),
           note: text('note'),
         })
-        if (ok && resetOnSuccess) form.reset()
+        if (ok) form.reset()
       }}
     >
       {FIELDS.map((field) => (
         <Field key={field.name} label={field.label}>
-          <Input
-            name={field.name}
-            required={field.required}
-            defaultValue={initial?.[field.name] ?? ''}
-          />
+          <Input name={field.name} required={field.required} />
         </Field>
       ))}
       <Button type="submit" size="small" variant="primary">
-        {submitLabel}
+        追加
       </Button>
     </form>
   )

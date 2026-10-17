@@ -1,12 +1,15 @@
 import {
   type Bubble,
+  type Character,
   currentArt,
   type ID,
+  type Panel,
   type PanelArt,
   PanelSchema,
   type Patch,
+  panelCharacterIds,
 } from '@manga/schema'
-import { Button, Checkbox, Field, IconButton, TextArea, XStack, YStack } from '@manga/ui'
+import { Button, Checkbox, Field, IconButton, Select, TextArea, XStack, YStack } from '@manga/ui'
 import { useId, useMemo, useState } from 'react'
 import { DEBOUNCE_MS, NumberField, TextField } from './fields'
 import styles from './panel-inspector.module.css'
@@ -23,6 +26,20 @@ const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
 function selectArtPatch(artId: ID | undefined, next: ID): Patch {
   if (artId === next) return []
   return [{ op: artId === undefined ? 'add' : 'replace', path: '/artId', value: next }]
+}
+
+/** `cast` に足す。`cast` が無ければ配列ごと add */
+function addCastPatch(cast: readonly ID[] | undefined, id: ID): Patch {
+  if (cast === undefined) return [{ op: 'add', path: '/cast', value: [id] }]
+  if (cast.includes(id)) return []
+  return [{ op: 'add', path: '/cast/-', value: id }]
+}
+
+/** `cast` から外す。最後の 1 人なら `cast` ごと消す */
+function removeCastPatch(cast: readonly ID[] | undefined, id: ID): Patch {
+  const index = cast?.indexOf(id) ?? -1
+  if (cast === undefined || index < 0) return []
+  return [{ op: 'remove', path: cast.length === 1 ? '/cast' : `/cast/${index}` }]
 }
 
 const byOrder = (bubbles: readonly Bubble[]) =>
@@ -86,6 +103,7 @@ export function PanelInspector({
         delayMs={DEBOUNCE_MS}
         onCommit={(v) => onChange(optionalString('/note', panel.note, v))}
       />
+      <CastSection panel={panel} characters={characters} onChange={onChange} />
       {diagnosis && !diagnosis.bubbleOrderOk && (
         <p className={styles.hint} data-bubble-order-ok={false}>
           <small className={styles.hintWarning}>フキダシの順が読み順と合っていません</small>
@@ -218,6 +236,80 @@ export function PanelInspector({
   )
 }
 
+/**
+ * 登場キャラの一覧と追加。台詞か焦点から拾えるキャラは理由を添えて並べ、`cast` に入れたキャラだけ外せる
+ */
+function CastSection({
+  panel,
+  characters,
+  onChange,
+}: {
+  panel: Panel
+  characters: readonly Character[]
+  onChange(patch: Patch): void
+}) {
+  const ids = panelCharacterIds(panel)
+  const cast = ids.flatMap((id) => characters.filter((c) => c.id === id))
+  const candidates = characters.filter((c) => !ids.includes(c.id))
+  const reasons = (id: ID) =>
+    [
+      panel.bubbles.some((b) => b.speakerId === id) && '台詞',
+      panel.focusPoints.some((f) => f.characterId === id) && '焦点',
+    ].filter((r): r is string => Boolean(r))
+  return (
+    <>
+      <XStack as="h4" className={section.heading}>
+        登場キャラ
+      </XStack>
+      {cast.length === 0 ? (
+        <p className={section.muted}>登場キャラはいません</p>
+      ) : (
+        <YStack as="ul" gap={2} className={styles.bubbles}>
+          {cast.map((character) => (
+            <XStack
+              as="li"
+              key={character.id}
+              className={styles.bubble}
+              data-cast-id={character.id}
+            >
+              <span className={styles.line}>
+                <b className={styles.speaker}>{character.name}</b>
+                <small className={section.muted}>{reasons(character.id).join('・')}</small>
+              </span>
+              {panel.cast?.includes(character.id) && (
+                <IconButton
+                  size="small"
+                  label={`${character.name} を登場キャラから外す`}
+                  onClick={() => onChange(removeCastPatch(panel.cast, character.id))}
+                >
+                  ×
+                </IconButton>
+              )}
+            </XStack>
+          ))}
+        </YStack>
+      )}
+      {candidates.length > 0 && (
+        <Select
+          aria-label="登場キャラを追加"
+          className={section.group}
+          value=""
+          onChange={(e) => {
+            if (e.target.value) onChange(addCastPatch(panel.cast, e.target.value))
+          }}
+        >
+          <option value="">キャラを追加…</option>
+          {candidates.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+      )}
+    </>
+  )
+}
+
 function ArtItem({
   art,
   url,
@@ -267,5 +359,18 @@ if (import.meta.vitest) {
     expect(selectArtPatch(undefined, 'a')).toEqual([{ op: 'add', path: '/artId', value: 'a' }])
     expect(selectArtPatch('a', 'b')).toEqual([{ op: 'replace', path: '/artId', value: 'b' }])
     expect(selectArtPatch('a', 'a')).toEqual([])
+  })
+
+  test('addCastPatch creates the array first and skips a character already in it', () => {
+    expect(addCastPatch(undefined, 'a')).toEqual([{ op: 'add', path: '/cast', value: ['a'] }])
+    expect(addCastPatch(['a'], 'b')).toEqual([{ op: 'add', path: '/cast/-', value: 'b' }])
+    expect(addCastPatch(['a'], 'a')).toEqual([])
+  })
+
+  test('removeCastPatch removes by index and drops the array with the last character', () => {
+    expect(removeCastPatch(['a', 'b'], 'b')).toEqual([{ op: 'remove', path: '/cast/1' }])
+    expect(removeCastPatch(['a'], 'a')).toEqual([{ op: 'remove', path: '/cast' }])
+    expect(removeCastPatch(['a'], 'b')).toEqual([])
+    expect(removeCastPatch(undefined, 'a')).toEqual([])
   })
 }
