@@ -48,10 +48,10 @@ export const toasts = createToastStore()
 
 export function Toasts({ store = toasts }: { store?: ToastStore }) {
   const { toasts: items } = useStore(store.state)
-  const { user, signIn } = useAuth()
+  const { signIn } = useAuth()
   const withActions = items.map(({ signIn: needsSignIn, ...toast }) =>
-    // 通知のあとにログインしたなら、ボタンはもう要らない
-    needsSignIn && user === null
+    // サーバ側でセッションが失効してもクライアントはログイン中のままなので、user は見ない
+    needsSignIn
       ? { ...toast, action: { label: 'ログイン', onClick: () => signInOrNotify(signIn) } }
       : toast,
   )

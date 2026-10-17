@@ -20,16 +20,15 @@ export function SignInButton(props: Omit<ButtonProps, 'onClick' | 'children'>) {
 
 /**
  * 「<failure>: <理由>」のエラー表示。未ログインのせいなら、その場でログインできるボタンを添える。
- * ログインし終えたらボタンは消え、文言だけ残る
+ * サーバ側でセッションが失効してもクライアントはログイン中のままなので、ログイン中でもボタンを出す
  */
 export function FailureAlert({ failure, error }: { failure: string; error: unknown }) {
-  const { user } = useAuth()
   return (
     <p className={`${common.error} ${common.actions}`} role="alert">
       <span>
         {failure}: {errorMessage(error)}
       </span>
-      {needsSignIn(error) && user === null && <SignInButton size="small" variant="primary" />}
+      {needsSignIn(error) && <SignInButton size="small" variant="primary" />}
     </p>
   )
 }
