@@ -9,6 +9,7 @@ import {
   type Tool,
 } from '@manga/editor-canvas'
 import { m } from '@manga/i18n'
+import { detectPlatform } from '@manga/storage'
 import {
   addCastPatch,
   BubbleInspector,
@@ -402,10 +403,11 @@ export function PageEditor({
         library.loadAsset,
       )
       const blob = await pageExporter.run(job, (done) => setExporting({ done, total }))
-      await saveFile(blob, exportFileName(project.title, numbers, ext), [
+      const path = await saveFile(blob, exportFileName(project.title, numbers, ext), [
         { name: ext.toUpperCase(), extensions: [ext] },
       ])
-      saved = true
+      // Web は常に null を返すので、保存先の選択を閉じたかどうかは Desktop でだけ分かる
+      saved = path !== null || detectPlatform() === 'web'
     } catch (e) {
       toasts.push(m.web_page_export_failed({ reason: errorMessage(e) }))
     }

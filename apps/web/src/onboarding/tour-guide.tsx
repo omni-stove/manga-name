@@ -129,7 +129,14 @@ export function TourGuide() {
   const routeId = useRouterState({ select: (s) => s.matches.at(-1)?.routeId })
   const { pageId } = useParams({ strict: false })
   const opened = useOpenedProject()
-  const finished = progress?.step === 'done' && routeId === '/'
+  // 最初の手順はまだプロジェクトがなく、/new と「はじめに」の外へ出たら続きの目印がないので、案内をやめる
+  const abandoned =
+    progress?.step === 'project' &&
+    routeId !== undefined &&
+    routeId !== '/new' &&
+    routeId !== '/onboarding' &&
+    !routeId.startsWith('/p/')
+  const finished = (progress?.step === 'done' && routeId === '/') || abandoned
   useEffect(() => {
     if (finished) tour.finish()
   }, [finished])
