@@ -1,4 +1,4 @@
-import { Button, Input, Typography, XStack, YStack } from '@manga/ui'
+import { Button, FileDrop, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { REFERENCE_ACCEPT } from '../file-picker'
@@ -118,10 +118,9 @@ function NewCharacter() {
               required={field.required}
             />
           ))}
-          <Input
+          <FileDrop
             label="参照画像"
             name="reference"
-            type="file"
             accept={REFERENCE_ACCEPT}
             hint="選ばなければ名前と外見から生成します"
           />

@@ -17,6 +17,7 @@ export {
   TextArea,
   type TextAreaProps,
 } from './field'
+export { FileDrop, type FileDropProps } from './file-drop'
 export { SegmentedControl, type SegmentedOption } from './segmented-control'
 export { Sidebar } from './sidebar'
 export { type Space, XStack, type XStackProps, YStack } from './stack'
