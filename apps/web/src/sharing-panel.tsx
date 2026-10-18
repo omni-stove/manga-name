@@ -17,6 +17,7 @@ const RoleOptions = () =>
 
 /**
  * プロジェクトの参加者と招待。owner は招待リンクを作って渡し、参加者のロールを変えたり外したりできる。
+ * メールアドレスを空にすると、リンクを知っている誰でも参加できる招待になる。
  * アプリはメールを送らないので、作ったリンクは owner がコピーして招待先に渡す
  */
 export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: SharingClient }) {
@@ -49,7 +50,7 @@ function MembersView({
   sharing: SharingClient
 }) {
   const members = use(membersPromise)
-  const [link, setLink] = useState<string>()
+  const [link, setLink] = useState<{ url: string; open: boolean }>()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
 
@@ -84,12 +85,12 @@ function MembersView({
             const role = String(data.get('role')) as MemberRole
             void run(async () => {
               const created = await sharing.invite(projectId, email, role)
-              setLink(created.url)
+              setLink({ url: created.url, open: created.invite.email === null })
               form.reset()
             })
           }}
         >
-          <Input label={m.web_sharing_email()} name="email" type="email" required />
+          <Input label={m.web_sharing_email()} name="email" type="email" />
           <Select label={m.web_sharing_role()} name="role" defaultValue="editor">
             <RoleOptions />
           </Select>
@@ -104,14 +105,14 @@ function MembersView({
             label={m.web_sharing_invite_link()}
             hideLabel
             readOnly
-            value={link}
+            value={link.url}
             onFocus={(e) => e.target.select()}
           />
-          <Button size="small" onClick={() => void navigator.clipboard.writeText(link)}>
+          <Button size="small" onClick={() => void navigator.clipboard.writeText(link.url)}>
             {m.web_common_copy()}
           </Button>
           <Typography as="small" variant="caption" tone="muted">
-            {m.web_sharing_invite_link_hint()}
+            {link.open ? m.web_sharing_open_invite_link_hint() : m.web_sharing_invite_link_hint()}
           </Typography>
         </XStack>
       )}
@@ -161,7 +162,7 @@ function MembersView({
           <YStack as="ul" className={styles.list}>
             {members.invites.map((invite) => (
               <XStack as="li" wrap key={invite.id}>
-                <span>{invite.email}</span>
+                <span>{invite.email ?? m.web_sharing_open_invite()}</span>
                 <small>
                   {m.web_sharing_pending_invite_detail({
                     role: ROLE_LABELS[invite.role],

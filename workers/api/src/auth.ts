@@ -15,7 +15,7 @@ export const INVITE_EMAIL_MISMATCH = 'invite_email_mismatch'
 
 /**
  * Better Auth の `user.validateUserInfo`。ユーザーを新しく作るときだけ、ログインを始めた招待リンクのトークン
- * （`inviteToken()`）が期限内で、招待先がそのメールアドレスであることを求める。
+ * （`inviteToken()`）が期限内で、招待先がそのメールアドレスであることを求める。誰でも受け取れる招待ならメールアドレスは問わない。
  * トークンが無いか無効なら INVITE_REQUIRED、メールアドレスが違えば INVITE_EMAIL_MISMATCH で断る。
  * 既にいるユーザーのログインは通す
  */
@@ -35,10 +35,11 @@ export function validateSignUp(env: Env, inviteToken: () => Promise<unknown>) {
             'SELECT email FROM project_invites WHERE token_hash = ?1 AND expires_at > ?2',
           )
             .bind(await hashToken(token), Date.now())
-            .first<{ email: string }>()
+            .first<{ email: string | null }>()
         : null
     if (invite === null) return { error: INVITE_REQUIRED }
-    if (user.email?.trim().toLowerCase() !== invite.email) return { error: INVITE_EMAIL_MISMATCH }
+    if (invite.email !== null && user.email?.trim().toLowerCase() !== invite.email)
+      return { error: INVITE_EMAIL_MISMATCH }
   }
 }
 

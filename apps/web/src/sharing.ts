@@ -32,7 +32,8 @@ interface Member {
 
 interface PendingInvite {
   id: string
-  email: string
+  /** null なら、リンクを知っている誰でも受け取れる */
+  email: string | null
   role: MemberRole
   expiresAt: string
 }
@@ -46,7 +47,8 @@ export interface Members {
 }
 
 interface InvitePreview {
-  email: string
+  /** null なら、リンクを知っている誰でも受け取れる */
+  email: string | null
   role: MemberRole
   projectId: ID
   projectTitle: string
@@ -61,7 +63,7 @@ export interface SharingClient {
   role(localId: ID): Promise<ProjectRole>
   /** 参加者と招待。クラウドに無いプロジェクトか未ログインなら null */
   members(localId: ID): Promise<Members | null>
-  /** 招待を作り、受け取る人に渡すリンクを返す */
+  /** 招待を作り、受け取る人に渡すリンクを返す。email が空なら、リンクを知っている誰でも受け取れる招待にする */
   invite(
     localId: ID,
     email: string,
@@ -153,7 +155,7 @@ export function createSharingClient(opts: SharingClientOptions): SharingClient {
     async invite(localId, email, role) {
       const res = await projects[':id'].invites.$post({
         param: { id: param(await requireCloudId(localId)) },
-        json: { email, role },
+        json: email === '' ? { role } : { email, role },
       })
       await expectOk(res, 'POST invite')
       const { token, ...invite } = await res.json()
@@ -338,6 +340,13 @@ if (import.meta.vitest) {
           contentType: 'application/json',
         },
       ])
+    })
+
+    test('invite leaves out an empty email so that anyone with the link can join', async () => {
+      const invite = { id: 'i1', email: null, role: 'viewer', expiresAt: 'x' }
+      const { client, sent } = setup(() => json({ ...invite, token: 't' }))
+      expect((await client.invite('local', '', 'viewer')).invite).toEqual(invite)
+      expect(sent()[0]?.body).toBe(JSON.stringify({ role: 'viewer' }))
     })
 
     test('changes to a project that is not in the cloud throw before calling the API', async () => {

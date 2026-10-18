@@ -11,7 +11,8 @@ import { requireUser, type UserEnv } from './user'
 const INVITE_TTL_MS = 7 * 24 * 60 * 60_000
 
 const InviteSchema = z.object({
-  email: z.email().max(320),
+  /** 省くと、リンクを知っている誰でも受け取れる招待になる */
+  email: z.email().max(320).optional(),
   role: z.enum(MEMBER_ROLES),
 })
 
@@ -55,7 +56,8 @@ interface MemberRow {
 /**
  * `/v1/projects/:id` の参加者と招待。requireUser の後ろに置き、参加していないプロジェクトは 404 にする。
  * - `GET /:id/members`: 自分の role、owner を先頭にした参加者、owner には未使用の招待も
- * - `POST /:id/invites` `{ email, role }`: 招待を作り、リンクに載せるトークンを 1 度だけ返す。同じメールアドレスの古い招待は消す
+ * - `POST /:id/invites` `{ email?, role }`: 招待を作り、リンクに載せるトークンを 1 度だけ返す。同じメールアドレスの古い招待は消す。
+ *   email を省くと、期限まで何度でも誰でも受け取れる招待になる（email は null）
  * - `DELETE /:id/invites/:inviteId`、`PUT /:id/members/:userId` `{ role }`
  * - `DELETE /:id/members/:userId`: owner は誰でも、参加者は自分だけ外せる
  * 招待とロールの変更は owner だけができ、他は 403。
@@ -97,7 +99,7 @@ export function createMemberRoutes(now: () => number) {
        WHERE project_id = ?1 AND expires_at > ?2 ORDER BY created_at`,
       )
         .bind(id, now())
-        .all<{ id: string; email: string; role: MemberRole; expiresAt: number }>()
+        .all<{ id: string; email: string | null; role: MemberRole; expiresAt: number }>()
       return c.json({
         role,
         members,
@@ -113,7 +115,7 @@ export function createMemberRoutes(now: () => number) {
       const data = c.req.valid('json')
 
       const projectId = c.req.param('id')
-      const email = normalizeEmail(data.email)
+      const email = data.email === undefined ? null : normalizeEmail(data.email)
       const token = newToken()
       const invite = {
         id: crypto.randomUUID(),
@@ -121,6 +123,7 @@ export function createMemberRoutes(now: () => number) {
         role: data.role,
         expiresAt: now() + INVITE_TTL_MS,
       }
+      // email が null なら `email = NULL` はどの行にも当たらず、ほかの誰でも受け取れる招待は残る
       await c.env.DB.batch([
         c.env.DB.prepare('DELETE FROM project_invites WHERE project_id = ?1 AND email = ?2').bind(
           projectId,
@@ -183,9 +186,10 @@ export function createMemberRoutes(now: () => number) {
 
 /**
  * `/v1/invites/:token`。招待リンクの受け口。
- * - `GET`: 招待先のメールアドレス、ロール、プロジェクトの id とタイトル。無いか期限切れなら 404
+ * - `GET`: 招待先のメールアドレス（誰でも受け取れる招待なら null）、ロール、プロジェクトの id とタイトル。無いか期限切れなら 404
  * - `POST /accept`: ログイン中のユーザーのメールアドレスが招待先と同じなら参加させ、招待を消す。違えば 403。
- *   既に参加していればロールを招待のものにする。owner なら何も変えない
+ *   既に参加していればロールを招待のものにする。owner なら何も変えない。
+ *   誰でも受け取れる招待は、誰でも参加させて消さない。既に参加していればロールを変えない
  */
 export function createInviteApp(now: () => number) {
   const app = new Hono<UserEnv>()
@@ -201,7 +205,7 @@ export function createInviteApp(now: () => number) {
       .bind(await hashToken(token), now())
       .first<{
         id: string
-        email: string
+        email: string | null
         role: MemberRole
         projectId: string
         projectTitle: string
@@ -220,11 +224,22 @@ export function createInviteApp(now: () => number) {
       const invite = await findInvite(c.env, c.req.param('token'))
       if (!invite) throw new ApiException('not_found')
       const userId = c.get('userId')
+      const current = await projectRole(c.env.DB, userId, invite.projectId)
+      if (invite.email === null) {
+        // 皆に配ったリンクを踏み直しただけで、owner が付け直したロールが戻らないようにする
+        if (current !== null) return c.json({ projectId: invite.projectId, role: current })
+        await c.env.DB.prepare(
+          `INSERT INTO project_members (project_id, user_id, role, created_at) VALUES (?1, ?2, ?3, ?4)
+           ON CONFLICT (project_id, user_id) DO NOTHING`,
+        )
+          .bind(invite.projectId, userId, invite.role, now())
+          .run()
+        return c.json({ projectId: invite.projectId, role: invite.role })
+      }
       const email = await userEmail(c.env, userId)
       if (email === null || normalizeEmail(email) !== invite.email) {
         throw new ApiException('invite_email_mismatch')
       }
-      const current = await projectRole(c.env.DB, userId, invite.projectId)
       await c.env.DB.batch([
         ...(current === 'owner'
           ? []

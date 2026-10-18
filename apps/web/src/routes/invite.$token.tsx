@@ -16,7 +16,8 @@ export const Route = createFileRoute('/invite/$token')({
 
 /**
  * 招待リンクの受け口。ログインしていなければログインさせ、招待先のメールアドレスでログインしていれば参加させて
- * そのプロジェクトを開く。違うメールアドレスなら参加させず、ログインし直すよう促す
+ * そのプロジェクトを開く。違うメールアドレスなら参加させず、ログインし直すよう促す。
+ * メールアドレスの無い招待なら、誰がログインしていても参加させる
  */
 function AcceptInvite() {
   const { token } = Route.useParams()
@@ -56,18 +57,19 @@ function AcceptInvite() {
       </YStack>
     )
   }
-  const matches = user.email.trim().toLowerCase() === invite.email
+  const date = new Date(invite.expiresAt).toLocaleDateString(getLocale())
+  const role = ROLE_LABELS[invite.role]
+  const invited = invite.email
+  const matches = invited === null || user.email.trim().toLowerCase() === invited
   return (
     <YStack as="section" gap={16} align="start">
       <Typography variant="title">
         {m.web_invite_project_title({ title: invite.projectTitle || m.web_common_untitled() })}
       </Typography>
       <Typography>
-        {m.web_invite_detail({
-          email: invite.email,
-          role: ROLE_LABELS[invite.role],
-          date: new Date(invite.expiresAt).toLocaleDateString(getLocale()),
-        })}
+        {invited === null
+          ? m.web_invite_open_detail({ role, date })
+          : m.web_invite_detail({ email: invited, role, date })}
       </Typography>
       {matches ? (
         <Button
@@ -87,7 +89,7 @@ function AcceptInvite() {
       ) : (
         <>
           <Typography tone="alert">
-            {m.web_invite_wrong_account({ current: user.email, invited: invite.email })}
+            {m.web_invite_wrong_account({ current: user.email, invited })}
           </Typography>
           <Button onClick={() => void signOut()}>{m.web_sign_out()}</Button>
         </>
