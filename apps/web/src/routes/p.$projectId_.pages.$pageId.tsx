@@ -225,7 +225,8 @@ function Editor() {
   const [exporting, setExporting] = useState<Exporting>('closed')
   const [inspectorExpanded, setInspectorExpanded] = useStoredFlag('manga.inspector.expanded', true)
   const [menu, setMenu] = useState<CanvasMenuRequest | null>(null)
-  const { canUndo, canRedo } = useStore(store.state)
+  const canUndo = useStore(store.state, (s) => s.canUndo)
+  const canRedo = useStore(store.state, (s) => s.canRedo)
   useUndoShortcuts(store)
   const navigate = useNavigate()
   const importReference = (file: Blob) => {
