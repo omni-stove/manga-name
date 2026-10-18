@@ -44,14 +44,18 @@ export function inBubble(bubble: Bubble, panel: Box, p: PagePoint): boolean {
 
 /**
  * ページ座標の点にある要素。描画の前後と同じく、フキダシはコマより手前、
- * フキダシ同士とコマ同士は order の大きいものが手前。何も無ければ null
+ * フキダシ同士とコマ同士は order の大きいものが手前。overflow でないフキダシは、コマの輪郭で
+ * 切られて見えない所では当たらない。何も無ければ null
  */
 export function hitTest(page: Page, width: number, height: number, p: PagePoint): Selection {
   const panels = [...page.panels].sort((a, b) => b.order - a.order)
   for (const panel of panels) {
     const box = panelBox(panel, width, height)
+    const inPanel = containsPoint(panelPolygon(panel, width, height), p)
     for (const bubble of [...panel.bubbles].sort((a, b) => b.order - a.order)) {
-      if (inBubble(bubble, box, p)) return { kind: 'bubble', id: bubble.id }
+      if ((inPanel || bubble.overflow) && inBubble(bubble, box, p)) {
+        return { kind: 'bubble', id: bubble.id }
+      }
     }
   }
   const panel = panelAt(page, width, height, p)
@@ -86,6 +90,25 @@ if (import.meta.vitest) {
     expect(hitTest(page, w, h, { x: -1, y: -1 })).toBeNull()
     // pn_2 と pn_3 の隙間
     expect(hitTest(page, w, h, { x: 0.49 * w, y: 0.4 * h })).toBeNull()
+  })
+
+  test('hitTest misses the part of a bubble cut off by its panel unless it overflows', () => {
+    const bubble = { ...(page.panels[0]?.bubbles[0] as Bubble), pos: { x: 1, y: 0.5 } }
+    const edged = (overflow?: boolean): Page => ({
+      ...page,
+      panels: [
+        {
+          ...(page.panels[0] as Panel),
+          rect: { x: 0, y: 0, w: 0.5, h: 0.5 },
+          bubbles: [{ ...bubble, size: { w: 0.4, h: 0.4 }, overflow }],
+        },
+      ],
+    })
+    const inside = { x: 0.45 * w, y: 0.25 * h }
+    const outside = { x: 0.55 * w, y: 0.25 * h }
+    expect(hitTest(edged(), w, h, inside)).toEqual({ kind: 'bubble', id: bubble.id })
+    expect(hitTest(edged(), w, h, outside)).toBeNull()
+    expect(hitTest(edged(true), w, h, outside)).toEqual({ kind: 'bubble', id: bubble.id })
   })
 
   test('hitTest follows the outline of a shaped panel', () => {

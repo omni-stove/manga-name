@@ -1,7 +1,6 @@
 import {
   type Bubble,
   type BubbleFrame,
-  bubbleFits,
   createBubble,
   fitBubble,
   type ID,
@@ -22,15 +21,6 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 // 画面座標からの変換で出る 0.19999999999 のような値を残さない
 const round = (v: number) => Math.round(v * 1000) / 1000
 const roundPoint = (p: Point): Point => ({ x: round(clamp01(p.x)), y: round(clamp01(p.y)) })
-const lerp = (a: Point, b: Point, t: number): Point => ({
-  x: a.x + (b.x - a.x) * t,
-  y: a.y + (b.y - a.y) * t,
-})
-const FIT_STEPS = 20
-
-/** frame があり、フキダシが枠からのはみ出しを許していなければ、枠に収めるべき */
-const shouldFit = (bubble: Bubble, frame?: BubbleFrame): frame is BubbleFrame =>
-  frame !== undefined && bubble.overflow !== true
 
 interface Found {
   panel: Panel
@@ -73,7 +63,11 @@ export function createBubblePatch(
   }
 }
 
-function shifted(bubble: Bubble, dx: number, dy: number): Bubble {
+/**
+ * フキダシを (dx, dy)（コマ内座標）動かした姿。中心としっぽはコマ内座標の 0..1 に収める。
+ * 本体は枠に収めない。枠の外に出た部分は、overflow でない限り描画でコマの輪郭に切られる
+ */
+export function movedBubble(bubble: Bubble, dx: number, dy: number): Bubble {
   const moved: Bubble = {
     ...bubble,
     pos: roundPoint({ x: bubble.pos.x + dx, y: bubble.pos.y + dy }),
@@ -83,49 +77,10 @@ function shifted(bubble: Bubble, dx: number, dy: number): Bubble {
 }
 
 /**
- * フキダシを (dx, dy)（コマ内座標）動かした姿。中心としっぽはコマ内座標の 0..1 に収める。
- * frame を渡すと、overflow でない限り本体を枠に収め、しっぽは本体が実際に動いた分だけ動かす
- */
-export function movedBubble(bubble: Bubble, dx: number, dy: number, frame?: BubbleFrame): Bubble {
-  const moved = shifted(bubble, dx, dy)
-  if (!shouldFit(bubble, frame)) return moved
-  const fitted = fitBubble(moved, frame)
-  return {
-    ...shifted(bubble, fitted.pos.x - bubble.pos.x, fitted.pos.y - bubble.pos.y),
-    size: fitted.size,
-  }
-}
-
-/**
  * ハンドル handle を p（コマ内座標）へ動かした姿。対角の隅を止めたまま外接矩形を張り直す。
- * 幅と高さは MIN_BUBBLE_SIZE 以上 1 以下。frame を渡すと、overflow でない限り、枠に収まる所で
- * ハンドルを止める。元から枠からはみ出していれば、張り直した後に枠に収める
+ * 幅と高さは MIN_BUBBLE_SIZE 以上 1 以下。movedBubble と同じく枠には収めない
  */
-export function resizedBubble(
-  bubble: Bubble,
-  handle: BubbleHandle,
-  p: Point,
-  frame?: BubbleFrame,
-): Bubble {
-  const next = stretched(bubble, handle, p)
-  if (!shouldFit(bubble, frame) || bubbleFits(next, frame)) return next
-  if (!bubbleFits(bubble, frame)) return fitBubble(next, frame)
-  // 止めた隅を動かさないよう、移動や縮小ではなくハンドルを引き戻して収める
-  const from = {
-    x: bubble.pos.x + (handle.includes('w') ? -1 : 1) * (bubble.size.w / 2),
-    y: bubble.pos.y + (handle.includes('n') ? -1 : 1) * (bubble.size.h / 2),
-  }
-  let lo = 0
-  let hi = 1
-  for (let i = 0; i < FIT_STEPS; i++) {
-    const mid = (lo + hi) / 2
-    if (bubbleFits(stretched(bubble, handle, lerp(from, p, mid)), frame)) lo = mid
-    else hi = mid
-  }
-  return stretched(bubble, handle, lerp(from, p, lo))
-}
-
-function stretched(bubble: Bubble, handle: BubbleHandle, p: Point): Bubble {
+export function resizedBubble(bubble: Bubble, handle: BubbleHandle, p: Point): Bubble {
   const fixed = {
     x: bubble.pos.x + (handle.includes('w') ? 1 : -1) * (bubble.size.w / 2),
     y: bubble.pos.y + (handle.includes('n') ? 1 : -1) * (bubble.size.h / 2),
@@ -172,7 +127,7 @@ export function updateBubblePatch(page: Page, next: Bubble): Patch {
 
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
-  const { fixtures } = await import('@manga/schema')
+  const { bubbleFits, fixtures } = await import('@manga/schema')
   const page = fixtures.samplePage01.episodes[0]?.pages[0] as Page
   const bubble: Bubble = {
     id: 'b',
@@ -216,40 +171,20 @@ if (import.meta.vitest) {
     })
   })
 
-  describe('with a frame', () => {
-    // 100mm 四方のコマ。枠から 2mm 空けるので、半径 20mm x 10mm の本体の中心は x 0.22..0.78
-    const frame = { panel: { rect: { x: 0, y: 0, w: 1, h: 1 } }, pageSize: { w: 100, h: 100 } }
-
-    test('movedBubble stops the body at the frame and moves the tail only as far', () => {
-      const tailed = { ...bubble, tail: { x: 0.5, y: 0.9 } }
-      expect(movedBubble(tailed, 0.4, 0, frame)).toMatchObject({
-        pos: { x: 0.78, y: 0.5 },
-        tail: { x: 0.78, y: 0.9 },
-      })
+  test('movedBubble and resizedBubble go past the frame', () => {
+    expect(movedBubble(bubble, 0.4, 0).pos).toEqual({ x: 0.9, y: 0.5 })
+    expect(resizedBubble(bubble, 'se', { x: 1, y: 0.6 })).toMatchObject({
+      pos: { x: 0.65, y: 0.5 },
+      size: { w: 0.7, h: 0.2 },
     })
+  })
 
-    test('an overflow bubble moves past the frame', () => {
-      expect(movedBubble({ ...bubble, overflow: true }, 0.4, 0, frame).pos).toEqual({
-        x: 0.9,
-        y: 0.5,
-      })
-    })
-
-    test('resizedBubble holds the opposite corner and stops the handle at the frame', () => {
-      const r = resizedBubble(bubble, 'se', { x: 1, y: 0.6 }, frame)
-      expect(r.pos.x - r.size.w / 2).toBeCloseTo(0.3)
-      expect(r.pos.y - r.size.h / 2).toBeCloseTo(0.4)
-      expect(r.pos.x + r.size.w / 2).toBeCloseTo(0.98, 2)
-      expect(r.size.h).toBeCloseTo(0.2)
-    })
-
-    test('createBubblePatch puts the new bubble inside the panel', () => {
-      const pageSize = { w: 182, h: 257 }
-      const created = createBubblePatch(page, 'pn_3', { x: 0, y: 0 }, pageSize)
-      const value = (created as { patch: { value: Bubble }[] }).patch[0]?.value as Bubble
-      expect(value.size).toEqual({ w: 0.3, h: 0.2 })
-      expect(bubbleFits(value, { panel: page.panels[2] as Panel, pageSize })).toBe(true)
-    })
+  test('createBubblePatch puts the new bubble inside the panel', () => {
+    const pageSize = { w: 182, h: 257 }
+    const created = createBubblePatch(page, 'pn_3', { x: 0, y: 0 }, pageSize)
+    const value = (created as { patch: { value: Bubble }[] }).patch[0]?.value as Bubble
+    expect(value.size).toEqual({ w: 0.3, h: 0.2 })
+    expect(bubbleFits(value, { panel: page.panels[2] as Panel, pageSize })).toBe(true)
   })
 
   describe('resizedBubble', () => {

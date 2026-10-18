@@ -35,6 +35,15 @@ export function drawCover(
   ctx.restore()
 }
 
+/** 輪郭 outline の外に出る部分を切って draw で描く */
+export function withClip(ctx: Ctx, outline: readonly PxPoint[], draw: () => void): void {
+  ctx.save()
+  tracePolygon(ctx, outline)
+  ctx.clip()
+  draw()
+  ctx.restore()
+}
+
 export function drawFrame(ctx: Ctx, outline: readonly PxPoint[], lineWidth: number): void {
   ctx.save()
   ctx.lineWidth = lineWidth

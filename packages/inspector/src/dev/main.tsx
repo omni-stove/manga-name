@@ -84,12 +84,7 @@ function Playground() {
           />
         )}
         {bubble && bubblePanel && (
-          <BubbleInspector
-            bubble={bubble}
-            characters={project.characters}
-            frame={{ panel: bubblePanel, pageSize: project.settings.pageSize }}
-            onChange={onChange}
-          />
+          <BubbleInspector bubble={bubble} characters={project.characters} onChange={onChange} />
         )}
         {view.kind === 'page' && (
           <PageInspector
