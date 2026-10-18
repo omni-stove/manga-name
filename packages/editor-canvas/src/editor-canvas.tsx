@@ -36,6 +36,9 @@ const SCRIBBLE_COLORS: Record<Stroke['color'], string> = {
   blue: '#2563eb',
 }
 
+// 赤入れの黒と見分けられるよう、下描きは鉛筆の色にする
+const SKETCH_COLOR = '#64748b'
+
 const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
 
 /**
@@ -58,6 +61,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * 参考画像はページの白地の上、コマの下に描く。焦点とベクトルはフキダシの上に描き、
  * `layers.hints` を切ると描画も選択も操作もしない。
  * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
+ * `sketch` ツールも同じ操作で、線は `Page.sketch` に足す。下描きのレイヤーが非表示なら何もしない。
  * `diagnosis` があり `layers.diagnosis` が立っていれば、視線経路、bubble chain、焦点ごとの診断ラベル、
  * ページ下の集計行と凡例を重ねる。そのとき焦点の素のラベルは診断ラベルに譲る。
  * `ghostPage` があれば、AI の提案で動く焦点とフキダシ、増えるベクトルを元の位置と提案の位置の両方で重ねる。
@@ -132,6 +136,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
   const scribbleTool = props.scribbleTool ?? 'ink'
   const scribble = useScribble({
     page,
+    key: 'scribbles',
     width: pageW,
     height: pageH,
     view,
@@ -139,11 +144,25 @@ export function EditorCanvas(props: EditorCanvasProps) {
     liveRef,
     onChange: props.onChange,
   })
-  const scribbleSelected = props.tool === 'scribble'
+  const sketchLiveRef = useRef<SVGPolylineElement>(null)
+  const sketch = useScribble({
+    page,
+    key: 'sketch',
+    width: pageW,
+    height: pageH,
+    view,
+    tool: props.sketchTool === 'eraser' ? 'eraser' : 'ink',
+    liveRef: sketchLiveRef,
+    onChange: props.onChange,
+  })
+  const scribbleSelected = props.tool === 'scribble' || props.tool === 'sketch'
   const diagnosis = layers.diagnosis ? props.diagnosis : null
-  const scribbling = scribbleSelected && layers.scribble
+  const scribbling =
+    (props.tool === 'scribble' && layers.scribble) || (props.tool === 'sketch' && layers.sketch)
   const pointer = scribbling
-    ? scribble.handlers
+    ? props.tool === 'sketch'
+      ? sketch.handlers
+      : scribble.handlers
     : scribbleSelected
       ? IDLE_POINTER
       : selection.handlers
@@ -240,6 +259,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         // 押している間にツールが切り替わっても、各フックの状態が取り残されないよう両方に渡す
         selection.handlers.onPointerUp(e)
         scribble.handlers.onPointerUp(e)
+        sketch.handlers.onPointerUp(e)
       }}
       onPointerCancel={(e) => {
         viewport.handlers.onPointerCancel(e)
@@ -249,6 +269,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         move.handlers.onPointerCancel(e)
         selection.handlers.onPointerCancel()
         scribble.handlers.onPointerCancel(e)
+        sketch.handlers.onPointerCancel(e)
       }}
       onContextMenu={(e) => {
         if (!props.onContextMenu) return
@@ -287,10 +308,31 @@ export function EditorCanvas(props: EditorCanvasProps) {
         onGenerate={props.onGenerate ? generate : undefined}
       />
       {layers.frames && <FrameLayer width={pageW} height={pageH} />}
+      {layers.sketch && (
+        <g data-layer="sketch" pointerEvents="none">
+          <Scribbles
+            scribbles={page.sketch ?? NO_STROKES}
+            width={pageW}
+            height={pageH}
+            color={SKETCH_COLOR}
+          />
+          {scribbling && props.tool === 'sketch' && (
+            <polyline
+              ref={sketchLiveRef}
+              data-live-stroke
+              fill="none"
+              stroke={SKETCH_COLOR}
+              strokeWidth={SCRIBBLE_WIDTH * pageW}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+        </g>
+      )}
       {layers.scribble && (
         <g data-layer="scribble" pointerEvents="none">
           <Scribbles scribbles={page.scribbles} width={pageW} height={pageH} />
-          {scribbling && (
+          {scribbling && props.tool === 'scribble' && (
             <polyline
               ref={liveRef}
               data-live-stroke
@@ -341,18 +383,26 @@ export function EditorCanvas(props: EditorCanvasProps) {
   )
 }
 
-/** 手描きの線。描いている間は再描画しないよう scribbles が変わったときだけ描き直す */
+// sketch が無いページで毎回新しい空配列を渡し、Scribbles の memo を外さない
+const NO_STROKES: Stroke[] = []
+
+/**
+ * 手描きの線。描いている間は再描画しないよう scribbles が変わったときだけ描き直す。
+ * color を渡すと Stroke.color の代わりにその色で描く
+ */
 const Scribbles = memo(function Scribbles({
   scribbles,
   width,
   height,
+  color,
 }: {
   scribbles: Stroke[]
   width: number
   height: number
+  color?: string
 }) {
   return scribbles.map((stroke) => (
-    <StrokeLine key={stroke.id} stroke={stroke} width={width} height={height} />
+    <StrokeLine key={stroke.id} stroke={stroke} width={width} height={height} color={color} />
   ))
 })
 
@@ -361,17 +411,19 @@ const StrokeLine = memo(function StrokeLine({
   stroke,
   width,
   height,
+  color,
 }: {
   stroke: Stroke
   width: number
   height: number
+  color?: string
 }) {
   return (
     <polyline
       data-stroke-id={stroke.id}
       points={polylinePoints(stroke.points, width, height)}
       fill="none"
-      stroke={SCRIBBLE_COLORS[stroke.color]}
+      stroke={color ?? SCRIBBLE_COLORS[stroke.color]}
       strokeWidth={stroke.width * width}
       strokeLinecap="round"
       strokeLinejoin="round"

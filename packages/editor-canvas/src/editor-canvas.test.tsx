@@ -54,6 +54,7 @@ const defaults: EditorCanvasProps = {
     reference: true,
     art: true,
     scribble: true,
+    sketch: true,
     hints: true,
     diagnosis: true,
     frames: true,
@@ -1711,5 +1712,67 @@ describe('scribble', () => {
     click(svg, clientAt(0.75, 0.4))
     expect(onChange).not.toHaveBeenCalled()
     expect(onSelect).not.toHaveBeenCalled()
+  })
+})
+
+describe('sketch', () => {
+  const line = (id: string) => ({
+    id,
+    points: [
+      { x: 0.1, y: 0.5 },
+      { x: 0.9, y: 0.5 },
+    ],
+    width: 0.002,
+    color: 'ink' as const,
+  })
+
+  test('the first stroke creates Page.sketch, later strokes are appended to it', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ tool: 'sketch', onChange })
+    layout(svg)
+    drag(svg, clientAt(0.2, 0.2), clientAt(0.3, 0.2))
+    expect(patchOf(onChange)).toEqual([
+      { op: 'add', path: '/sketch', value: [expect.objectContaining({ color: 'ink' })] },
+    ])
+
+    const appended = vi.fn()
+    const again = await render({
+      page: { ...samplePage, sketch: [line('sk_1')] },
+      tool: 'sketch',
+      onChange: appended,
+    })
+    layout(again)
+    drag(again, clientAt(0.2, 0.2), clientAt(0.3, 0.2))
+    expect(patchOf(appended)).toEqual([
+      { op: 'add', path: '/sketch/-', value: expect.objectContaining({ color: 'ink' }) },
+    ])
+  })
+
+  test('sketch strokes are drawn in their own layer and erased from Page.sketch', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      page: { ...samplePage, sketch: [line('sk_1')] },
+      tool: 'sketch',
+      sketchTool: 'eraser',
+      onChange,
+    })
+    layout(svg)
+    expect(svg.querySelectorAll('[data-layer="sketch"] [data-stroke-id]')).toHaveLength(1)
+    expect(svg.querySelectorAll('[data-layer="scribble"] [data-stroke-id]')).toHaveLength(0)
+    click(svg, clientAt(0.5, 0.5))
+    expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/sketch/0' }])
+  })
+
+  test('with the sketch layer hidden the tool does nothing', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      tool: 'sketch',
+      layers: { ...defaults.layers, sketch: false },
+      onChange,
+    })
+    layout(svg)
+    expect(svg.querySelector('[data-layer="sketch"]')).toBeNull()
+    drag(svg, clientAt(0.2, 0.2), clientAt(0.3, 0.2))
+    expect(onChange).not.toHaveBeenCalled()
   })
 })
