@@ -718,7 +718,7 @@ export function PageEditor({
           <Area open={can('inspector')}>
             {/* 入力の待ち（useDraft）が移った先のページへ書き込まないよう、ページごとに作り直す */}
             <PageScriptInspector
-              key={pageId}
+              key={`script-${pageId}`}
               page={page}
               editable={canEdit}
               onChange={(patch) =>
