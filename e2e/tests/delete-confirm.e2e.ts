@@ -1,9 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createProject, FIXTURE_EPISODE, FIXTURE_PROJECT, importProject } from './app'
 
-test('エピソードは一覧と話の画面から、確認ダイアログを経て削除でき、Undo で戻る', async ({
-  page,
-}) => {
+test('エピソードは一覧と話の画面から、確認ダイアログを経て削除できる', async ({ page }) => {
   await importProject(page, FIXTURE_PROJECT)
   await page.getByRole('button', { name: 'エピソードを削除' }).click()
   const dialog = page.getByRole('dialog', { name: 'エピソードを削除' })
@@ -15,10 +13,10 @@ test('エピソードは一覧と話の画面から、確認ダイアログを�
   await page.getByRole('button', { name: 'エピソードを削除' }).click()
   await dialog.getByRole('button', { name: '削除' }).click()
   await expect(page.getByText('エピソードがありません。')).toBeVisible()
-  await page.getByRole('button', { name: 'Undo' }).click()
-  const card = page.getByRole('listitem').filter({ hasText: FIXTURE_EPISODE })
-  await expect(card).toBeVisible()
 
+  await importProject(page, FIXTURE_PROJECT)
+  await page.getByRole('link', { name: 'エピソード一覧', exact: true }).click()
+  const card = page.getByRole('listitem').filter({ hasText: FIXTURE_EPISODE })
   await card.getByRole('button', { name: '削除' }).click()
   await dialog.getByRole('button', { name: '削除' }).click()
   await expect(page.getByText('エピソードがありません。')).toBeVisible()

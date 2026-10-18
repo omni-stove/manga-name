@@ -1,7 +1,7 @@
 import type { Episode } from '@manga/schema'
 import { ConfirmDialog } from '@manga/ui'
 
-/** エピソードの削除を確かめる。ページも一緒に消えるので枚数を出す。Undo で戻せる */
+/** エピソードの削除を確かめる。ページも一緒に消えるので枚数を出す */
 export function RemoveEpisodeDialog({
   episode,
   onConfirm,
