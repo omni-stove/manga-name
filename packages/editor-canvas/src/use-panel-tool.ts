@@ -17,6 +17,7 @@ import type { Box } from './bubble-shape'
 import { type PagePoint, panelAt, panelBox, panelPolygon } from './hit-test'
 import {
   type Cut,
+  constrainCut,
   createPanelPatch,
   cutPanelPatch,
   draftRect,
@@ -117,7 +118,8 @@ function boxOf(el: Element): ClientBox {
  * そのコマと結合する。
  * 多角形のコマは頂点のドラッグで頂点を動かし、矩形のコマも Alt を押しながら隅を引けば頂点を動かす。
  * 縦横の分割は `split` で行う。`startCut` の後か Alt を押しながらのドラッグで線を引くと、
- * 選択中のコマをその線で割る（縦横に近い線はそろえる）。ドラッグ中は `draft` を描くだけで、
+ * 選択中のコマをその線で割る（縦横に近い線はそろえ、Shift を押していれば水平、垂直、隣のコマの辺のうち
+ * 近い向きに固定する）。ドラッグ中は `draft` を描くだけで、
  * Patch は pointerup で 1 回だけ出す。形の変わったコマのフキダシは、overflow でない限り新しい枠に収める。
  * 動かずに離したときは何もせず、クリックの選択は useSelection に任せる。Escape でドラッグと線の分割、結合を取り消す
  */
@@ -140,7 +142,11 @@ export function usePanelTool(opts: Options) {
     const mm = clientToPage(opts.view, boxOf(e.currentTarget), { x: e.clientX, y: e.clientY })
     return mm && { mm, n: { x: mm.x / opts.width, y: mm.y / opts.height } }
   }
-  const cutOf = (from: Pos, to: Pos) => snapCut({ from, to }, opts.width, opts.height)
+  /** g の分割線を to まで引いた線。locked なら水平、垂直、隣のコマの辺のどれかの向きに固定する */
+  const cutOf = (g: Extract<Gesture, { kind: 'cut' }>, to: Pos, locked: boolean) =>
+    locked
+      ? constrainCut(opts.page, g.panelId, { from: g.from, to }, opts.width, opts.height)
+      : snapCut({ from: g.from, to }, opts.width, opts.height)
   /** リサイズか頂点の移動で点 p まで引いたときのコマの輪郭 */
   const reshaped = (g: Extract<Gesture, { kind: 'resize' | 'vertex' }>, p: Pos): Point[] => {
     if (g.kind === 'vertex') return moveVertex(opts.page, g.panelId, g.index, p)
@@ -167,8 +173,9 @@ export function usePanelTool(opts: Options) {
       if (at === null) return
       const client = { x: e.clientX, y: e.clientY }
       if (selected) {
-        // 結合モードでは隣のコマとの境目を押しても、選択中のコマのハンドルより結合を優先する
-        if (e.shiftKey || merging) {
+        // 結合モードでは隣のコマとの境目を押しても、選択中のコマのハンドルより結合を優先する。
+        // 線を引くときの Shift は向きの固定なので、隣のコマから引き始めても結合にしない
+        if ((e.shiftKey && !cutting && !e.altKey) || merging) {
           const target = panelAt(opts.page, opts.width, opts.height, at.mm)
           if (target && target.id !== selected.id) {
             take(e, { kind: 'merge', pointerId: e.pointerId, targetId: target.id, client })
@@ -242,7 +249,7 @@ export function usePanelTool(opts: Options) {
       if (at === null) return
       g.dragging = true
       if (g.kind === 'cut') {
-        setDraft({ kind: 'cut', cut: cutOf(g.from, at.n), panelId: g.panelId })
+        setDraft({ kind: 'cut', cut: cutOf(g, at.n, e.shiftKey), panelId: g.panelId })
         return
       }
       setDraft({
@@ -280,7 +287,12 @@ export function usePanelTool(opts: Options) {
       if (g.kind === 'cut') {
         if (!g.dragging) return
         setCutFor(null)
-        const patch = cutPanelPatch(opts.page, g.panelId, cutOf(g.from, at.n), opts.direction)
+        const patch = cutPanelPatch(
+          opts.page,
+          g.panelId,
+          cutOf(g, at.n, e.shiftKey),
+          opts.direction,
+        )
         commit(patch)
         return
       }

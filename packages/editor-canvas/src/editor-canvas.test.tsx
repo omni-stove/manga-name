@@ -571,6 +571,25 @@ describe('panel tool', () => {
     expect(must(svg.querySelector('[data-cut]')).getAttribute('aria-pressed')).toBe('false')
   })
 
+  test('Shift while drawing the cut locks a slightly slanted line to vertical', async () => {
+    const onChange = vi.fn()
+    const svg = await render({
+      tool: 'panel',
+      onChange,
+      selection: { kind: 'panel', id: 'pn_1' },
+    })
+    layout(svg)
+    // 縦から 5 度ほど傾いた線。snapCut では縦にそろわない
+    const to = clientAt(0.53, 0.24)
+    fire(svg, pointer('pointerdown', { id: 1, ...clientAt(0.5, 0.02), altKey: true }))
+    fire(svg, pointer('pointermove', { id: 1, ...to, shiftKey: true }))
+    fire(svg, pointer('pointerup', { id: 1, ...to, shiftKey: true }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    const [kept, added] = patchOf(onChange) as { value: Panel }[]
+    expect(kept?.value.shape).toBeUndefined()
+    expect(added?.value.shape).toBeUndefined()
+  })
+
   test('a shaped panel shows vertex handles, and a vertex drag reshapes it', async () => {
     const onChange = vi.fn()
     const shaped: Page = {

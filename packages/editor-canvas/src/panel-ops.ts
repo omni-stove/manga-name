@@ -28,6 +28,8 @@ const SPLIT_GUTTER = 0.02
 const VERTEX_SNAP = SNAP_DISTANCE
 /** 縦か横からこの角度（度）以内の分割線は、縦か横にそろえる */
 const CUT_SNAP_DEGREES = 4
+/** 分割線の向きをそろえる先に数える、割るコマからの隙間（正規化座標）。コマ間の SPLIT_GUTTER より広く取る */
+const NEIGHBOUR_GAP = 0.05
 // 0.51 - 0.5 が 0.010000000000000009 になるので、ちょうど SNAP_DISTANCE の差も吸い付ける
 const EPSILON = 1e-9
 
@@ -311,6 +313,57 @@ export function snapCut(cut: Cut, width: number, height: number): Cut {
     return { from: cut.from, to: { x: cut.from.x, y: cut.to.y } }
   }
   return cut
+}
+
+/**
+ * 分割線 cut の向きを、水平と垂直、コマ panelId に隣接するコマの辺の向きのうち最も近いものに固定した線。
+ * to はその向きで from を通る直線へ垂直に下ろす。角度はページの mm で測るので width と height は
+ * ページの大きさ（mm）。from は動かさない
+ */
+export function constrainCut(
+  page: Page,
+  panelId: ID,
+  cut: Cut,
+  width: number,
+  height: number,
+): Cut {
+  const dx = (cut.to.x - cut.from.x) * width
+  const dy = (cut.to.y - cut.from.y) * height
+  if (Math.hypot(dx, dy) <= EPSILON) return cut
+  const angles = [0, Math.PI / 2]
+  const self = page.panels.find((p) => p.id === panelId)
+  if (self) {
+    const near = edgesOf(self.rect)
+    for (const other of page.panels) {
+      if (other.id === panelId) continue
+      const e = edgesOf(other.rect)
+      const apart =
+        e.left > near.right + NEIGHBOUR_GAP ||
+        e.right < near.left - NEIGHBOUR_GAP ||
+        e.top > near.bottom + NEIGHBOUR_GAP ||
+        e.bottom < near.top - NEIGHBOUR_GAP
+      if (apart) continue
+      const outline = panelOutline(other)
+      outline.forEach((p, i) => {
+        const q = outline[(i + 1) % outline.length] as Point
+        angles.push(Math.atan2((q.y - p.y) * height, (q.x - p.x) * width))
+      })
+    }
+  }
+  const angle = Math.atan2(dy, dx)
+  // 線に向きは無いので、π ずれた角度は同じ向きとして比べる
+  const apartFrom = (a: number) => {
+    const d = (((angle - a) % Math.PI) + Math.PI) % Math.PI
+    return Math.min(d, Math.PI - d)
+  }
+  const best = angles.reduce((a, b) => (apartFrom(b) < apartFrom(a) ? b : a))
+  const ux = Math.cos(best)
+  const uy = Math.sin(best)
+  const t = dx * ux + dy * uy
+  return {
+    from: cut.from,
+    to: { x: cut.from.x + (t * ux) / width, y: cut.from.y + (t * uy) / height },
+  }
 }
 
 /**
@@ -837,6 +890,56 @@ if (import.meta.vitest) {
       [0.5, 0.26],
     ])
     expect(cutChord(pn1, { from: { x: 0, y: 0.5 }, to: { x: 1, y: 0.5 } })).toBeNull()
+  })
+
+  describe('constrainCut', () => {
+    const square: Page = {
+      ...page,
+      panels: [
+        { ...(page.panels[0] as Panel), id: 'pn_a', rect: { x: 0, y: 0, w: 0.5, h: 0.5 } },
+        {
+          ...(page.panels[0] as Panel),
+          id: 'pn_b',
+          // 左の辺が (0.52, 0) から (0.62, 0.5) へ傾いた台形
+          rect: { x: 0.52, y: 0, w: 0.48, h: 0.5 },
+          shape: [
+            { x: 0, y: 0 },
+            { x: 1, y: 0 },
+            { x: 1, y: 1 },
+            { x: 0.1 / 0.48, y: 1 },
+          ],
+        },
+        { ...(page.panels[0] as Panel), id: 'pn_far', rect: { x: 0, y: 0.8, w: 1, h: 0.2 } },
+      ],
+    }
+    const from = { x: 0.2, y: 0 }
+
+    test('locks the line to the slant of a neighbouring edge', () => {
+      const cut = constrainCut(square, 'pn_a', { from, to: { x: 0.31, y: 0.5 } }, 100, 100)
+      expect(cut.to.x).toBeCloseTo(0.3, 2)
+      expect(cut.to.y).toBeCloseTo(0.5, 2)
+    })
+
+    test('locks to horizontal or vertical when those are nearer', () => {
+      const v = constrainCut(square, 'pn_a', { from, to: { x: 0.23, y: 0.5 } }, 100, 100)
+      expect(v.to.x).toBeCloseTo(0.2, 9)
+      const h = constrainCut(square, 'pn_a', { from, to: { x: 0.5, y: 0.1 } }, 100, 100)
+      expect(h.to.y).toBeCloseTo(0, 9)
+    })
+
+    test('ignores panels that are not next to the cut panel', () => {
+      const far: Page = {
+        ...square,
+        panels: square.panels
+          .filter((p) => p.id !== 'pn_b')
+          .concat({
+            ...(square.panels[1] as Panel),
+            rect: { x: 0.6, y: 0, w: 0.4, h: 0.5 },
+          }),
+      }
+      const cut = constrainCut(far, 'pn_a', { from, to: { x: 0.31, y: 0.5 } }, 100, 100)
+      expect(cut.to.x).toBeCloseTo(0.2, 9)
+    })
   })
 
   test('snapCut straightens nearly vertical and horizontal lines only', () => {
