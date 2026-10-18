@@ -11,6 +11,8 @@ const ERASE_SLOP_PX = 6
 
 interface Options {
   page: Page
+  /** 線を足す先。scribbles は誰でも書けるメモ、sketch は原作者の下描き */
+  key: 'scribbles' | 'sketch'
   /** ページの大きさ（mm） */
   width: number
   height: number
@@ -68,8 +70,8 @@ function strokeAt(
 }
 
 /**
- * `scribble` ツールの入力。マウス、ペン、1 本指のタッチで線を引き、pointerup で
- * `/scribbles/-` に Stroke を足す Patch を 1 回だけ出す。2 本目の指が触れたら描きかけの線は捨て、
+ * `scribble` と `sketch` ツールの入力。マウス、ペン、1 本指のタッチで線を引き、pointerup で
+ * `/<key>/-` に Stroke を足す Patch を 1 回だけ出す（sketch がまだ無ければ配列ごと足す）。2 本目の指が触れたら描きかけの線は捨て、
  * ピンチとパンは useViewport に任せる。消しゴムは押した位置のストロークを 1 本消す
  */
 export function useScribble(opts: Options) {
@@ -106,8 +108,8 @@ export function useScribble(opts: Options) {
     const p = toPage(at, box)
     const q = toPage({ clientX: at.clientX + ERASE_SLOP_PX, clientY: at.clientY }, box)
     if (!p || !q) return
-    const i = strokeAt(opts.page.scribbles, opts.width, opts.height, p, q.x - p.x)
-    if (i >= 0) opts.onChange([{ op: 'remove', path: `/scribbles/${i}` }])
+    const i = strokeAt(opts.page[opts.key] ?? [], opts.width, opts.height, p, q.x - p.x)
+    if (i >= 0) opts.onChange([{ op: 'remove', path: `/${opts.key}/${i}` }])
   }
 
   const endTouch = (e: ReactPointerEvent<SVGSVGElement>) => {
@@ -172,7 +174,11 @@ export function useScribble(opts: Options) {
         width: SCRIBBLE_WIDTH,
         color: opts.tool === 'eraser' ? 'ink' : opts.tool,
       }
-      opts.onChange([{ op: 'add', path: '/scribbles/-', value: stroke }])
+      opts.onChange(
+        opts.page[opts.key]
+          ? [{ op: 'add', path: `/${opts.key}/-`, value: stroke }]
+          : [{ op: 'add', path: `/${opts.key}`, value: [stroke] }],
+      )
     },
     onPointerCancel(e: ReactPointerEvent<SVGSVGElement>) {
       endTouch(e)

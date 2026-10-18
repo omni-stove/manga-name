@@ -83,7 +83,7 @@ function simplify(outline: readonly Point[]): Point[] {
  * ページ座標の輪郭を Panel の rect と shape にする。rect は輪郭を囲む矩形で、輪郭がその矩形そのものなら
  * shape を省く。rect は他の操作と同じく 0.001 に丸め、shape は丸めた rect に対するコマ内座標
  */
-function geometryOf(outline: readonly Point[]): { rect: Rect; shape?: Point[] } {
+export function geometryOf(outline: readonly Point[]): { rect: Rect; shape?: Point[] } {
   const pts = simplify(outline)
   const b = boundsOf(pts)
   const rect = rectOf({ left: b.x, top: b.y, right: b.x + b.w, bottom: b.y + b.h })
@@ -191,13 +191,13 @@ function readingOrder<T extends { rect: Rect }>(
 }
 
 /** order を読む順の 1 始まりに振り直したコマ。配列の並びは変えない */
-function renumber(panels: readonly Panel[], direction: ReadingDirection): Panel[] {
+export function renumber(panels: readonly Panel[], direction: ReadingDirection): Panel[] {
   const rank = new Map(readingOrder(panels, direction).map((p, i) => [p.id, i + 1]))
   return panels.map((p) => ({ ...p, order: rank.get(p.id) ?? p.order }))
 }
 
 /** 振り直しで order が変わったコマの replace。skip の添字は丸ごと置き換えるので出さない */
-function orderOps(before: readonly Panel[], after: readonly Panel[], skip: number[]): Patch {
+export function orderOps(before: readonly Panel[], after: readonly Panel[], skip: number[]): Patch {
   const patch: Patch = []
   after.forEach((p, i) => {
     if (skip.includes(i)) return
