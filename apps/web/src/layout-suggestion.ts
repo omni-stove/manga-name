@@ -1,5 +1,6 @@
 import type { LayoutSuggestionRequest } from '@manga/ai'
 import {
+  type Character,
   createRowPanels,
   type ID,
   type LayoutOption,
@@ -24,12 +25,15 @@ export function layoutRequest(
 
 /**
  * 案を空のコマから組んだコマにする。枠は createRowPanels で段とコマの比から割り、
- * 描くものを指示メモ、カメラを camera、セリフを lineBubbles のフキダシにする
+ * 描くものを指示メモ、カメラを camera、セリフを lineBubbles のフキダシにする。
+ * 居ない話し手は落とし、空のセリフは捨てる
  */
 export function suggestedPanels(
   option: LayoutOption,
   settings: Pick<Project['settings'], 'direction' | 'pageSize'>,
+  characters: readonly Character[],
 ): Panel[] {
+  const known = (id: string) => characters.some((c) => c.id === id)
   const suggested = option.rows.flatMap((row) => row.panels)
   const frames = createRowPanels(
     option.rows.map((row) => ({ height: row.height, widths: row.panels.map((p) => p.width) })),
@@ -42,7 +46,15 @@ export function suggestedPanels(
       ...frame,
       note: panel.note,
       ...(panel.camera !== undefined && { camera: panel.camera }),
-      bubbles: lineBubbles(frame, panel.lines, settings),
+      bubbles: lineBubbles(
+        frame,
+        panel.lines.flatMap(({ speakerId, ...line }) => {
+          const text = line.text.trim()
+          if (text === '') return []
+          return [{ ...line, text, ...(speakerId !== undefined && known(speakerId) && { speakerId }) }]
+        }),
+        settings,
+      ),
     }
   })
 }
@@ -52,8 +64,9 @@ export function suggestedPage(
   page: Page,
   option: LayoutOption,
   settings: Pick<Project['settings'], 'direction' | 'pageSize'>,
+  characters: readonly Character[],
 ): Page {
-  return { ...page, panels: suggestedPanels(option, settings) }
+  return { ...page, panels: suggestedPanels(option, settings, characters) }
 }
 
 /** ページのコマを panels で置き換える Project 根の Patch */
@@ -93,7 +106,7 @@ if (import.meta.vitest) {
   })
 
   test('suggestedPanels turns rows into panels in reading order with notes, cameras and bubbles', () => {
-    const panels = suggestedPanels(option, project.settings)
+    const panels = suggestedPanels(option, project.settings, project.characters)
     const suggested = option.rows.flatMap((row) => row.panels)
     expect(panels.map((p) => p.order)).toEqual(suggested.map((_, i) => i + 1))
     expect(panels.map((p) => p.note)).toEqual(suggested.map((p) => p.note))
@@ -113,7 +126,7 @@ if (import.meta.vitest) {
       ...project,
       episodes: [...project.episodes, { id: newId(), title: '', pages: [page] }],
     })
-    const panels = suggestedPanels(option, project.settings)
+    const panels = suggestedPanels(option, project.settings, project.characters)
     const patch = replacePanelsPatch(base, page.id, panels)
     expect(patch).toEqual([
       {
@@ -131,7 +144,7 @@ if (import.meta.vitest) {
         ),
       }),
     ).not.toThrow()
-    const preview = suggestedPage(page, option, project.settings)
+    const preview = suggestedPage(page, option, project.settings, project.characters)
     expect(preview).toMatchObject({ id: page.id, script: 's' })
     expect(preview.panels).toHaveLength(panels.length)
   })

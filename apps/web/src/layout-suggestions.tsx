@@ -76,13 +76,23 @@ export function LayoutSuggestions({
 
   const apply = (option: LayoutOption) => {
     setConfirming(undefined)
+    const current = store.get()
+    const currentPage = findPage(current, pageId)?.page
+    if (!currentPage) {
+      setApplyError(m.web_common_page_gone())
+      return
+    }
+    if (hasLockedPanel(currentPage)) {
+      setApplyError(m.web_layout_suggest_locked())
+      return
+    }
     try {
-      const current = store.get()
-      const currentPage = findPage(current, pageId)?.page
-      if (!currentPage) throw new Error(m.web_common_page_gone())
-      if (hasLockedPanel(currentPage)) throw new Error(m.web_layout_suggest_locked())
       store.applyPatch(
-        replacePanelsPatch(current, pageId, suggestedPanels(option, current.settings)),
+        replacePanelsPatch(
+          current,
+          pageId,
+          suggestedPanels(option, current.settings, current.characters),
+        ),
         { source: 'ai', label: m.web_layout_suggest_history() },
       )
       setApplyError(undefined)
@@ -141,7 +151,7 @@ export function LayoutSuggestions({
                 <XStack gap={8} align="start">
                   <div className={styles.thumbnail}>
                     <PageThumbnail
-                      page={suggestedPage(page, option, project.settings)}
+                      page={suggestedPage(page, option, project.settings, project.characters)}
                       pageSize={project.settings.pageSize}
                     />
                   </div>
