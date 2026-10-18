@@ -254,6 +254,8 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       return { panels }
     })
   const batchControllers = new Map<string, AbortController>()
+  // 同じページで attemptPage が重なっても、最後の 1 つが終わるまで pages のフラグを残すための数
+  const pageRuns = new Map<string, number>()
 
   const toggle = (field: keyof GeneratingState, key: string | readonly string[], on: boolean) =>
     generating.setState((s) => {
@@ -470,6 +472,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     const keys = panelIds.map((id) => generatingKey(req.projectId, id))
     const pageKey = generatingKey(req.projectId, req.pageId)
     toggle('panels', keys, true)
+    pageRuns.set(pageKey, (pageRuns.get(pageKey) ?? 0) + 1)
     toggle('pages', pageKey, true)
     try {
       const missing = await runPage({ ...req, panelIds })
@@ -487,7 +490,12 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       return { counts, error }
     } finally {
       toggle('panels', keys, false)
-      toggle('pages', pageKey, false)
+      const left = (pageRuns.get(pageKey) ?? 1) - 1
+      if (left > 0) pageRuns.set(pageKey, left)
+      else {
+        pageRuns.delete(pageKey)
+        toggle('pages', pageKey, false)
+      }
     }
   }
 
