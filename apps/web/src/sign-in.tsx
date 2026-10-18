@@ -7,11 +7,14 @@ import { useAuth } from './use-auth'
 /** 未ログインのせいで失敗したか */
 export const needsSignIn = (error: unknown): boolean => error instanceof SignInRequiredError
 
-/** 押すとログインを始める。始められなければトーストで知らせる */
-export function SignInButton(props: Omit<ButtonProps, 'onClick' | 'children'>) {
+/** 押すとログインを始める。始められなければトーストで知らせる。`inviteToken` は useAuth の signIn に渡す */
+export function SignInButton({
+  inviteToken,
+  ...props
+}: Omit<ButtonProps, 'onClick' | 'children'> & { inviteToken?: string }) {
   const { signIn } = useAuth()
   return (
-    <Button {...props} onClick={() => signInOrNotify(signIn)}>
+    <Button {...props} onClick={() => signInOrNotify(() => signIn({ inviteToken }))}>
       ログイン
     </Button>
   )

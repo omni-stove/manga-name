@@ -12,7 +12,7 @@ export function AuthProvider({ client, children }: { client: AuthClient; childre
 /** ログイン状態と操作。user が null の間はローカルモードで動く */
 export function useAuth(): {
   user: AuthUser | null
-  signIn(): Promise<void>
+  signIn(opts?: { inviteToken?: string }): Promise<void>
   setName(name: string): Promise<void>
   signOut(): Promise<void>
   getToken(): Promise<string | null>
