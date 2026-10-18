@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { Button } from './button'
 import { Dialog } from './dialog'
 import { Typography } from './typography'
@@ -30,7 +31,7 @@ export function ConfirmDialog({
       onSubmit={onConfirm}
       actions={
         <>
-          <Button onClick={onCancel}>キャンセル</Button>
+          <Button onClick={onCancel}>{m.ui_confirm_dialog_cancel()}</Button>
           <Button type="submit" variant={irreversible ? 'danger' : 'primary'} autoFocus>
             {confirmLabel}
           </Button>

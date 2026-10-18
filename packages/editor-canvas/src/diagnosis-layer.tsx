@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { FocusDiagnosis, FocusStatus, ID, Page, PageDiagnosis, Point } from '@manga/schema'
 import { memo } from 'react'
 import { toPagePoint } from './hint-ops'
@@ -22,8 +23,6 @@ const SUMMARY_SIZE = 3.2
 const SUMMARY_GAP = 2
 const LEGEND_GAP = 6.5
 const LEGEND_SWATCH = 6
-
-const BUBBLE_LABEL = 'フキダシ'
 
 /** 集計行。例 `reading order OK | focus points: 12 ok 12 miss 0`。weak は 1 件以上のときだけ出す */
 function summaryLine(diagnosis: PageDiagnosis): string {
@@ -203,7 +202,10 @@ function focusAnchors(
       anchors.set(f.id, { ...toPagePoint(panel, width, height, f.pos), label: f.label })
     }
     for (const b of panel.bubbles) {
-      anchors.set(b.id, { ...toPagePoint(panel, width, height, b.pos), label: BUBBLE_LABEL })
+      anchors.set(b.id, {
+        ...toPagePoint(panel, width, height, b.pos),
+        label: m.editor_canvas_diagnosis_bubble_label(),
+      })
     }
   }
   return anchors
@@ -211,14 +213,25 @@ function focusAnchors(
 
 const LEGEND: readonly {
   key: string
-  label: string
+  label: () => string
   stroke: string
   dash?: string
   width: number
 }[] = [
-  { key: 'sweep', label: '視線経路', stroke: SWEEP_COLOR, dash: '5 3', width: 1.5 },
-  { key: 'chain', label: 'フキダシ順', stroke: CHAIN_COLOR, width: 4 },
-  { key: 'vector', label: '誘導線', stroke: 'var(--hint-vector)', width: 2 },
+  {
+    key: 'sweep',
+    label: m.editor_canvas_diagnosis_legend_sweep,
+    stroke: SWEEP_COLOR,
+    dash: '5 3',
+    width: 1.5,
+  },
+  { key: 'chain', label: m.editor_canvas_diagnosis_legend_chain, stroke: CHAIN_COLOR, width: 4 },
+  {
+    key: 'vector',
+    label: m.editor_canvas_diagnosis_legend_vector,
+    stroke: 'var(--hint-vector)',
+    width: 2,
+  },
 ]
 
 const LEGEND_STATUS: readonly FocusStatus[] = ['ok', 'weak', 'miss']
@@ -233,7 +246,8 @@ function Legend({ y }: { y: number }) {
   return (
     <g data-diagnosis="legend" fontFamily={FONT_FAMILY} fontSize={LABEL_SIZE}>
       {LEGEND.map((l) => {
-        const at = step(l.label)
+        const label = l.label()
+        const at = step(label)
         return (
           <g key={l.key}>
             <line
@@ -252,7 +266,7 @@ function Legend({ y }: { y: number }) {
               style={{ fill: 'var(--text-muted)' }}
               dominantBaseline="hanging"
             >
-              {l.label}
+              {label}
             </text>
           </g>
         )

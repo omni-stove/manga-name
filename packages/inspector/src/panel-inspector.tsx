@@ -1,4 +1,4 @@
-import { getLocale } from '@manga/i18n'
+import { getLocale, m } from '@manga/i18n'
 import {
   type Bubble,
   type Character,
@@ -28,7 +28,14 @@ import { addCastPatch, optionalString, removeCastPatch, replace, swapOrder } fro
 import section from './section.module.css'
 import type { PanelInspectorProps } from './types'
 
-const CAMERA_SUGGESTIONS = ['ロング', 'ミドル', 'バストアップ', 'アップ', 'アオリ', '俯瞰']
+const CAMERA_SUGGESTIONS = [
+  m.inspector_panel_camera_long,
+  m.inspector_panel_camera_middle,
+  m.inspector_panel_camera_bust,
+  m.inspector_panel_camera_close_up,
+  m.inspector_panel_camera_low_angle,
+  m.inspector_panel_camera_high_angle,
+]
 
 const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
 
@@ -70,10 +77,10 @@ export function PanelInspector({
   return (
     <div className={section.section} data-inspector="panel">
       <Typography variant="subheading" className={section.title}>
-        コマ {panel.order}
+        {m.inspector_panel_title({ order: panel.order })}
       </Typography>
       <NumberField
-        label="読み順"
+        label={m.inspector_reading_order()}
         value={panel.order}
         min={1}
         step={1}
@@ -82,19 +89,19 @@ export function PanelInspector({
         onCommit={(n) => onChange(replace('/order', n))}
       />
       <TextField
-        label="カメラ"
+        label={m.inspector_panel_camera()}
         value={panel.camera ?? ''}
         list={cameraListId}
-        placeholder="ロング、アオリ、俯瞰…"
+        placeholder={m.inspector_panel_camera_placeholder()}
         onCommit={(v) => onChange(optionalString('/camera', panel.camera, v))}
       />
       <datalist id={cameraListId}>
-        {CAMERA_SUGGESTIONS.map((c) => (
-          <option key={c} value={c} />
+        {CAMERA_SUGGESTIONS.map((camera) => (
+          <option key={camera()} value={camera()} />
         ))}
       </datalist>
       <TextField
-        label="指示メモ"
+        label={m.inspector_panel_note()}
         value={panel.note ?? ''}
         rows={4}
         delayMs={DEBOUNCE_MS}
@@ -103,15 +110,15 @@ export function PanelInspector({
       <CastSection panel={panel} characters={characters} onChange={onChange} />
       {diagnosis && !diagnosis.bubbleOrderOk && (
         <p className={styles.hint} data-bubble-order-ok={false}>
-          <small className={styles.hintWarning}>フキダシの順が読み順と合っていません</small>
+          <small className={styles.hintWarning}>{m.inspector_panel_bubble_order_mismatch()}</small>
         </p>
       )}
 
       <Typography variant="label" tone="muted" className={section.heading}>
-        フキダシ
+        {m.inspector_panel_bubbles()}
       </Typography>
       {bubbles.length === 0 ? (
-        <Typography tone="muted">フキダシはありません</Typography>
+        <Typography tone="muted">{m.inspector_panel_bubbles_empty()}</Typography>
       ) : (
         <YStack as="ol" gap={2} className={styles.bubbles}>
           {bubbles.map(({ bubble, index }, i) => {
@@ -122,11 +129,11 @@ export function PanelInspector({
                 <span className={styles.order}>{bubble.order}</span>
                 <span className={styles.line}>
                   {speakerOf(bubble) && <b className={styles.speaker}>{speakerOf(bubble)}</b>}
-                  {bubble.text.split('\n')[0] || '（空）'}
+                  {bubble.text.split('\n')[0] || m.inspector_panel_bubble_empty_text()}
                 </span>
                 <IconButton
                   size="small"
-                  label="フキダシを前へ"
+                  label={m.inspector_panel_bubble_earlier()}
                   disabled={!prev}
                   onClick={() =>
                     prev &&
@@ -143,7 +150,7 @@ export function PanelInspector({
                 </IconButton>
                 <IconButton
                   size="small"
-                  label="フキダシを後へ"
+                  label={m.inspector_panel_bubble_later()}
                   disabled={!next}
                   onClick={() =>
                     next &&
@@ -165,19 +172,19 @@ export function PanelInspector({
       )}
 
       <Typography variant="label" tone="muted" className={section.heading}>
-        生成
+        {m.inspector_generate()}
       </Typography>
       {diagnosis && (
         <>
           <p className={styles.hint} data-hint data-used={useHint}>
             {diagnosis.hint || (
               <Typography as="span" tone="muted">
-                ヒントはありません
+                {m.inspector_panel_hint_empty()}
               </Typography>
             )}
           </p>
           <Checkbox
-            label="ヒントを使う"
+            label={m.inspector_panel_use_hint()}
             checked={useHint}
             onChange={(e) => onUseHintChange?.(e.target.checked)}
           />
@@ -185,21 +192,21 @@ export function PanelInspector({
       )}
       {useReference !== undefined && (
         <Checkbox
-          label="参考画像を使う"
+          label={m.inspector_panel_use_reference()}
           checked={useReference}
           onChange={(e) => onUseReferenceChange?.(e.target.checked)}
         />
       )}
       <XStack wrap className={section.group}>
         <Button variant="primary" disabled={generating} onClick={() => onGenerate()}>
-          {generating ? '生成中…' : '生成'}
+          {generating ? m.inspector_generating() : m.inspector_generate()}
         </Button>
       </XStack>
       <TextArea
-        label="修正指示"
+        label={m.inspector_panel_instruction()}
         rows={3}
         value={instruction}
-        placeholder="採用中の絵に対する直し方"
+        placeholder={m.inspector_panel_instruction_placeholder()}
         onChange={(e) => setInstruction(e.target.value)}
       />
       <XStack wrap className={section.group}>
@@ -207,15 +214,15 @@ export function PanelInspector({
           disabled={generating || !current || instruction.trim() === ''}
           onClick={() => onGenerate(instruction.trim())}
         >
-          修正して再生成
+          {m.inspector_panel_regenerate()}
         </Button>
       </XStack>
 
       <Typography variant="label" tone="muted" className={section.heading}>
-        履歴
+        {m.inspector_panel_history()}
       </Typography>
       {arts.length === 0 ? (
-        <Typography tone="muted">まだ生成していません</Typography>
+        <Typography tone="muted">{m.inspector_panel_history_empty()}</Typography>
       ) : (
         <YStack as="ol" className={styles.arts}>
           {arts.map((art) => (
@@ -256,16 +263,16 @@ function CastSection({
   const candidates = characters.filter((c) => !ids.includes(c.id))
   const reasons = (id: ID) =>
     [
-      panel.bubbles.some((b) => b.speakerId === id) && '台詞',
-      panel.focusPoints.some((f) => f.characterId === id) && '焦点',
-    ].filter((r): r is string => Boolean(r))
+      panel.bubbles.some((b) => b.speakerId === id) && m.inspector_panel_cast_reason_dialogue(),
+      panel.focusPoints.some((f) => f.characterId === id) && m.inspector_focus(),
+    ].filter((r) => r !== false)
   return (
     <>
       <Typography variant="label" tone="muted" className={section.heading}>
-        登場キャラ
+        {m.inspector_panel_cast()}
       </Typography>
       {cast.length === 0 ? (
-        <Typography tone="muted">登場キャラはいません</Typography>
+        <Typography tone="muted">{m.inspector_panel_cast_empty()}</Typography>
       ) : (
         <YStack as="ul" gap={2} className={styles.bubbles}>
           {cast.map((character) => (
@@ -284,7 +291,7 @@ function CastSection({
               {panel.cast?.includes(character.id) && (
                 <IconButton
                   size="small"
-                  label={`${character.name} を登場キャラから外す`}
+                  label={m.inspector_panel_cast_remove({ name: character.name })}
                   onClick={() => onChange(removeCastPatch(panel.cast, character.id))}
                 >
                   ×
@@ -296,7 +303,7 @@ function CastSection({
       )}
       {candidates.length > 0 && (
         <Select
-          label="登場キャラを追加"
+          label={m.inspector_panel_cast_add()}
           hideLabel
           className={section.group}
           value=""
@@ -304,7 +311,7 @@ function CastSection({
             if (e.target.value) onChange(addCastPatch(panel.cast, e.target.value))
           }}
         >
-          <option value="">キャラを追加…</option>
+          <option value="">{m.inspector_panel_cast_add_placeholder()}</option>
           {candidates.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -339,23 +346,23 @@ function ArtItem({
       data-current={current || undefined}
     >
       <button type="button" className={styles.thumb} aria-pressed={current} onClick={onSelect}>
-        <Suspense fallback={<span>読み込み中…</span>}>
-          <ArtImage url={url} alt={art.instruction ?? '生成した絵'} />
+        <Suspense fallback={<span>{m.inspector_loading()}</span>}>
+          <ArtImage url={url} alt={art.instruction ?? m.inspector_panel_art_alt()} />
         </Suspense>
       </button>
       <YStack gap={4} className={styles.meta}>
         <XStack as="span" className={styles.metaHead}>
           <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
-          {current && <b className={styles.badge}>採用中</b>}
+          {current && <b className={styles.badge}>{m.inspector_panel_art_current()}</b>}
           {onRemove && (
             <Button size="small" variant="ghost" className={styles.remove} onClick={onRemove}>
-              削除
+              {m.inspector_remove()}
             </Button>
           )}
         </XStack>
         {art.instruction && <p className={styles.instruction}>{art.instruction}</p>}
         <details className={styles.prompt}>
-          <summary>プロンプト</summary>
+          <summary>{m.inspector_panel_art_prompt()}</summary>
           <pre>{art.prompt}</pre>
         </details>
       </YStack>
@@ -365,7 +372,11 @@ function ArtItem({
 
 function ArtImage({ url, alt }: { url: Promise<string | null>; alt: string }) {
   const resolved = use(url)
-  return resolved === null ? <span>読み込めません</span> : <img src={resolved} alt={alt} />
+  return resolved === null ? (
+    <span>{m.inspector_load_failed()}</span>
+  ) : (
+    <img src={resolved} alt={alt} />
+  )
 }
 
 if (import.meta.vitest) {

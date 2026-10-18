@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { type DragEvent, type ReactNode, useId, useRef, useState } from 'react'
 import { IconButton } from './button'
 import buttonStyles from './button.module.css'
@@ -33,7 +34,7 @@ export function FileDrop({
   name,
   onPick,
   disabled,
-  prompt = 'ここにドロップ',
+  prompt = m.ui_file_drop_prompt(),
   hint,
   error,
 }: FileDropProps) {
@@ -77,7 +78,7 @@ export function FileDrop({
     take(file)
   }
 
-  const note = error ?? (rejected ? 'この形式のファイルは選べません' : undefined)
+  const note = error ?? (rejected ? m.ui_file_drop_rejected() : undefined)
   return (
     <div className={fieldStyles.field}>
       <span id={labelId} className={fieldStyles.label}>
@@ -115,12 +116,17 @@ export function FileDrop({
             }}
           />
           <span className={cx(buttonStyles.button, buttonStyles.small)} aria-hidden>
-            ファイルを選ぶ
+            {m.ui_file_drop_choose()}
           </span>
           <span className={cx(styles.text, fileName && styles.fileName)}>{fileName ?? prompt}</span>
         </label>
         {fileName && (
-          <IconButton label="選択を解除" size="small" disabled={disabled} onClick={clear}>
+          <IconButton
+            label={m.ui_file_drop_clear()}
+            size="small"
+            disabled={disabled}
+            onClick={clear}
+          >
             ×
           </IconButton>
         )}

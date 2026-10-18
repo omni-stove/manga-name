@@ -1,15 +1,16 @@
+import { m } from '@manga/i18n'
 import type { Page } from '@manga/schema'
 import { Button, Checkbox, Field, Typography, XStack } from '@manga/ui'
-import { DEBOUNCE_MS, SelectField, TextField } from './fields'
+import { DEBOUNCE_MS, option, SelectField, TextField } from './fields'
 import styles from './page-inspector.module.css'
 import { optionalString, replace } from './patch'
 import section from './section.module.css'
 import type { PageInspectorProps } from './types'
 
 const SIDES: readonly { value: Page['side']; label: string }[] = [
-  { value: 'right', label: '右ページ' },
-  { value: 'left', label: '左ページ' },
-  { value: 'single', label: '単ページ' },
+  option('right', m.inspector_page_side_right),
+  option('left', m.inspector_page_side_left),
+  option('single', m.inspector_page_side_single),
 ]
 
 export function PageInspector({
@@ -24,31 +25,32 @@ export function PageInspector({
   return (
     <div className={section.section} data-inspector="page">
       <Typography variant="subheading" className={section.title}>
-        ページ
+        {m.inspector_page_title()}
       </Typography>
       <SelectField
-        label="見開き"
+        label={m.inspector_page_side()}
         value={page.side}
         options={SIDES}
         onCommit={(v) => onChange(replace('/side', v))}
       />
       <TextField
-        label="メモ"
+        label={m.inspector_note()}
         value={page.note ?? ''}
         rows={4}
         delayMs={DEBOUNCE_MS}
         onCommit={(v) => onChange(optionalString('/note', page.note, v))}
       />
       <Typography variant="label" tone="muted" className={section.heading}>
-        参考画像
+        {m.inspector_page_reference()}
       </Typography>
       {reference === undefined ? (
-        <Typography tone="muted">
-          なし。PNG、JPEG、PDF。キャンバスへのドロップと貼り付けでも読み込めます
-        </Typography>
+        <Typography tone="muted">{m.inspector_page_reference_empty()}</Typography>
       ) : (
         <>
-          <Field label="不透明度" hint={`${Math.round(reference.opacity * 100)}%`}>
+          <Field
+            label={m.inspector_page_reference_opacity()}
+            hint={`${Math.round(reference.opacity * 100)}%`}
+          >
             {(described) => (
               <input
                 type="range"
@@ -63,7 +65,7 @@ export function PageInspector({
             )}
           </Field>
           <Checkbox
-            label="表示"
+            label={m.inspector_page_reference_visible()}
             checked={reference.visible}
             onChange={(e) => onChange(replace('/reference/visible', e.target.checked))}
           />
@@ -71,7 +73,7 @@ export function PageInspector({
       )}
       <XStack wrap className={section.group}>
         <Button size="small" onClick={onPickReference}>
-          {reference === undefined ? '読み込む' : '差し替え'}
+          {reference === undefined ? m.inspector_page_reference_load() : m.inspector_replace()}
         </Button>
         {reference !== undefined && (
           <Button
@@ -79,7 +81,7 @@ export function PageInspector({
             variant="ghost"
             onClick={() => onChange([{ op: 'remove', path: '/reference' }])}
           >
-            削除
+            {m.inspector_remove()}
           </Button>
         )}
       </XStack>
@@ -89,26 +91,23 @@ export function PageInspector({
           disabled={generating || page.panels.length === 0}
           onClick={onGenerateAll}
         >
-          {generating ? '生成中…' : 'このページを全部生成'}
+          {generating ? m.inspector_generating() : m.inspector_page_generate_all()}
         </Button>
         <Typography as="span" tone="muted">
-          コマ {page.panels.length}
+          {m.inspector_panel_title({ order: page.panels.length })}
         </Typography>
       </XStack>
       {diagnosis && (
         <dl className={styles.diagnosis}>
-          <dt>読み順</dt>
+          <dt>{m.inspector_reading_order()}</dt>
           <dd data-ok={diagnosis.readingOrderOk}>
-            {diagnosis.readingOrderOk ? 'OK' : '配置と食い違い'}
+            {diagnosis.readingOrderOk ? 'OK' : m.inspector_page_reading_order_mismatch()}
           </dd>
-          <dt>焦点</dt>
-          <dd>
-            {diagnosis.summary.total} 件: ok {diagnosis.summary.ok} / weak {diagnosis.summary.weak}{' '}
-            / miss {diagnosis.summary.miss}
-          </dd>
+          <dt>{m.inspector_focus()}</dt>
+          <dd>{m.inspector_page_focus_summary(diagnosis.summary)}</dd>
           {diagnosis.issues.length > 0 && (
             <>
-              <dt>指摘</dt>
+              <dt>{m.inspector_page_issues()}</dt>
               <dd>
                 <ul className={styles.issues}>
                   {diagnosis.issues.map((issue, i) => (
