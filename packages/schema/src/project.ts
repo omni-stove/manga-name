@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 4 as const
+export const SCHEMA_VERSION = 5 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -186,6 +186,17 @@ export const PageSchema = PageBaseSchema.superRefine((page, ctx) => {
   checkUniqueOrder(ctx, page.panels, ['panels'])
 })
 
+/** 登録したコマ割り。コマの枠だけを持ち、絵やフキダシは持たない */
+const LayoutTemplateBaseSchema = z.object({
+  id: IdSchema,
+  name: z.string().min(1),
+  panels: z.array(PanelBaseSchema.pick({ order: true, rect: true, shape: true })),
+})
+
+export const LayoutTemplateSchema = LayoutTemplateBaseSchema.superRefine((template, ctx) => {
+  checkUniqueOrder(ctx, template.panels, ['panels'])
+})
+
 export const EpisodeSchema = z.object({
   id: IdSchema,
   title: z.string(),
@@ -201,6 +212,7 @@ export const ProjectBaseSchema = z.object({
   settings: ProjectSettingsSchema,
   characters: z.array(CharacterSchema),
   episodes: z.array(EpisodeSchema),
+  layoutTemplates: z.array(LayoutTemplateSchema).optional(),
 })
 
 export const ProjectSchema = ProjectBaseSchema.superRefine((project, ctx) => {
@@ -267,6 +279,7 @@ export type ReferenceImage = z.infer<typeof ReferenceImageSchema>
 export type Stroke = z.infer<typeof StrokeSchema>
 export type Panel = z.infer<typeof PanelSchema>
 export type Page = z.infer<typeof PageSchema>
+export type LayoutTemplate = z.infer<typeof LayoutTemplateSchema>
 export type Episode = z.infer<typeof EpisodeSchema>
 export type Project = z.infer<typeof ProjectSchema>
 
@@ -355,6 +368,24 @@ if (import.meta.vitest) {
       if (!first) throw new Error('fixture panel 1 has no bubble')
       target.bubbles.push({ ...first, id: 'bb_dup' })
       expect(issuePaths(other)).toContain(panelPath(0, 'bubbles.1.order'))
+    })
+
+    test('LayoutTemplate needs a name and unique panel orders', async () => {
+      const project = await loadFixture()
+      const rect = { x: 0, y: 0, w: 1, h: 0.5 }
+      project.layoutTemplates = [
+        {
+          id: 'lt_1',
+          name: '',
+          panels: [
+            { order: 1, rect },
+            { order: 1, rect },
+          ],
+        },
+      ]
+      const paths = issuePaths(project)
+      expect(paths).toContain('layoutTemplates.0.name')
+      expect(paths).toContain('layoutTemplates.0.panels.1.order')
     })
 
     test('Point, Size and Rect are 0..1', async () => {
