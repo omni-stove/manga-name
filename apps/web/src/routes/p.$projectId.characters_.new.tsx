@@ -94,6 +94,7 @@ function NewCharacter() {
       </XStack>
       <form
         className={styles.add}
+        data-guide="character-form"
         onSubmit={(e) => {
           e.preventDefault()
           const data = new FormData(e.currentTarget)

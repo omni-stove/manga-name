@@ -92,7 +92,7 @@ if (import.meta.vitest) {
     library = createProjectLibrary(storage)
   })
 
-  describe('8 ルートが描画される', () => {
+  describe('7 ルートが描画される', () => {
     test.each([
       ['/', 'プロジェクト一覧'],
       ['/new', '新規プロジェクト'],
@@ -101,10 +101,19 @@ if (import.meta.vitest) {
       [`/p/${projectId}/pages/${pageId}`, 'インスペクタ'],
       [`/p/${projectId}/characters`, 'キャラクター一覧'],
       [`/p/${projectId}/characters/new`, '外見から生成'],
-      ['/onboarding', '焦点と誘導線'],
     ])('%s', async (path, heading) => {
       expect(await render(library, path)).toContain(heading)
     })
+  })
+
+  test('「はじめに」を開くと案内を最初の手順から始める', async () => {
+    const { tour } = await import('./onboarding/tour')
+    try {
+      await render(library, '/onboarding')
+      expect(tour.state.getState()).toEqual({ step: 'project' })
+    } finally {
+      tour.finish()
+    }
   })
 
   test('設定は ?settings= のときだけ、今の画面の上にダイアログで出る', async () => {

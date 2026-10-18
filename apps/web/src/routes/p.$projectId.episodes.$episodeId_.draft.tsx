@@ -16,6 +16,7 @@ import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react
 import { useEffect, useRef, useState } from 'react'
 import common from '../common.module.css'
 import { TemplateSelect, useTemplateChoice } from '../layout-templates'
+import { useTourStep } from '../onboarding/tour-guide'
 import {
   abortable,
   MAX_PAGE_COUNT,
@@ -49,7 +50,8 @@ type Phase =
  * （ページごとの流れ、登場キャラ、セリフ）を作り、全ページを並べて直せる形で見せる。脚本のセリフで
  * どのページにも入っていないものは一覧で知らせる。確かめた割り振りはテンプレート（登録したコマ割りも選べる）のページにし、
  * セリフはコマのフキダシにして、エピソードの末尾に `source: 'ai'` の 1 回の applyPatch で足す。
- * ページを離れると進行中の要求を abort し、後から届いた応答は捨てる
+ * ページを離れると進行中の要求を abort し、後から届いた応答は捨てる。
+ * オンボーディングの案内では、登録したキャラクターを話し手にした例の脚本を入れ、ページ数を 1 に決めておく
  */
 function ScriptDraft() {
   const { projectId, episodeId } = Route.useParams()
@@ -57,8 +59,13 @@ function ScriptDraft() {
   const { llmProvider } = Route.useRouteContext()
   const project = useProject(store)
   const navigate = useNavigate()
-  const [script, setScript] = useState('')
-  const [pageCountText, setPageCountText] = useState('')
+  const touring = useTourStep(projectId) === 'draft'
+  const [script, setScript] = useState(() =>
+    touring
+      ? m.web_tour_script({ name: project.characters[0]?.name ?? m.web_common_untitled() })
+      : '',
+  )
+  const [pageCountText, setPageCountText] = useState(touring ? '1' : '')
   const [tone, setTone] = useState('')
   const [template, setTemplate] = useTemplateChoice(project)
   const [phase, setPhase] = useState<Phase>({ kind: 'input' })
@@ -140,7 +147,7 @@ function ScriptDraft() {
           {m.web_draft_title()}
         </Typography>
       </XStack>
-      <div className={styles.layout}>
+      <div className={styles.layout} data-guide="draft-plan">
         <YStack
           as="form"
           gap={12}
@@ -167,6 +174,8 @@ function ScriptDraft() {
               min={1}
               max={MAX_PAGE_COUNT}
               value={pageCountText}
+              // 案内では 1 ページで足りる脚本を入れてあり、生成を待つ時間も短く済む
+              disabled={touring}
               onChange={(e) => setPageCountText(e.target.value)}
             />
             <YStack gap={4}>
@@ -176,6 +185,7 @@ function ScriptDraft() {
                     key={g.label}
                     size="small"
                     aria-pressed={g.pages === pageCount}
+                    disabled={touring}
                     onClick={() => setPageCountText(String(g.pages))}
                   >
                     {g.label} {g.pages}

@@ -93,7 +93,6 @@ import { errorMessage } from './route-error'
 import { saveFile } from './save-file'
 import { SaveStatusIndicator } from './save-status'
 import { ROLE_LABELS } from './sharing'
-import { Spotlight } from './spotlight'
 import type { Peer } from './store/presence'
 import type { WebProjectStore } from './store/project-store'
 import { toasts } from './toasts'
@@ -186,22 +185,11 @@ export interface PageEditorProps {
   llmProvider: LlmProvider
   /** 使える領域。省略すると全部使える */
   unlocked?: ReadonlySet<EditorArea>
-  /** 手順の案内。`target` 以外をぼかして押せなくし、`target` に `message` の吹き出しを向ける */
-  guide?: { target: GuideTarget; message: string }
-  /** ツールバーの右端、書き出しの前に足す操作 */
-  actions?: ReactNode
+  /** レイヤーの表示を切り替えた */
+  onLayersChange?: (layers: Layers) => void
+  /** ページを書き出して保存した */
+  onExport?: () => void
 }
-
-/** 案内で吹き出しを向けられる操作。`generate` は「このページを全部生成」、`layers` はレイヤーの切り替え */
-export type GuideTarget = 'generate' | 'layers'
-
-const GUIDE_TARGETS: Record<GuideTarget, string> = {
-  generate: '[data-action="generate-all"]',
-  layers: '[data-area="layers"]',
-}
-
-// キャンバスは案内が指す丸や矢印と、生成した絵を見せる所なのでぼかさない。`actions` は案内する側が足した操作
-const GUIDE_KEEP = ['[data-area="canvas"]', '[data-area="actions"]']
 
 /** `open` でなければ中身を見た目そのままで押せなくし、フォーカスも当てない */
 function Area({ open, children }: { open: boolean; children: ReactNode }) {
@@ -289,10 +277,12 @@ export function PageEditor({
   generation,
   llmProvider,
   unlocked,
-  guide,
-  actions,
+  onLayersChange,
+  onExport,
 }: PageEditorProps) {
   const can = (area: EditorArea) => unlocked?.has(area) ?? true
+  // 案内が「このページを全部生成」を指す間は、ボタンが畳んだサイドバーや閉じたページの欄に隠れないよう開いておく
+  const guidingGenerate = unlocked?.has('generate') === true
   const project = useProject(store)
   const generatingState = useStore(generation.generating)
   const generating = generatingPanels(generatingState, projectId)
@@ -399,6 +389,7 @@ export function PageEditor({
     const numbers = Array.from({ length: total }, (_, i) => from + i)
     const ext = format === 'pdf' ? 'pdf' : total === 1 ? 'png' : 'zip'
     setExporting({ done: 0, total })
+    let saved = false
     try {
       const pageIds = episode.pages.slice(from - 1, to).map((p) => p.id)
       const width = Math.round((project.settings.pageSize.w / MM_PER_INCH) * dpi)
@@ -414,10 +405,13 @@ export function PageEditor({
       await saveFile(blob, exportFileName(project.title, numbers, ext), [
         { name: ext.toUpperCase(), extensions: [ext] },
       ])
+      saved = true
     } catch (e) {
       toasts.push(m.web_page_export_failed({ reason: errorMessage(e) }))
     }
     setExporting('closed')
+    // React Compiler は try の中の optional call を扱えないので、呼ぶのは try を出てから
+    if (saved) onExport?.()
   }
   const undoItems: ContextMenuItem[] = [
     { label: 'Undo', shortcut: `${MOD}Z`, disabled: !canUndo, onSelect: () => store.undo() },
@@ -555,28 +549,30 @@ export function PageEditor({
           <HistoryButtons store={store} />
         </Area>
         <Area open={can('tools')}>
-          <SegmentedControl
-            label={m.web_editor_tools()}
-            value={tool}
-            options={tools}
-            onChange={(t) => setTool(t)}
-          />
-          {tool === 'scribble' && (
+          <XStack as="span" gap={20} rowGap={12} wrap data-area="tools">
             <SegmentedControl
-              label={m.web_editor_pen()}
-              value={scribbleTool}
-              options={scribbleTools}
-              onChange={(t) => setScribbleTool(t)}
+              label={m.web_editor_tools()}
+              value={tool}
+              options={tools}
+              onChange={(t) => setTool(t)}
             />
-          )}
-          {tool === 'focus' && (
-            <SegmentedControl
-              label={m.web_editor_focus_kind()}
-              value={focusKind}
-              options={focusKindOptions()}
-              onChange={(k) => setFocusKind(k)}
-            />
-          )}
+            {tool === 'scribble' && (
+              <SegmentedControl
+                label={m.web_editor_pen()}
+                value={scribbleTool}
+                options={scribbleTools}
+                onChange={(t) => setScribbleTool(t)}
+              />
+            )}
+            {tool === 'focus' && (
+              <SegmentedControl
+                label={m.web_editor_focus_kind()}
+                value={focusKind}
+                options={focusKindOptions()}
+                onChange={(k) => setFocusKind(k)}
+              />
+            )}
+          </XStack>
         </Area>
         <Area open={can('layers')}>
           <XStack role="group" aria-label={m.web_editor_layers()} data-area="layers">
@@ -588,18 +584,17 @@ export function PageEditor({
                 key={l.key}
                 label={l.label}
                 checked={layers[l.key]}
-                onChange={(e) => setLayers({ ...layers, [l.key]: e.target.checked })}
+                onChange={(e) => {
+                  const next = { ...layers, [l.key]: e.target.checked }
+                  setLayers(next)
+                  onLayersChange?.(next)
+                }}
               />
             ))}
           </XStack>
         </Area>
         <XStack as="span" gap={6} className={styles.actions}>
           <SaveStatusIndicator store={store} />
-          {actions && (
-            <XStack as="span" gap={6} data-area="actions">
-              {actions}
-            </XStack>
-          )}
           <Area open={can('export')}>
             {typeof exporting === 'object' ? (
               <XStack as="span" className={styles.exportProgress} role="status">
@@ -611,7 +606,12 @@ export function PageEditor({
                 />
               </XStack>
             ) : (
-              <Button size="small" variant="primary" onClick={() => setExporting('dialog')}>
+              <Button
+                size="small"
+                variant="primary"
+                data-guide="export"
+                onClick={() => setExporting('dialog')}
+              >
                 {m.web_editor_export()}
               </Button>
             )}
@@ -645,11 +645,6 @@ export function PageEditor({
           onExport={(settings) => void exportPages(settings)}
           onExportProject={exportProject}
         />
-      )}
-      {guide && (
-        <Spotlight target={GUIDE_TARGETS[guide.target]} keep={GUIDE_KEEP}>
-          {guide.message}
-        </Spotlight>
       )}
       {error && (
         <Typography tone="alert" className={styles.error}>
@@ -698,8 +693,7 @@ export function PageEditor({
         <Sidebar
           title={m.web_editor_inspector()}
           side="right"
-          // 吹き出しを向けるボタンが畳んだサイドバーの中に隠れないよう、案内の間は開いたままにする
-          expanded={inspectorExpanded || guide?.target === 'generate'}
+          expanded={inspectorExpanded || guidingGenerate}
           onExpandedChange={setInspectorExpanded}
           className={styles.inspectorSidebar}
         >
@@ -731,7 +725,7 @@ export function PageEditor({
                   resolveAsset={resolveAsset}
                 />
               </Area>
-              <details open={selection === null}>
+              <details open={selection === null || guidingGenerate}>
                 <summary>{m.web_editor_page()}</summary>
                 <PageInspector
                   page={page}

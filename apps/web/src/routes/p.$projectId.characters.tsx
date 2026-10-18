@@ -30,6 +30,7 @@ function CharacterList() {
         <Button
           size="small"
           variant="primary"
+          data-guide="add-character"
           onClick={() =>
             void navigate({ to: '/p/$projectId/characters/new', params: { projectId } })
           }

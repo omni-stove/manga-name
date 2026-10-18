@@ -48,6 +48,7 @@ export function SideNav() {
           activeOptions={{ exact: true }}
           icon={<GridIcon />}
           label={m.web_project_list()}
+          guide="nav-projects"
         />
         <NavItem to="/onboarding" icon={<SparkIcon />} label={m.web_nav_onboarding()} />
       </YStack>
@@ -104,12 +105,14 @@ function ProjectItems({
         activeOptions={{ exact: !inEpisodes }}
         icon={<PagesIcon />}
         label={m.web_nav_episodes()}
+        guide="nav-episodes"
       />
       <NavItem
         to="/p/$projectId/characters"
         params={{ projectId }}
         icon={<PersonIcon />}
         label={m.web_nav_characters()}
+        guide="nav-characters"
       />
       <NavItem
         to="."
@@ -125,14 +128,17 @@ function ProjectItems({
 function NavItem({
   icon,
   label,
+  guide,
   ...link
 }: Pick<LinkProps, 'to' | 'params' | 'search' | 'replace' | 'activeOptions'> & {
   icon: ReactNode
   label: string
+  /** オンボーディングの案内が吹き出しを向けるときの目印 */
+  guide?: string
 }) {
   return (
     <li>
-      <Link {...link} className={styles.item} title={label}>
+      <Link {...link} className={styles.item} title={label} data-guide={guide}>
         {icon}
         <span className={styles.label}>{label}</span>
       </Link>

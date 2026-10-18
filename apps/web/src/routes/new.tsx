@@ -2,6 +2,7 @@ import { m } from '@manga/i18n'
 import { Button, FileDrop, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
+import { tour } from '../onboarding/tour'
 import { parseProjectFile } from '../project-file'
 import { errorMessage } from '../route-error'
 import styles from './projects.module.css'
@@ -38,11 +39,13 @@ function NewProject() {
       <Typography variant="title">{m.web_new_project_title()}</Typography>
       <form
         className={styles.create}
+        data-guide="new-project"
         onSubmit={(e) => {
           e.preventDefault()
           const title = String(new FormData(e.currentTarget).get('title') ?? '').trim()
           void run(async () => {
             const project = await library.create(title || m.web_common_untitled())
+            tour.created(project.id)
             await navigate({ to: '/p/$projectId', params: { projectId: project.id } })
           })
         }}
