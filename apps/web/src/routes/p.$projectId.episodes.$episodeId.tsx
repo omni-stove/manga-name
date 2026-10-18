@@ -1,12 +1,22 @@
 import { m } from '@manga/i18n'
 import { type Episode, pageCharacterIds } from '@manga/schema'
-import { Button, ConfirmDialog, Input, RemoveButton, Typography, XStack, YStack } from '@manga/ui'
+import {
+  Button,
+  ConfirmDialog,
+  IconButton,
+  Input,
+  RemoveButton,
+  Typography,
+  XStack,
+  YStack,
+} from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { PeerBadge, usePeers } from '../collaboration-view'
 import collabStyles from '../collaboration-view.module.css'
 import common from '../common.module.css'
+import { Icon } from '../history-buttons'
 import { TemplateSelect, useTemplateChoice } from '../layout-templates'
 import { PageThumbnail } from '../page-thumbnail'
 import {
@@ -62,15 +72,16 @@ function EpisodePages() {
 
   return (
     <YStack gap={8}>
-      <XStack wrap gap={12}>
-        <Link to="/p/$projectId" params={{ projectId }}>
+      <YStack as="header" gap={4}>
+        <Link to="/p/$projectId" params={{ projectId }} className={styles.back}>
+          <span aria-hidden>← </span>
           {m.web_episode_list()}
         </Link>
-        <EpisodeTitle episode={episode} apply={apply} />
-        <Button size="small" variant="ghost" onClick={() => setRemovingEpisode(true)}>
-          {m.web_episode_remove()}
-        </Button>
-      </XStack>
+        <XStack gap={12} justify="between">
+          <EpisodeTitle episode={episode} apply={apply} />
+          <RemoveButton label={m.web_episode_remove()} onClick={() => setRemovingEpisode(true)} />
+        </XStack>
+      </YStack>
       {removingEpisode && (
         <RemoveEpisodeDialog
           episode={episode}
@@ -242,7 +253,7 @@ function EpisodePages() {
   )
 }
 
-/** 話の名前の見出し。「名前を変更」で入力欄に替わり、保存すると反映する */
+/** 話の名前の見出し。横の鉛筆の「名前を変更」で入力欄に替わり、保存すると反映する */
 function EpisodeTitle({
   episode,
   apply,
@@ -254,19 +265,21 @@ function EpisodeTitle({
   const [title, setTitle] = useState(episode.title)
   if (!editing) {
     return (
-      <>
+      <XStack gap={4}>
         <Typography variant="heading">{episode.title}</Typography>
-        <Button
+        <IconButton
           size="small"
-          variant="ghost"
+          label={m.web_episode_rename()}
           onClick={() => {
             setTitle(episode.title)
             setEditing(true)
           }}
         >
-          {m.web_episode_rename()}
-        </Button>
-      </>
+          <Icon>
+            <path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4" />
+          </Icon>
+        </IconButton>
+      </XStack>
     )
   }
   return (

@@ -1,3 +1,13 @@
+.back {
+  font-size: var(--text-s);
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--text);
+}
+
 /* ページの無い話のカードも、ページのある話のサムネイルと同じ紙の大きさにして並びを揃える */
 .blank {
   background: var(--paper);
