@@ -81,7 +81,8 @@ const describeCharacter = (c: Character) => (c.appearance ? `${c.name}: ${c.appe
 
 /** 全キャラに共通するデザインの行。キャラを描かせるプロンプトでだけ、キャラの行の前に入れる */
 const characterDesign = (settings: ProjectSettings) =>
-  settings.characterDesign && `character design shared by every character: ${settings.characterDesign}`
+  settings.characterDesign &&
+  `character design shared by every character: ${settings.characterDesign}`
 
 /**
  * コマの中身を表す行。カメラ、指示メモ、登場キャラ、焦点（重い順）、誘導線、ヒント。空の行も含む。
@@ -471,7 +472,9 @@ if (import.meta.vitest) {
       .panelArt({ project: { ...project, settings }, page, panelId: 'pn_1' })
       .prompt.split('\n')
     expect(panelLines[1]).toBe(design)
-    const pageLines = prompts.pageArt({ project: { ...project, settings }, page }).prompt.split('\n')
+    const pageLines = prompts
+      .pageArt({ project: { ...project, settings }, page })
+      .prompt.split('\n')
     expect(pageLines[2]).toBe(design)
     expect(pageLines[3]?.startsWith('characters: ')).toBe(true)
 

@@ -57,6 +57,7 @@ function CharacterList() {
         defaultValue={project.settings.characterDesign ?? ''}
         onBlur={(e) => {
           const next = e.currentTarget.value.trim()
+          if (characterDesignPatch(project.settings, next).length === 0) return
           apply(m.web_characters_design_history(), (p) => characterDesignPatch(p.settings, next))
         }}
       />
