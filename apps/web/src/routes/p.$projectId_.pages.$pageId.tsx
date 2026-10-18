@@ -396,7 +396,6 @@ function Editor() {
   const menuContext = {
     page,
     tools,
-    generating,
     edit: (label: string, target: NonNullable<Selection>, patch: Patch) =>
       apply(label, (p) => elementPatch(p, pageId, target, patch)),
     remove: (target: NonNullable<Selection>) => {
@@ -407,7 +406,6 @@ function Editor() {
       })
       if (removed) setSelection(null)
     },
-    generate: (panelId: ID) => generate(panelId),
     setTool,
     openShapes: () => menu && setMenu({ ...menu, shapes: true }),
   }
