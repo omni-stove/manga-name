@@ -1,10 +1,11 @@
 import { Button, Typography } from '@manga/ui'
+import { Suspense, use } from 'react'
+import { assetUrl } from './asset-url'
 import styles from './character-inspector.module.css'
 import { DEBOUNCE_MS, Group, TextField } from './fields'
 import { optionalString, replace } from './patch'
 import section from './section.module.css'
 import type { CharacterInspectorProps } from './types'
-import { useAssetUrls } from './use-asset-urls'
 
 /**
  * 参照画像が無いキャラに出す既定の画像。キャラごとの見た目を持たないので生成には送らず、
@@ -25,6 +26,17 @@ function DefaultReference() {
   )
 }
 
+function Reference({ url, alt }: { url: Promise<string | null>; alt: string }) {
+  const resolved = use(url)
+  if (resolved === null)
+    return (
+      <Typography as="span" tone="muted">
+        読み込めません
+      </Typography>
+    )
+  return <img className={styles.reference} src={resolved} alt={alt} />
+}
+
 export function CharacterInspector({
   character,
   onChange,
@@ -34,8 +46,6 @@ export function CharacterInspector({
   resolveAsset,
 }: CharacterInspectorProps) {
   const ref = character.referenceRef
-  const urls = useAssetUrls(ref === undefined ? [] : [ref], resolveAsset)
-  const url = ref === undefined ? undefined : urls.get(ref)
   return (
     <div className={section.section} data-inspector="character">
       <Typography variant="subheading" className={section.title}>
@@ -64,12 +74,16 @@ export function CharacterInspector({
       <Group label="参照画像">
         {ref === undefined ? (
           <DefaultReference />
-        ) : url ? (
-          <img className={styles.reference} src={url} alt={`${character.name} の参照画像`} />
         ) : (
-          <Typography as="span" tone="muted">
-            {url === null ? '読み込めません' : '読み込み中…'}
-          </Typography>
+          <Suspense
+            fallback={
+              <Typography as="span" tone="muted">
+                読み込み中…
+              </Typography>
+            }
+          >
+            <Reference url={assetUrl(resolveAsset, ref)} alt={`${character.name} の参照画像`} />
+          </Suspense>
         )}
         <Button size="small" disabled={generating} onClick={onPickReference}>
           {ref === undefined ? '画像を選ぶ' : '差し替え'}

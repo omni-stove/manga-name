@@ -21,6 +21,7 @@ import {
 } from '../project-ops'
 import { RemoveEpisodeDialog } from '../remove-episode-dialog'
 import type { ProjectStore } from '../store/project-store'
+import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
 import styles from './pages.module.css'
 
@@ -38,6 +39,7 @@ function EpisodePages() {
   const { projectId, episodeId } = Route.useParams()
   const { store, collab } = projectRoute.useLoaderData()
   const { library } = Route.useRouteContext()
+  const resolveAsset = useAssetResolver(library.resolveAsset)
   const project = useProject(store)
   const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
@@ -142,7 +144,7 @@ function EpisodePages() {
                   <PageThumbnail
                     page={page}
                     pageSize={project.settings.pageSize}
-                    resolveAsset={library.resolveAsset}
+                    resolveAsset={resolveAsset}
                   />
                   <strong>{index + 1} ページ</strong>
                 </YStack>

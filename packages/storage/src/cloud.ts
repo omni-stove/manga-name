@@ -6,7 +6,12 @@ import {
   parseProject,
   readApiError,
 } from '@manga/schema'
-import { byUpdatedAtDesc, type ProjectSummary, type StorageAdapter } from './adapter'
+import {
+  byUpdatedAtDesc,
+  type ProjectSummary,
+  type ProjectsByOrigin,
+  type StorageAdapter,
+} from './adapter'
 
 /** ローカルのプロジェクト 1 件と、それに対応するクラウドのプロジェクトの同期記録 */
 export interface CloudLink {
@@ -80,6 +85,8 @@ export interface SyncStatus {
 }
 
 export interface CloudStorage extends StorageAdapter {
+  /** `local` は手元の一覧、`cloudOnly` は `GET /v1/projects` のうち手元に無くリンクも無いもの */
+  listProjectsByOrigin(): ProjectsByOrigin
   /**
    * ローカルの id のプロジェクトの共同編集（`GET /v1/projects/:id/sync`）の WebSocket URL。
    * ブラウザの WebSocket はヘッダを付けられないので、呼ぶたびに使い捨ての接続チケットを発行して `?ticket=` に載せる。
@@ -792,21 +799,34 @@ export function createCloudStorage(opts: CloudStorageOptions): CloudStorage {
     return localProject
   }
 
-  return {
-    async listProjects() {
-      const [localList, entries] = await Promise.all([local.listProjects(), links.entries()])
-      let remote: ProjectSummary[] = []
+  function listProjectsByOrigin(): ProjectsByOrigin {
+    const localList = local.listProjects()
+    const fetchRemote = async (): Promise<ProjectSummary[]> => {
       try {
         const res = await request('')
-        if (res?.ok) remote = ((await res.json()) as { projects: ProjectSummary[] }).projects
+        if (res?.ok) return ((await res.json()) as { projects: ProjectSummary[] }).projects
       } catch {
         // オフラインでもローカルの一覧は出す
       }
-      const localIds = new Set(localList.map((p) => p.id))
-      const linked = new Set(entries.filter(([id]) => localIds.has(id)).map(([, l]) => l.cloudId))
-      const cloudOnly = remote.filter((p) => !linked.has(p.id) && !localIds.has(p.id))
-      return [...localList, ...cloudOnly].sort(byUpdatedAtDesc)
+      return []
+    }
+    const cloudOnly = Promise.all([localList, links.entries(), fetchRemote()]).then(
+      ([localList, entries, remote]) => {
+        const localIds = new Set(localList.map((p) => p.id))
+        const linked = new Set(entries.filter(([id]) => localIds.has(id)).map(([, l]) => l.cloudId))
+        return remote.filter((p) => !linked.has(p.id) && !localIds.has(p.id)).sort(byUpdatedAtDesc)
+      },
+      () => [],
+    )
+    return { local: localList, cloudOnly }
+  }
+
+  return {
+    async listProjects() {
+      const { local, cloudOnly } = listProjectsByOrigin()
+      return [...(await local), ...(await cloudOnly)].sort(byUpdatedAtDesc)
     },
+    listProjectsByOrigin,
     loadProject: loadLinked,
     async saveProject(p) {
       await local.saveProject(p)
@@ -1280,6 +1300,35 @@ if (import.meta.vitest) {
       server.use(http.get(`${BASE}/v1/projects`, () => HttpResponse.error()))
       expect(await storage.loadProject(p.id)).toEqual(p)
       expect(await storage.listProjects()).toEqual([summarize(p)])
+    })
+
+    test('listProjectsByOrigin lists the local projects without waiting for the API', async () => {
+      const api = useApi()
+      const a = createDevice()
+      const shared = createEmptyProject('cloud')
+      await a.storage.saveProject(shared)
+      await a.storage.flush()
+      const cloudId = await cloudIdOf(a.links, shared.id)
+
+      const b = createDevice()
+      const mine = createEmptyProject('local')
+      await b.local.saveProject(mine)
+      let release = () => {}
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      server.use(
+        http.get(`${BASE}/v1/projects`, async () => {
+          await held
+          return HttpResponse.json({ projects: [...api.rows.values()].map(summarize) })
+        }),
+      )
+      const { local, cloudOnly } = b.storage.listProjectsByOrigin()
+      expect(await local).toEqual([summarize(mine)])
+      release()
+      expect(await cloudOnly).toEqual([
+        { id: cloudId, title: 'cloud', updatedAt: api.rows.get(cloudId)?.updatedAt },
+      ])
     })
 
     test('deleteProject removes the project locally and in the cloud', async () => {
