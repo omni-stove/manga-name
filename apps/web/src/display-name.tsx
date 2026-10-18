@@ -1,10 +1,9 @@
+import { m } from '@manga/i18n'
 import { DISPLAY_NAME_MAX_LENGTH, DisplayNameSchema } from '@manga/schema'
 import { Button, Dialog, Input, Typography, XStack } from '@manga/ui'
 import { useState } from 'react'
 import { errorMessage } from './route-error'
 import { useAuth } from './use-auth'
-
-const HINT = '同じプロジェクトのメンバーに見える名前です。Google アカウントの名前は使いません'
 
 /** 表示名の入力と保存。保存できたら true を返す */
 function useDisplayNameInput(initial: string) {
@@ -15,7 +14,7 @@ function useDisplayNameInput(initial: string) {
   const save = async () => {
     const parsed = DisplayNameSchema.safeParse(value)
     if (!parsed.success) {
-      setError(`1〜${DISPLAY_NAME_MAX_LENGTH} 文字で入力してください`)
+      setError(m.web_display_name_length_error({ max: DISPLAY_NAME_MAX_LENGTH }))
       return false
     }
     setBusy(true)
@@ -32,12 +31,12 @@ function useDisplayNameInput(initial: string) {
   }
   const input = (
     <Input
-      label="表示名"
+      label={m.web_display_name_label()}
       value={value}
       maxLength={DISPLAY_NAME_MAX_LENGTH}
       required
       autoComplete="nickname"
-      hint={HINT}
+      hint={m.web_display_name_hint()}
       error={error}
       onChange={(e) => setValue(e.target.value)}
     />
@@ -60,21 +59,21 @@ function DisplayNameDialogBody({ onClose }: { onClose(): void }) {
   const { input, busy, save } = useDisplayNameInput('')
   return (
     <Dialog
-      title="表示名を決める"
+      title={m.web_display_name_dialog_title()}
       onClose={onClose}
       onSubmit={() => void save()}
       actions={
         <>
           <Button type="button" variant="ghost" onClick={onClose}>
-            あとで
+            {m.web_display_name_later()}
           </Button>
           <Button type="submit" variant="primary" disabled={busy}>
-            決める
+            {m.web_display_name_decide()}
           </Button>
         </>
       }
     >
-      <Typography>ペンネームなど、本名でなくてもかまいません。</Typography>
+      <Typography>{m.web_display_name_dialog_body()}</Typography>
       {input}
     </Dialog>
   )
@@ -95,11 +94,11 @@ export function DisplayNameForm({ name }: { name: string }) {
       <XStack wrap align="end">
         {input}
         <Button type="submit" size="small" disabled={busy}>
-          保存
+          {m.web_common_save()}
         </Button>
         {saved && (
           <Typography as="span" tone="muted" role="status">
-            保存しました
+            {m.web_common_saved()}
           </Typography>
         )}
       </XStack>

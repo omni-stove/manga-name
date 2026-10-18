@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { BUBBLE_SHAPES } from '@manga/inspector'
 import type { Character, PagePlan, PlanLine, Project } from '@manga/schema'
 import {
@@ -75,7 +76,7 @@ function ScriptDraft() {
 
   const pageCount = parsePageCount(pageCountText)
   const pageCountError =
-    pageCount === null ? `1〜${MAX_PAGE_COUNT} の整数にしてください` : undefined
+    pageCount === null ? m.web_draft_page_count_error({ max: MAX_PAGE_COUNT }) : undefined
   const pageCountGuide = PAGE_COUNT_GUIDES.find((g) => g.pages === pageCount)
 
   const plan = async () => {
@@ -113,7 +114,7 @@ function ScriptDraft() {
       )
       store.applyPatch(appendPagesPatch(store.get(), pages, episodeId), {
         source: 'ai',
-        label: '脚本から下書き',
+        label: m.web_draft_title(),
       })
       void backToEpisode()
     } catch (e) {
@@ -135,10 +136,10 @@ function ScriptDraft() {
     <YStack gap={12}>
       <XStack wrap gap={12}>
         <Link to="/p/$projectId/episodes/$episodeId" params={{ projectId, episodeId }}>
-          {episode?.title ?? 'エピソード'}
+          {episode?.title ?? m.web_draft_episode_fallback()}
         </Link>
         <Typography as="h1" variant="heading">
-          脚本から下書き
+          {m.web_draft_title()}
         </Typography>
       </XStack>
       <div className={styles.layout}>
@@ -153,16 +154,16 @@ function ScriptDraft() {
         >
           <YStack as="fieldset" gap={12} className={styles.fieldset} disabled={isRunning}>
             <TextArea
-              label="脚本"
-              hint="セリフとト書きをそのまま貼り付けます"
+              label={m.web_draft_script()}
+              hint={m.web_draft_script_hint()}
               className={styles.script}
               rows={16}
               value={script}
               onChange={(e) => setScript(e.target.value)}
             />
             <Input
-              label="ページ数"
-              hint="この枚数に脚本を割り振ります。空なら脚本に合わせます"
+              label={m.web_draft_page_count()}
+              hint={m.web_draft_page_count_hint()}
               error={pageCountError}
               type="number"
               min={1}
@@ -171,7 +172,7 @@ function ScriptDraft() {
               onChange={(e) => setPageCountText(e.target.value)}
             />
             <YStack gap={4}>
-              <XStack wrap gap={8} role="group" aria-label="商業誌の目安">
+              <XStack wrap gap={8} role="group" aria-label={m.web_draft_page_count_guides()}>
                 {PAGE_COUNT_GUIDES.map((g) => (
                   <Button
                     key={g.label}
@@ -190,44 +191,42 @@ function ScriptDraft() {
               )}
             </YStack>
             <Input
-              label="トーンのヒント"
+              label={m.web_draft_tone()}
               value={tone}
-              placeholder="例: 静かで寂しい"
+              placeholder={m.web_draft_tone_placeholder()}
               onChange={(e) => setTone(e.target.value)}
             />
           </YStack>
           <XStack wrap gap={8}>
             {isRunning ? (
-              <Button onClick={stop}>中止</Button>
+              <Button onClick={stop}>{m.web_draft_stop()}</Button>
             ) : (
               <Button
                 type="submit"
                 variant={phase.kind === 'plan' ? 'secondary' : 'primary'}
                 disabled={script.trim() === '' || pageCount === null}
               >
-                {phase.kind === 'plan' ? 'ページ割りを作り直す' : 'ページ割りを作る'}
+                {phase.kind === 'plan' ? m.web_draft_replan() : m.web_draft_plan()}
               </Button>
             )}
           </XStack>
           {isRunning && (
             <XStack as="p" className={styles.progress} role="status">
-              ページ割りを作っています…
-              <progress aria-label="ページ割りの進行" />
+              {m.web_draft_planning()}
+              <progress aria-label={m.web_draft_planning_progress()} />
             </XStack>
           )}
           {phase.kind === 'failed' && (
             <FailureAlert
-              failure="ページ割りを作れませんでした"
+              failure={m.web_draft_plan_failed()}
               error={phase.error}
               signInButton={false}
             />
           )}
         </YStack>
-        <YStack as="section" gap={12} aria-label="ページ割り">
+        <YStack as="section" gap={12} aria-label={m.web_draft_plan_section()}>
           {plans.length === 0 ? (
-            <Typography tone="muted">
-              脚本を入れてページ割りを作ると、ここにページごとの流れ、登場キャラ、セリフが並びます
-            </Typography>
+            <Typography tone="muted">{m.web_draft_empty()}</Typography>
           ) : (
             <>
               <XStack
@@ -241,13 +240,13 @@ function ScriptDraft() {
                 }}
               >
                 <Typography>
-                  {plans.length} ページ / セリフ {lineCount}
+                  {m.web_draft_summary({ pages: plans.length, lines: lineCount })}
                 </Typography>
                 <TemplateSelect project={project} value={template} onChange={setTemplate} />
                 <Button type="submit" variant="primary" disabled={isRunning}>
-                  {plans.length} ページを追加
+                  {m.web_draft_add_pages({ count: plans.length })}
                 </Button>
-                <Button onClick={discard}>破棄</Button>
+                <Button onClick={discard}>{m.web_draft_discard()}</Button>
               </XStack>
               {addError && (
                 <Typography tone="alert" role="alert">
@@ -256,19 +255,21 @@ function ScriptDraft() {
               )}
               {planned?.pageCount !== undefined && plans.length !== planned.pageCount && (
                 <Typography tone="muted" role="status">
-                  {planned.pageCount} ページの指定に対して {plans.length}{' '}
-                  ページの割り振りです。合わなければ作り直してください
+                  {m.web_draft_page_count_mismatch({
+                    requested: planned.pageCount,
+                    planned: plans.length,
+                  })}
                 </Typography>
               )}
               {missing.length > 0 && (
                 <YStack gap={4} role="status" className={styles.missing} data-missing-lines>
                   <Typography weight="bold">
-                    脚本のセリフ {missing.length} 個がどのページにも入っていません
+                    {m.web_draft_missing_lines({ count: missing.length })}
                   </Typography>
                   <ul className={styles.missingList}>
                     {missing.map((line, i) => (
                       // biome-ignore lint/suspicious/noArrayIndexKey: 同じセリフが脚本に何度も出ることがある
-                      <li key={i}>「{line}」</li>
+                      <li key={i}>{m.web_draft_missing_line({ line })}</li>
                     ))}
                   </ul>
                 </YStack>
@@ -281,8 +282,6 @@ function ScriptDraft() {
     </YStack>
   )
 }
-
-const CAST_LABEL = '登場キャラ'
 
 /** ページ割りの全ページを 1 行ずつ並べ、流れ、登場キャラ、セリフを直せるようにする */
 function PlanList({
@@ -323,7 +322,7 @@ function PlanList({
           </Typography>
           <YStack gap={8}>
             <TextArea
-              label="流れ"
+              label={m.web_draft_flow()}
               rows={3}
               value={p.note}
               onChange={(e) => editPlan(index, () => ({ note: e.target.value }))}
@@ -334,7 +333,7 @@ function PlanList({
                 wrap
                 gap={8}
                 className={styles.fieldset}
-                aria-label={CAST_LABEL}
+                aria-label={m.web_draft_cast()}
               >
                 {characters.map((c) => (
                   <Checkbox
@@ -356,10 +355,15 @@ function PlanList({
               </XStack>
             )}
           </YStack>
-          <YStack gap={6} as="fieldset" className={styles.fieldset} aria-label="このページのセリフ">
+          <YStack
+            gap={6}
+            as="fieldset"
+            className={styles.fieldset}
+            aria-label={m.web_draft_page_lines()}
+          >
             {p.lines.length === 0 && (
               <Typography variant="caption" tone="muted">
-                セリフなし
+                {m.web_draft_no_lines()}
               </Typography>
             )}
             <ol className={styles.lines}>
@@ -377,7 +381,7 @@ function PlanList({
                     {j === 0 && index > 0 && (
                       <IconButton
                         size="small"
-                        label="前のページへ"
+                        label={m.web_draft_line_to_previous_page()}
                         onClick={() => moveEdgeLine(index, -1)}
                       >
                         ↑
@@ -386,7 +390,7 @@ function PlanList({
                     {j === p.lines.length - 1 && index < plans.length - 1 && (
                       <IconButton
                         size="small"
-                        label="次のページへ"
+                        label={m.web_draft_line_to_next_page()}
                         onClick={() => moveEdgeLine(index, 1)}
                       >
                         ↓
@@ -394,7 +398,7 @@ function PlanList({
                     )}
                     <IconButton
                       size="small"
-                      label="セリフを削除"
+                      label={m.web_draft_remove_line()}
                       onClick={() => editLines(index, (lines) => lines.filter((_, k) => k !== j))}
                     >
                       ×
@@ -409,7 +413,7 @@ function PlanList({
               className={styles.addLine}
               onClick={() => editLines(index, (lines) => [...lines, { text: '', shape: 'normal' }])}
             >
-              セリフを足す
+              {m.web_draft_add_line()}
             </Button>
           </YStack>
         </li>
@@ -431,7 +435,7 @@ function LineEditor({
   return (
     <XStack gap={4} className={styles.lineFields}>
       <Select
-        label="話し手"
+        label={m.web_draft_speaker()}
         hideLabel
         className={styles.lineSelect}
         value={line.speakerId ?? ''}
@@ -441,7 +445,7 @@ function LineEditor({
           onChange(id === '' ? rest : { ...rest, speakerId: id })
         }}
       >
-        <option value="">（なし）</option>
+        <option value="">{m.web_draft_no_speaker()}</option>
         {characters.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}
@@ -449,7 +453,7 @@ function LineEditor({
         ))}
       </Select>
       <Select
-        label="形"
+        label={m.web_draft_shape()}
         hideLabel
         className={styles.lineSelect}
         value={line.shape}
@@ -462,7 +466,7 @@ function LineEditor({
         ))}
       </Select>
       <Input
-        label="セリフ"
+        label={m.web_draft_line()}
         hideLabel
         className={styles.lineText}
         value={line.text}

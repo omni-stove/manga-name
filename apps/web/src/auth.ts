@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { readApiError } from '@manga/schema'
 
 /** ログイン中のユーザー。Better Auth の user の画面で使う分だけ */
@@ -174,7 +175,7 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
       await refreshOnce()
     },
     async signIn({ inviteToken } = {}) {
-      if (baseUrl === '') throw new Error('API の URL が設定されていない')
+      if (baseUrl === '') throw new Error(m.web_auth_api_url_missing())
       const res = await authFetch('/sign-in/social', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -192,7 +193,7 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
       navigate(url)
     },
     async setName(name) {
-      if (session === null) throw new Error('ログインしていません')
+      if (session === null) throw new Error(m.web_auth_not_signed_in())
       const res = await fetchWithAuth(`${baseUrl}/v1/me`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
@@ -216,13 +217,16 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
   }
 }
 
-// キーは workers/api の validateSignUp が返す値
-const SIGN_IN_ERRORS: Record<string, string> = {
-  invite_required:
-    'アカウントは招待リンクからしか作れません。招待した人にリンクを頼み、そのリンクからログインしてください',
-  invite_email_mismatch:
-    'この招待は別のメールアドレス宛てです。招待されたメールアドレスの Google アカウントでログインしてください',
+/** workers/api の validateSignUp が返す値 */
+type SignInErrorCode = 'invite_required' | 'invite_email_mismatch'
+
+const SIGN_IN_ERRORS: Record<SignInErrorCode, () => string> = {
+  invite_required: () => m.web_sign_in_error_invite_required(),
+  invite_email_mismatch: () => m.web_sign_in_error_invite_email_mismatch(),
 }
+
+const isSignInErrorCode = (code: string): code is SignInErrorCode =>
+  Object.hasOwn(SIGN_IN_ERRORS, code)
 
 /**
  * Google からの戻りでログインできなかったとき Better Auth が戻り先に付ける `?error=` を読み、
@@ -234,7 +238,9 @@ export function takeSignInError(url: URL): { message: string; url: URL } | null 
   const rest = new URL(url)
   rest.searchParams.delete('error')
   rest.searchParams.delete('error_description')
-  const message = SIGN_IN_ERRORS[code] ?? `ログインできませんでした（${code}）`
+  const message = isSignInErrorCode(code)
+    ? SIGN_IN_ERRORS[code]()
+    : m.web_sign_in_error_unknown({ code })
   return { message, url: rest }
 }
 

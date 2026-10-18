@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { Button, FileDrop, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
@@ -13,10 +14,10 @@ export const Route = createFileRoute('/p/$projectId/characters_/new')({ componen
 const projectRoute = getRouteApi('/p/$projectId')
 
 const FIELDS = [
-  { name: 'name', label: '名前', required: true },
-  { name: 'shortName', label: '略称', required: true },
-  { name: 'appearance', label: '外見（生成プロンプトに入る）', required: false },
-  { name: 'note', label: 'メモ', required: false },
+  { name: 'name', label: () => m.web_character_field_name(), required: true },
+  { name: 'shortName', label: () => m.web_character_field_short_name(), required: true },
+  { name: 'appearance', label: () => m.web_character_field_appearance(), required: false },
+  { name: 'note', label: () => m.web_character_field_note(), required: false },
 ] as const
 
 /**
@@ -48,15 +49,15 @@ function NewCharacter() {
   const add = async (fields: CharacterFields, image: File | undefined) => {
     setFailure(undefined)
     setBusy(image ? 'adding' : 'generating')
-    let stage = 'キャラクターを追加できませんでした'
+    let stage = m.web_character_add_failed()
     try {
       const { character } = addCharacterPatch(fields)
       let source: Blob
       if (image) {
-        stage = '参照画像を読み込めませんでした'
+        stage = m.web_character_reference_read_failed()
         source = image
       } else {
-        stage = '参照画像を生成できませんでした'
+        stage = m.web_character_reference_generate_failed()
         source = (
           await imageProvider.generateCharacterArt({
             project: { settings: project.settings },
@@ -70,7 +71,9 @@ function NewCharacter() {
         'reference',
       )
       if (!mounted.current) return
-      if (apply('キャラクターを追加', () => addCharacterPatch({ ...fields, referenceRef }).patch)) {
+      if (
+        apply(m.web_characters_add(), () => addCharacterPatch({ ...fields, referenceRef }).patch)
+      ) {
         await backToList()
       }
     } catch (err) {
@@ -84,10 +87,10 @@ function NewCharacter() {
     <YStack gap={12}>
       <XStack wrap gap={12}>
         <Link to="/p/$projectId/characters" params={{ projectId }}>
-          キャラクター一覧
+          {m.web_characters_title()}
         </Link>
         <Typography as="h1" variant="heading">
-          キャラクターを追加
+          {m.web_characters_add()}
         </Typography>
       </XStack>
       <form
@@ -113,16 +116,16 @@ function NewCharacter() {
           {FIELDS.map((field) => (
             <Input
               key={field.name}
-              label={field.label}
+              label={field.label()}
               name={field.name}
               required={field.required}
             />
           ))}
           <FileDrop
-            label="参照画像"
+            label={m.web_character_reference()}
             name="reference"
             accept={REFERENCE_ACCEPT}
-            hint="選ばなければ名前と外見から生成します"
+            hint={m.web_character_reference_hint()}
           />
         </YStack>
         {failure && <FailureAlert {...failure} signInButton={false} />}
@@ -133,10 +136,14 @@ function NewCharacter() {
         )}
         <XStack wrap gap={8}>
           <Button type="submit" size="small" variant="primary" disabled={busy !== undefined}>
-            {busy === 'generating' ? '生成中…' : busy === 'adding' ? '追加中…' : '追加'}
+            {busy === 'generating'
+              ? m.web_common_generating()
+              : busy === 'adding'
+                ? m.web_character_adding()
+                : m.web_common_add()}
           </Button>
           <Button size="small" onClick={() => void backToList()}>
-            キャンセル
+            {m.web_common_cancel()}
           </Button>
         </XStack>
       </form>
