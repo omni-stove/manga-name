@@ -31,6 +31,14 @@ export function ContextMenu({ label, x, y, items, onClose }: ContextMenuProps) {
   const latestClose = useRef(onClose)
   latestClose.current = onClose
 
+  // 項目へのフォーカスより先に控え、閉じたときに戻す。戻さないとフォーカスが body に落ち、キャンバスのキー操作が効かなくなる
+  useLayoutEffect(() => {
+    const opener = document.activeElement
+    return () => {
+      if (opener instanceof HTMLElement) opener.focus({ preventScroll: true })
+    }
+  }, [])
+
   useLayoutEffect(() => {
     const menu = ref.current
     if (!menu) return
