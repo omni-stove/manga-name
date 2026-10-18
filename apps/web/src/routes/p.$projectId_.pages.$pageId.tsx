@@ -1,5 +1,6 @@
 import { diagnosePage } from '@manga/diagnosis'
 import {
+  type CanvasMenuRequest,
   EditorCanvas,
   type Layers,
   type ScribbleTool,
@@ -35,6 +36,7 @@ import {
 import {
   Button,
   Checkbox,
+  ContextMenu,
   IconButton,
   SegmentedControl,
   type SegmentedOption,
@@ -56,7 +58,7 @@ import { exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
 import { REFERENCE_ACCEPT, useFilePicker } from '../file-picker'
 import { generatingPanels, usesHint, usesReference } from '../generate-panel'
-import { HistoryButtons, Icon } from '../history-buttons'
+import { HistoryButtons, Icon, MOD } from '../history-buttons'
 import {
   bubblePatch,
   findBubble,
@@ -222,6 +224,8 @@ function Editor() {
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
   const [inspectorExpanded, setInspectorExpanded] = useStoredFlag('manga.inspector.expanded', true)
+  const [menu, setMenu] = useState<CanvasMenuRequest | null>(null)
+  const { canUndo, canRedo } = useStore(store.state)
   useUndoShortcuts(store)
   const navigate = useNavigate()
   const importReference = (file: Blob) => {
@@ -435,6 +439,44 @@ function Editor() {
           )}
         </XStack>
       </XStack>
+      {menu && (
+        <ContextMenu
+          label="ページのメニュー"
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            {
+              label: 'Undo',
+              shortcut: `${MOD}Z`,
+              disabled: !canUndo,
+              onSelect: () => store.undo(),
+            },
+            {
+              label: 'Redo',
+              shortcut: `${MOD}Shift+Z`,
+              disabled: !canRedo,
+              onSelect: () => store.redo(),
+            },
+            'separator',
+            { label: '全体を表示', onSelect: menu.fit },
+            ...(canEdit ? [{ label: '参考画像を読み込む…', onSelect: referencePicker.open }] : []),
+            'separator',
+            {
+              label: '前のページ',
+              shortcut: PREV_PAGE_KEY,
+              disabled: !prevPage,
+              onSelect: () => prevPage && openPage(prevPage.id),
+            },
+            {
+              label: '次のページ',
+              shortcut: NEXT_PAGE_KEY,
+              disabled: !nextPage,
+              onSelect: () => nextPage && openPage(nextPage.id),
+            },
+          ]}
+        />
+      )}
       {exporting === 'dialog' && (
         <ExportDialog
           pages={episode.pages}
@@ -481,6 +523,7 @@ function Editor() {
             onSelect={setSelection}
             onGenerate={generate}
             resolveAsset={resolveAsset}
+            onContextMenu={setMenu}
           />
         </div>
         <Sidebar

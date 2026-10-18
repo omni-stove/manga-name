@@ -1,6 +1,7 @@
 import type { Page, Patch } from '@manga/schema'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useRef,
   useState,
@@ -55,7 +56,7 @@ export function useSelection(opts: Options) {
   const [hovered, setHovered] = useState<Selection>(null)
   const pending = useRef<{ pointerId: number; x: number; y: number } | null>(null)
 
-  const hitAt = (e: ReactPointerEvent<SVGSVGElement>): Selection => {
+  const hitAt = (e: ReactMouseEvent<SVGSVGElement>): Selection => {
     const p = clientToPage(opts.view, boxOf(e.currentTarget), { x: e.clientX, y: e.clientY })
     if (p === null) return null
     const hint = opts.hints
