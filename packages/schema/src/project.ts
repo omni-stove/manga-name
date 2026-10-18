@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 7 as const
+export const SCHEMA_VERSION = 8 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -27,10 +27,6 @@ export const ProjectSettingsSchema = z.object({
     unit: z.literal('mm'),
   }),
   dpi: z.number().int().positive(),
-  style: z.object({
-    prompt: z.string(),
-    negative: z.string().optional(),
-  }),
   diagnosis: DiagnosisConfigSchema.partial().optional(),
 })
 

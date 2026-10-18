@@ -31,7 +31,7 @@ export const PageArtRequestSchema = z.object({
   characterRefs: z.array(z.object({ characterId: IdSchema, image: blob })).optional(),
 })
 
-/** キャラの参照画像を外見から作る要求。画風は settings.style から取る */
+/** キャラの参照画像を外見から作る要求 */
 export const CharacterArtRequestSchema = z.object({
   project: ProjectBaseSchema.pick({ settings: true }),
   character: CharacterSchema,
@@ -104,7 +104,6 @@ if (import.meta.vitest) {
           direction: 'rtl',
           pageSize: { w: 182, h: 257, unit: 'mm' },
           dpi: 300,
-          style: { prompt: 'p' },
         },
         characters: [],
       },
@@ -122,7 +121,6 @@ if (import.meta.vitest) {
           direction: 'rtl',
           pageSize: { w: 182, h: 257, unit: 'mm' },
           dpi: 300,
-          style: { prompt: 'p' },
         },
         characters: [],
       },

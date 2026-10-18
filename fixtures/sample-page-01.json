@@ -1,7 +1,7 @@
 {
   "$comment": "6 コマ、右綴じの 1 ページ。arts は空で、生成前のネーム。sample-page-01.diagnosis.json の入力。",
   "project": {
-    "schemaVersion": 7,
+    "schemaVersion": 8,
     "id": "prj_sample",
     "title": "sample",
     "createdAt": "2026-10-15T00:00:00.000Z",
@@ -13,11 +13,7 @@
         "h": 257,
         "unit": "mm"
       },
-      "dpi": 300,
-      "style": {
-        "prompt": "manga name rough, monochrome line art, loose sketch",
-        "negative": "text, letters, speech bubbles, color"
-      }
+      "dpi": 300
     },
     "characters": [
       {

@@ -7,7 +7,6 @@ import {
   Input,
   SegmentedControl,
   Select,
-  TextArea,
   type ThemePreference,
   Typography,
   useThemePreference,
@@ -140,7 +139,7 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
   const role = library.role(projectId) ?? 'owner'
   const project = useProject(store)
   const { apply, error } = useApplyPatch(store)
-  const { direction, pageSize, dpi, style } = project.settings
+  const { direction, pageSize, dpi } = project.settings
 
   return (
     <YStack gap={16}>
@@ -153,12 +152,10 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
           const data = new FormData(e.currentTarget)
           const text = (key: string) => String(data.get(key) ?? '')
           const number = (key: string) => toNumber(text(key))
-          const negative = text('negative')
-          const next: Pick<ProjectSettings, 'direction' | 'pageSize' | 'dpi' | 'style'> = {
+          const next: Pick<ProjectSettings, 'direction' | 'pageSize' | 'dpi'> = {
             direction: text('direction') === 'ltr' ? 'ltr' : 'rtl',
             pageSize: { w: number('w'), h: number('h'), unit: 'mm' },
             dpi: number('dpi'),
-            style: negative ? { prompt: text('prompt'), negative } : { prompt: text('prompt') },
           }
           const title = text('title')
           apply(m.web_settings_change_project(), (p) => {
@@ -199,18 +196,6 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
           </XStack>
         </FieldGroup>
         <Input label="dpi" name="dpi" type="number" min="1" step="1" required defaultValue={dpi} />
-        <TextArea
-          label={m.web_settings_style()}
-          name="prompt"
-          rows={3}
-          defaultValue={style.prompt}
-        />
-        <TextArea
-          label={m.web_settings_negative()}
-          name="negative"
-          rows={2}
-          defaultValue={style.negative ?? ''}
-        />
         <Button type="submit" variant="primary" disabled={role !== 'owner' && role !== 'editor'}>
           {m.web_common_save()}
         </Button>

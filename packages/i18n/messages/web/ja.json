@@ -57,8 +57,6 @@
   "web_settings_page_size": "判型（mm）",
   "web_settings_width": "幅",
   "web_settings_height": "高さ",
-  "web_settings_style": "スタイル",
-  "web_settings_negative": "除外するもの",
   "web_settings_sharing": "共有",
   "web_sign_in": "ログイン",
   "web_sign_in_failed": "ログインできません: {reason}",
