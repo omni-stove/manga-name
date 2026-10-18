@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef } from 'react'
+import { type ReactNode, useLayoutEffect, useRef } from 'react'
 import { cx } from './cx'
 import styles from './dialog.module.css'
 import { Typography } from './typography'
@@ -19,7 +19,7 @@ interface DialogProps {
 /** モーダル。開いている間だけマウントし、マウントで showModal する */
 export function Dialog({ title, onClose, onSubmit, actions, children, className }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = ref.current
     // jsdom は showModal を持たない
     if (dialog && !dialog.open) dialog.showModal?.()
