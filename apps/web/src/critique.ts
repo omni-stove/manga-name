@@ -34,11 +34,11 @@ export type SuggestionState =
   | { kind: 'rejected'; reason: string }
 
 /**
- * critique に送るページ。手描きの線、絵の履歴、参考画像は提案に使わないうえ本文を膨らませるので外す。
+ * critique に送るページ。手描きの線、下描き、絵の履歴、参考画像は提案に使わないうえ本文を膨らませるので外す。
  * 送る diagnosis は画面に出しているものと同じ
  */
 export function critiqueRequest(page: Page, diagnosis: PageDiagnosis): CritiqueRequest {
-  const { reference: _reference, ...rest } = page
+  const { reference: _reference, sketch: _sketch, ...rest } = page
   return {
     page: {
       ...rest,

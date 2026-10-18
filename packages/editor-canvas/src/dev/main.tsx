@@ -78,6 +78,7 @@ function Playground() {
     reference: true,
     art: true,
     scribble: true,
+    sketch: true,
     hints: true,
     diagnosis: true,
     frames: true,
