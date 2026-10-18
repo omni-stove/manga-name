@@ -43,18 +43,20 @@ export function inBubble(bubble: Bubble, panel: Box, p: PagePoint): boolean {
 }
 
 /**
- * ページ座標の点にある要素。描画の前後と同じく、フキダシはコマより手前、
- * フキダシ同士とコマ同士は order の大きいものが手前。overflow でないフキダシは、コマの輪郭で
- * 切られて見えない所では当たらない。何も無ければ null
+ * ページ座標の点にある要素。描画の前後と同じく、overflow のフキダシは全コマの後に描かれるので
+ * 最も手前、次に各コマ内の overflow でないフキダシ、最後にコマ。それぞれ order の大きいものが手前。
+ * overflow でないフキダシは、コマの輪郭で切られて見えない所では当たらない。何も無ければ null
  */
 export function hitTest(page: Page, width: number, height: number, p: PagePoint): Selection {
   const panels = [...page.panels].sort((a, b) => b.order - a.order)
-  for (const panel of panels) {
-    const box = panelBox(panel, width, height)
-    const inPanel = containsPoint(panelPolygon(panel, width, height), p)
-    for (const bubble of [...panel.bubbles].sort((a, b) => b.order - a.order)) {
-      if ((inPanel || bubble.overflow) && inBubble(bubble, box, p)) {
-        return { kind: 'bubble', id: bubble.id }
+  for (const overflow of [true, false]) {
+    for (const panel of panels) {
+      const box = panelBox(panel, width, height)
+      if (!overflow && !containsPoint(panelPolygon(panel, width, height), p)) continue
+      for (const bubble of [...panel.bubbles].sort((a, b) => b.order - a.order)) {
+        if (Boolean(bubble.overflow) === overflow && inBubble(bubble, box, p)) {
+          return { kind: 'bubble', id: bubble.id }
+        }
       }
     }
   }
