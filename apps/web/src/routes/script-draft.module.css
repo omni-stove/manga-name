@@ -1,0 +1,111 @@
+/* 脚本を見ながら割り振りを直せるよう、広い画面では入力を左に留めて割り振りと並べる */
+.layout {
+  display: grid;
+  gap: var(--space-20);
+  grid-template-columns: minmax(18rem, 26rem) minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.inputs {
+  position: sticky;
+  top: var(--space-16);
+}
+
+@media (max-width: 60rem) {
+  .inputs {
+    position: static;
+  }
+}
+
+.fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.script {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.progress {
+  color: var(--text-muted);
+}
+
+.missing {
+  padding: var(--space-12);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface-raised);
+}
+
+.missingList {
+  margin: 0;
+  padding-left: var(--space-20);
+}
+
+.plans {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.plan {
+  display: grid;
+  gap: var(--space-12);
+  grid-template-columns: 2rem minmax(0, 2fr) minmax(0, 3fr);
+  padding: var(--space-12) 0;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 40rem) {
+  .plan {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.number {
+  font-variant-numeric: tabular-nums;
+}
+
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.line {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.lineFields {
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.lineSelect {
+  flex: none;
+  width: auto;
+}
+
+.lineText {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.addLine {
+  align-self: start;
+}

@@ -17,7 +17,6 @@ import {
   renameEpisodePatch,
 } from '../project-ops'
 import { RemoveEpisodeDialog } from '../remove-episode-dialog'
-import { ScriptDraftDialog } from '../script-draft-dialog'
 import type { ProjectStore } from '../store/project-store'
 import { useApplyPatch, useProject } from '../use-project'
 import styles from './pages.module.css'
@@ -32,12 +31,11 @@ const projectRoute = getRouteApi('/p/$projectId')
 function EpisodePages() {
   const { projectId, episodeId } = Route.useParams()
   const { store, collab } = projectRoute.useLoaderData()
-  const { library, llmProvider } = Route.useRouteContext()
+  const { library } = Route.useRouteContext()
   const project = useProject(store)
   const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
   const [template, setTemplate] = useState<PageTemplate>('3rows')
-  const [drafting, setDrafting] = useState(false)
   const [removingEpisode, setRemovingEpisode] = useState(false)
   /** 確認中のページの id と、確認の文言に出すページ番号 */
   const [removingPage, setRemovingPage] = useState<{ id: string; number: number }>()
@@ -99,18 +97,17 @@ function EpisodePages() {
         <Button type="submit" variant="primary">
           ページを追加
         </Button>
-        <Button onClick={() => setDrafting(true)}>脚本から下書き</Button>
+        <Button
+          onClick={() =>
+            void navigate({
+              to: '/p/$projectId/episodes/$episodeId/draft',
+              params: { projectId, episodeId },
+            })
+          }
+        >
+          脚本から下書き
+        </Button>
       </XStack>
-      {drafting && (
-        <ScriptDraftDialog
-          project={project}
-          store={store}
-          llmProvider={llmProvider}
-          episodeId={episode.id}
-          template={template}
-          onClose={() => setDrafting(false)}
-        />
-      )}
       <EpisodeBatch episode={episode} projectId={projectId} store={store} />
       {pages.length === 0 && <Typography tone="muted">ページがありません。</Typography>}
       <ol className={`${common.cards} ${styles.pages}`}>

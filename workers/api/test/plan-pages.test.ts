@@ -74,23 +74,37 @@ describe('POST /v1/ai/plan-pages', () => {
     expect((await usageRows()).results).toHaveLength(0)
   })
 
-  test('drops unknown and repeated characters from the cast without retrying', async () => {
+  test('drops unknown and repeated characters from the cast and the speakers without retrying', async () => {
     const plan = async () => [
-      { note: 'n', cast: ['chr_e', 'chr_missing', 'chr_e'] },
-      { note: 'm', cast: [] },
+      {
+        note: 'n',
+        cast: ['chr_e', 'chr_missing', 'chr_e'],
+        lines: [
+          { speakerId: 'chr_e', text: 'a', shape: 'normal' as const },
+          { speakerId: 'chr_missing', text: 'b', shape: 'shout' as const },
+        ],
+      },
+      { note: 'm', cast: [], lines: [] },
     ]
     const { provider, calls } = scripted([plan])
     const res = await post(createApp({ llmProvider: () => provider }))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual([
-      { note: 'n', cast: ['chr_e'] },
-      { note: 'm', cast: [] },
+      {
+        note: 'n',
+        cast: ['chr_e'],
+        lines: [
+          { speakerId: 'chr_e', text: 'a', shape: 'normal' },
+          { text: 'b', shape: 'shout' },
+        ],
+      },
+      { note: 'm', cast: [], lines: [] },
     ])
     expect(calls).toHaveLength(1)
   })
 
   test('returns a plan whose page count differs from the requested one without retrying', async () => {
-    const three = async () => [...aiFixtures.pagePlan, { note: 'n', cast: [] }]
+    const three = async () => [...aiFixtures.pagePlan, { note: 'n', cast: [], lines: [] }]
     const { provider, calls } = scripted([three])
     const res = await post(createApp({ llmProvider: () => provider }))
     expect(res.status).toBe(200)

@@ -49,7 +49,7 @@ export interface ImageProvider {
 }
 
 export interface LlmProvider {
-  /** 脚本をページに割り振り、ページごとの流れと登場キャラを返す。コマ割りはしない */
+  /** 脚本をページに割り振り、ページごとの流れ、登場キャラ、セリフを返す。コマ割りはしない */
   planPages(req: PagePlanRequest): Promise<PagePlanResponse>
   critique(req: CritiqueRequest): Promise<CritiqueResponse>
 }

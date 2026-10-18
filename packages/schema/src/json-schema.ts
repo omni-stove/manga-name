@@ -27,6 +27,6 @@ if (import.meta.vitest) {
   test('pagePlanJsonSchema describes an array of pages', () => {
     const schema = pagePlanJsonSchema()
     expect(schema.type).toBe('array')
-    expect(schema.items).toMatchObject({ required: ['note', 'cast'] })
+    expect(schema.items).toMatchObject({ required: ['note', 'cast', 'lines'] })
   })
 }

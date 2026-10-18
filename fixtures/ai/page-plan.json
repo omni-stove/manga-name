@@ -1,4 +1,12 @@
 [
-  { "note": "結晶の森の奥へ E が歩いていく。", "cast": ["chr_e"] },
-  { "note": "目当ての場所に着いた E が、足元の何かに気づく。", "cast": ["chr_e"] }
+  {
+    "note": "結晶の森。E が奥へ歩いていく。",
+    "cast": ["chr_e"],
+    "lines": [{ "speakerId": "chr_e", "text": "……ここか", "shape": "normal" }]
+  },
+  {
+    "note": "E が足元を見て、何かに気づく。",
+    "cast": ["chr_e"],
+    "lines": [{ "text": "その足元に、光るものがあった。", "shape": "narration" }]
+  }
 ]
