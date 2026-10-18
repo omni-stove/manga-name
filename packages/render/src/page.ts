@@ -2,6 +2,7 @@ import {
   bubbleTextBox,
   clipTextBox,
   currentArt,
+  INNER_FRAME,
   type Page,
   type Panel,
   panelOutline,
@@ -69,6 +70,7 @@ export async function drawPage(
   c.fillStyle = '#fff'
   c.fillRect(0, 0, surface.width, surface.height)
 
+  const innerRect = rectToPx(INNER_FRAME, pageRect)
   const panels = byOrder(page.panels)
   const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx)))
   const drawBubbles = (panel: Panel, overflow: boolean) => {
@@ -77,9 +79,8 @@ export async function drawPage(
       if ((bubble.overflow === true) !== overflow) continue
       const g = bubbleGeometry(bubble, rect)
       drawBubble(c, bubble.shape, g, pageSize.w * BUBBLE_LINE_WIDTH)
-      const box = overflow
-        ? bubbleTextBox(bubble.shape, g)
-        : clipTextBox(bubbleTextBox(bubble.shape, g), rect)
+      const text = bubbleTextBox(bubble.shape, g)
+      const box = clipTextBox(overflow ? text : clipTextBox(text, rect), innerRect)
       const { lines, fontPx } = layoutBubbleText(bubble.text, box, pageSize.w * MIN_FONT)
       drawVerticalText(c, lines, fontPx, box)
     }

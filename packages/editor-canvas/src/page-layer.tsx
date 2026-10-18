@@ -7,6 +7,7 @@ import {
   cornerAnchor,
   currentArt,
   type ID,
+  INNER_FRAME,
   type Page,
   type Panel,
   type Point,
@@ -469,7 +470,8 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
 /**
  * フキダシ。太線で輪郭を描いてから同じ形を白で塗り重ね、本体としっぽの継ぎ目の線を消す。
  * 外側に残る線は太線の半分になる。枠なしは何も描かない代わりに、選択していなくても薄い破線で範囲を示す。
- * clipId を渡すと、輪郭と文字をその clipPath で切る
+ * clipId を渡すと、輪郭と文字をその clipPath で切る。フキダシは内枠の外に出てよいが、セリフは断裁で
+ * 切れないよう内枠の内側に寄せる
  */
 const BubbleView = memo(function BubbleView({
   bubble,
@@ -489,9 +491,11 @@ const BubbleView = memo(function BubbleView({
   const panel = panelBox({ rect: panelRect }, width, height)
   const g = bubbleGeometry(bubble, panel)
   const paths = bubblePaths(bubble.shape, g)
-  const box = clipId
-    ? clipTextBox(bubbleTextBox(bubble.shape, g), panel)
-    : bubbleTextBox(bubble.shape, g)
+  const text = bubbleTextBox(bubble.shape, g)
+  const box = clipTextBox(
+    clipId ? clipTextBox(text, panel) : text,
+    panelBox({ rect: INNER_FRAME }, width, height),
+  )
   const layout = layoutVertical(bubble.text, box)
   const pitch = layout.fontSize * COLUMN_PITCH
   const blockWidth =
