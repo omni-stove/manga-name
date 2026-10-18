@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { BubbleHandle } from './bubble-ops'
 import { bodyPath, bubbleGeometry, tailPath } from './bubble-shape'
 import { GUIDE } from './page-layer'
@@ -85,7 +86,9 @@ export function BubbleToolLayer({
           vectorEffect="non-scaling-stroke"
           style={{ fill: tail.set ? GUIDE : undefined, stroke: GUIDE, cursor: 'move' }}
         >
-          <title>{tail.set ? 'しっぽの先端' : 'ドラッグでしっぽを付ける'}</title>
+          <title>
+            {tail.set ? m.editor_canvas_bubble_tail_tip() : m.editor_canvas_bubble_tail_drag()}
+          </title>
         </circle>
       )}
     </g>

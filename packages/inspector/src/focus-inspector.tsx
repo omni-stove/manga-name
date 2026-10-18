@@ -1,35 +1,36 @@
+import { m } from '@manga/i18n'
 import type { FocusKind } from '@manga/schema'
 import { Field, Typography } from '@manga/ui'
-import { SelectField, TextField } from './fields'
+import { option, SelectField, TextField } from './fields'
 import styles from './hint-inspector.module.css'
 import { optionalString, replace } from './patch'
 import section from './section.module.css'
 import type { FocusInspectorProps } from './types'
 
 export const FOCUS_KINDS: readonly { value: FocusKind; label: string }[] = [
-  { value: 'face', label: '顔' },
-  { value: 'keyObject', label: '物' },
-  { value: 'sfx', label: '描き文字' },
+  option('face', m.inspector_focus_kind_face),
+  option('keyObject', m.inspector_focus_kind_key_object),
+  option('sfx', m.inspector_focus_kind_sfx),
 ]
 
 export function FocusInspector({ focus, characters, diagnosis, onChange }: FocusInspectorProps) {
   return (
     <div className={section.section} data-inspector="focus">
       <Typography variant="subheading" className={section.title}>
-        焦点 {focus.label}
+        {m.inspector_focus_title({ label: focus.label })}
       </Typography>
       <SelectField
-        label="種別"
+        label={m.inspector_kind()}
         value={focus.kind}
         options={FOCUS_KINDS}
         onCommit={(v) => v !== focus.kind && onChange(replace('/kind', v))}
       />
       <TextField
-        label="ラベル"
+        label={m.inspector_focus_label()}
         value={focus.label}
         onCommit={(v) => v !== focus.label && onChange(replace('/label', v))}
       />
-      <Field label="重み" hint={focus.weight.toFixed(2)}>
+      <Field label={m.inspector_focus_weight()} hint={focus.weight.toFixed(2)}>
         {(described) => (
           <input
             type="range"
@@ -44,10 +45,10 @@ export function FocusInspector({ focus, characters, diagnosis, onChange }: Focus
         )}
       </Field>
       <SelectField
-        label="キャラクター"
+        label={m.inspector_focus_character()}
         value={focus.characterId ?? ''}
         options={[
-          { value: '', label: '（なし）' },
+          { value: '', label: m.inspector_none() },
           ...characters.map((c) => ({ value: c.id, label: c.name })),
         ]}
         onCommit={(v) => onChange(optionalString('/characterId', focus.characterId, v))}
@@ -56,15 +57,18 @@ export function FocusInspector({ focus, characters, diagnosis, onChange }: Focus
         <dl className={styles.diagnosis} data-diagnosis-status={diagnosis.status}>
           <dt>t</dt>
           <dd>{diagnosis.t.toFixed(2)}</dd>
-          <dt>誘導線</dt>
+          <dt>{m.inspector_vector_lines()}</dt>
           <dd>
-            強 {diagnosis.strong} / 弱 {diagnosis.weak}
+            {m.inspector_focus_vector_counts({
+              strong: diagnosis.strong,
+              weak: diagnosis.weak,
+            })}
           </dd>
-          <dt>判定</dt>
+          <dt>{m.inspector_focus_status()}</dt>
           <dd data-status={diagnosis.status}>{diagnosis.status}</dd>
           {diagnosis.reason && (
             <>
-              <dt>理由</dt>
+              <dt>{m.inspector_focus_reason()}</dt>
               <dd>{diagnosis.reason}</dd>
             </>
           )}

@@ -1,3 +1,11 @@
 {
-  "$schema": "https://inlang.com/schema/inlang-message-format"
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "ui_confirm_dialog_cancel": "キャンセル",
+  "ui_file_drop_prompt": "ここにドロップ",
+  "ui_file_drop_rejected": "この形式のファイルは選べません",
+  "ui_file_drop_choose": "ファイルを選ぶ",
+  "ui_file_drop_clear": "選択を解除",
+  "ui_sidebar_expand": "{title}を開く",
+  "ui_sidebar_collapse": "{title}を畳む",
+  "ui_toast_dismiss": "閉じる"
 }

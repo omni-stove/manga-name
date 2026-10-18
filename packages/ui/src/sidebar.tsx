@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { type ReactNode, useId } from 'react'
 import { IconButton } from './button'
 import { cx } from './cx'
@@ -45,7 +46,7 @@ export function Sidebar({
           </Typography>
         )}
         <IconButton
-          label={collapsed ? `${title}を開く` : `${title}を畳む`}
+          label={collapsed ? m.ui_sidebar_expand({ title }) : m.ui_sidebar_collapse({ title })}
           aria-expanded={expanded}
           aria-controls={contentId}
           onClick={() => onExpandedChange(!expanded)}

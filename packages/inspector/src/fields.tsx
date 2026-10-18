@@ -112,6 +112,14 @@ export function NumberField({
   )
 }
 
+/** 選択肢。`label` は読むたびに `label()` を呼ぶので、モジュールの定数にしても表示時の言語で出る */
+export const option = <T extends string>(value: T, label: () => string) => ({
+  value,
+  get label() {
+    return label()
+  },
+})
+
 interface SelectFieldProps<T extends string> {
   label: string
   value: T

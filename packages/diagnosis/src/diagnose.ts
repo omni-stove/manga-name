@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import {
   boundsOf,
   convexHull,
@@ -79,16 +80,16 @@ const judge = (
   distance: number,
   { strong, weak }: Counts,
   config: DiagnosisConfig,
-): Pick<FocusDiagnosis, 'status' | 'reason'> => {
-  const off = distance.toFixed(2)
+): { status: 'ok'; reason?: string } | { status: 'weak' | 'miss'; reason: string } => {
+  const off = { distance: distance.toFixed(2) }
   if (distance <= config.pathBand + EPSILON) {
     return config.requireStrongForOk && strong === 0
-      ? { status: 'weak', reason: '経路上にあるが強い誘導線がない' }
+      ? { status: 'weak', reason: m.diagnosis_focus_on_path_without_strong() }
       : { status: 'ok' }
   }
-  if (strong >= 1) return { status: 'ok', reason: `経路から ${off} 外れているが強い誘導線がある` }
-  if (weak >= 1) return { status: 'weak', reason: `経路から ${off} 外れており弱い誘導線しかない` }
-  return { status: 'miss', reason: `経路から ${off} 外れており誘導線がない` }
+  if (strong >= 1) return { status: 'ok', reason: m.diagnosis_focus_off_path_strong(off) }
+  if (weak >= 1) return { status: 'weak', reason: m.diagnosis_focus_off_path_weak(off) }
+  return { status: 'miss', reason: m.diagnosis_focus_off_path_none(off) }
 }
 
 const diagnosePanel = (
@@ -105,7 +106,7 @@ const diagnosePanel = (
       severity: 'info',
       code: 'EMPTY_PANEL',
       panelId: panel.id,
-      message: '焦点もフキダシもメモもない',
+      message: m.diagnosis_issue_empty_panel(),
     })
   }
 
@@ -119,7 +120,7 @@ const diagnosePanel = (
         code: status === 'miss' ? 'FOCUS_MISS' : 'FOCUS_WEAK',
         panelId: panel.id,
         focusPointId: f.id,
-        message: `${f.label}: ${reason}`,
+        message: m.diagnosis_issue_focus({ label: f.label, reason }),
       })
     }
     return {
@@ -143,7 +144,7 @@ const diagnosePanel = (
       severity: 'warning',
       code: 'BUBBLE_ORDER',
       panelId: panel.id,
-      message: 'フキダシの順が視線経路の向きと逆転している',
+      message: m.diagnosis_issue_bubble_order(),
     })
   }
 
@@ -187,7 +188,7 @@ const overlapIssues = (panels: readonly Panel[]): Issue[] => {
           severity: 'error',
           code: 'OVERLAP',
           panelId: a.id,
-          message: `${a.id} と ${b.id} のコマが重なっている`,
+          message: m.diagnosis_issue_overlap({ a: a.id, b: b.id }),
         })
       }
     }
@@ -223,7 +224,7 @@ export function diagnosePage(page: Page, settings: ProjectSettings): PageDiagnos
     issues.push({
       severity: 'warning',
       code: 'READING_ORDER',
-      message: `配置から推定した読み順は ${inferredOrder.join(' → ')}`,
+      message: m.diagnosis_issue_reading_order({ order: inferredOrder.join(' → ') }),
     })
   }
   issues.push(...overlapIssues(panels))
