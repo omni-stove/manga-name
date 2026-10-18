@@ -1,3 +1,4 @@
+import { bubbleReach } from './bubble-outline'
 import { clipHalfPlane, containsPoint, convexHull, panelOutline } from './geometry'
 import type { Bubble, Panel, Point, Size } from './project'
 
@@ -5,8 +6,6 @@ import type { Bubble, Panel, Point, Size } from './project'
 const FRAME_MARGIN_MM = 2
 // bubbleFits は 0.001 単位に丸めた後の値を見るので、丸めで出る僅かなはみ出しは許す
 const FIT_SLACK_MM = 0.1
-// thought の輪郭は膨らみの頂点で楕円の約 1.11 倍まで出る（render の THOUGHT_BULGE 1.25 の二次ベジェの頂点）
-const THOUGHT_REACH = 1.11
 const SHRINK_STEPS = 20
 
 const round = (v: number) => Math.round(v * 1000) / 1000
@@ -35,12 +34,6 @@ function frameMm({ panel, pageSize }: BubbleFrame): FrameMm {
   }
 }
 
-/** 半径 rx, ry の本体が、中心から単位ベクトル n の向きへどこまで出るか */
-function reach(shape: Shape, rx: number, ry: number, n: Point): number {
-  if (shape === 'narration') return Math.abs(n.x) * rx + Math.abs(n.y) * ry
-  return (shape === 'thought' ? THOUGHT_REACH : 1) * Math.hypot(n.x * rx, n.y * ry)
-}
-
 /** 半径 rx, ry の本体を枠から margin 内側に収められる中心の範囲。無ければ空 */
 function centerRegion(frame: FrameMm, shape: Shape, rx: number, ry: number, margin: number) {
   const { outline } = frame
@@ -50,7 +43,7 @@ function centerRegion(frame: FrameMm, shape: Shape, rx: number, ry: number, marg
     const len = Math.hypot(b.x - a.x, b.y - a.y)
     if (len === 0) return
     const inward = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len }
-    region = clipHalfPlane(region, a, b, margin + reach(shape, rx, ry, inward))
+    region = clipHalfPlane(region, a, b, margin + bubbleReach(shape, rx, ry, inward))
   })
   return region
 }

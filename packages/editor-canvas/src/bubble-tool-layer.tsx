@@ -21,7 +21,7 @@ const line = {
 /**
  * `bubble` ツールの UI。ドラッグ中は移動、リサイズ、しっぽの変更後の輪郭を破線で描き、
  * それ以外は選択中のフキダシに隅のリサイズハンドルとしっぽの先端のハンドルを出す。
- * しっぽが無いときの先端のハンドルは破線の丸で、ドラッグするとしっぽができる
+ * しっぽが無いときの先端のハンドルは破線の丸で、ドラッグするとしっぽができる。しっぽの付かない形には出さない
  */
 export function BubbleToolLayer({
   selected,
@@ -73,19 +73,21 @@ export function BubbleToolLayer({
           style={{ stroke: GUIDE, cursor: CURSORS[c.handle] }}
         />
       ))}
-      <circle
-        data-tail-handle={tail.set ? 'set' : 'unset'}
-        cx={tail.x}
-        cy={tail.y}
-        r={handleSize / 2}
-        fill="#fff"
-        strokeWidth={1}
-        strokeDasharray={tail.set ? undefined : '2 1'}
-        vectorEffect="non-scaling-stroke"
-        style={{ fill: tail.set ? GUIDE : undefined, stroke: GUIDE, cursor: 'move' }}
-      >
-        <title>{tail.set ? 'しっぽの先端' : 'ドラッグでしっぽを付ける'}</title>
-      </circle>
+      {tail && (
+        <circle
+          data-tail-handle={tail.set ? 'set' : 'unset'}
+          cx={tail.x}
+          cy={tail.y}
+          r={handleSize / 2}
+          fill="#fff"
+          strokeWidth={1}
+          strokeDasharray={tail.set ? undefined : '2 1'}
+          vectorEffect="non-scaling-stroke"
+          style={{ fill: tail.set ? GUIDE : undefined, stroke: GUIDE, cursor: 'move' }}
+        >
+          <title>{tail.set ? 'しっぽの先端' : 'ドラッグでしっぽを付ける'}</title>
+        </circle>
+      )}
     </g>
   )
 }
