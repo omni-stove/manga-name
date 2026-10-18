@@ -15,7 +15,6 @@ import {
   IssueList,
   PageInspector,
   PanelInspector,
-  ProjectSettingsInspector,
   removeCastPatch,
   VectorInspector,
 } from '@manga/inspector'
@@ -68,10 +67,9 @@ import {
   focusPatch,
   panelPatch,
   removeArtPatch,
-  settingsInspectorPatch,
   vectorPatch,
 } from '../inspector-ops'
-import { LayoutTemplateForm } from '../layout-templates'
+import { LayoutTemplateDialog } from '../layout-templates'
 import {
   exportProjectJson,
   PROJECT_FILE_FILTERS,
@@ -176,8 +174,6 @@ type Exporting = 'closed' | 'dialog' | { done: number; total: number }
 
 const MM_PER_INCH = 25.4
 
-const formatDate = (iso: string) => new Date(iso).toLocaleString('ja-JP')
-
 /** 選択が指す要素がまだページにあるか。Delete や Undo で消えた要素の選択は無いものとして扱う */
 function hasElement(page: Page, selection: Selection): boolean {
   if (selection === null) return false
@@ -226,6 +222,7 @@ function Editor() {
   const [exporting, setExporting] = useState<Exporting>('closed')
   const [inspectorExpanded, setInspectorExpanded] = useStoredFlag('manga.inspector.expanded', true)
   const [menu, setMenu] = useState<CanvasMenuRequest | null>(null)
+  const [registeringLayout, setRegisteringLayout] = useState(false)
   const canUndo = useStore(store.state, (s) => s.canUndo)
   const canRedo = useStore(store.state, (s) => s.canRedo)
   useUndoShortcuts(store)
@@ -462,7 +459,16 @@ function Editor() {
             },
             'separator',
             { label: '全体を表示', onSelect: menu.fit },
-            ...(canEdit ? [{ label: '参考画像を読み込む…', onSelect: referencePicker.open }] : []),
+            ...(canEdit
+              ? [
+                  { label: '参考画像を読み込む…', onSelect: referencePicker.open },
+                  {
+                    label: 'コマ割りをテンプレートに登録…',
+                    disabled: page.panels.length === 0,
+                    onSelect: () => setRegisteringLayout(true),
+                  },
+                ]
+              : []),
             'separator',
             {
               label: '前のページ',
@@ -477,6 +483,13 @@ function Editor() {
               onSelect: () => nextPage && openPage(nextPage.id),
             },
           ]}
+        />
+      )}
+      {registeringLayout && (
+        <LayoutTemplateDialog
+          pageId={pageId}
+          apply={apply}
+          onClose={() => setRegisteringLayout(false)}
         />
       )}
       {exporting === 'dialog' && (
@@ -574,10 +587,6 @@ function Editor() {
                 {referencePicker.input}
                 <BatchOptions batch={pageBatch} />
               </details>
-              <details>
-                <summary>コマ割りを登録</summary>
-                <LayoutTemplateForm page={page} pageId={pageId} apply={apply} />
-              </details>
               <PageCast
                 page={page}
                 characters={project.characters}
@@ -586,15 +595,6 @@ function Editor() {
                   apply('ページの登場キャラを変更', (p) => pagePatch(p, pageId, patch))
                 }
               />
-              <details>
-                <summary>プロジェクト設定</summary>
-                <ProjectSettingsInspector
-                  settings={project.settings}
-                  onChange={(patch) =>
-                    apply('プロジェクト設定を変更', () => settingsInspectorPatch(patch))
-                  }
-                />
-              </details>
             </fieldset>
             {GAZE_EVALUATION && diagnosis && (
               <details open data-section="issues">
@@ -735,25 +735,23 @@ function SelectionInspector({
     const found = findPanel(page, selection.id)
     if (!found) return <Typography tone="muted">選んだコマはもうありません</Typography>
     return (
-      <>
-        <PanelInspector
-          key={selection.id}
-          panel={found.panel}
-          characters={characters}
-          diagnosis={diagnosis?.panels.find((d) => d.panelId === selection.id)}
-          generating={generating.has(selection.id)}
-          onChange={(patch) =>
-            apply('コマを編集', (p) => panelPatch(p, pageId, selection.id, patch))
-          }
-          onGenerate={(instruction) => generate(selection.id, instruction)}
-          useReference={referenceToggle.uses(selection.id)}
-          onUseReferenceChange={(use) => referenceToggle.set(selection.id, use)}
-          useHint={hintToggle.uses(selection.id)}
-          onUseHintChange={(use) => hintToggle.set(selection.id, use)}
-          resolveAsset={resolveAsset}
-        />
-        <ArtRemoval panel={found.panel} pageId={pageId} apply={apply} />
-      </>
+      <PanelInspector
+        key={selection.id}
+        panel={found.panel}
+        characters={characters}
+        diagnosis={diagnosis?.panels.find((d) => d.panelId === selection.id)}
+        generating={generating.has(selection.id)}
+        onChange={(patch) => apply('コマを編集', (p) => panelPatch(p, pageId, selection.id, patch))}
+        onGenerate={(instruction) => generate(selection.id, instruction)}
+        useReference={referenceToggle.uses(selection.id)}
+        onUseReferenceChange={(use) => referenceToggle.set(selection.id, use)}
+        useHint={hintToggle.uses(selection.id)}
+        onUseHintChange={(use) => hintToggle.set(selection.id, use)}
+        onRemoveArt={(artId) =>
+          apply('絵を削除', (p) => removeArtPatch(p, pageId, selection.id, artId))
+        }
+        resolveAsset={resolveAsset}
+      />
     )
   }
   if (selection.kind === 'bubble') {
@@ -806,34 +804,6 @@ function SelectionInspector({
         apply('ベクトルを編集', (p) => vectorPatch(p, pageId, selection.id, patch))
       }
     />
-  )
-}
-
-/** 履歴の削除。採用中の絵は消せないので、それ以外だけ並べる。アセットは残し、Undo で戻せる */
-function ArtRemoval({ panel, pageId, apply }: { panel: Panel; pageId: ID; apply: Apply }) {
-  const removable = panel.arts.filter((art) => art.id !== panel.artId).reverse()
-  if (removable.length === 0) return null
-  return (
-    <details className={styles.section} data-inspector="art-removal">
-      <summary>履歴の削除（{removable.length}）</summary>
-      <YStack as="ul" gap={4} className={styles.artRemove}>
-        {removable.map((art) => (
-          <XStack as="li" key={art.id} data-art-id={art.id}>
-            <span className={styles.ellipsis}>
-              <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
-              {art.instruction && ` ${art.instruction}`}
-            </span>
-            <Button
-              size="small"
-              variant="ghost"
-              onClick={() => apply('絵を削除', (p) => removeArtPatch(p, pageId, panel.id, art.id))}
-            >
-              削除
-            </Button>
-          </XStack>
-        ))}
-      </YStack>
-    </details>
   )
 }
 

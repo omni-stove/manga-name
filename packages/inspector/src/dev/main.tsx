@@ -8,7 +8,6 @@ import { BubbleInspector } from '../bubble-inspector'
 import { CharacterInspector } from '../character-inspector'
 import { PageInspector } from '../page-inspector'
 import { PanelInspector } from '../panel-inspector'
-import { ProjectSettingsInspector } from '../project-settings-inspector'
 
 const project = fixtures.samplePage01
 const page = project.episodes[0]?.pages[0] as Page
@@ -32,7 +31,7 @@ const withArts = (panel: Page['panels'][number]) => ({
 const resolveAsset = async (ref: string) =>
   new URL(`../../../../fixtures/art/${ref.replace(/^fixture:/, '')}.png`, import.meta.url).href
 
-type View = { kind: 'panel' | 'bubble'; id: string } | { kind: 'page' | 'character' | 'settings' }
+type View = { kind: 'panel' | 'bubble'; id: string } | { kind: 'page' | 'character' }
 
 function Playground() {
   const [view, setView] = useState<View>({ kind: 'panel', id: panelIds[0] ?? '' })
@@ -70,9 +69,6 @@ function Playground() {
           <button type="button" onClick={() => setView({ kind: 'character' })}>
             キャラクター
           </button>
-          <button type="button" onClick={() => setView({ kind: 'settings' })}>
-            設定
-          </button>
         </p>
         {panel && (
           <PanelInspector
@@ -102,9 +98,6 @@ function Playground() {
             onGenerateReference={() => console.log('onGenerateReference')}
             resolveAsset={resolveAsset}
           />
-        )}
-        {view.kind === 'settings' && (
-          <ProjectSettingsInspector settings={project.settings} onChange={onChange} />
         )}
       </div>
       <div>

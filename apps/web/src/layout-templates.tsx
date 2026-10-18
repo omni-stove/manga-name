@@ -1,5 +1,5 @@
-import type { ID, Page, Project } from '@manga/schema'
-import { Button, Input, Select, XStack } from '@manga/ui'
+import type { ID, Project } from '@manga/schema'
+import { Button, Dialog, Input, Select } from '@manga/ui'
 import { useState } from 'react'
 import { addLayoutTemplatePatch, templateOptions } from './project-ops'
 import { toasts } from './toasts'
@@ -50,26 +50,24 @@ export function TemplateSelect({
 }
 
 /**
- * 開いているページのコマ割りに名前を付けてテンプレートに登録する。登録したものはページの追加や
- * 脚本からの下書きでテンプレートとして選べ、コマの枠だけが写る。コマの無いページでは登録できない
+ * 開いているページのコマ割りに名前を付けてテンプレートに登録するダイアログ。登録したものはページの追加や
+ * 脚本からの下書きでテンプレートとして選べ、コマの枠だけが写る。登録できたら閉じる
  */
-export function LayoutTemplateForm({
-  page,
+export function LayoutTemplateDialog({
   pageId,
   apply,
+  onClose,
 }: {
-  page: Page
   pageId: ID
   apply: ReturnType<typeof useApplyPatch>['apply']
+  onClose(): void
 }) {
   const [name, setName] = useState('')
   return (
-    <XStack
-      as="form"
-      wrap
-      gap={8}
-      onSubmit={(e) => {
-        e.preventDefault()
+    <Dialog
+      title="コマ割りをテンプレートに登録"
+      onClose={onClose}
+      onSubmit={() => {
         if (
           apply(
             'コマ割りをテンプレートに登録',
@@ -77,21 +75,28 @@ export function LayoutTemplateForm({
           )
         ) {
           toasts.push(`「${name.trim()}」をテンプレートに登録しました`, 'info')
-          setName('')
+          onClose()
         }
       }}
+      actions={
+        <>
+          <Button type="button" onClick={onClose}>
+            キャンセル
+          </Button>
+          <Button type="submit" variant="primary" disabled={!name.trim()}>
+            登録
+          </Button>
+        </>
+      }
     >
       <Input
         label="テンプレート名"
         required
+        autoFocus
         value={name}
         placeholder="例: 見開き前の 5 コマ"
-        disabled={page.panels.length === 0}
         onChange={(e) => setName(e.currentTarget.value)}
       />
-      <Button type="submit" size="small" disabled={page.panels.length === 0 || !name.trim()}>
-        コマ割りを登録
-      </Button>
-    </XStack>
+    </Dialog>
   )
 }

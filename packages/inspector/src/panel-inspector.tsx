@@ -55,6 +55,7 @@ export function PanelInspector({
   onUseReferenceChange,
   useHint = true,
   onUseHintChange,
+  onRemoveArt,
   resolveAsset,
 }: PanelInspectorProps) {
   const cameraListId = useId()
@@ -226,6 +227,9 @@ export function PanelInspector({
                 const patch = selectArtPatch(panel.artId, art.id)
                 if (patch.length > 0) onChange(patch)
               }}
+              onRemove={
+                onRemoveArt && art.id !== panel.artId ? () => onRemoveArt(art.id) : undefined
+              }
             />
           ))}
         </YStack>
@@ -316,11 +320,13 @@ function ArtItem({
   url,
   current,
   onSelect,
+  onRemove,
 }: {
   art: PanelArt
   url: Promise<string | null>
   current: boolean
   onSelect(): void
+  onRemove?(): void
 }) {
   return (
     <XStack
@@ -340,6 +346,11 @@ function ArtItem({
         <XStack as="span" className={styles.metaHead}>
           <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
           {current && <b className={styles.badge}>採用中</b>}
+          {onRemove && (
+            <Button size="small" variant="ghost" className={styles.remove} onClick={onRemove}>
+              削除
+            </Button>
+          )}
         </XStack>
         {art.instruction && <p className={styles.instruction}>{art.instruction}</p>}
         <details className={styles.prompt}>
