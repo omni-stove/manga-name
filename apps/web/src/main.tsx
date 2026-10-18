@@ -15,6 +15,7 @@ import { createPanelGeneration } from './generate-panel'
 import { createImageProvider, readApiBaseUrl } from './image-provider'
 import { createLlmProvider } from './llm-provider'
 import { createProjectLibrary } from './project-library'
+import { errorMessage } from './route-error'
 import { createAppRouter } from './router'
 import { createSharingClient } from './sharing'
 import { createTabSync } from './store/tab-sync'
@@ -50,7 +51,13 @@ const local = createStorage(defaultStorageKind(platform))
 const cloud =
   baseUrl === ''
     ? null
-    : createCloudStorage({ baseUrl, local, getToken: auth.getToken, fetch: auth.fetch })
+    : createCloudStorage({
+        baseUrl,
+        local,
+        getToken: auth.getToken,
+        fetch: auth.fetch,
+        onError: (e) => toasts.push(`クラウドに保存できません: ${errorMessage(e)}`),
+      })
 const storage = cloud ?? local
 const sharing = createSharingClient({
   baseUrl,
@@ -93,7 +100,7 @@ auth.subscribe(() => {
 if (platform === 'desktop') {
   import('./desktop/shell')
     .then(({ startDesktopShell }) => startDesktopShell({ router, library }))
-    .catch((e: unknown) => toasts.push(`メニューを作れません: ${String(e)}`))
+    .catch((e: unknown) => toasts.push(`メニューを作れません: ${errorMessage(e)}`))
 }
 
 // debounce 待ちの変更をタブを閉じる・隠す時点で書く。pagehide だけでは書き込みが終わる前にページが破棄されうる

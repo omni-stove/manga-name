@@ -1,5 +1,6 @@
 import { Button } from '@manga/ui'
 import { useStore } from 'zustand'
+import { errorMessage } from './route-error'
 import styles from './save-status.module.css'
 import type { SaveStatus, WebProjectStore } from './store/project-store'
 import { SyncStatusIndicator } from './sync-status'
@@ -20,7 +21,7 @@ export function SaveStatusIndicator({ store }: { store: WebProjectStore }) {
       <span
         className={styles.status}
         data-status={saveStatus}
-        title={saveError instanceof Error ? saveError.message : undefined}
+        title={saveError === undefined ? undefined : errorMessage(saveError)}
       >
         {LABEL[saveStatus]}
       </span>

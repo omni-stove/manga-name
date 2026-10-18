@@ -1,3 +1,4 @@
+import { getLocale } from '@manga/i18n'
 import { Button, Typography, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -65,7 +66,7 @@ function AcceptInvite() {
       <Typography variant="title">「{invite.projectTitle || '無題'}」への招待</Typography>
       <Typography>
         {invite.email} を{ROLE_LABELS[invite.role]}として招待しています（
-        {new Date(invite.expiresAt).toLocaleDateString()} まで）。
+        {new Date(invite.expiresAt).toLocaleDateString(getLocale())} まで）。
       </Typography>
       {matches ? (
         <Button

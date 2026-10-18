@@ -1,3 +1,4 @@
+import { getLocale } from '@manga/i18n'
 import type { ProjectSummary } from '@manga/storage'
 import { Button, ConfirmDialog, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router'
@@ -102,7 +103,7 @@ function ProjectCard({ project, busy, onRemove }: CardProps & { project: Project
         <YStack gap={4}>
           <strong>{project.title || '無題'}</strong>
           <Typography as="small" variant="caption" tone="muted">
-            更新 {new Date(project.updatedAt).toLocaleString()}
+            更新 {new Date(project.updatedAt).toLocaleString(getLocale())}
           </Typography>
         </YStack>
       </Link>

@@ -1,3 +1,4 @@
+import { getLocale } from '@manga/i18n'
 import {
   type Bubble,
   type Character,
@@ -42,7 +43,7 @@ const byOrder = (bubbles: readonly Bubble[]) =>
     .map((bubble, index) => ({ bubble, index }))
     .sort((a, b) => a.bubble.order - b.bubble.order)
 
-const formatDate = (iso: string) => new Date(iso).toLocaleString('ja-JP')
+const formatDate = (iso: string) => new Date(iso).toLocaleString(getLocale())
 
 export function PanelInspector({
   panel,

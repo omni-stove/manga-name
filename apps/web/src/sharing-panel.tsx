@@ -1,3 +1,4 @@
+import { getLocale } from '@manga/i18n'
 import type { ID } from '@manga/schema'
 import { Button, Input, Select, Typography, XStack, YStack } from '@manga/ui'
 import { Suspense, startTransition, use, useState } from 'react'
@@ -167,7 +168,8 @@ function MembersView({
               <XStack as="li" wrap key={invite.id}>
                 <span>{invite.email}</span>
                 <small>
-                  {ROLE_LABELS[invite.role]}・{new Date(invite.expiresAt).toLocaleDateString()} まで
+                  {ROLE_LABELS[invite.role]}・
+                  {new Date(invite.expiresAt).toLocaleDateString(getLocale())} まで
                 </small>
                 <Button
                   size="small"

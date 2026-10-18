@@ -1,6 +1,7 @@
 import { ToastList } from '@manga/ui'
 import { useStore } from 'zustand'
 import { createStore, type StoreApi } from 'zustand/vanilla'
+import { errorMessage } from './route-error'
 import { useAuth } from './use-auth'
 
 type ToastKind = 'error' | 'info'
@@ -60,7 +61,7 @@ export function Toasts({ store = toasts }: { store?: ToastStore }) {
 
 /** signIn を始め、始められなければトーストで知らせる */
 export function signInOrNotify(signIn: () => Promise<void>): void {
-  signIn().catch((e: unknown) => toasts.push(`ログインできません: ${String(e)}`))
+  signIn().catch((e: unknown) => toasts.push(`ログインできません: ${errorMessage(e)}`))
 }
 
 if (import.meta.vitest) {
