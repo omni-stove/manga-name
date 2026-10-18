@@ -63,7 +63,7 @@ describe('createAnthropicLlmProvider', () => {
     expect(new Headers(init?.headers).get('x-api-key')).toBe('test-key')
     const { system, user, schema } = prompts.planPages(planRequest)
     const body = sentBody()
-    expect(body).toMatchObject({ model: 'claude-haiku-5-5', max_tokens: 32_000 })
+    expect(body).toMatchObject({ model: 'claude-haiku-5-5', max_tokens: 64_000 })
     expect(body.system.map((b) => b.text).join('')).toBe(system)
     expect(body.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: user }] }])
     // AI SDK は Anthropic が受け付けない制約（minLength など）を description に移すので、形だけを比べる
