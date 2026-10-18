@@ -80,6 +80,7 @@ function Playground() {
     scribble: true,
     hints: true,
     diagnosis: true,
+    frames: true,
   })
 
   const toggleGenerating = (id: ID) =>

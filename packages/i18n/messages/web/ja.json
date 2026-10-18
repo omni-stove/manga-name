@@ -121,6 +121,7 @@
   "web_editor_layer_art": "絵",
   "web_editor_layer_scribble": "手描き",
   "web_editor_layer_hints": "ヒント",
+  "web_editor_layer_frames": "枠線",
   "web_editor_layer_diagnosis": "診断",
   "web_editor_history_import_reference": "参考画像を読み込み",
   "web_editor_reference_import_failed": "参考画像を読み込めません: {reason}",

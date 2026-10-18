@@ -144,6 +144,7 @@ const layerOptions = (): readonly { key: keyof Layers; label: string }[] => [
   { key: 'art', label: m.web_editor_layer_art() },
   { key: 'scribble', label: m.web_editor_layer_scribble() },
   { key: 'hints', label: m.web_editor_layer_hints() },
+  { key: 'frames', label: m.web_editor_layer_frames() },
   ...(GAZE_EVALUATION
     ? [{ key: 'diagnosis' as const, label: m.web_editor_layer_diagnosis() }]
     : []),
@@ -155,6 +156,7 @@ const ALL_LAYERS: Layers = {
   scribble: true,
   hints: true,
   diagnosis: GAZE_EVALUATION,
+  frames: true,
 }
 
 type Apply = (label: string, build: (project: Project) => Patch) => boolean

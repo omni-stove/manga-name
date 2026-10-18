@@ -4,6 +4,7 @@ import { memo, useCallback, useId, useLayoutEffect, useRef } from 'react'
 import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { BubbleToolLayer } from './bubble-tool-layer'
 import { DiagnosisLayer } from './diagnosis-layer'
+import { FrameLayer } from './frame-layer'
 import { GhostLayer } from './ghost-layer'
 import { findFocus, findVector, focusRadius, toPagePoint } from './hint-ops'
 import { HintsLayer } from './hints-layer'
@@ -51,6 +52,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * Patch はページ root 基準で `onChange` に 1 操作 1 回出し、Undo / Redo は持たない。
  * `focus` ツールではクリックで焦点を置き、ドラッグで動かす。`vector` ツールではドラッグでベクトルを作り、
  * 終点（と始点）が焦点かフキダシの上なら `targetFocusId`（と `sourceFocusId`）を付ける。
+ * `layers.frames` が立っていれば、タチキリ枠、外枠、内枠をコマの上に重ねる。
  * 参考画像はページの白地の上、コマの下に描く。焦点とベクトルはフキダシの上に描き、
  * `layers.hints` を切ると描画も選択も操作もしない。
  * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
@@ -253,6 +255,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         idPrefix={idPrefix}
         onGenerate={props.onGenerate ? generate : undefined}
       />
+      {layers.frames && <FrameLayer width={pageW} height={pageH} />}
       {layers.scribble && (
         <g data-layer="scribble" pointerEvents="none">
           <Scribbles scribbles={page.scribbles} width={pageW} height={pageH} />
