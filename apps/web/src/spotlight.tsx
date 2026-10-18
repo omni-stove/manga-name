@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react'
 import styles from './spotlight.module.css'
 
 interface SpotlightProps {
@@ -118,12 +118,14 @@ export function Spotlight({ target, keep, children }: SpotlightProps) {
         role="status"
         className={styles.tip}
         data-above={layout?.tip.above || undefined}
-        style={{
-          visibility: layout ? undefined : 'hidden',
-          left: layout?.tip.left,
-          top: layout?.tip.top,
-          ['--arrow-x' as string]: `${layout?.tip.arrow ?? 0}px`,
-        }}
+        style={
+          {
+            visibility: layout ? undefined : 'hidden',
+            left: layout?.tip.left,
+            top: layout?.tip.top,
+            '--arrow-x': `${layout?.tip.arrow ?? 0}px`,
+          } as CSSProperties
+        }
       >
         {children}
       </div>
