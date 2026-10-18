@@ -45,6 +45,7 @@ interface PageLayerProps {
   showReference: boolean
   resolveAsset(ref: string): Promise<string>
   generating: Set<ID>
+  generatingPage: boolean
   selection: Selection
   /** clipPath の id の接頭辞。同じ文書に複数のキャンバスがあっても衝突しない値 */
   idPrefix: string
@@ -125,10 +126,17 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
           panelShape={panel.shape}
           width={width}
           height={height}
-          generating={props.generating.has(panel.id)}
-          onGenerate={props.onGenerate}
+          generating={!props.generatingPage && props.generating.has(panel.id)}
+          onGenerate={props.generatingPage ? undefined : props.onGenerate}
         />
       ))}
+      {props.generatingPage && (
+        <GeneratingOverlay
+          rect={{ x: 0, y: 0, w: width, h: height }}
+          points={`0,0 ${width},0 ${width},${height} 0,${height}`}
+          label={m.editor_canvas_page_generating()}
+        />
+      )}
     </g>
   )
 })
@@ -272,7 +280,9 @@ const PanelOverlay = memo(function PanelOverlay({
     <g className="ec-overlay" data-overlay-panel-id={panelId}>
       {/* フキダシの上でも .ec-overlay:hover を効かせるための当たり判定 */}
       <polygon points={points} fill="transparent" />
-      {generating && <GeneratingOverlay rect={rect} points={points} />}
+      {generating && (
+        <GeneratingOverlay rect={rect} points={points} label={m.editor_canvas_panel_generating()} />
+      )}
       {onGenerate && !generating && (
         <GenerateButton outline={outline} onClick={() => onGenerate(panelId)} />
       )}
@@ -391,12 +401,12 @@ function PanelNumber({ order, outline }: { order: number; outline: readonly Page
 }
 
 /** 半透明の白と回るスピナー */
-function GeneratingOverlay({ rect, points }: { rect: Box; points: string }) {
+function GeneratingOverlay({ rect, points, label }: { rect: Box; points: string; label: string }) {
   const cx = rect.x + rect.w / 2
   const cy = rect.y + rect.h / 2
   const r = Math.min(12, Math.max(3, Math.min(rect.w, rect.h) * 0.12))
   return (
-    <g data-spinner="" aria-label={m.editor_canvas_panel_generating()}>
+    <g data-spinner="" aria-label={label}>
       <polygon points={points} fill="#fff" opacity={0.6} />
       <circle
         cx={cx}

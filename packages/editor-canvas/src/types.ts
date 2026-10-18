@@ -56,6 +56,8 @@ export interface EditorCanvasProps {
   layers: Layers
   /** 生成中のコマ。スピナーを重ねる */
   generating: Set<ID>
+  /** ページ全体を 1 回で生成中。コマごとのスピナーの代わりにページに 1 つ重ね、生成ボタンを隠す */
+  generatingPage?: boolean
   /** page を root とした JSON Patch */
   onChange(patch: Patch): void
   onSelect(sel: Selection): void

@@ -255,6 +255,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         showReference={layers.reference}
         resolveAsset={props.resolveAsset}
         generating={props.generating}
+        generatingPage={props.generatingPage ?? false}
         selection={props.selection}
         idPrefix={idPrefix}
         onGenerate={props.onGenerate ? generate : undefined}

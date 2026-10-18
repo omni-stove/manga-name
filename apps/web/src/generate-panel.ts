@@ -30,6 +30,8 @@ import { toasts } from './toasts'
 interface GeneratingState {
   /** 生成中のコマ。import で同じ JSON を読むとコマの id が重なるので、projectId とのキーで持つ。`generatingPanels` で取り出す */
   panels: Set<string>
+  /** 1 回で生成中のページ。キーは panels と同じく projectId との組で、`generatingPage` で引く。そのコマも panels に入る */
+  pages: Set<string>
   /** 一括生成が走っている範囲。キーは panels と同じく projectId との組で、`batchRunning` で引く */
   batches: Set<string>
 }
@@ -42,6 +44,11 @@ export function generatingPanels(state: GeneratingState, projectId: ID): Set<ID>
   return new Set(
     [...state.panels].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length)),
   )
+}
+
+/** ページ全体を 1 回で生成している最中か。EditorCanvas の `generatingPage` に渡す */
+export function generatingPage(state: GeneratingState, projectId: ID, pageId: ID): boolean {
+  return state.pages.has(generatingKey(projectId, pageId))
 }
 
 /** 参考画像やヒントを使わないコマ。キーは generatingKey と同じ形 */
@@ -234,6 +241,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
   } = deps
   const generating = createStore<GeneratingState>()(() => ({
     panels: new Set(),
+    pages: new Set(),
     batches: new Set(),
   }))
   const referenceOptOut = createStore<OptOutState>()(() => ({ panels: new Set() }))
@@ -246,6 +254,8 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       return { panels }
     })
   const batchControllers = new Map<string, AbortController>()
+  // 同じページで attemptPage が重なっても、最後の 1 つが終わるまで pages のフラグを残すための数
+  const pageRuns = new Map<string, number>()
 
   const toggle = (field: keyof GeneratingState, key: string | readonly string[], on: boolean) =>
     generating.setState((s) => {
@@ -254,7 +264,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
         if (on) keys.add(k)
         else keys.delete(k)
       }
-      return field === 'panels' ? { panels: keys } : { batches: keys }
+      return { ...s, [field]: keys }
     })
 
   const loadCharacterRefs = async (cast: readonly Character[]) =>
@@ -460,7 +470,10 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     counts.busy = req.panelIds.length - panelIds.length
     if (panelIds.length === 0) return { counts }
     const keys = panelIds.map((id) => generatingKey(req.projectId, id))
+    const pageKey = generatingKey(req.projectId, req.pageId)
     toggle('panels', keys, true)
+    pageRuns.set(pageKey, (pageRuns.get(pageKey) ?? 0) + 1)
+    toggle('pages', pageKey, true)
     try {
       const missing = await runPage({ ...req, panelIds })
       counts.done = panelIds.length - missing.length
@@ -477,6 +490,12 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       return { counts, error }
     } finally {
       toggle('panels', keys, false)
+      const left = (pageRuns.get(pageKey) ?? 1) - 1
+      if (left > 0) pageRuns.set(pageKey, left)
+      else {
+        pageRuns.delete(pageKey)
+        toggle('pages', pageKey, false)
+      }
     }
   }
 
@@ -1002,6 +1021,7 @@ if (import.meta.vitest) {
       })
       const pending = generation.generateAll(all(store))
       await called
+      expect(generatingPage(generation.generating.getState(), sample.id, pageId)).toBe(true)
       generation.cancel(sample.id, `page/${pageId}`)
       expect(await pending).toMatchObject({ canceled: 6, done: 0 })
       expect(pagePanels(store).every((p) => p.arts.length === 0)).toBe(true)
@@ -1009,6 +1029,7 @@ if (import.meta.vitest) {
       expect(batchRunning(generation.generating.getState(), sample.id, `page/${pageId}`)).toBe(
         false,
       )
+      expect(generatingPage(generation.generating.getState(), sample.id, pageId)).toBe(false)
     })
   })
 
