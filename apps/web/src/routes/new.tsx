@@ -1,6 +1,6 @@
-import { Button, Input, Typography, XStack, YStack } from '@manga/ui'
+import { Button, FileDrop, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { type DragEvent, useState } from 'react'
+import { useState } from 'react'
 import { parseProjectFile } from '../project-file'
 import { errorMessage } from '../route-error'
 import styles from './projects.module.css'
@@ -13,7 +13,6 @@ function NewProject() {
   const navigate = useNavigate()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
-  const [dragging, setDragging] = useState(false)
 
   /** 失敗は画面に出す。同じプロジェクトを二重に作らないよう、実行中はボタンを止める */
   const run = async (task: () => Promise<void>) => {
@@ -33,13 +32,6 @@ function NewProject() {
       const project = await library.import(parseProjectFile(await file.text()))
       await navigate({ to: '/p/$projectId', params: { projectId: project.id } })
     })
-
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file) void importFile(file)
-  }
 
   return (
     <YStack as="section" gap={16}>
@@ -62,32 +54,13 @@ function NewProject() {
           </Button>
         </XStack>
       </form>
-      <fieldset
-        className={styles.dropZone}
-        data-dragging={dragging}
-        onDragOver={(e) => {
-          e.preventDefault()
-          setDragging(true)
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-      >
-        <label>
-          JSON をここにドロップするか、ファイルを選んで読み込む{' '}
-          <input
-            type="file"
-            accept="application/json,.json"
-            disabled={busy}
-            onChange={(e) => {
-              const input = e.currentTarget
-              const file = input.files?.[0]
-              // 同じファイルを選び直しても change が起きるよう空にする
-              input.value = ''
-              if (file) void importFile(file)
-            }}
-          />
-        </label>
-      </fieldset>
+      <FileDrop
+        label="プロジェクト JSON を読み込む"
+        accept="application/json,.json"
+        prompt="書き出した JSON をここにドロップ"
+        disabled={busy}
+        onPick={(file) => void importFile(file)}
+      />
       {error && (
         <Typography tone="alert" role="alert">
           {error}
