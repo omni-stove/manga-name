@@ -125,6 +125,7 @@ function EpisodePages() {
           {m.web_episode_add_page()}
         </Button>
         <Button
+          data-guide="draft"
           onClick={() =>
             void navigate({
               to: '/p/$projectId/episodes/$episodeId/draft',
@@ -150,6 +151,7 @@ function EpisodePages() {
                 to="/p/$projectId/pages/$pageId"
                 params={{ projectId, pageId: page.id }}
                 className={common.cardLink}
+                data-guide="page"
               >
                 <YStack gap={4}>
                   <PageThumbnail
