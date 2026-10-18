@@ -3,11 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./rpc": {
+      "types": "./dist/types/rpc.d.ts"
+    }
+  },
   "scripts": {
     "dev": "wrangler dev --var ENVIRONMENT:development",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "types": "tsc -p tsconfig.types.json",
+    "prepare": "pnpm types"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.80",
@@ -15,7 +22,7 @@
     "@manga/schema": "workspace:*",
     "ai": "^7.0.141",
     "better-auth": "^1.7.9",
-    "hono": "^4.9.0",
+    "hono": "catalog:",
     "lib0": "^0.2.114",
     "y-protocols": "^1.0.6",
     "yjs": "^13.6.27",

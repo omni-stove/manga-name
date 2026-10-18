@@ -12,6 +12,7 @@
       "ignoreDependencies": ["@inlang/plugin-message-format"]
     },
     "workers/api": {
+      "entry": ["src/rpc.ts"],
       "ignoreDependencies": ["cloudflare"]
     }
   }

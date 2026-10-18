@@ -1,4 +1,7 @@
-import { ApiException } from './api-error'
+import { createMiddleware } from 'hono/factory'
+import type { BlankEnv } from 'hono/types'
+import type { z } from 'zod'
+import { ApiException, parseOrThrow } from './api-error'
 
 const notJson = () => new ApiException('invalid_request', { detail: 'body is not valid JSON' })
 
@@ -45,3 +48,15 @@ export const requestJson = (request: Request): Promise<unknown> =>
   request.json().catch(() => {
     throw notJson()
   })
+
+/**
+ * 本文を maxBytes まで JSON として読み（readJson）、schema で検証して `c.req.valid('json')` に置くミドルウェア。
+ * hono/validator を使わないのは、本文を上限まで読まずに断る readJson と、invalid_request の応答を保つため
+ */
+export const jsonBody = <S extends z.ZodObject>(schema: S, maxBytes: number) =>
+  createMiddleware<BlankEnv, string, { in: { json: z.input<S> }; out: { json: z.output<S> } }>(
+    async (c, next) => {
+      c.req.addValidatedData('json', parseOrThrow(schema, await readJson(c.req.raw, maxBytes)))
+      await next()
+    },
+  )

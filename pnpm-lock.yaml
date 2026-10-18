@@ -173,6 +173,9 @@ catalogs:
     '@vitest/coverage-v8':
       specifier: 5.0.4
       version: 5.0.4
+    hono:
+      specifier: ^4.9.0
+      version: 4.13.13
     typescript:
       specifier: ^7.0.2
       version: 7.0.2
@@ -256,6 +259,9 @@ importers:
       '@tauri-apps/plugin-store':
         specifier: ^2.5.0
         version: 2.5.0
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.13
       immer:
         specifier: ^11.0.0
         version: 11.1.21
@@ -284,6 +290,9 @@ importers:
       '@inlang/paraglide-js':
         specifier: ^2.29.0
         version: 2.29.0(typescript@7.0.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@manga/api':
+        specifier: workspace:*
+        version: link:../../workers/api
       '@tanstack/router-plugin':
         specifier: ^1.168.46
         version: 1.168.46(@tanstack/react-router@1.170.44(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(esbuild@0.28.2)(rolldown@1.2.14)(supports-color@10.2.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -577,7 +586,7 @@ importers:
         specifier: ^1.7.9
         version: 1.7.9(@opentelemetry/api@1.9.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vitest@5.0.4)
       hono:
-        specifier: ^4.9.0
+        specifier: 'catalog:'
         version: 4.13.13
       lib0:
         specifier: ^0.2.114

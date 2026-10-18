@@ -4,6 +4,7 @@ import {
   type RouterHistory,
   RouterProvider,
 } from '@tanstack/react-router'
+import type { AuthClient } from './auth'
 import type { PanelGeneration } from './generate-panel'
 import type { ImageProvider } from './image-provider'
 import type { LlmProvider } from './llm-provider'
@@ -23,6 +24,8 @@ export interface RouterContext {
   generation: PanelGeneration
   /** プロジェクトの参加者と招待 */
   sharing: SharingClient
+  /** ログイン状態。ログインが要る読み込みを loader で分けるのに使う */
+  auth: Pick<AuthClient, 'getUser'>
 }
 
 /** アプリのルーター。`history` を省くとブラウザ履歴を使う */
@@ -69,6 +72,7 @@ if (import.meta.vitest) {
         llmProvider: createLlmProvider({ baseUrl: '', getToken: async () => null }),
         generation: createPanelGeneration({ library, imageProvider }),
         sharing: createSharingClient({ baseUrl: '', fetch, cloudId: async () => null }),
+        auth: { getUser: () => null },
       },
       createMemoryHistory({ initialEntries: [path] }),
     )

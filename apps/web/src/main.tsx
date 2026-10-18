@@ -72,7 +72,14 @@ const library = createProjectLibrary(storage, {
 const imageProvider = createImageProvider({ baseUrl, getToken: auth.getToken })
 const llmProvider = createLlmProvider({ baseUrl, getToken: auth.getToken })
 const generation = createPanelGeneration({ library, imageProvider })
-const router = createAppRouter({ library, imageProvider, llmProvider, generation, sharing })
+const router = createAppRouter({
+  library,
+  imageProvider,
+  llmProvider,
+  generation,
+  sharing,
+  auth,
+})
 // 一覧に並ぶクラウドだけのプロジェクトとロールはユーザーで変わるので、ログインとサインアウトで loader を読み直す
 // トークンの取り直しでも通知が来るが、同じユーザーなら読み直さない
 let userId = auth.getUser()?.id

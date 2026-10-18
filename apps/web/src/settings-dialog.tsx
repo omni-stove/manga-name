@@ -210,7 +210,8 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
         </Typography>
       )}
       <Typography variant="heading">共有</Typography>
-      <SharingPanel projectId={projectId} sharing={sharing} />
+      {/* key で作り直すのは、SharingPanel が最初に読んだプロジェクトの参加者を持ち続けるため */}
+      <SharingPanel key={projectId} projectId={projectId} sharing={sharing} />
     </YStack>
   )
 }

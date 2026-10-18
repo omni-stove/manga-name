@@ -21,6 +21,8 @@ catalog:
   '@vitest/coverage-v8': 5.0.4
   '@vitest/coverage-istanbul': 5.0.4
   '@vitest/browser-playwright': ^5.0.4
+  # apps/web の hc が workers/api の経路の型を読むので、両方で同じ版でないと型の展開が壊れる
+  hono: ^4.9.0
 
 minimumReleaseAgeExclude:
   - '@cloudflare/vitest-plugin@1.4.3'

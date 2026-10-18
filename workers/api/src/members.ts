@@ -1,8 +1,8 @@
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { MEMBER_ROLES, type ProjectRole, projectRole, userEmail } from './access'
-import { ApiException, parseOrThrow } from './api-error'
-import { readJson } from './body'
+import { ApiException } from './api-error'
+import { jsonBody } from './body'
 import type { Env } from './env'
 import { hashToken, newToken } from './token'
 import { requireUser, type UserEnv } from './user'
@@ -16,6 +16,11 @@ const InviteSchema = z.object({
 })
 
 const RoleSchema = z.object({ role: z.enum(MEMBER_ROLES) })
+
+type MemberRole = (typeof MEMBER_ROLES)[number]
+
+/** 招待とロールの変更の本文の上限（バイト） */
+const MAX_BODY_BYTES = 1024
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 
@@ -56,41 +61,6 @@ interface MemberRow {
  * 招待とロールの変更は owner だけができ、他は 403。
  */
 export function createMemberRoutes(now: () => number) {
-  const app = new Hono<UserEnv>()
-
-  app.get('/:id/members', async (c) => {
-    const id = c.req.param('id')
-    const role = await projectRole(c.env.DB, c.get('userId'), id)
-    if (role === null) throw new ApiException('not_found')
-    // 表示名を決める前のユーザーは name が空なので、null にして Web にメールアドレスで代わりに出させる
-    const { results } = await c.env.DB.prepare(
-      `SELECT p.owner_id AS userId, 'owner' AS role, u.email AS email, NULLIF(u.name, '') AS name, 0 AS rank, 0 AS created_at
-       FROM projects p LEFT JOIN auth_users u ON u.id = p.owner_id WHERE p.id = ?1
-       UNION ALL
-       SELECT m.user_id, m.role, u.email, NULLIF(u.name, ''), 1, m.created_at
-       FROM project_members m LEFT JOIN auth_users u ON u.id = m.user_id WHERE m.project_id = ?1
-       ORDER BY rank, created_at`,
-    )
-      .bind(id)
-      .all<MemberRow>()
-    const members = results.map(({ userId, role, email, name }) => ({ userId, role, email, name }))
-    if (role !== 'owner') return c.json({ role, members, invites: [] })
-    const invites = await c.env.DB.prepare(
-      `SELECT id, email, role, expires_at AS expiresAt FROM project_invites
-       WHERE project_id = ?1 AND expires_at > ?2 ORDER BY created_at`,
-    )
-      .bind(id, now())
-      .all<{ id: string; email: string; role: string; expiresAt: number }>()
-    return c.json({
-      role,
-      members,
-      invites: invites.results.map((i) => ({
-        ...i,
-        expiresAt: new Date(i.expiresAt).toISOString(),
-      })),
-    })
-  })
-
   /** 参加していなければ not_found、owner でなければ owner_only を throw する */
   const requireOwner = async (c: Context<UserEnv>, projectId: string) => {
     const role = await projectRole(c.env.DB, c.get('userId'), projectId)
@@ -98,79 +68,117 @@ export function createMemberRoutes(now: () => number) {
     if (role !== 'owner') throw new ApiException('owner_only')
   }
 
-  app.post('/:id/invites', async (c) => {
-    await requireOwner(c, c.req.param('id'))
-    const data = parseOrThrow(InviteSchema, await readJson(c.req.raw, 1024))
-
-    const projectId = c.req.param('id')
-    const email = normalizeEmail(data.email)
-    const token = newToken()
-    const invite = {
-      id: crypto.randomUUID(),
-      email,
-      role: data.role,
-      expiresAt: now() + INVITE_TTL_MS,
-    }
-    await c.env.DB.batch([
-      c.env.DB.prepare('DELETE FROM project_invites WHERE project_id = ?1 AND email = ?2').bind(
-        projectId,
+  // hc が経路ごとの型を拾えるよう、ルートは 1 つの式につなげて返す
+  return new Hono<UserEnv>()
+    .get('/:id/members', async (c) => {
+      const id = c.req.param('id')
+      const role = await projectRole(c.env.DB, c.get('userId'), id)
+      if (role === null) throw new ApiException('not_found')
+      // 表示名を決める前のユーザーは name が空なので、null にして Web にメールアドレスで代わりに出させる
+      const { results } = await c.env.DB.prepare(
+        `SELECT p.owner_id AS userId, 'owner' AS role, u.email AS email, NULLIF(u.name, '') AS name, 0 AS rank, 0 AS created_at
+       FROM projects p LEFT JOIN auth_users u ON u.id = p.owner_id WHERE p.id = ?1
+       UNION ALL
+       SELECT m.user_id, m.role, u.email, NULLIF(u.name, ''), 1, m.created_at
+       FROM project_members m LEFT JOIN auth_users u ON u.id = m.user_id WHERE m.project_id = ?1
+       ORDER BY rank, created_at`,
+      )
+        .bind(id)
+        .all<MemberRow>()
+      const members = results.map(({ userId, role, email, name }) => ({
+        userId,
+        role,
         email,
-      ),
-      c.env.DB.prepare(
-        `INSERT INTO project_invites (id, project_id, email, role, token_hash, created_at, expires_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
-      ).bind(
-        invite.id,
-        projectId,
-        email,
-        invite.role,
-        await hashToken(token),
-        now(),
-        invite.expiresAt,
-      ),
-    ])
-    return c.json({ ...invite, expiresAt: new Date(invite.expiresAt).toISOString(), token }, 201)
-  })
+        name,
+      }))
+      if (role !== 'owner') return c.json({ role, members, invites: [] })
+      const invites = await c.env.DB.prepare(
+        `SELECT id, email, role, expires_at AS expiresAt FROM project_invites
+       WHERE project_id = ?1 AND expires_at > ?2 ORDER BY created_at`,
+      )
+        .bind(id, now())
+        .all<{ id: string; email: string; role: MemberRole; expiresAt: number }>()
+      return c.json({
+        role,
+        members,
+        invites: invites.results.map((i) => ({
+          ...i,
+          expiresAt: new Date(i.expiresAt).toISOString(),
+        })),
+      })
+    })
 
-  app.delete('/:id/invites/:inviteId', async (c) => {
-    await requireOwner(c, c.req.param('id'))
-    const { meta } = await c.env.DB.prepare(
-      'DELETE FROM project_invites WHERE id = ?1 AND project_id = ?2',
-    )
-      .bind(c.req.param('inviteId'), c.req.param('id'))
-      .run()
-    if (meta.changes !== 1) throw new ApiException('not_found')
-    return c.body(null, 204)
-  })
-
-  app.put('/:id/members/:userId', async (c) => {
-    await requireOwner(c, c.req.param('id'))
-    const { role } = parseOrThrow(RoleSchema, await readJson(c.req.raw, 1024))
-    const projectId = c.req.param('id')
-    const userId = c.req.param('userId')
-    const { meta } = await c.env.DB.prepare(
-      'UPDATE project_members SET role = ?3 WHERE project_id = ?1 AND user_id = ?2',
-    )
-      .bind(projectId, userId, role)
-      .run()
-    if (meta.changes !== 1) throw new ApiException('not_found')
-    await revokeSync(c.env, projectId, userId)
-    return c.body(null, 204)
-  })
-
-  app.delete('/:id/members/:userId', async (c) => {
-    const projectId = c.req.param('id')
-    const userId = c.req.param('userId')
-    if (userId !== c.get('userId')) {
+    .post('/:id/invites', jsonBody(InviteSchema, MAX_BODY_BYTES), async (c) => {
       await requireOwner(c, c.req.param('id'))
-    } else if ((await projectRole(c.env.DB, userId, projectId)) === null) {
-      throw new ApiException('not_found')
-    }
-    if (!(await removeMember(c.env, projectId, userId))) throw new ApiException('not_found')
-    return c.body(null, 204)
-  })
+      const data = c.req.valid('json')
 
-  return app
+      const projectId = c.req.param('id')
+      const email = normalizeEmail(data.email)
+      const token = newToken()
+      const invite = {
+        id: crypto.randomUUID(),
+        email,
+        role: data.role,
+        expiresAt: now() + INVITE_TTL_MS,
+      }
+      await c.env.DB.batch([
+        c.env.DB.prepare('DELETE FROM project_invites WHERE project_id = ?1 AND email = ?2').bind(
+          projectId,
+          email,
+        ),
+        c.env.DB.prepare(
+          `INSERT INTO project_invites (id, project_id, email, role, token_hash, created_at, expires_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+        ).bind(
+          invite.id,
+          projectId,
+          email,
+          invite.role,
+          await hashToken(token),
+          now(),
+          invite.expiresAt,
+        ),
+      ])
+      return c.json({ ...invite, expiresAt: new Date(invite.expiresAt).toISOString(), token }, 201)
+    })
+
+    .delete('/:id/invites/:inviteId', async (c) => {
+      await requireOwner(c, c.req.param('id'))
+      const { meta } = await c.env.DB.prepare(
+        'DELETE FROM project_invites WHERE id = ?1 AND project_id = ?2',
+      )
+        .bind(c.req.param('inviteId'), c.req.param('id'))
+        .run()
+      if (meta.changes !== 1) throw new ApiException('not_found')
+      return c.body(null, 204)
+    })
+
+    .put('/:id/members/:userId', jsonBody(RoleSchema, MAX_BODY_BYTES), async (c) => {
+      await requireOwner(c, c.req.param('id'))
+      const { role } = c.req.valid('json')
+      const projectId = c.req.param('id')
+      const userId = c.req.param('userId')
+      const { meta } = await c.env.DB.prepare(
+        'UPDATE project_members SET role = ?3 WHERE project_id = ?1 AND user_id = ?2',
+      )
+        .bind(projectId, userId, role)
+        .run()
+      if (meta.changes !== 1) throw new ApiException('not_found')
+      await revokeSync(c.env, projectId, userId)
+      return c.body(null, 204)
+    })
+
+    .delete('/:id/members/:userId', async (c) => {
+      const projectId = c.req.param('id')
+      const userId = c.req.param('userId')
+      if (userId !== c.get('userId')) {
+        await requireOwner(c, c.req.param('id'))
+      } else if ((await projectRole(c.env.DB, userId, projectId)) === null) {
+        throw new ApiException('not_found')
+      }
+      if (!(await removeMember(c.env, projectId, userId))) throw new ApiException('not_found')
+      return c.body(null, 204)
+    })
 }
 
 /**
@@ -194,45 +202,47 @@ export function createInviteApp(now: () => number) {
       .first<{
         id: string
         email: string
-        role: string
+        role: MemberRole
         projectId: string
         projectTitle: string
         expiresAt: number
       }>()
 
-  app.get('/:token', async (c) => {
-    const invite = await findInvite(c.env, c.req.param('token'))
-    if (!invite) throw new ApiException('not_found')
-    const { id: _, ...rest } = invite
-    return c.json({ ...rest, expiresAt: new Date(invite.expiresAt).toISOString() })
-  })
-
-  app.post('/:token/accept', async (c) => {
-    const invite = await findInvite(c.env, c.req.param('token'))
-    if (!invite) throw new ApiException('not_found')
-    const userId = c.get('userId')
-    const email = await userEmail(c.env, userId)
-    if (email === null || normalizeEmail(email) !== invite.email) {
-      throw new ApiException('invite_email_mismatch')
-    }
-    const current = await projectRole(c.env.DB, userId, invite.projectId)
-    await c.env.DB.batch([
-      ...(current === 'owner'
-        ? []
-        : [
-            c.env.DB.prepare(
-              `INSERT INTO project_members (project_id, user_id, role, created_at) VALUES (?1, ?2, ?3, ?4)
-               ON CONFLICT (project_id, user_id) DO UPDATE SET role = excluded.role`,
-            ).bind(invite.projectId, userId, invite.role, now()),
-          ]),
-      c.env.DB.prepare('DELETE FROM project_invites WHERE id = ?1').bind(invite.id),
-    ])
-    if (current !== null && current !== 'owner') await revokeSync(c.env, invite.projectId, userId)
-    return c.json({
-      projectId: invite.projectId,
-      role: current === 'owner' ? 'owner' : invite.role,
-    })
-  })
-
   return app
+    .get('/:token', async (c) => {
+      const invite = await findInvite(c.env, c.req.param('token'))
+      if (!invite) throw new ApiException('not_found')
+      const { id: _, ...rest } = invite
+      return c.json({ ...rest, expiresAt: new Date(invite.expiresAt).toISOString() })
+    })
+
+    .post('/:token/accept', async (c) => {
+      const invite = await findInvite(c.env, c.req.param('token'))
+      if (!invite) throw new ApiException('not_found')
+      const userId = c.get('userId')
+      const email = await userEmail(c.env, userId)
+      if (email === null || normalizeEmail(email) !== invite.email) {
+        throw new ApiException('invite_email_mismatch')
+      }
+      const current = await projectRole(c.env.DB, userId, invite.projectId)
+      await c.env.DB.batch([
+        ...(current === 'owner'
+          ? []
+          : [
+              c.env.DB.prepare(
+                `INSERT INTO project_members (project_id, user_id, role, created_at) VALUES (?1, ?2, ?3, ?4)
+               ON CONFLICT (project_id, user_id) DO UPDATE SET role = excluded.role`,
+              ).bind(invite.projectId, userId, invite.role, now()),
+            ]),
+        c.env.DB.prepare('DELETE FROM project_invites WHERE id = ?1').bind(invite.id),
+      ])
+      if (current !== null && current !== 'owner') await revokeSync(c.env, invite.projectId, userId)
+      return c.json({
+        projectId: invite.projectId,
+        role: current === 'owner' ? ('owner' as const) : invite.role,
+      })
+    })
 }
+
+export type MemberRoutes = ReturnType<typeof createMemberRoutes>
+export type InviteApp = ReturnType<typeof createInviteApp>
