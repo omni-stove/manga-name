@@ -6,10 +6,21 @@ export interface ProjectSummary {
   updatedAt: ISODate
 }
 
+export interface ProjectsByOrigin {
+  local: Promise<ProjectSummary[]>
+  cloudOnly: Promise<ProjectSummary[]>
+}
+
 /** プロジェクトとアセットの保存先。Web と Desktop の差はこの実装の選択に閉じる */
 export interface StorageAdapter {
   /** 保存済みプロジェクトの概要。updatedAt の新しい順 */
   listProjects(): Promise<ProjectSummary[]>
+  /**
+   * listProjects と同じプロジェクトを、手元に保存してある分とクラウドにしか無い分に分けて返す。
+   * `local` はネットワークを待たずに満ちる。どちらも updatedAt の新しい順で、`cloudOnly` は reject しない。
+   * 実装しないアダプタでは listProjects をすべて `local` とする
+   */
+  listProjectsByOrigin?(): ProjectsByOrigin
   /**
    * 保存されているかどうか。読めない内容でも保存されていれば true。
    * 実装しないアダプタでは listProjects に出るかどうかで判定する

@@ -19,13 +19,13 @@ import {
   XStack,
   YStack,
 } from '@manga/ui'
-import { useId, useMemo, useState } from 'react'
+import { Suspense, use, useId, useState } from 'react'
+import { assetUrl } from './asset-url'
 import { DEBOUNCE_MS, NumberField, TextField } from './fields'
 import styles from './panel-inspector.module.css'
 import { addCastPatch, optionalString, removeCastPatch, replace, swapOrder } from './patch'
 import section from './section.module.css'
 import type { PanelInspectorProps } from './types'
-import { useAssetUrls } from './use-asset-urls'
 
 const CAMERA_SUGGESTIONS = ['ロング', 'ミドル', 'バストアップ', 'アップ', 'アオリ', '俯瞰']
 
@@ -59,8 +59,6 @@ export function PanelInspector({
 }: PanelInspectorProps) {
   const cameraListId = useId()
   const [instruction, setInstruction] = useState('')
-  const refs = useMemo(() => panel.arts.map((a) => a.ref), [panel.arts])
-  const urls = useAssetUrls(refs, resolveAsset)
   const current = currentArt(panel)
   const bubbles = byOrder(panel.bubbles)
   const speakerOf = (bubble: Bubble) =>
@@ -222,7 +220,7 @@ export function PanelInspector({
             <ArtItem
               key={art.id}
               art={art}
-              url={urls.get(art.ref)}
+              url={assetUrl(resolveAsset, art.ref)}
               current={art.id === panel.artId}
               onSelect={() => {
                 const patch = selectArtPatch(panel.artId, art.id)
@@ -320,7 +318,7 @@ function ArtItem({
   onSelect,
 }: {
   art: PanelArt
-  url: string | null | undefined
+  url: Promise<string | null>
   current: boolean
   onSelect(): void
 }) {
@@ -334,11 +332,9 @@ function ArtItem({
       data-current={current || undefined}
     >
       <button type="button" className={styles.thumb} aria-pressed={current} onClick={onSelect}>
-        {url ? (
-          <img src={url} alt={art.instruction ?? '生成した絵'} />
-        ) : (
-          <span>{url === null ? '読み込めません' : '読み込み中…'}</span>
-        )}
+        <Suspense fallback={<span>読み込み中…</span>}>
+          <ArtImage url={url} alt={art.instruction ?? '生成した絵'} />
+        </Suspense>
       </button>
       <YStack gap={4} className={styles.meta}>
         <XStack as="span" className={styles.metaHead}>
@@ -353,6 +349,11 @@ function ArtItem({
       </YStack>
     </XStack>
   )
+}
+
+function ArtImage({ url, alt }: { url: Promise<string | null>; alt: string }) {
+  const resolved = use(url)
+  return resolved === null ? <span>読み込めません</span> : <img src={resolved} alt={alt} />
 }
 
 if (import.meta.vitest) {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 
 /**
- * `resolve` を EditorCanvas の resolveAsset として渡せる形にする。
+ * `resolve` を EditorCanvas や PageThumbnail の resolveAsset として渡せる形にする。
  * 返した URL を覚えておき、アンマウント時と `resolve` が差し替わった時に URL.revokeObjectURL で解放する。
  * 同じ ref は 2 度解決しない。EditorCanvas は resolveAsset の identity が変わると解決し直すので、同じ `resolve` には同じ関数を返す
  */

@@ -124,7 +124,7 @@ describe('art', () => {
     })
     expect(svg.querySelectorAll('image')).toHaveLength(5)
     const panel = must(svg.querySelector('[data-panel-id="pn_3"]'))
-    expect(panel.getAttribute('data-art-error')).toBe('true')
+    expect(panel.querySelector('[data-art-error]')).not.toBeNull()
     expect(panel.textContent).toContain('画像を読み込めません')
   })
 

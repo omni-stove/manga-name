@@ -1,5 +1,5 @@
-import { currentArt, type ID, type Page, type Stroke } from '@manga/schema'
-import { memo, useCallback, useId, useLayoutEffect, useMemo, useRef } from 'react'
+import type { ID, Page, Stroke } from '@manga/schema'
+import { memo, useCallback, useId, useLayoutEffect, useRef } from 'react'
 import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { BubbleToolLayer } from './bubble-tool-layer'
 import { DiagnosisLayer } from './diagnosis-layer'
@@ -10,7 +10,6 @@ import { panelBox, panelPolygon, polygonPoints } from './hit-test'
 import { PageLayer } from './page-layer'
 import { PanelToolLayer } from './panel-tool-layer'
 import type { EditorCanvasProps, Selection } from './types'
-import { useAssetUrls } from './use-asset-urls'
 import { useBubbleTool } from './use-bubble-tool'
 import { useHintTool } from './use-hint-tool'
 import { usePanelTool } from './use-panel-tool'
@@ -141,17 +140,6 @@ export function EditorCanvas(props: EditorCanvasProps) {
       ? null
       : selection.hovered
 
-  const referenceRef = layers.reference ? page.reference?.ref : undefined
-  const refs = useMemo(() => {
-    const arts = layers.art
-      ? page.panels.flatMap((p) => {
-          const ref = currentArt(p)?.ref
-          return ref === undefined ? [] : [ref]
-        })
-      : []
-    return referenceRef === undefined ? arts : [referenceRef, ...arts]
-  }, [page.panels, layers.art, referenceRef])
-  const { assets, markError } = useAssetUrls(refs, props.resolveAsset)
   // 親が毎回作り直す onGenerate で PageLayer の memo が外れないよう、identity を固定して最新を呼ぶ
   const onGenerateRef = useRef(props.onGenerate)
   useLayoutEffect(() => {
@@ -258,11 +246,10 @@ export function EditorCanvas(props: EditorCanvasProps) {
         height={pageH}
         showArt={layers.art}
         showReference={layers.reference}
-        assets={assets}
+        resolveAsset={props.resolveAsset}
         generating={props.generating}
         selection={props.selection}
         idPrefix={idPrefix}
-        onArtError={markError}
         onGenerate={props.onGenerate ? generate : undefined}
       />
       {layers.scribble && (
