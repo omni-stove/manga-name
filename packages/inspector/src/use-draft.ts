@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 /**
  * 入力欄の下書き。`value` は保存済みの値で、`set` で下書きを変えると `delayMs` 後に `commit` に渡す。
@@ -19,7 +19,7 @@ export function useDraft<T>(
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const pending = useRef<{ value: T } | undefined>(undefined)
   const commitRef = useRef(commit)
-  useEffect(() => {
+  useLayoutEffect(() => {
     commitRef.current = commit
   })
 

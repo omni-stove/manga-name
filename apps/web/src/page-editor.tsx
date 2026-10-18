@@ -716,7 +716,9 @@ export function PageEditor({
           className={styles.scriptSidebar}
         >
           <Area open={can('inspector')}>
+            {/* 入力の待ち（useDraft）が移った先のページへ書き込まないよう、ページごとに作り直す */}
             <PageScriptInspector
+              key={pageId}
               page={page}
               editable={canEdit}
               onChange={(patch) =>
@@ -814,6 +816,7 @@ export function PageEditor({
               <details open={selection === null || guidingGenerate}>
                 <summary>{m.web_editor_page()}</summary>
                 <PageInspector
+                  key={pageId}
                   page={page}
                   diagnosis={GAZE_EVALUATION ? (diagnosis ?? undefined) : undefined}
                   generating={
