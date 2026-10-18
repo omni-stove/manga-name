@@ -90,6 +90,7 @@ import {
   removeArtPatch,
   vectorPatch,
 } from './inspector-ops'
+import { LayoutSuggestions } from './layout-suggestions'
 import { LayoutTemplateDialog } from './layout-templates'
 import type { LlmProvider } from './llm-provider'
 import styles from './page-editor.module.css'
@@ -285,7 +286,7 @@ function issueTarget(page: Page, issue: Issue): Selection {
 }
 
 /**
- * ページの編集画面。ツールバー、左にページの脚本、キャンバス、右にインスペクタ。
+ * ページの編集画面。ツールバー、左にページの脚本とコマ割りの提案、キャンバス、右にインスペクタ。
  * `unlocked` を渡すと、そこに無い領域をキーボードでも操作できなくする
  */
 export function PageEditor({
@@ -721,6 +722,15 @@ export function PageEditor({
               onChange={(patch) =>
                 apply(m.web_editor_history_edit_page_script(), (p) => pagePatch(p, pageId, patch))
               }
+            />
+            <LayoutSuggestions
+              key={pageId}
+              store={store}
+              project={project}
+              page={page}
+              pageId={pageId}
+              llmProvider={llmProvider}
+              canEdit={canEdit}
             />
           </Area>
         </Sidebar>

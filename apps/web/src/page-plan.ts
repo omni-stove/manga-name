@@ -136,9 +136,32 @@ export function missingLines(script: string, plans: readonly PagePlan[]): string
 const BUBBLE_COLUMNS = 3
 
 /**
- * セリフをコマ順のコマに読む順で均等に配り、各コマで読む向きの端から並べたフキダシにする。
+ * 1 コマのセリフを、読む順に読む向きの端から BUBBLE_COLUMNS 列ずつ並べたフキダシにする。
  * フキダシは fitBubble でコマの枠に収める
  */
+export function lineBubbles(
+  panel: Panel,
+  lines: readonly PlanLine[],
+  settings: Pick<Project['settings'], 'direction' | 'pageSize'>,
+): Bubble[] {
+  return lines.map((line, m) => {
+    const column = (m % BUBBLE_COLUMNS) + 0.5
+    const x = column / BUBBLE_COLUMNS
+    const bubble = createBubble({
+      order: m + 1,
+      text: line.text,
+      shape: line.shape,
+      ...(line.speakerId !== undefined && { speakerId: line.speakerId }),
+      pos: {
+        x: settings.direction === 'rtl' ? 1 - x : x,
+        y: 0.2 + Math.floor(m / BUBBLE_COLUMNS) * 0.3,
+      },
+    })
+    return fitBubble(bubble, { panel, pageSize: settings.pageSize })
+  })
+}
+
+/** セリフをコマ順のコマに読む順で均等に配り、lineBubbles でフキダシにする */
 function distributeLines(
   panels: readonly Panel[],
   lines: readonly PlanLine[],
@@ -150,25 +173,10 @@ function distributeLines(
     const panel = ordered[Math.floor((j * ordered.length) / lines.length)] as Panel
     byPanel.set(panel, [...(byPanel.get(panel) ?? []), line])
   })
-  return panels.map((panel) => {
-    const assigned = byPanel.get(panel) ?? []
-    const bubbles = assigned.map((line, m): Bubble => {
-      const column = (m % BUBBLE_COLUMNS) + 0.5
-      const x = column / BUBBLE_COLUMNS
-      const bubble = createBubble({
-        order: m + 1,
-        text: line.text,
-        shape: line.shape,
-        ...(line.speakerId !== undefined && { speakerId: line.speakerId }),
-        pos: {
-          x: settings.direction === 'rtl' ? 1 - x : x,
-          y: 0.2 + Math.floor(m / BUBBLE_COLUMNS) * 0.3,
-        },
-      })
-      return fitBubble(bubble, { panel, pageSize: settings.pageSize })
-    })
-    return { ...panel, bubbles }
-  })
+  return panels.map((panel) => ({
+    ...panel,
+    bubbles: lineBubbles(panel, byPanel.get(panel) ?? [], settings),
+  }))
 }
 
 /**

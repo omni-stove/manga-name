@@ -10,11 +10,13 @@ import {
 import {
   CharacterArtRequestSchema,
   CritiqueResponseSchema,
+  LayoutSuggestionResponseSchema,
   PageArtRequestSchema,
   PageDiagnosisSchema,
   PagePlanResponseSchema,
   PageSchema,
   PanelArtRequestSchema,
+  type PlanLine,
   ProjectBaseSchema,
 } from '@manga/schema'
 import { type Context, Hono } from 'hono'
@@ -96,6 +98,12 @@ const PagePlanRequestSchema = z.object({
   pageCount: z.number().int().min(1).max(MAX_PAGE_COUNT).optional(),
 })
 
+/** `@manga/ai` の LayoutSuggestionRequest */
+const LayoutSuggestionRequestSchema = z.object({
+  project: ProjectBaseSchema.pick({ settings: true, characters: true }),
+  script: z.string().trim().min(1).max(MAX_SCRIPT_LENGTH),
+})
+
 /** `@manga/ai` の CritiqueRequest。診断は同じページのものに限る */
 const CritiqueRequestSchema = z
   .object({ page: PageSchema, diagnosis: PageDiagnosisSchema })
@@ -135,6 +143,13 @@ async function retryUntilValid<T>(
   return { value: undefined, attempts }
 }
 
+/** characterIds に居ない話し手を落とす。居ない話し手はプロジェクトのスキーマを通らないため */
+function dropUnknownSpeakers(lines: PlanLine[], characterIds: ReadonlySet<string>): PlanLine[] {
+  return lines.map(({ speakerId, ...line }) =>
+    speakerId !== undefined && characterIds.has(speakerId) ? { ...line, speakerId } : line,
+  )
+}
+
 const isFile = (v: unknown): v is File => typeof v !== 'string' && v !== null && v !== undefined
 
 /**
@@ -170,7 +185,7 @@ async function readImageForm<S extends z.ZodType>(c: Context<UserEnv>, schema: S
 }
 
 /**
- * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/page-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/critique`、
+ * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/page-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/suggest-layout`、`POST /v1/ai/critique`、
  * `/v1/projects` の CRUD とアセットと参加者、招待リンクの受け口 `/v1/invites/:token`、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
  * `/v1/health`、`/v1/auth/*`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
  * CORS は WEB_ORIGINS と tauri://localhost だけに許す。`/v1/health` 以外は ALLOWED_COUNTRIES の国からの接続だけを通す。
@@ -332,9 +347,7 @@ export function createApp(options: AppOptions = {}) {
       return result.data.map((p) => ({
         ...p,
         cast: p.cast.filter((id, i) => p.cast.indexOf(id) === i && characterIds.has(id)),
-        lines: p.lines.map(({ speakerId, ...line }) =>
-          speakerId !== undefined && characterIds.has(speakerId) ? { ...line, speakerId } : line,
-        ),
+        lines: dropUnknownSpeakers(p.lines, characterIds),
       }))
     })
     await settleUsage(c.env.DB, usageId, attempts)
@@ -342,6 +355,42 @@ export function createApp(options: AppOptions = {}) {
     if (value === undefined) {
       throw new ApiException('provider_invalid_response', {
         detail: 'llm provider returned an invalid page plan',
+      })
+    }
+    return c.json(value)
+  })
+
+  app.post('/v1/ai/suggest-layout', async (c) => {
+    const req = parseOrThrow(LayoutSuggestionRequestSchema, await requestJson(c.req.raw))
+    const usageId = await reserve(c, 'suggest-layout')
+    const provider = createLlm(c.env)
+    const characterIds = new Set(req.project.characters.map((ch) => ch.id))
+
+    const { value, attempts } = await retryUntilValid('suggest-layout', async () => {
+      // plan-pages と同じく、実プロバイダの応答は LLM の出力そのままなので検証し直す
+      const result = LayoutSuggestionResponseSchema.safeParse(await provider.suggestLayout(req))
+      if (!result.success) {
+        console.error('suggest-layout: invalid layout suggestion', z.prettifyError(result.error))
+        return undefined
+      }
+      return {
+        options: result.data.options.map((option) => ({
+          ...option,
+          rows: option.rows.map((row) => ({
+            ...row,
+            panels: row.panels.map((panel) => ({
+              ...panel,
+              lines: dropUnknownSpeakers(panel.lines, characterIds),
+            })),
+          })),
+        })),
+      }
+    })
+    await settleUsage(c.env.DB, usageId, attempts)
+
+    if (value === undefined) {
+      throw new ApiException('provider_invalid_response', {
+        detail: 'llm provider returned an invalid layout suggestion',
       })
     }
     return c.json(value)

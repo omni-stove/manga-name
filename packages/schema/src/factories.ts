@@ -63,9 +63,8 @@ const emptyPanel = (order: number, rect: Panel['rect']): Panel => ({
 
 /**
  * テンプレートからページを作る。登録したコマ割り（LayoutTemplate）なら、その枠と order のまま空のコマを置き、
- * direction は見ない。組み込みのテンプレートなら、内枠（INNER_FRAME）を行数ぶんの行に縦に割り、
- * 各行を 2 列に割る。コマはコマ間（GUTTER）を空けて重ならない。
- * order は行ごとに上から、行内は rtl なら右から、ltr なら左から振る。
+ * direction は見ない。組み込みのテンプレートなら、createRowPanels で内枠を同じ高さの行数ぶんの段に割り、
+ * 各段を同じ幅の 2 列に割る
  */
 export function createPage(
   template: PageTemplate | LayoutTemplate,
@@ -78,24 +77,44 @@ export function createPage(
     }))
     return { id: newId(), side: 'single', panels, scribbles: [] }
   }
-  const rows = ROWS[template]
+  const rows = Array.from({ length: ROWS[template] }, () => ({
+    height: 1,
+    widths: Array.from({ length: COLUMNS }, () => 1),
+  }))
+  return { id: newId(), side: 'single', panels: createRowPanels(rows, direction), scribbles: [] }
+}
+
+/** 段の高さの比と、段の中のコマの幅の比（読む順） */
+export interface RowLayout {
+  height: number
+  widths: readonly number[]
+}
+
+/**
+ * 段の比から空のコマを作る。内枠（INNER_FRAME）を段の height の比で上から縦に割り、各段を widths の比で横に割る。
+ * コマはコマ間（GUTTER）を空けて重ならない。order は段ごとに上から、段の中は widths の順に振り、
+ * rtl なら右から、ltr なら左から並べる。比はどれも正の数
+ */
+export function createRowPanels(rows: readonly RowLayout[], direction: ReadingDirection): Panel[] {
+  const totalHeight = rows.reduce((sum, row) => sum + row.height, 0)
+  const freeHeight = INNER_FRAME.h - GUTTER * (rows.length - 1)
   const panels: Panel[] = []
-  const h = (INNER_FRAME.h - GUTTER * (rows - 1)) / rows
-  const w = (INNER_FRAME.w - GUTTER * (COLUMNS - 1)) / COLUMNS
-  for (let row = 0; row < rows; row++) {
-    for (let k = 0; k < COLUMNS; k++) {
-      const col = direction === 'rtl' ? COLUMNS - 1 - k : k
-      panels.push(
-        emptyPanel(panels.length + 1, {
-          x: INNER_FRAME.x + col * (w + GUTTER),
-          y: INNER_FRAME.y + row * (h + GUTTER),
-          w,
-          h,
-        }),
-      )
+  let y = INNER_FRAME.y
+  for (const row of rows) {
+    const h = (freeHeight * row.height) / totalHeight
+    const totalWidth = row.widths.reduce((sum, w) => sum + w, 0)
+    const freeWidth = INNER_FRAME.w - GUTTER * (row.widths.length - 1)
+    let offset = 0
+    for (const width of row.widths) {
+      const w = (freeWidth * width) / totalWidth
+      const x =
+        direction === 'rtl' ? INNER_FRAME.x + INNER_FRAME.w - offset - w : INNER_FRAME.x + offset
+      panels.push(emptyPanel(panels.length + 1, { x, y, w, h }))
+      offset += w + GUTTER
     }
+    y += h + GUTTER
   }
-  return { id: newId(), side: 'single', panels, scribbles: [] }
+  return panels
 }
 
 /** page のコマの枠（order、rect、shape）を name のコマ割りにする。name は前後の空白を落とし、空なら throw */
@@ -158,6 +177,24 @@ if (import.meta.vitest) {
       dpi: 300,
     })
     expect(ProjectSchema.safeParse(p).success).toBe(true)
+  })
+
+  test('createRowPanels splits the inner frame by the ratios in reading order', () => {
+    const rows = [
+      { height: 2, widths: [1] },
+      { height: 1, widths: [2, 1] },
+    ]
+    for (const direction of ['rtl', 'ltr'] as const) {
+      const [wide, first, second] = createRowPanels(rows, direction)
+      if (!wide || !first || !second) throw new Error('コマが 3 つない')
+      expect([wide.order, first.order, second.order]).toEqual([1, 2, 3])
+      expect(wide.rect.w).toBeCloseTo(INNER_FRAME.w)
+      expect(wide.rect.h).toBeCloseTo(2 * first.rect.h)
+      expect(first.rect.y).toBeCloseTo(wide.rect.y + wide.rect.h + GUTTER)
+      expect(first.rect.w).toBeCloseTo(2 * second.rect.w)
+      expect(first.rect.x > second.rect.x).toBe(direction === 'rtl')
+      expect(first.rect.y + first.rect.h).toBeCloseTo(INNER_FRAME.y + INNER_FRAME.h)
+    }
   })
 
   describe('createPage', () => {

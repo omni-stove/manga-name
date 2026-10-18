@@ -2,6 +2,7 @@ import type {
   CharacterArtRequest,
   CritiqueResponse,
   ID,
+  LayoutSuggestionResponse,
   Page,
   PageArtRequest,
   PageDiagnosis,
@@ -13,6 +14,7 @@ import type {
 export type {
   CharacterArtRequest,
   CritiqueResponse,
+  LayoutSuggestionResponse,
   PageArtRequest,
   PagePlanResponse,
   PanelArtRequest,
@@ -35,6 +37,13 @@ export interface PagePlanRequest {
   pageCount?: number
 }
 
+/** 1 ページのコマ割りの提案の要求 */
+export interface LayoutSuggestionRequest {
+  project: Pick<Project, 'settings' | 'characters'>
+  /** ページの脚本（Page.script） */
+  script: string
+}
+
 export interface CritiqueRequest {
   page: Page
   diagnosis: PageDiagnosis
@@ -51,6 +60,8 @@ export interface ImageProvider {
 export interface LlmProvider {
   /** 脚本をページに割り振り、ページごとの流れ、登場キャラ、セリフを返す。コマ割りはしない */
   planPages(req: PagePlanRequest): Promise<PagePlanResponse>
+  /** 1 ページの脚本を段とコマに割った案を返す。コマごとに描くもの、カメラ、セリフを持つ */
+  suggestLayout(req: LayoutSuggestionRequest): Promise<LayoutSuggestionResponse>
   critique(req: CritiqueRequest): Promise<CritiqueResponse>
 }
 
