@@ -46,7 +46,7 @@ type Phase =
 
 /**
  * 「脚本から下書き」のページ。脚本、ページ数、トーンから `llmProvider.planPages` でページ割り
- * （ページごとの流れ、登場キャラ、セリフ）を作り、全ページを並べて直せる形で見せる。脚本のセリフで
+ * （ページごとの流れ、脚本、登場キャラ、セリフ）を作り、全ページを並べて直せる形で見せる。脚本のセリフで
  * どのページにも入っていないものは一覧で知らせる。確かめた割り振りはテンプレート（登録したコマ割りも選べる）のページにし、
  * セリフはコマのフキダシにして、エピソードの末尾に `source: 'ai'` の 1 回の applyPatch で足す。
  * ページを離れると進行中の要求を abort し、後から届いた応答は捨てる
@@ -281,7 +281,7 @@ function ScriptDraft() {
   )
 }
 
-/** ページ割りの全ページを 1 行ずつ並べ、流れ、登場キャラ、セリフを直せるようにする */
+/** ページ割りの全ページを 1 行ずつ並べ、流れ、脚本、登場キャラ、セリフを直せるようにする */
 function PlanList({
   plans,
   characters,
@@ -324,6 +324,12 @@ function PlanList({
               rows={3}
               value={p.note}
               onChange={(e) => editPlan(index, () => ({ note: e.target.value }))}
+            />
+            <TextArea
+              label={m.web_draft_page_script()}
+              rows={4}
+              value={p.script}
+              onChange={(e) => editPlan(index, () => ({ script: e.target.value }))}
             />
             {characters.length > 0 && (
               <XStack

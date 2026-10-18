@@ -199,7 +199,7 @@ function characterList(characters: Character[]): string[] {
 }
 
 /**
- * ページ割りのプロンプト。脚本をページに割り振り、ページごとの流れ、登場キャラ、セリフの配列を返させる。
+ * ページ割りのプロンプト。脚本をページに割り振り、ページごとの流れ、脚本の原文、登場キャラ、セリフの配列を返させる。
  * system に出力規則と JSON Schema、user にキャラ一覧、ページ数、脚本を入れる。
  */
 function planPages(req: PagePlanRequest): LlmPrompt {
@@ -209,6 +209,7 @@ function planPages(req: PagePlanRequest): LlmPrompt {
     'You are a manga story editor. Split the script into pages and say roughly what happens on each page.',
     'Reply with the pages in reading order as JSON that conforms to the JSON Schema below.',
     '- note: what happens on the page, in the language of the script. Keep every action, stage direction, setting, sound effect and prop the script gives for this part; do not summarise them away.',
+    '- script: the part of the script that falls on the page, copied verbatim with its speaker names, brackets, stage directions and line breaks. Joined in page order, the scripts of all pages give back the whole script. Leave out a tone note in parentheses at the very top of the script.',
     '- cast: the ids of the listed characters who appear on the page. Empty when none appears.',
     '- lines: every line of dialogue, inner monologue and narration that falls on the page, in reading order, copied verbatim without the speaker name and brackets.',
     '  - speakerId: the id of the listed character who says it. Omit it for narration or when the speaker is not listed.',

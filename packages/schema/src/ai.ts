@@ -50,6 +50,8 @@ export const PlanLineSchema = z.object({
 export const PagePlanSchema = z.object({
   /** このページで起きること。Page.note になる */
   note: z.string().min(1),
+  /** このページに当たる脚本の原文。Page.script になる */
+  script: z.string().min(1),
   /** このページに出るキャラ（Character.id）。Page.cast になる */
   cast: z.array(IdSchema),
   /** このページのセリフ。読む順 */
@@ -75,11 +77,12 @@ export type CritiqueResponse = z.infer<typeof CritiqueResponseSchema>
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('PagePlanResponseSchema needs at least one page with a non-empty note and non-empty lines', () => {
-    const plan = { note: 'n', cast: [], lines: [{ text: 't', shape: 'normal' }] }
+  test('PagePlanResponseSchema needs at least one page with a non-empty note, script and lines', () => {
+    const plan = { note: 'n', script: 's', cast: [], lines: [{ text: 't', shape: 'normal' }] }
     expect(PagePlanResponseSchema.parse([plan])).toHaveLength(1)
     expect(PagePlanResponseSchema.safeParse([]).success).toBe(false)
     expect(PagePlanResponseSchema.safeParse([{ ...plan, note: '' }]).success).toBe(false)
+    expect(PagePlanResponseSchema.safeParse([{ ...plan, script: '' }]).success).toBe(false)
     expect(
       PagePlanResponseSchema.safeParse([{ ...plan, lines: [{ text: '', shape: 'normal' }] }])
         .success,

@@ -52,7 +52,7 @@ afterEach(() => {
 
 describe('createAnthropicLlmProvider', () => {
   test('planPages sends the prompts and the wrapped array schema to the Messages API with the key', async () => {
-    const plan = [{ note: 'n', cast: [], lines: [] }]
+    const plan = [{ note: 'n', script: 's', cast: [], lines: [] }]
     fetchMock.mockResolvedValueOnce(message(JSON.stringify({ elements: plan })))
     const provider = createAnthropicLlmProvider({ apiKey: 'test-key' })
     expect(await provider.planPages(planRequest)).toEqual(plan)
@@ -63,7 +63,7 @@ describe('createAnthropicLlmProvider', () => {
     expect(new Headers(init?.headers).get('x-api-key')).toBe('test-key')
     const { system, user, schema } = prompts.planPages(planRequest)
     const body = sentBody()
-    expect(body).toMatchObject({ model: 'claude-haiku-5-5', max_tokens: 32_000 })
+    expect(body).toMatchObject({ model: 'claude-haiku-5-5', max_tokens: 64_000 })
     expect(body.system.map((b) => b.text).join('')).toBe(system)
     expect(body.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: user }] }])
     // AI SDK は Anthropic が受け付けない制約（minLength など）を description に移すので、形だけを比べる

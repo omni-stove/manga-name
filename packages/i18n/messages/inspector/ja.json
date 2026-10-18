@@ -3,6 +3,8 @@
   "inspector_none": "（なし）",
   "inspector_kind": "種別",
   "inspector_note": "メモ",
+  "inspector_page_script": "このページの脚本",
+  "inspector_page_script_placeholder": "このページのト書きとセリフ",
   "inspector_generate": "生成",
   "inspector_generating": "生成中…",
   "inspector_replace": "差し替え",
