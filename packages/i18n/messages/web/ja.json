@@ -402,5 +402,10 @@
   "web_draft_line": "セリフ",
   "web_art_status_none": "未生成",
   "web_art_status_partial": "一部",
-  "web_art_status_all": "全部"
+  "web_art_status_all": "全部",
+  "web_nav_onboarding": "はじめに",
+  "web_onboarding_title": "はじめてのネーム",
+  "web_onboarding_description": "コマ割りとセリフを用意したページです。「ネームを生成」を押すと、AI がコマに絵を入れます。",
+  "web_onboarding_generate": "ネームを生成",
+  "web_onboarding_export_failed": "書き出せません: {reason}"
 }
