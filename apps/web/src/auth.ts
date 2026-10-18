@@ -175,7 +175,12 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
       const res = await authFetch('/sign-in/social', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ provider: 'google', callbackURL: window.location.href }),
+        // 失敗しても今の画面へ戻し、takeSignInError で理由を出す。省くと API の既定のエラーページに着く
+        body: JSON.stringify({
+          provider: 'google',
+          callbackURL: window.location.href,
+          errorCallbackURL: window.location.href,
+        }),
       })
       if (!res.ok) throw new Error(`sign-in failed: ${res.status}`)
       const { url } = (await res.json()) as { url?: string }
@@ -205,6 +210,24 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
     getToken,
     fetch: fetchWithAuth,
   }
+}
+
+/**
+ * Google からの戻りでログインできなかったとき Better Auth が戻り先に付ける `?error=` を読み、
+ * 画面向けの文言と、`error` と `error_description` を外した URL を返す。付いていなければ null
+ */
+export function takeSignInError(url: URL): { message: string; url: URL } | null {
+  const code = url.searchParams.get('error')
+  if (code === null) return null
+  const rest = new URL(url)
+  rest.searchParams.delete('error')
+  rest.searchParams.delete('error_description')
+  // workers/api の INVITE_REQUIRED
+  const message =
+    code === 'invite_required'
+      ? '招待されたメールアドレスでしかアカウントを作れません。招待を受け取ったメールアドレスの Google アカウントでログインしてください'
+      : `ログインできませんでした（${code}）`
+  return { message, url: rest }
 }
 
 interface GetSessionBody {
@@ -392,8 +415,21 @@ if (import.meta.vitest) {
       expect(JSON.parse(String(init?.body))).toEqual({
         provider: 'google',
         callbackURL: 'https://app.test/p/1',
+        errorCallbackURL: 'https://app.test/p/1',
       })
       expect(new Headers(init?.headers).get('content-type')).toBe('application/json')
+    })
+
+    test('takeSignInError explains the error and drops it from the URL', () => {
+      expect(takeSignInError(new URL('https://app.test/p/1?settings=1'))).toBeNull()
+      const refused = takeSignInError(new URL('https://app.test/invite/t?error=invite_required'))
+      expect(refused?.message).toContain('招待されたメールアドレス')
+      expect(refused?.url.href).toBe('https://app.test/invite/t')
+      const other = takeSignInError(
+        new URL('https://app.test/?settings=1&error=access_denied&error_description=x'),
+      )
+      expect(other?.message).toContain('access_denied')
+      expect(other?.url.href).toBe('https://app.test/?settings=1')
     })
 
     test('signIn fails on an error status or a missing URL', async () => {

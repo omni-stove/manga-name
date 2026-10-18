@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers'
 import { fixtures } from '@manga/schema'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createApp } from '../src/app'
+import { INVITE_REQUIRED, validateSignUp } from '../src/auth'
 import { DEBUG_USER_HEADER } from '../src/user'
 
 const app = createApp()
@@ -45,6 +46,7 @@ beforeEach(async () => {
     env.DB.prepare('DELETE FROM auth_users'),
     env.DB.prepare('DELETE FROM ai_usage'),
     env.DB.prepare('DELETE FROM rate_limits'),
+    env.DB.prepare('DELETE FROM project_invites'),
   ])
 })
 
@@ -125,5 +127,44 @@ describe('X-Debug-User', () => {
     expect(res.status).toBe(200)
     const { results } = await env.DB.prepare('SELECT user_id FROM ai_usage').all()
     expect(results).toEqual([{ user_id: 'u_alice' }])
+  })
+})
+
+describe('sign-up', () => {
+  /** alice のプロジェクトに email 宛ての招待を expiresAt まで入れる */
+  async function seedInvite(email: string, expiresAt: number) {
+    const headers = { [DEBUG_USER_HEADER]: 'alice', 'content-type': 'application/json' }
+    const res = await app.request(
+      '/v1/projects',
+      { method: 'POST', headers, body: JSON.stringify({ title: '招待' }) },
+      env,
+    )
+    const { id } = (await res.json()) as { id: string }
+    await env.DB.prepare(
+      `INSERT INTO project_invites (id, project_id, email, role, token_hash, created_at, expires_at)
+       VALUES (?1, ?2, ?3, 'viewer', ?1, 0, ?4)`,
+    )
+      .bind(crypto.randomUUID(), id, email, expiresAt)
+      .run()
+  }
+
+  const validate = (email: string, action = 'create-user') =>
+    validateSignUp(env)({ user: { email }, source: { action } })
+
+  test('lets an email with an invite in time sign up, whatever its case', async () => {
+    await seedInvite('carol@example.com', Date.now() + DAY)
+    expect(await validate('Carol@Example.com')).toBeUndefined()
+  })
+
+  test('refuses an email without an invite or with only an expired one', async () => {
+    await seedInvite('dave@example.com', Date.now() - 1_000)
+    for (const email of ['dave@example.com', 'eve@example.com']) {
+      expect(await validate(email)).toEqual({ error: INVITE_REQUIRED })
+    }
+  })
+
+  test('lets an existing user sign in without an invite', async () => {
+    expect(await validate('eve@example.com', 'sign-in')).toBeUndefined()
+    expect(await validate('eve@example.com', 'link-account')).toBeUndefined()
   })
 })
