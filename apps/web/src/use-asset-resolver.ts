@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 /**
  * `resolve` を EditorCanvas や PageThumbnail の resolveAsset として渡せる形にする。
@@ -8,6 +8,7 @@ import { useEffect, useMemo } from 'react'
 export function useAssetResolver(
   resolve: (ref: string) => Promise<string>,
 ): (ref: string) => Promise<string> {
+  const [generation, setGeneration] = useState(0)
   const { cache, resolveAsset } = useMemo(() => {
     const cache = new Map<string, Promise<string>>()
     const resolveAsset = (ref: string) => {
@@ -21,7 +22,8 @@ export function useAssetResolver(
       return url
     }
     return { cache, resolveAsset }
-  }, [resolve])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolve, generation])
 
   useEffect(
     () => () => {
@@ -31,6 +33,8 @@ export function useAssetResolver(
           () => {},
         )
       cache.clear()
+      // 解放した URL を覚えた Promise が use() 側に残らないよう、別の関数に差し替える。StrictMode の cleanup 対策
+      setGeneration((g) => g + 1)
     },
     [cache],
   )
