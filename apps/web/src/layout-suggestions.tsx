@@ -13,6 +13,7 @@ import {
 } from './layout-suggestion'
 import styles from './layout-suggestions.module.css'
 import { PageThumbnail } from './page-thumbnail'
+import { findPage } from './project-ops'
 import { errorMessage } from './route-error'
 import { FailureAlert } from './sign-in'
 import type { ProjectStore } from './store/project-store'
@@ -77,6 +78,9 @@ export function LayoutSuggestions({
     setConfirming(undefined)
     try {
       const current = store.get()
+      const currentPage = findPage(current, pageId)?.page
+      if (!currentPage) throw new Error(m.web_common_page_gone())
+      if (hasLockedPanel(currentPage)) throw new Error(m.web_layout_suggest_locked())
       store.applyPatch(
         replacePanelsPatch(current, pageId, suggestedPanels(option, current.settings)),
         { source: 'ai', label: m.web_layout_suggest_history() },
