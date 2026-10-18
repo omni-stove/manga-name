@@ -31,6 +31,23 @@ function pointerOf(page: Page, selection: Selection): string | undefined {
   return `/panels/${at.panelIndex}/${selection.kind === 'focus' ? 'focusPoints' : 'vectors'}/${at.index}`
 }
 
+/** 選択要素の位置がロックされているか。要素が無ければ false */
+export function isLocked(page: Page, selection: Selection): boolean {
+  if (selection === null) return false
+  if (selection.kind === 'panel') {
+    return page.panels.find((p) => p.id === selection.id)?.locked === true
+  }
+  if (selection.kind === 'bubble') {
+    return page.panels.flatMap((p) => p.bubbles).find((b) => b.id === selection.id)?.locked === true
+  }
+  if (selection.kind === 'focus') {
+    const at = findFocus(page, selection.id)
+    return at?.panel.focusPoints[at.index]?.locked === true
+  }
+  const at = findVector(page, selection.id)
+  return at?.panel.vectors[at.index]?.locked === true
+}
+
 /** 選択要素を消す Patch。消せる要素が無ければ空 */
 export function removePatch(page: Page, selection: Selection): Patch {
   const pointer = pointerOf(page, selection)
@@ -62,13 +79,13 @@ export function movedRect(rect: Rect, dx: number, dy: number): Rect {
 }
 
 /**
- * 選択要素を正規化座標で (dx, dy) 動かす Patch。コマはページの中に、
+ * 選択要素を正規化座標で (dx, dy) 動かす Patch。位置がロックされた要素は動かさない。コマはページの中に、
  * フキダシの中心としっぽ、焦点、ベクトルの両端はコマ内座標の 0..1 に収める。動かない軸は出さない。
  * 焦点は繋がったベクトルの端も一緒に動かす
  */
 export function nudgePatch(page: Page, selection: Selection, dx: number, dy: number): Patch {
   const pointer = pointerOf(page, selection)
-  if (pointer === undefined || selection === null) return []
+  if (pointer === undefined || selection === null || isLocked(page, selection)) return []
   const patch: Patch = []
   const move = (path: string, from: number, delta: number, max: number) => {
     if (delta === 0) return
@@ -156,6 +173,15 @@ if (import.meta.vitest) {
         { op: 'replace', path: '/panels/2/bubbles/0/pos/x', value: 1 },
         { op: 'replace', path: '/panels/2/bubbles/0/tail/x', value: 0.84 },
       ])
+    })
+
+    test('does not move a locked element', () => {
+      const locked = {
+        ...page,
+        panels: page.panels.map((p, i) => (i === 1 ? { ...p, locked: true } : p)),
+      }
+      expect(isLocked(locked, { kind: 'panel', id: 'pn_2' })).toBe(true)
+      expect(nudgePatch(locked, { kind: 'panel', id: 'pn_2' }, -0.01, 0)).toEqual([])
     })
 
     test('does nothing for a missing element', () => {

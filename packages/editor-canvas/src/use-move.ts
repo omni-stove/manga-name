@@ -7,7 +7,7 @@ import {
   useState,
 } from 'react'
 import { findBubble, movedBubble, updateBubblePatch } from './bubble-ops'
-import { movedRect, nudgePatch } from './edit-ops'
+import { isLocked, movedRect, nudgePatch } from './edit-ops'
 import { type PagePoint, panelBox } from './hit-test'
 import type { Selection } from './types'
 import type { BubbleDraft } from './use-bubble-tool'
@@ -46,7 +46,7 @@ function boxOf(el: Element): ClientBox {
 }
 
 /**
- * `select` ツールで、選択中のコマかフキダシを押したままドラッグして動かす。
+ * `select` ツールで、選択中のコマかフキダシを押したままドラッグして動かす。位置をロックしたものは動かさない。
  * コマはページの中に、フキダシの中心としっぽはコマ内座標の 0..1 に収める。
  * ドラッグ中は移動後の輪郭を `panelDraft` か `bubbleDraft` に出すだけで、Patch は pointerup で 1 回だけ出す。
  * 動かさずに離したときの選択は useSelection に任せる。Escape でドラッグを取り消す
@@ -97,7 +97,7 @@ export function useMove(opts: Options) {
       if (e.defaultPrevented || e.button !== 0 || e.isPrimary === false) return
       const sel = opts.selection
       if (sel === null || (sel.kind !== 'panel' && sel.kind !== 'bubble')) return
-      if (!sameSelection(opts.hitAt(e), sel)) return
+      if (!sameSelection(opts.hitAt(e), sel) || isLocked(opts.page, sel)) return
       const at = pointAt(e)
       if (at === null) return
       // 動かさずに離せば useSelection のクリックになるよう、preventDefault しない

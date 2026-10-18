@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 6 as const
+export const SCHEMA_VERSION = 7 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -65,6 +65,7 @@ export const BubbleSchema = z.object({
   size: SizeSchema,
   tail: PointSchema.optional(),
   overflow: z.boolean().optional(),
+  locked: z.boolean().optional(),
 })
 
 export const PanelArtSchema = z.object({
@@ -91,6 +92,7 @@ export const FocusPointSchema = z.object({
   pos: PointSchema,
   weight: unit,
   characterId: IdSchema.optional(),
+  locked: z.boolean().optional(),
 })
 
 export const VectorKindSchema = z.enum(['gaze', 'motion', 'speed'])
@@ -104,6 +106,7 @@ export const VectorSchema = z.object({
   strength: StrengthSchema,
   sourceFocusId: IdSchema.optional(),
   targetFocusId: IdSchema.optional(),
+  locked: z.boolean().optional(),
 })
 
 export const ReferenceImageSchema = z.object({
@@ -149,6 +152,7 @@ const PanelBaseSchema = z.object({
   vectors: z.array(VectorSchema),
   sweep: SweepSchema.optional(),
   cast: z.array(IdSchema).optional(),
+  locked: z.boolean().optional(),
 })
 
 export const PanelSchema = PanelBaseSchema.superRefine((panel, ctx) => {

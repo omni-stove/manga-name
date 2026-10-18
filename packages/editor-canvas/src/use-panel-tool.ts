@@ -114,7 +114,7 @@ function boxOf(el: Element): ClientBox {
 
 /**
  * `panel` ツールの操作。何も無いところやコマの上のドラッグで矩形のコマを作り、作ったコマを選ぶ。
- * 選択中のコマはハンドルのドラッグでリサイズし、`toggleMerge` の後か Shift を押しながら別のコマを押すと
+ * 選択中のコマはハンドルのドラッグでリサイズし（位置をロックしたコマはリサイズも頂点の移動もさせない）、`toggleMerge` の後か Shift を押しながら別のコマを押すと
  * そのコマと結合する。
  * 多角形のコマは頂点のドラッグで頂点を動かし、矩形のコマも Alt を押しながら隅を引けば頂点を動かす。
  * 縦横の分割は `split` で行う。`startCut` の後か Alt を押しながらのドラッグで線を引くと、
@@ -182,12 +182,16 @@ export function usePanelTool(opts: Options) {
             return
           }
         }
-        const handle = handleAt(panelBox(selected, opts.width, opts.height), at.mm, handleSize)
-        const vertex = selected.shape
-          ? vertexAt(panelPolygon(selected, opts.width, opts.height), at.mm, handleSize)
-          : e.altKey && handle !== undefined
-            ? CORNER_INDEX[handle]
-            : undefined
+        const handle = selected.locked
+          ? undefined
+          : handleAt(panelBox(selected, opts.width, opts.height), at.mm, handleSize)
+        const vertex = selected.locked
+          ? undefined
+          : selected.shape
+            ? vertexAt(panelPolygon(selected, opts.width, opts.height), at.mm, handleSize)
+            : e.altKey && handle !== undefined
+              ? CORNER_INDEX[handle]
+              : undefined
         if (vertex !== undefined && !cutting && !merging) {
           take(e, { kind: 'vertex', pointerId: e.pointerId, panelId: selected.id, index: vertex })
           setDraft({ kind: 'outline', outline: panelOutline(selected), panelId: selected.id })

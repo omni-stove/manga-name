@@ -24,7 +24,7 @@ export function pageRootedPatch(patch: Patch): Patch {
 }
 
 /**
- * critique の提案 Patch を、焦点とフキダシの `pos` の replace、ベクトルの add だけに限って検査する。
+ * critique の提案 Patch を、位置をロックしていない焦点とフキダシの `pos` の replace、ベクトルの add だけに限って検査する。
  * パスは pageRootedPatch でページを根にしてから `page` に照らす。
  * 添字が無い、値が型どおりでない、ベクトルの id が重なる、ベクトルの端が同じコマの焦点かフキダシでない操作は拒否する。
  * 空の Patch も適用するものが無いので拒否する
@@ -48,7 +48,9 @@ function checkOperation(page: Page, op: Patch[number], vectorIds: Set<string>): 
     if (op.op !== 'replace') return `${op.path} は replace でしか変えられません`
     const panel = page.panels[Number(pos[1])]
     const items = pos[2] === 'focusPoints' ? panel?.focusPoints : panel?.bubbles
-    if (!items?.[Number(pos[3])]) return `${op.path} の要素がページにありません`
+    const item = items?.[Number(pos[3])]
+    if (!item) return `${op.path} の要素がページにありません`
+    if (item.locked) return `${op.path} は位置をロックした要素なので動かせません`
     if (!PointSchema.safeParse(op.value).success) {
       return `${op.path} の値が 0〜1 の座標ではありません`
     }
@@ -114,6 +116,20 @@ if (import.meta.vitest) {
       { op: 'add', path: '/panels/4/vectors/0', value: vector },
     ]
     expect(checkCritiquePatch(page, patch)).toEqual({ ok: true, patch })
+  })
+
+  test('rejects moving a locked bubble', () => {
+    const locked = {
+      ...page,
+      panels: page.panels.map((p, i) =>
+        i === 0 ? { ...p, bubbles: p.bubbles.map((b) => ({ ...b, locked: true })) } : p,
+      ),
+    }
+    const checked = checkCritiquePatch(locked, [
+      { op: 'replace', path: '/panels/0/bubbles/0/pos', value: { x: 0.9, y: 0.2 } },
+    ])
+    expect(checked.ok).toBe(false)
+    if (!checked.ok) expect(checked.reason).toContain('ロック')
   })
 
   describe('rejects patches that touch the panel rect', () => {
