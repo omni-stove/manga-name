@@ -92,7 +92,7 @@ if (import.meta.vitest) {
     library = createProjectLibrary(storage)
   })
 
-  describe('6 ルートが描画される', () => {
+  describe('7 ルートが描画される', () => {
     test.each([
       ['/', 'プロジェクト一覧'],
       ['/new', '新規プロジェクト'],
@@ -100,6 +100,7 @@ if (import.meta.vitest) {
       [`/p/${projectId}/episodes/${episodeId}`, '脚本から下書き'],
       [`/p/${projectId}/pages/${pageId}`, 'インスペクタ'],
       [`/p/${projectId}/characters`, 'キャラクター一覧'],
+      [`/p/${projectId}/characters/new`, '外見から生成'],
     ])('%s', async (path, heading) => {
       expect(await render(library, path)).toContain(heading)
     })
