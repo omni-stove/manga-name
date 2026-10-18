@@ -20,8 +20,21 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['**/src/**/*.{ts,tsx}'],
-      exclude: ['**/*.stories.tsx', '**/src/dev/**', '**/*.gen.ts'],
+      // workers/** はテストを走らせないので、含めると 0% として合計を下げる
+      exclude: ['workers/**', '**/*.stories.tsx', '**/src/dev/**', '**/*.gen.ts'],
       reporter: ['text-summary', 'html'],
+      // パッケージごとに今の値を床にし、テストの無いコードを足して下げた PR を止める
+      thresholds: {
+        'apps/web/**': { statements: 69, branches: 59, functions: 59, lines: 69 },
+        'packages/ai/**': { statements: 98, branches: 92, functions: 96, lines: 98 },
+        'packages/diagnosis/**': { statements: 98, branches: 91, functions: 100, lines: 100 },
+        'packages/editor-canvas/**': { statements: 88, branches: 79, functions: 90, lines: 94 },
+        'packages/inspector/**': { statements: 93, branches: 79, functions: 88, lines: 96 },
+        'packages/render/**': { statements: 95, branches: 88, functions: 92, lines: 95 },
+        'packages/schema/**': { statements: 98, branches: 93, functions: 99, lines: 99 },
+        'packages/storage/**': { statements: 81, branches: 70, functions: 89, lines: 85 },
+        'packages/ui/**': { statements: 61, branches: 43, functions: 53, lines: 63 },
+      },
     },
   },
 })

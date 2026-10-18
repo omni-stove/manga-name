@@ -45,5 +45,61 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/**", "!packages/inspector/**", "!packages/editor-canvas/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@manga/**",
+                      "!@manga/schema",
+                      "!@manga/i18n",
+                      "!@manga/schema/**",
+                      "!@manga/i18n/**"
+                    ],
+                    "message": "packages/* 同士の連携は apps/web が配線する（CONTRIBUTING.md の規約）"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/inspector/**", "packages/editor-canvas/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@manga/**",
+                      "!@manga/schema",
+                      "!@manga/i18n",
+                      "!@manga/ui",
+                      "!@manga/schema/**",
+                      "!@manga/i18n/**",
+                      "!@manga/ui/**"
+                    ],
+                    "message": "packages/* 同士の連携は apps/web が配線する（CONTRIBUTING.md の規約）"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
