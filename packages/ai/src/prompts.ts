@@ -2,6 +2,7 @@ import {
   type Character,
   type ID,
   type JsonSchema,
+  layoutSuggestionJsonSchema,
   type Page,
   type PageDiagnosis,
   type Panel,
@@ -16,6 +17,7 @@ import {
   type CharacterArtRequest,
   type CritiqueRequest,
   findPanel,
+  type LayoutSuggestionRequest,
   type PageArtRequest,
   type PagePlanRequest,
   type PanelArtRequest,
@@ -23,6 +25,9 @@ import {
 
 /** ページ割りで割り振らせるページ数の上限。Workers が受け付けるページ数の上限と揃える */
 const MAX_PLANNED_PAGES = 64
+
+/** コマ割りの提案で出させる案の数。LayoutSuggestionResponseSchema の上限と揃える */
+const LAYOUT_OPTIONS = 3
 
 /** LLM に渡すプロンプト。schema は構造化出力に対応したプロバイダにそのまま渡す */
 export interface LlmPrompt {
@@ -198,6 +203,12 @@ function characterList(characters: Character[]): string[] {
   ]
 }
 
+/** セリフ（PlanLine）の話し手と形の決め方。ページ割りとコマ割りの提案で同じにする */
+const LINE_FIELDS = [
+  '  - speakerId: the id of the listed character who says it. Omit it for narration or when the speaker is not listed.',
+  '  - shape: normal for speech, shout for shouting, thought for inner monologue, whisper for whispering, tremble for a shaky or frightened voice, electronic for a voice through a phone, TV, radio or machine, urchin for a flustered or startled inner voice, none for a murmur written straight on the art, narration for narration and captions.',
+]
+
 /**
  * ページ割りのプロンプト。脚本をページに割り振り、ページごとの流れ、脚本の原文、登場キャラ、セリフの配列を返させる。
  * system に出力規則と JSON Schema、user にキャラ一覧、ページ数、脚本を入れる。
@@ -212,8 +223,7 @@ function planPages(req: PagePlanRequest): LlmPrompt {
     '- script: the part of the script that falls on the page, copied verbatim with its speaker names, brackets, stage directions and line breaks. Joined in page order, the scripts of all pages give back the whole script. Leave out a tone note in parentheses at the very top of the script.',
     '- cast: the ids of the listed characters who appear on the page. Empty when none appears.',
     '- lines: every line of dialogue, inner monologue and narration that falls on the page, in reading order, copied verbatim without the speaker name and brackets.',
-    '  - speakerId: the id of the listed character who says it. Omit it for narration or when the speaker is not listed.',
-    '  - shape: normal for speech, shout for shouting, thought for inner monologue, whisper for whispering, tremble for a shaky or frightened voice, electronic for a voice through a phone, TV, radio or machine, urchin for a flustered or startled inner voice, none for a murmur written straight on the art, narration for narration and captions.',
+    ...LINE_FIELDS,
     '- Every line of the script goes on exactly one page. Never drop, merge, shorten or paraphrase a line.',
     '- Give the key scenes more pages and keep transitions short. Put a reveal at the top of a page, not at the bottom.',
     'JSON Schema:',
@@ -237,6 +247,34 @@ const POINT_JSON_SCHEMA: JsonSchema = {
   additionalProperties: false,
   required: ['x', 'y'],
   properties: { x: { type: 'number' }, y: { type: 'number' } },
+}
+
+/**
+ * コマ割りの提案のプロンプト。1 ページの脚本から、段とコマに割った案を LAYOUT_OPTIONS 個返させる。
+ * system に出力規則と JSON Schema、user にキャラ一覧とページの脚本を入れる
+ */
+function suggestLayout(req: LayoutSuggestionRequest): LlmPrompt {
+  const schema = layoutSuggestionJsonSchema()
+
+  const system = [
+    'You are a manga storyboard artist. Lay out one manga page from its script as rows of panels.',
+    'Reply with one JSON object that conforms to the JSON Schema below, and nothing else.',
+    'Rules:',
+    `- Give ${LAYOUT_OPTIONS} options that read differently, for example with a different number of panels or a different beat in the largest panel. summary is one Japanese sentence on what the option stresses.`,
+    '- rows go from the top of the page down, and the panels of a row are in reading order. height is the size of a row relative to the other rows, width the size of a panel relative to the other panels of its row.',
+    '- Use 3 to 7 panels unless the script calls for a splash page, and at most 3 panels in a row. Give the most important beat the largest panel, and end the page on a beat that makes the reader turn the page.',
+    '- note: what the panel shows, in the language of the script: who does what, where. One or two sentences.',
+    '- camera: the shot in the language of the script, such as ロング, バストアップ, アップ, 俯瞰 or あおり. Omit it when the shot does not matter.',
+    '- lines: the lines of dialogue, inner monologue and narration that fall in the panel, in reading order, copied verbatim without the speaker name and brackets.',
+    ...LINE_FIELDS,
+    '- In every option, every line of the script goes in exactly one panel. Never drop, merge, shorten or paraphrase a line. Give a panel with many or long lines enough room.',
+    'JSON Schema:',
+    JSON.stringify(schema),
+  ].join('\n')
+
+  const user = [...characterList(req.project.characters), 'Script:', req.script].join('\n')
+
+  return { system, user, schema }
 }
 
 /**
@@ -376,7 +414,7 @@ function critique(req: CritiqueRequest): LlmPrompt {
   return { system, user, schema }
 }
 
-export const prompts = { panelArt, pageArt, characterArt, planPages, critique }
+export const prompts = { panelArt, pageArt, characterArt, planPages, suggestLayout, critique }
 
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
@@ -495,6 +533,28 @@ if (import.meta.vitest) {
     expect(
       prompts.planPages({ project: { ...project, characters: [] }, script: 's' }).user,
     ).toContain(`- (none)\nPages: as many as the script needs, at most ${MAX_PLANNED_PAGES}.`)
+  })
+
+  test('suggestLayout embeds the layout JSON Schema and lists characters and the page script', () => {
+    const { system, user, schema } = prompts.suggestLayout({
+      project: {
+        settings: project.settings,
+        characters: [{ id: 'chr_e', name: 'エリ', shortName: 'E' }],
+      },
+      script: 'E「こんにちは」\n森を歩く。',
+    })
+    expect(schema).toEqual(layoutSuggestionJsonSchema())
+    expect(system).toContain(`JSON Schema:\n${JSON.stringify(layoutSuggestionJsonSchema())}`)
+    expect(system).toContain(LINE_FIELDS.join('\n'))
+    expect(user).toBe(
+      [
+        'Characters:',
+        '- id: chr_e, name: エリ, shortName: E',
+        'Script:',
+        'E「こんにちは」',
+        '森を歩く。',
+      ].join('\n'),
+    )
   })
 
   const page = project.episodes[0]?.pages[0] as Page

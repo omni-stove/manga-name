@@ -95,6 +95,20 @@ describe('createAnthropicLlmProvider', () => {
     expect(body.output_config.format.schema).toMatchObject({ required: schema.required })
   })
 
+  test('suggestLayout sends its prompts and the object schema', async () => {
+    const reply = { options: [] }
+    fetchMock.mockResolvedValueOnce(message(JSON.stringify(reply)))
+    const provider = createAnthropicLlmProvider({ apiKey: 'test-key' })
+    expect(await provider.suggestLayout(planRequest)).toEqual(reply)
+
+    const { system, user, schema } = prompts.suggestLayout(planRequest)
+    const body = sentBody()
+    expect(body.max_tokens).toBe(8_000)
+    expect(body.system.map((b) => b.text).join('')).toBe(system)
+    expect(body.messages[0]?.content[0]?.text).toBe(user)
+    expect(body.output_config.format.schema).toMatchObject({ required: schema.required })
+  })
+
   test('returns the JSON as is without checking it against the schema', async () => {
     fetchMock.mockResolvedValueOnce(message('{"elements":[{"unexpected":true}]}'))
     const provider = createAnthropicLlmProvider({ apiKey: 'test-key' })

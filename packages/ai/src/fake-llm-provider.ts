@@ -1,11 +1,17 @@
-import { CritiqueResponseSchema, PagePlanResponseSchema } from '@manga/schema'
+import {
+  CritiqueResponseSchema,
+  LayoutSuggestionResponseSchema,
+  PagePlanResponseSchema,
+} from '@manga/schema'
 import critique from '../../../fixtures/ai/critique.json'
+import layoutSuggestion from '../../../fixtures/ai/layout-suggestion.json'
 import pagePlan from '../../../fixtures/ai/page-plan.json'
 import type { LlmProvider } from './provider'
 
 /** `fixtures/ai/` の固定応答。読み込み時に検証済み */
 export const aiFixtures = {
   pagePlan: PagePlanResponseSchema.parse(pagePlan),
+  layoutSuggestion: LayoutSuggestionResponseSchema.parse(layoutSuggestion),
   critique: CritiqueResponseSchema.parse(critique),
 }
 
@@ -22,6 +28,9 @@ export function createFakeLlmProvider(): LlmProvider {
       return Array.from({ length: req.pageCount }, (_, i) =>
         structuredClone(pages[i % pages.length] as (typeof pages)[number]),
       )
+    },
+    async suggestLayout() {
+      return structuredClone(aiFixtures.layoutSuggestion)
     },
     async critique() {
       return structuredClone(aiFixtures.critique)

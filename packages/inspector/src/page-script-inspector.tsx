@@ -11,7 +11,7 @@ export function PageScriptInspector({ page, editable = true, onChange }: PageScr
       <TextField
         label={m.inspector_page_script()}
         value={page.script ?? ''}
-        rows={16}
+        rows={10}
         placeholder={m.inspector_page_script_placeholder()}
         delayMs={DEBOUNCE_MS}
         onCommit={(v) => onChange(optionalString('/script', page.script, v))}

@@ -1,9 +1,14 @@
-import { CritiqueResponseSchema, PagePlanResponseSchema, readApiError } from '@manga/schema'
+import {
+  CritiqueResponseSchema,
+  LayoutSuggestionResponseSchema,
+  PagePlanResponseSchema,
+  readApiError,
+} from '@manga/schema'
 import { type HttpProviderOptions, SignInRequiredError } from './http-image-provider'
 import type { LlmProvider } from './provider'
 
 /**
- * Workers のプロキシ `POST /v1/ai/plan-pages`、`POST /v1/ai/critique` に JSON を送る LlmProvider。
+ * Workers のプロキシ `POST /v1/ai/plan-pages`、`POST /v1/ai/suggest-layout`、`POST /v1/ai/critique` に JSON を送る LlmProvider。
  * 応答は `@manga/schema` で検証して返す。トークン無しと 401 は SignInRequiredError、
  * ほかの HTTP エラーは readApiError の Error（多くは ApiError）を、検証に通らない応答は Error を throw する。
  */
@@ -27,6 +32,9 @@ export function createHttpLlmProvider(opts: HttpProviderOptions): LlmProvider {
   return {
     async planPages(req) {
       return PagePlanResponseSchema.parse(await postJson('/v1/ai/plan-pages', req))
+    },
+    async suggestLayout(req) {
+      return LayoutSuggestionResponseSchema.parse(await postJson('/v1/ai/suggest-layout', req))
     },
     async critique(req) {
       return CritiqueResponseSchema.parse(await postJson('/v1/ai/critique', req))
@@ -77,6 +85,24 @@ if (import.meta.vitest) {
 
     vi.stubGlobal('fetch', async () => Response.json([]))
     await expect(provider.planPages(req)).rejects.toThrow()
+  })
+
+  test('suggestLayout posts the page script and validates the reply', async () => {
+    const layoutReq = { project: { settings, characters }, script: 'E「……」' }
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      expect(JSON.parse(init.body as string)).toEqual(layoutReq)
+      return Response.json(aiFixtures.layoutSuggestion)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = createHttpLlmProvider({
+      baseUrl: 'https://api.example',
+      getToken: async () => 't',
+    })
+    expect(await provider.suggestLayout(layoutReq)).toEqual(aiFixtures.layoutSuggestion)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example/v1/ai/suggest-layout')
+
+    vi.stubGlobal('fetch', async () => Response.json({ options: [] }))
+    await expect(provider.suggestLayout(layoutReq)).rejects.toThrow()
   })
 
   test('critique posts the page and diagnosis and validates the reply', async () => {

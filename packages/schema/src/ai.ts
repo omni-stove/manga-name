@@ -61,6 +61,37 @@ export const PagePlanSchema = z.object({
 /** ページ割りの応答。読む順のページごとの割り振り */
 export const PagePlanResponseSchema = z.array(PagePlanSchema).min(1)
 
+/** コマ割りの提案の 1 コマ。Panel になる */
+export const SuggestedPanelSchema = z.object({
+  /** 行の中での幅の比。行のコマの width の和で割って幅にする */
+  width: z.number().positive(),
+  /** このコマで描くもの。Panel.note になる */
+  note: z.string().min(1),
+  /** 画面の切り取り方（ロング、バストアップなど）。Panel.camera になる */
+  camera: z.string().min(1).optional(),
+  /** このコマのセリフ。読む順。Bubble になる */
+  lines: z.array(PlanLineSchema),
+})
+
+/** コマ割りの提案の 1 段。コマは読む順 */
+export const SuggestedRowSchema = z.object({
+  /** ページの中での高さの比。全段の height の和で割って高さにする */
+  height: z.number().positive(),
+  panels: z.array(SuggestedPanelSchema).min(1).max(4),
+})
+
+/** ページのコマ割りの案 1 つ。段は上から */
+export const LayoutOptionSchema = z.object({
+  /** 案の狙い */
+  summary: z.string().min(1),
+  rows: z.array(SuggestedRowSchema).min(1).max(6),
+})
+
+/** コマ割りの提案の応答。違う狙いの案を並べる */
+export const LayoutSuggestionResponseSchema = z.object({
+  options: z.array(LayoutOptionSchema).min(1).max(3),
+})
+
 export const CritiqueResponseSchema = z.object({
   summary: z.string(),
   suggestions: z.array(z.object({ message: z.string(), patch: PatchSchema })),
@@ -72,6 +103,10 @@ export type CharacterArtRequest = z.infer<typeof CharacterArtRequestSchema>
 export type PlanLine = z.infer<typeof PlanLineSchema>
 export type PagePlan = z.infer<typeof PagePlanSchema>
 export type PagePlanResponse = z.infer<typeof PagePlanResponseSchema>
+export type SuggestedPanel = z.infer<typeof SuggestedPanelSchema>
+export type SuggestedRow = z.infer<typeof SuggestedRowSchema>
+export type LayoutOption = z.infer<typeof LayoutOptionSchema>
+export type LayoutSuggestionResponse = z.infer<typeof LayoutSuggestionResponseSchema>
 export type CritiqueResponse = z.infer<typeof CritiqueResponseSchema>
 
 if (import.meta.vitest) {
@@ -87,6 +122,22 @@ if (import.meta.vitest) {
       PagePlanResponseSchema.safeParse([{ ...plan, lines: [{ text: '', shape: 'normal' }] }])
         .success,
     ).toBe(false)
+  })
+
+  test('LayoutSuggestionResponseSchema needs positive ratios and 1 to 3 options of 1 to 6 rows', () => {
+    const panel = { width: 1, note: 'n', lines: [] }
+    const option = { summary: 's', rows: [{ height: 1, panels: [panel] }] }
+    expect(LayoutSuggestionResponseSchema.parse({ options: [option] }).options).toHaveLength(1)
+    const invalid = [
+      { options: [] },
+      { options: [option, option, option, option] },
+      { options: [{ ...option, rows: [] }] },
+      { options: [{ ...option, rows: [{ height: 0, panels: [panel] }] }] },
+      { options: [{ ...option, rows: [{ height: 1, panels: [{ ...panel, width: -1 }] }] }] },
+      { options: [{ ...option, rows: [{ height: 1, panels: [] }] }] },
+    ]
+    for (const res of invalid)
+      expect(LayoutSuggestionResponseSchema.safeParse(res).success).toBe(false)
   })
 
   test('CritiqueResponseSchema requires a Patch per suggestion', () => {
