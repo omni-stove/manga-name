@@ -5,8 +5,8 @@ import { generateText, type JSONSchema7, jsonSchema, Output } from 'ai'
 
 const ANTHROPIC_LLM_MODEL = 'claude-haiku-5-5'
 
-/** 64 ページ分の流れと登場キャラを返しても切れない上限 */
-const MAX_PLAN_OUTPUT_TOKENS = 16_000
+/** 64 ページ分の流れ、登場キャラ、脚本のセリフ全部を返しても切れない上限 */
+const MAX_PLAN_OUTPUT_TOKENS = 32_000
 /** 1 ページの講評と提案 5 件で切れない上限 */
 const MAX_CRITIQUE_OUTPUT_TOKENS = 8_000
 

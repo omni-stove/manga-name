@@ -17,6 +17,7 @@ import { Route as PProjectIdIndexRouteImport } from './routes/p.$projectId.index
 import { Route as PProjectIdCharactersRouteImport } from './routes/p.$projectId.characters'
 import { Route as PProjectIdEpisodesEpisodeIdRouteImport } from './routes/p.$projectId.episodes.$episodeId'
 import { Route as PProjectIdPagesPageIdRouteImport } from './routes/p.$projectId_.pages.$pageId'
+import { Route as PProjectIdEpisodesEpisodeIdDraftRouteImport } from './routes/p.$projectId.episodes.$episodeId_.draft'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -59,6 +60,12 @@ const PProjectIdPagesPageIdRoute = PProjectIdPagesPageIdRouteImport.update({
   path: '/p/$projectId/pages/$pageId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PProjectIdEpisodesEpisodeIdDraftRoute =
+  PProjectIdEpisodesEpisodeIdDraftRouteImport.update({
+    id: '/episodes/$episodeId_/draft',
+    path: '/episodes/$episodeId/draft',
+    getParentRoute: () => PProjectIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -69,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/p/$projectId/': typeof PProjectIdIndexRoute
   '/p/$projectId/episodes/$episodeId': typeof PProjectIdEpisodesEpisodeIdRoute
   '/p/$projectId/pages/$pageId': typeof PProjectIdPagesPageIdRoute
+  '/p/$projectId/episodes/$episodeId/draft': typeof PProjectIdEpisodesEpisodeIdDraftRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +86,7 @@ export interface FileRoutesByTo {
   '/p/$projectId': typeof PProjectIdIndexRoute
   '/p/$projectId/episodes/$episodeId': typeof PProjectIdEpisodesEpisodeIdRoute
   '/p/$projectId/pages/$pageId': typeof PProjectIdPagesPageIdRoute
+  '/p/$projectId/episodes/$episodeId/draft': typeof PProjectIdEpisodesEpisodeIdDraftRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +98,7 @@ export interface FileRoutesById {
   '/p/$projectId/': typeof PProjectIdIndexRoute
   '/p/$projectId/episodes/$episodeId': typeof PProjectIdEpisodesEpisodeIdRoute
   '/p/$projectId_/pages/$pageId': typeof PProjectIdPagesPageIdRoute
+  '/p/$projectId/episodes/$episodeId_/draft': typeof PProjectIdEpisodesEpisodeIdDraftRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +111,7 @@ export interface FileRouteTypes {
     | '/p/$projectId/'
     | '/p/$projectId/episodes/$episodeId'
     | '/p/$projectId/pages/$pageId'
+    | '/p/$projectId/episodes/$episodeId/draft'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -110,6 +121,7 @@ export interface FileRouteTypes {
     | '/p/$projectId'
     | '/p/$projectId/episodes/$episodeId'
     | '/p/$projectId/pages/$pageId'
+    | '/p/$projectId/episodes/$episodeId/draft'
   id:
     | '__root__'
     | '/'
@@ -120,6 +132,7 @@ export interface FileRouteTypes {
     | '/p/$projectId/'
     | '/p/$projectId/episodes/$episodeId'
     | '/p/$projectId_/pages/$pageId'
+    | '/p/$projectId/episodes/$episodeId_/draft'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -188,6 +201,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PProjectIdPagesPageIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/p/$projectId/episodes/$episodeId_/draft': {
+      id: '/p/$projectId/episodes/$episodeId_/draft'
+      path: '/episodes/$episodeId/draft'
+      fullPath: '/p/$projectId/episodes/$episodeId/draft'
+      preLoaderRoute: typeof PProjectIdEpisodesEpisodeIdDraftRouteImport
+      parentRoute: typeof PProjectIdRoute
+    }
   }
 }
 
@@ -195,12 +215,14 @@ interface PProjectIdRouteChildren {
   PProjectIdCharactersRoute: typeof PProjectIdCharactersRoute
   PProjectIdIndexRoute: typeof PProjectIdIndexRoute
   PProjectIdEpisodesEpisodeIdRoute: typeof PProjectIdEpisodesEpisodeIdRoute
+  PProjectIdEpisodesEpisodeIdDraftRoute: typeof PProjectIdEpisodesEpisodeIdDraftRoute
 }
 
 const PProjectIdRouteChildren: PProjectIdRouteChildren = {
   PProjectIdCharactersRoute: PProjectIdCharactersRoute,
   PProjectIdIndexRoute: PProjectIdIndexRoute,
   PProjectIdEpisodesEpisodeIdRoute: PProjectIdEpisodesEpisodeIdRoute,
+  PProjectIdEpisodesEpisodeIdDraftRoute: PProjectIdEpisodesEpisodeIdDraftRoute,
 }
 
 const PProjectIdRouteWithChildren = PProjectIdRoute._addFileChildren(

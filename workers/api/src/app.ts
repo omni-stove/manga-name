@@ -324,10 +324,13 @@ export function createApp(options: AppOptions = {}) {
         return undefined
       }
       // 指定とのページ数のずれと居ないキャラは作り直させない。ページ数が多いとモデルは再試行してもずれがちで、
-      // ずれは Web が警告して利用者に直させる。居ないキャラはページの登場キャラがスキーマを通らなくなるので落とす
+      // ずれは Web が警告して利用者に直させる。居ないキャラは登場キャラと話し手がスキーマを通らなくなるので落とす
       return result.data.map((p) => ({
         ...p,
         cast: p.cast.filter((id, i) => p.cast.indexOf(id) === i && characterIds.has(id)),
+        lines: p.lines.map(({ speakerId, ...line }) =>
+          speakerId !== undefined && characterIds.has(speakerId) ? { ...line, speakerId } : line,
+        ),
       }))
     })
     await settleUsage(c.env.DB, usageId, attempts)

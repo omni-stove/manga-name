@@ -1,4 +1,4 @@
-export { BubbleInspector } from './bubble-inspector'
+export { BUBBLE_SHAPES, BubbleInspector } from './bubble-inspector'
 export { CharacterInspector } from './character-inspector'
 export { FOCUS_KINDS, FocusInspector } from './focus-inspector'
 export { IssueList } from './issue-list'

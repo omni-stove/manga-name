@@ -5,7 +5,8 @@ import { optionalString, replace } from './patch'
 import section from './section.module.css'
 import type { BubbleInspectorProps } from './types'
 
-const SHAPES: readonly { value: Bubble['shape']; label: string }[] = [
+/** フキダシの形と、画面での呼び名 */
+export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[] = [
   { value: 'normal', label: '普通' },
   { value: 'shout', label: '叫び' },
   { value: 'thought', label: '思考' },
@@ -39,7 +40,7 @@ export function BubbleInspector({ bubble, characters, onChange }: BubbleInspecto
       <SelectField
         label="形"
         value={bubble.shape}
-        options={SHAPES}
+        options={BUBBLE_SHAPES}
         onCommit={(v) => onChange(replace('/shape', v))}
       />
       <Checkbox
