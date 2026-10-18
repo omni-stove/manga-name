@@ -1,4 +1,3 @@
-import { m } from '@manga/i18n'
 import type { Panel, PanelDiagnosis, Point } from '@manga/schema'
 import { type Focus, panelFoci } from './focus'
 
@@ -7,26 +6,22 @@ const LARGE_WEIGHT = 0.5
 
 /** 3x3 の格子の名前。[行][列]、行は上から、列は左から */
 const GRID = [
-  [m.diagnosis_hint_grid_top_left, m.diagnosis_hint_grid_top, m.diagnosis_hint_grid_top_right],
-  [m.diagnosis_hint_grid_left, m.diagnosis_hint_grid_center, m.diagnosis_hint_grid_right],
-  [
-    m.diagnosis_hint_grid_bottom_left,
-    m.diagnosis_hint_grid_bottom,
-    m.diagnosis_hint_grid_bottom_right,
-  ],
+  ['左上', '中央上', '右上'],
+  ['左', '中央', '右'],
+  ['左下', '中央下', '右下'],
 ] as const
 
 /** コマ内座標を 0, 0.5, 1 に丸めた 3x3 の格子の名前 */
 const gridName = (pos: Point): string => {
   const cell = (v: number) => Math.min(2, Math.max(0, Math.round(v * 2)))
-  return (GRID[cell(pos.y)]?.[cell(pos.x)] ?? m.diagnosis_hint_grid_center)()
+  return GRID[cell(pos.y)]?.[cell(pos.x)] ?? '中央'
 }
 
 type HintFocus = { phrase: string; large: boolean }
 
 /** 焦点の句を「と」でつなぐ。空なら空文字 */
 const and = (phrases: readonly string[]): string =>
-  phrases.reduce((a, b) => (a === '' ? b : m.diagnosis_hint_and({ a, b })), '')
+  phrases.reduce((a, b) => (a === '' ? b : `${a} と ${b}`), '')
 
 /**
  * Panel の生成ヒントを 1 文で返す（04 の 10 節）。生成プロンプトにそのまま連結する前提で、改行を含まない。
@@ -44,11 +39,14 @@ export function panelHint(panel: Panel, diagnosis: PanelDiagnosis): string {
     .flatMap((f) => {
       const source = sources.get(f.focusPointId)
       if (!source) return []
+      // 合成焦点の label は表示用に locale で変わるので、プロンプトには固定の語を使う。
       // label 由来の改行がプロンプトの行を割らないよう空白に寄せる
-      const label = source.label.replace(/\s+/g, ' ').trim()
+      const label = (source.kind === 'bubble' ? 'フキダシ' : source.label)
+        .replace(/\s+/g, ' ')
+        .trim()
       return [
         {
-          phrase: m.diagnosis_hint_focus({ position: gridName(source.pos), label }),
+          phrase: `${gridName(source.pos)}の ${label}`,
           large: source.weight >= LARGE_WEIGHT,
         },
       ]
@@ -58,19 +56,19 @@ export function panelHint(panel: Panel, diagnosis: PanelDiagnosis): string {
   const flow = foci.filter((f) => !f.large).map((f) => f.phrase)
   const first = flow[0]
   const last = flow.at(-1)
-  if (!first || !last) return large === '' ? '' : m.diagnosis_hint_large_only({ large })
+  if (!first || !last) return large === '' ? '' : `視線は${large} に大きく集まる`
 
   const via = and(flow.slice(1, -1))
   if (large === '') {
-    if (flow.length === 1) return m.diagnosis_hint_single({ focus: first })
+    if (flow.length === 1) return `視線は${first} に集まる`
     return via === ''
-      ? m.diagnosis_hint_flow({ first, last })
-      : m.diagnosis_hint_flow_via({ first, via, last })
+      ? `視線は${first} から${last} へ流れる`
+      : `視線は${first} から${via} を経て${last} へ流れる`
   }
-  if (flow.length === 1) return m.diagnosis_hint_large_then({ large, focus: first })
+  if (flow.length === 1) return `視線は${large} を大きく捉え、${first} へ流れる`
   return via === ''
-    ? m.diagnosis_hint_large_flow({ large, first, last })
-    : m.diagnosis_hint_large_flow_via({ large, first, via, last })
+    ? `視線は${large} を大きく捉え、${first} から${last} へ流れる`
+    : `視線は${large} を大きく捉え、${first} から${via} を経て${last} へ流れる`
 }
 
 if (import.meta.vitest) {
