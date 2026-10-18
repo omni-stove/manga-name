@@ -102,6 +102,24 @@ describe('drawing the fixture', () => {
     expect(svg.querySelectorAll('[data-bubble-alert]')).toHaveLength(0)
   })
 
+  test('a locked panel or bubble shows a lock under its number', async () => {
+    expect((await render()).querySelectorAll('[data-locked]')).toHaveLength(0)
+    const page: Page = {
+      ...samplePage,
+      panels: samplePage.panels.map((panel) => ({
+        ...panel,
+        locked: panel.id === 'pn_2' || undefined,
+        bubbles: panel.bubbles.map((b) => (b.id === 'bb_3' ? { ...b, locked: true } : b)),
+      })),
+    }
+    const svg = await render({ page })
+    expect(svg.querySelectorAll('[data-locked]')).toHaveLength(2)
+    expect(
+      svg.querySelector('[data-panel-id="pn_2"] [data-panel-number] [data-locked]'),
+    ).not.toBeNull()
+    expect(svg.querySelector('[data-bubble-id="bb_3"] [data-locked]')).not.toBeNull()
+  })
+
   /** pn_3 の唯一のフキダシ bb_3 を差し替えたページ */
   const withBubble3 = (patch: Partial<Panel['bubbles'][number]>): Page => ({
     ...samplePage,
