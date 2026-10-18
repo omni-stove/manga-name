@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { Button, IconButton, Typography, XStack, YStack } from '@manga/ui'
 import { Link, type LinkProps, useMatch } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
@@ -23,7 +24,7 @@ export function SideNav() {
     <YStack
       as="nav"
       gap={16}
-      aria-label="ナビゲーション"
+      aria-label={m.web_nav_label()}
       className={styles.nav}
       data-collapsed={collapsed || undefined}
     >
@@ -34,7 +35,7 @@ export function SideNav() {
           </Link>
         )}
         <IconButton
-          label={collapsed ? 'ナビゲーションを開く' : 'ナビゲーションを畳む'}
+          label={collapsed ? m.web_nav_expand() : m.web_nav_collapse()}
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >
@@ -46,7 +47,7 @@ export function SideNav() {
           to="/"
           activeOptions={{ exact: true }}
           icon={<GridIcon />}
-          label="プロジェクト一覧"
+          label={m.web_project_list()}
         />
       </YStack>
       {opened && (
@@ -63,7 +64,7 @@ export function SideNav() {
           search={(prev) => ({ ...prev, settings: 'app' })}
           replace
           icon={<GearIcon />}
-          label="アプリ設定"
+          label={m.web_app_settings()}
         />
         {!collapsed && <Account />}
       </YStack>
@@ -84,10 +85,15 @@ function ProjectItems({
 }) {
   const project = useProject(store)
   return (
-    <YStack as="ul" gap={2} className={styles.list} aria-label={project.title || '無題'}>
+    <YStack
+      as="ul"
+      gap={2}
+      className={styles.list}
+      aria-label={project.title || m.web_common_untitled()}
+    >
       {!collapsed && (
         <Typography as="li" variant="label" tone="muted" className={styles.project}>
-          {project.title || '無題'}
+          {project.title || m.web_common_untitled()}
         </Typography>
       )}
       <NavItem
@@ -96,20 +102,20 @@ function ProjectItems({
         // エピソードとエディタはエピソード一覧の下の階層なので、そこにいる間もエピソードを選ばれた状態にする
         activeOptions={{ exact: !inEpisodes }}
         icon={<PagesIcon />}
-        label="エピソード"
+        label={m.web_nav_episodes()}
       />
       <NavItem
         to="/p/$projectId/characters"
         params={{ projectId }}
         icon={<PersonIcon />}
-        label="キャラクター"
+        label={m.web_nav_characters()}
       />
       <NavItem
         to="."
         search={(prev) => ({ ...prev, settings: 'project' })}
         replace
         icon={<SlidersIcon />}
-        label="設定"
+        label={m.web_nav_settings()}
       />
     </YStack>
   )
@@ -144,7 +150,7 @@ function Account() {
     <YStack as="li" gap={4} align="start" className={styles.account}>
       <span title={user.email}>{user.name || user.email}</span>
       <Button size="small" variant="ghost" onClick={() => void signOut()}>
-        サインアウト
+        {m.web_sign_out()}
       </Button>
     </YStack>
   )

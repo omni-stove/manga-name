@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Episode } from '@manga/schema'
 import { ConfirmDialog } from '@manga/ui'
 
@@ -13,9 +14,12 @@ export function RemoveEpisodeDialog({
 }) {
   return (
     <ConfirmDialog
-      title="エピソードを削除"
-      message={`「${episode.title}」とその ${episode.pages.length} ページを削除しますか？`}
-      confirmLabel="削除"
+      title={m.web_episodes_remove()}
+      message={m.web_episodes_remove_message({
+        title: episode.title,
+        count: episode.pages.length,
+      })}
+      confirmLabel={m.web_common_delete()}
       onConfirm={onConfirm}
       onCancel={onCancel}
     />

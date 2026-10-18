@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { Typography, YStack } from '@manga/ui'
 import { createRootRouteWithContext, Link, Outlet } from '@tanstack/react-router'
 import { DisplayNameDialog } from '../display-name'
@@ -30,8 +31,8 @@ function RootLayout() {
 function NotFound() {
   return (
     <YStack as="section" gap={16} align="start">
-      <Typography variant="title">ページが見つかりません</Typography>
-      <Link to="/">プロジェクト一覧へ</Link>
+      <Typography variant="title">{m.web_not_found_page()}</Typography>
+      <Link to="/">{m.web_back_to_project_list()}</Link>
     </YStack>
   )
 }

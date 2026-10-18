@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { ToastList } from '@manga/ui'
 import { useStore } from 'zustand'
 import { createStore, type StoreApi } from 'zustand/vanilla'
@@ -53,7 +54,7 @@ export function Toasts({ store = toasts }: { store?: ToastStore }) {
   const withActions = items.map(({ signIn: needsSignIn, ...toast }) =>
     // サーバ側でセッションが失効してもクライアントはログイン中のままなので、user は見ない
     needsSignIn
-      ? { ...toast, action: { label: 'ログイン', onClick: () => signInOrNotify(signIn) } }
+      ? { ...toast, action: { label: m.web_sign_in(), onClick: () => signInOrNotify(signIn) } }
       : toast,
   )
   return <ToastList items={withActions} onDismiss={store.dismiss} />
@@ -61,7 +62,7 @@ export function Toasts({ store = toasts }: { store?: ToastStore }) {
 
 /** signIn を始め、始められなければトーストで知らせる */
 export function signInOrNotify(signIn: () => Promise<void>): void {
-  signIn().catch((e: unknown) => toasts.push(`ログインできません: ${errorMessage(e)}`))
+  signIn().catch((e: unknown) => toasts.push(m.web_sign_in_failed({ reason: errorMessage(e) })))
 }
 
 if (import.meta.vitest) {

@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import {
   createCloudStorage,
   createIndexedDbYDocStore,
@@ -56,7 +57,7 @@ const cloud =
         local,
         getToken: auth.getToken,
         fetch: auth.fetch,
-        onError: (e) => toasts.push(`クラウドに保存できません: ${errorMessage(e)}`),
+        onError: (e) => toasts.push(m.web_cloud_save_failed({ reason: errorMessage(e) })),
       })
 const storage = cloud ?? local
 const sharing = createSharingClient({
@@ -71,7 +72,7 @@ const library = createProjectLibrary(storage, {
     collaboration: {
       syncUrl: async (id: string) => `tab-sync:${id}`,
       ydocs: createIndexedDbYDocStore(),
-      userName: 'タブ',
+      userName: m.web_collab_tab_user(),
       createSocket: createTabSync(),
     },
   }),
@@ -100,7 +101,7 @@ auth.subscribe(() => {
 if (platform === 'desktop') {
   import('./desktop/shell')
     .then(({ startDesktopShell }) => startDesktopShell({ router, library }))
-    .catch((e: unknown) => toasts.push(`メニューを作れません: ${errorMessage(e)}`))
+    .catch((e: unknown) => toasts.push(m.web_menu_build_failed({ reason: errorMessage(e) })))
 }
 
 // debounce 待ちの変更をタブを閉じる・隠す時点で書く。pagehide だけでは書き込みが終わる前にページが破棄されうる

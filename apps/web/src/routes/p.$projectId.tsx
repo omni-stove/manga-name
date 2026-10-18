@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, notFound, Outlet, useParams } from '@tanstack/react-router'
 import { CollaborationBar } from '../collaboration-view'
@@ -35,9 +36,9 @@ function ProjectNotFound() {
   const { projectId } = useParams({ strict: false })
   return (
     <YStack as="section" gap={16} align="start">
-      <Typography variant="title">プロジェクトが見つかりません</Typography>
+      <Typography variant="title">{m.web_not_found_project()}</Typography>
       <Typography>{projectId}</Typography>
-      <Link to="/">プロジェクト一覧へ</Link>
+      <Link to="/">{m.web_back_to_project_list()}</Link>
     </YStack>
   )
 }

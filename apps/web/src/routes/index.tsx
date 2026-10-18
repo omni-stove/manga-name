@@ -1,4 +1,4 @@
-import { getLocale } from '@manga/i18n'
+import { getLocale, m } from '@manga/i18n'
 import type { ProjectSummary } from '@manga/storage'
 import { Button, ConfirmDialog, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router'
@@ -47,9 +47,9 @@ function ProjectList() {
   return (
     <YStack as="section" gap={16}>
       <XStack wrap gap={12}>
-        <Typography variant="title">プロジェクト一覧</Typography>
+        <Typography variant="title">{m.web_project_list()}</Typography>
         <Button variant="primary" onClick={() => void navigate({ to: '/new' })}>
-          新規作成
+          {m.web_projects_create_new()}
         </Button>
       </XStack>
       {error && (
@@ -64,7 +64,7 @@ function ProjectList() {
         <Suspense
           fallback={
             <Typography as="li" tone="muted">
-              クラウドのプロジェクトを読み込み中…
+              {m.web_projects_loading_cloud()}
             </Typography>
           }
         >
@@ -78,9 +78,11 @@ function ProjectList() {
       )}
       {removing && (
         <ConfirmDialog
-          title="プロジェクトを削除"
-          message={`「${removing.title || '無題'}」を削除しますか？元に戻せません。`}
-          confirmLabel="削除"
+          title={m.web_projects_remove_title()}
+          message={m.web_projects_remove_message({
+            title: removing.title || m.web_common_untitled(),
+          })}
+          confirmLabel={m.web_common_delete()}
           irreversible
           onConfirm={() => {
             setRemoving(undefined)
@@ -101,15 +103,17 @@ function ProjectCard({ project, busy, onRemove }: CardProps & { project: Project
     <YStack as="li" gap={6} className={common.card}>
       <Link to="/p/$projectId" params={{ projectId: project.id }} className={common.cardLink}>
         <YStack gap={4}>
-          <strong>{project.title || '無題'}</strong>
+          <strong>{project.title || m.web_common_untitled()}</strong>
           <Typography as="small" variant="caption" tone="muted">
-            更新 {new Date(project.updatedAt).toLocaleString(getLocale())}
+            {m.web_projects_updated_at({
+              date: new Date(project.updatedAt).toLocaleString(getLocale()),
+            })}
           </Typography>
         </YStack>
       </Link>
       <XStack as="span" wrap gap={6} className={common.cardActions}>
         <Button size="small" variant="ghost" disabled={busy} onClick={() => onRemove(project)}>
-          削除
+          {m.web_common_delete()}
         </Button>
       </XStack>
     </YStack>
@@ -128,5 +132,5 @@ function CloudOnlyCards({
 
 function NoProjects({ cloudOnly }: { cloudOnly: Promise<ProjectSummary[]> }) {
   if (use(cloudOnly).length > 0) return null
-  return <Typography tone="muted">まだプロジェクトがありません。</Typography>
+  return <Typography tone="muted">{m.web_projects_empty()}</Typography>
 }

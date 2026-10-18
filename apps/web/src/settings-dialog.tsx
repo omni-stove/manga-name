@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { ID, ProjectSettings } from '@manga/schema'
 import {
   Button,
@@ -54,10 +55,10 @@ export function SettingsDialog() {
       search: ({ settings: _, ...rest }) => rest,
       replace: true,
     })
-  const actions = <Button onClick={close}>閉じる</Button>
+  const actions = <Button onClick={close}>{m.web_common_close()}</Button>
   if (settings === 'app')
     return (
-      <Dialog key={settings} title="アプリ設定" onClose={close} actions={actions}>
+      <Dialog key={settings} title={m.web_app_settings()} onClose={close} actions={actions}>
         <AppSettings />
       </Dialog>
     )
@@ -65,7 +66,7 @@ export function SettingsDialog() {
     return (
       <Dialog
         key={settings}
-        title="プロジェクト設定"
+        title={m.web_project_settings()}
         onClose={close}
         actions={actions}
         className={styles.dialog}
@@ -76,10 +77,10 @@ export function SettingsDialog() {
   return null
 }
 
-const THEMES: readonly { value: ThemePreference; label: string }[] = [
-  { value: 'system', label: 'システム' },
-  { value: 'light', label: 'ライト' },
-  { value: 'dark', label: 'ダーク' },
+const themes = (): readonly { value: ThemePreference; label: string }[] => [
+  { value: 'system', label: m.web_settings_theme_system() },
+  { value: 'light', label: m.web_settings_theme_light() },
+  { value: 'dark', label: m.web_settings_theme_dark() },
 ]
 
 function AppSettings() {
@@ -87,39 +88,44 @@ function AppSettings() {
   const { user, signOut } = useAuth()
   return (
     <YStack gap={16} align="start">
-      <Typography tone="muted">設定の保存はここに入る。</Typography>
+      <Typography tone="muted">{m.web_settings_placeholder()}</Typography>
       <dl className={common.fields}>
-        <dt>ストレージ</dt>
+        <dt>{m.web_settings_storage()}</dt>
         <dd>memory / indexeddb</dd>
-        <dt>AI プロキシの URL</dt>
-        <dd>未設定</dd>
-        <dt>アカウント</dt>
+        <dt>{m.web_settings_ai_proxy_url()}</dt>
+        <dd>{m.web_settings_not_set()}</dd>
+        <dt>{m.web_settings_account()}</dt>
         <XStack as="dd" wrap>
           {user ? (
             <>
               {user.email}
               <Button size="small" variant="ghost" onClick={() => void signOut()}>
-                サインアウト
+                {m.web_sign_out()}
               </Button>
             </>
           ) : (
             <>
-              未ログイン（ローカルモード）。AI の生成とクラウド保存にはログインが要ります
+              {m.web_settings_signed_out()}
               <SignInButton size="small" />
             </>
           )}
         </XStack>
         {user && (
           <>
-            <dt>表示名</dt>
+            <dt>{m.web_settings_display_name()}</dt>
             <dd>
               <DisplayNameForm key={user.id} name={user.name} />
             </dd>
           </>
         )}
-        <dt>テーマ</dt>
+        <dt>{m.web_settings_theme()}</dt>
         <dd>
-          <SegmentedControl label="テーマ" value={theme} options={THEMES} onChange={setTheme} />
+          <SegmentedControl
+            label={m.web_settings_theme()}
+            value={theme}
+            options={themes()}
+            onChange={setTheme}
+          />
         </dd>
       </dl>
     </YStack>
@@ -155,22 +161,22 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
             style: negative ? { prompt: text('prompt'), negative } : { prompt: text('prompt') },
           }
           const title = text('title')
-          apply('プロジェクト設定を変更', (p) => {
+          apply(m.web_settings_change_project(), (p) => {
             const patch = settingsPatch(p.settings, next)
             if (title !== p.title) patch.unshift({ op: 'replace', path: '/title', value: title })
             return patch
           })
         }}
       >
-        <Input label="タイトル" name="title" defaultValue={project.title} />
-        <Select label="読む方向" name="direction" defaultValue={direction}>
-          <option value="rtl">右から左（rtl）</option>
-          <option value="ltr">左から右（ltr）</option>
+        <Input label={m.web_common_title()} name="title" defaultValue={project.title} />
+        <Select label={m.web_settings_direction()} name="direction" defaultValue={direction}>
+          <option value="rtl">{m.web_settings_direction_rtl()}</option>
+          <option value="ltr">{m.web_settings_direction_ltr()}</option>
         </Select>
-        <FieldGroup label="判型（mm）">
+        <FieldGroup label={m.web_settings_page_size()}>
           <XStack className={styles.size}>
             <Input
-              label="幅"
+              label={m.web_settings_width()}
               hideLabel
               name="w"
               type="number"
@@ -181,7 +187,7 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
             />
             ×
             <Input
-              label="高さ"
+              label={m.web_settings_height()}
               hideLabel
               name="h"
               type="number"
@@ -193,15 +199,20 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
           </XStack>
         </FieldGroup>
         <Input label="dpi" name="dpi" type="number" min="1" step="1" required defaultValue={dpi} />
-        <TextArea label="スタイル" name="prompt" rows={3} defaultValue={style.prompt} />
         <TextArea
-          label="除外するもの"
+          label={m.web_settings_style()}
+          name="prompt"
+          rows={3}
+          defaultValue={style.prompt}
+        />
+        <TextArea
+          label={m.web_settings_negative()}
           name="negative"
           rows={2}
           defaultValue={style.negative ?? ''}
         />
         <Button type="submit" variant="primary" disabled={role !== 'owner' && role !== 'editor'}>
-          保存
+          {m.web_common_save()}
         </Button>
       </form>
       {error && (
@@ -209,7 +220,7 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
           {error}
         </Typography>
       )}
-      <Typography variant="heading">共有</Typography>
+      <Typography variant="heading">{m.web_settings_sharing()}</Typography>
       {/* key で作り直すのは、SharingPanel が最初に読んだプロジェクトの参加者を持ち続けるため */}
       <SharingPanel key={projectId} projectId={projectId} sharing={sharing} />
     </YStack>

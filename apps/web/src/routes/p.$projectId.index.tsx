@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Episode, ID } from '@manga/schema'
 import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
@@ -28,7 +29,7 @@ function EpisodeList() {
   // 足した話は空なので、そのまま開いてページを足せるようにする
   const addEpisode = () => {
     let added: ID | undefined
-    const ok = apply('エピソードを追加', (p) => {
+    const ok = apply(m.web_episodes_add(), (p) => {
       const { patch, episode } = addEpisodePatch(p)
       added = episode.id
       return patch
@@ -43,8 +44,8 @@ function EpisodeList() {
   return (
     <YStack gap={8}>
       <XStack wrap gap={12} className={common.toolbar}>
-        <Typography variant="heading">エピソード</Typography>
-        <Button onClick={addEpisode}>エピソードを追加</Button>
+        <Typography variant="heading">{m.web_nav_episodes()}</Typography>
+        <Button onClick={addEpisode}>{m.web_episodes_add()}</Button>
       </XStack>
       {error && (
         <Typography tone="alert" role="alert">
@@ -52,7 +53,7 @@ function EpisodeList() {
         </Typography>
       )}
       {project.episodes.length === 0 && (
-        <Typography tone="muted">エピソードがありません。</Typography>
+        <Typography tone="muted">{m.web_episodes_empty()}</Typography>
       )}
       <ol className={`${common.cards} ${styles.pages}`}>
         {project.episodes.map((episode) => {
@@ -83,11 +84,11 @@ function EpisodeList() {
                 </YStack>
               </Link>
               <Typography as="small" variant="caption" tone="muted">
-                {`${episode.pages.length} ページ`}
+                {m.web_episodes_page_count({ count: episode.pages.length })}
               </Typography>
               <XStack as="span" wrap gap={6} className={common.cardActions}>
                 <Button size="small" variant="ghost" onClick={() => setRemoving(episode)}>
-                  削除
+                  {m.web_common_delete()}
                 </Button>
               </XStack>
             </YStack>
@@ -98,7 +99,7 @@ function EpisodeList() {
         <RemoveEpisodeDialog
           episode={removing}
           onConfirm={() => {
-            apply('エピソードを削除', (p) => removeEpisodePatch(p, removing.id))
+            apply(m.web_episodes_remove(), (p) => removeEpisodePatch(p, removing.id))
             setRemoving(undefined)
           }}
           onCancel={() => setRemoving(undefined)}
