@@ -1,6 +1,13 @@
 import { m } from '@manga/i18n'
 import type { ID, Page, Stroke } from '@manga/schema'
-import { memo, useCallback, useId, useLayoutEffect, useRef } from 'react'
+import {
+  memo,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useRef,
+} from 'react'
 import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { BubbleToolLayer } from './bubble-tool-layer'
 import { DiagnosisLayer } from './diagnosis-layer'
@@ -14,10 +21,11 @@ import { PanelToolLayer } from './panel-tool-layer'
 import type { EditorCanvasProps, Selection } from './types'
 import { useBubbleTool } from './use-bubble-tool'
 import { useHintTool } from './use-hint-tool'
+import { useLongPress } from './use-long-press'
 import { useMove } from './use-move'
 import { usePanelTool } from './use-panel-tool'
 import { polylinePoints, SCRIBBLE_WIDTH, useScribble } from './use-scribble'
-import { sameSelection, useSelection } from './use-selection'
+import { type ClientPoint, sameSelection, useSelection } from './use-selection'
 import { useViewport } from './use-viewport'
 import { zoomOf } from './view'
 
@@ -47,7 +55,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * クリックで選択、ホバーで強調、Delete で削除、矢印キーで 0.01 刻みの移動。
  * `select` ツールでは選択中のコマかフキダシをドラッグで動かす。
  * `panel` ツールと手描きの最中を除き、要素の無いところ（作業台とコマの外）のドラッグでページを動かす。
- * 右クリックは押した要素を選んでから `onContextMenu` に渡す。
+ * 右クリックは押した要素を選んでから `onContextMenu` に渡す。手描きの最中を除き、タッチの長押しも右クリックとして扱う。
  * `panel` ツールではドラッグでコマを作り、選択中のコマをハンドルでリサイズ、ボタンで縦横に分割、
  * 「線で分割」か Alt + ドラッグで引いた斜めの線で分割、「結合」か Shift + クリックで押したコマと結合する。多角形のコマは
  * 頂点をドラッグで動かし、矩形のコマも Alt + 隅のドラッグで頂点を動かせる。
@@ -184,6 +192,28 @@ export function EditorCanvas(props: EditorCanvasProps) {
   })
   const generate = useCallback((panelId: ID) => onGenerateRef.current?.(panelId), [])
 
+  const openMenu = (at: ClientPoint) => {
+    if (!props.onContextMenu) return
+    // メニューを閉じたときにフォーカスがキャンバスへ戻り、続けて Delete や矢印キーが効くようにする
+    at.currentTarget.focus({ preventScroll: true })
+    const target = selection.hitAt(at)
+    if (target !== null && !sameSelection(target, props.selection)) props.onSelect(target)
+    props.onContextMenu({ x: at.clientX, y: at.clientY, target, fit: viewport.fit })
+  }
+  const longPress = useLongPress((el, at) =>
+    openMenu({ currentTarget: el, clientX: at.x, clientY: at.y }),
+  )
+  const cancelPointer = (e: ReactPointerEvent<SVGSVGElement>) => {
+    viewport.handlers.onPointerCancel(e)
+    panelTool.handlers.onPointerCancel(e)
+    bubbleTool.handlers.onPointerCancel(e)
+    hintTool.handlers.onPointerCancel(e)
+    move.handlers.onPointerCancel(e)
+    selection.handlers.onPointerCancel()
+    scribble.handlers.onPointerCancel(e)
+    sketch.handlers.onPointerCancel(e)
+  }
+
   const cursor = panning
     ? 'grabbing'
     : spaceHeld
@@ -231,6 +261,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         selection.handlers.onPointerLeave()
       }}
       onPointerDown={(e) => {
+        if (props.onContextMenu && !scribbling) longPress.onPointerDown(e)
         viewport.handlers.onPointerDown(e)
         panelTool.handlers.onPointerDown(e)
         bubbleTool.handlers.onPointerDown(e)
@@ -243,6 +274,12 @@ export function EditorCanvas(props: EditorCanvasProps) {
         }
       }}
       onPointerMove={(e) => {
+        // 長押しはタイマーで発火し、各フックへ取り消しを渡せるイベントが無いので、その後の最初のイベントで渡す
+        if (longPress.held(e)) {
+          cancelPointer(e)
+          return
+        }
+        longPress.onPointerMove(e)
         viewport.handlers.onPointerMove(e)
         panelTool.handlers.onPointerMove(e)
         bubbleTool.handlers.onPointerMove(e)
@@ -251,6 +288,11 @@ export function EditorCanvas(props: EditorCanvasProps) {
         pointer.onPointerMove(e)
       }}
       onPointerUp={(e) => {
+        // メニューを開いた指を離しても、クリックやドラッグの確定にしない
+        if (longPress.end(e)) {
+          cancelPointer(e)
+          return
+        }
         viewport.handlers.onPointerUp(e)
         panelTool.handlers.onPointerUp(e)
         bubbleTool.handlers.onPointerUp(e)
@@ -262,23 +304,13 @@ export function EditorCanvas(props: EditorCanvasProps) {
         sketch.handlers.onPointerUp(e)
       }}
       onPointerCancel={(e) => {
-        viewport.handlers.onPointerCancel(e)
-        panelTool.handlers.onPointerCancel(e)
-        bubbleTool.handlers.onPointerCancel(e)
-        hintTool.handlers.onPointerCancel(e)
-        move.handlers.onPointerCancel(e)
-        selection.handlers.onPointerCancel()
-        scribble.handlers.onPointerCancel(e)
-        sketch.handlers.onPointerCancel(e)
+        longPress.end(e)
+        cancelPointer(e)
       }}
       onContextMenu={(e) => {
         if (!props.onContextMenu) return
         e.preventDefault()
-        // メニューを閉じたときにフォーカスがキャンバスへ戻り、続けて Delete や矢印キーが効くようにする
-        e.currentTarget.focus({ preventScroll: true })
-        const target = selection.hitAt(e)
-        if (target !== null && !sameSelection(target, props.selection)) props.onSelect(target)
-        props.onContextMenu({ x: e.clientX, y: e.clientY, target, fit: viewport.fit })
+        if (!longPress.contextMenu()) openMenu(e)
       }}
       onKeyDown={(e) => {
         if (

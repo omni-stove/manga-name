@@ -3,6 +3,7 @@ import {
   type CanvasMenuRequest,
   convertSketchPatch,
   EditorCanvas,
+  isLocked,
   type Layers,
   removePatch,
   type ScribbleTool,
@@ -41,6 +42,7 @@ import {
   ContextMenu,
   type ContextMenuItem,
   IconButton,
+  RemoveButton,
   SegmentedControl,
   type SegmentedOption,
   Select,
@@ -53,7 +55,13 @@ import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useEffectEvent, useState } from 'react'
 import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from './batch-generation'
-import { elementMenuItems, shapeMenuItems, toolMenuItems } from './canvas-menu'
+import {
+  type ElementMenuContext,
+  elementMenuItems,
+  setLocked,
+  shapeMenuItems,
+  toolMenuItems,
+} from './canvas-menu'
 import { CollaborationBar, PeerBadge, peerColor, usePeers } from './collaboration-view'
 import { previewPage } from './critique'
 import { CritiquePanel } from './critique-panel'
@@ -761,6 +769,9 @@ export function PageEditor({
             </details>
             <fieldset disabled={!canEdit} className={styles.inspectorFields}>
               <Area open={can('inspector')}>
+                {selection && (
+                  <ElementActions page={page} target={selection} actions={menuContext} />
+                )}
                 <SelectionInspector
                   page={page}
                   pageId={pageId}
@@ -839,6 +850,35 @@ export function PageEditor({
         </Sidebar>
       </div>
     </YStack>
+  )
+}
+
+/**
+ * 選んでいる要素の位置のロックと削除。右クリックメニューと同じ操作で、
+ * 長押しに気づかないタッチ端末や、キーボードの無い iPad でも押せるよう常に出しておく
+ */
+function ElementActions({
+  page,
+  target,
+  actions,
+}: {
+  page: Page
+  target: NonNullable<Selection>
+  actions: Pick<ElementMenuContext, 'edit' | 'remove'>
+}) {
+  return (
+    <XStack justify="between" data-section="element-actions">
+      <Checkbox
+        label={m.web_canvas_menu_lock()}
+        checked={isLocked(page, target)}
+        onChange={(e) => setLocked(actions, target, e.target.checked)}
+      />
+      <RemoveButton
+        size="small"
+        label={m.web_common_delete()}
+        onClick={() => actions.remove(target)}
+      />
+    </XStack>
   )
 }
 
