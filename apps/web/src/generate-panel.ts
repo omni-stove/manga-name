@@ -1,5 +1,6 @@
 import type { ImageProvider, PageArtRequest, PanelArtRequest } from '@manga/ai'
 import { diagnosePage, panelHint } from '@manga/diagnosis'
+import { m } from '@manga/i18n'
 import { cropPanelArts, renderLayoutPng, renderPageLayoutPng } from '@manga/render'
 import {
   type Character,
@@ -205,7 +206,7 @@ async function runPool<T>(
 function addArtPatch(project: Project, pageId: ID, panelId: ID, art: PanelArt): Patch {
   const page = findPage(project, pageId)?.page
   const panel = page && findPanel(page, panelId)?.panel
-  if (!panel) throw new Error('生成中にコマが消えました')
+  if (!panel) throw new Error(m.web_generate_panel_gone())
   const { parentId, ...orphan } = art
   const value = parentId !== undefined && panel.arts.some((a) => a.id === parentId) ? art : orphan
   return panelPatch(project, pageId, panelId, [
@@ -276,14 +277,13 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
 
   const loadPrevious = async (panel: Panel, instruction: string) => {
     const current = currentArt(panel)
-    if (!current) throw new Error('修正指示つきの再生成には採用中の絵が要ります')
+    if (!current) throw new Error(m.web_generate_previous_art_required())
     return { parentId: current.id, art: await library.loadAsset(current.ref), instruction }
   }
 
   // 待つ間にプロジェクトが削除されると、書き込みが消したプロジェクトを復活させる
   const assertOpen = async (store: ProjectStore, projectId: ID) => {
-    if (!(await library.isOpen(projectId, store)))
-      throw new Error('生成中にプロジェクトが削除されました')
+    if (!(await library.isOpen(projectId, store))) throw new Error(m.web_generate_project_deleted())
   }
 
   const run = async ({
@@ -339,7 +339,9 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     // 待っている間にコマが動いていることがあるので、Patch はその時点の Project で組む
     store.applyPatch(addArtPatch(store.get(), pageId, panelId, art), {
       source: 'ai',
-      label: previous ? `コマ ${panel.order} を修正して再生成` : `コマ ${panel.order} を生成`,
+      label: previous
+        ? m.web_generate_history_regenerate_panel({ order: panel.order })
+        : m.web_generate_history_generate_panel({ order: panel.order }),
     })
   }
 
@@ -437,10 +439,13 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
         return []
       }
     })
-    if (patch.length === 0) throw new Error('生成中にコマが消えました')
+    if (patch.length === 0) throw new Error(m.web_generate_panel_gone())
     store.applyPatch(patch, {
       source: 'ai',
-      label: `ページ ${found.pageIndex + 1} のコマ ${arts.length - missing.length} 件を生成`,
+      label: m.web_generate_history_generate_page({
+        page: found.pageIndex + 1,
+        count: arts.length - missing.length,
+      }),
     })
     return missing
   }
@@ -461,7 +466,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       counts.done = panelIds.length - missing.length
       counts.failed = missing.length
       return missing.length > 0
-        ? { counts, error: new Error('生成中にコマが消えました') }
+        ? { counts, error: new Error(m.web_generate_panel_gone()) }
         : { counts }
     } catch (error) {
       if (req.signal.aborted) {
@@ -496,7 +501,9 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     async generate(req) {
       const { outcome, error } = await attempt(req)
       if (outcome === 'failed')
-        notify(`コマの生成に失敗しました: ${errorMessage(error)}`, { signIn: needsSignIn(error) })
+        notify(m.web_generate_panel_failed({ reason: errorMessage(error) }), {
+          signIn: needsSignIn(error),
+        })
       return outcome
     },
     async generateAll({ store, projectId, scope, pageIds, includeGenerated }) {
@@ -518,7 +525,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
           if (!(await library.isOpen(projectId, store))) {
             controller.abort()
             counts.canceled += panelIds.length
-            errors.push(new Error('生成中にプロジェクトが削除されました'))
+            errors.push(new Error(m.web_generate_project_deleted()))
             return
           }
           const page = await attemptPage({ store, projectId, pageId, panelIds, signal })
@@ -532,11 +539,13 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
         toggle('batches', key, false)
       }
       if (errors.length > 0) {
-        const summary =
+        const reason = errorMessage(errors[0])
+        notify(
           counts.failed > 0
-            ? `コマ ${counts.failed} 件の生成に失敗しました`
-            : '一括生成を止めました'
-        notify(`${summary}: ${errorMessage(errors[0])}`, { signIn: errors.some(needsSignIn) })
+            ? m.web_generate_batch_failed({ count: counts.failed, reason })
+            : m.web_generate_batch_stopped({ reason }),
+          { signIn: errors.some(needsSignIn) },
+        )
       }
       return counts
     },

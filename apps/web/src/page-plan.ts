@@ -1,4 +1,5 @@
 import type { PagePlanRequest } from '@manga/ai'
+import { m } from '@manga/i18n'
 import {
   type Bubble,
   type Character,
@@ -36,10 +37,42 @@ export function parsePageCount(text: string): number | undefined | null {
 
 /** ページ数の欄に一押しで入れる、商業誌の 1 回分の目安。`pages` は MAX_PAGE_COUNT 以下 */
 export const PAGE_COUNT_GUIDES: readonly { label: string; pages: number; hint: string }[] = [
-  { label: '週刊連載', pages: 19, hint: '週刊少年誌の 1 話はおよそ 16〜20 ページ' },
-  { label: '月刊連載', pages: 32, hint: '月刊誌の 1 話はおよそ 30〜45 ページ' },
-  { label: '読切', pages: 31, hint: '新人賞や読切は 31 ページや 45 ページの枠が多い' },
-  { label: '初回増ページ', pages: 50, hint: '週刊の第 1 話は 45〜55 ページ前後' },
+  {
+    get label() {
+      return m.web_page_count_guide_weekly()
+    },
+    pages: 19,
+    get hint() {
+      return m.web_page_count_guide_weekly_hint()
+    },
+  },
+  {
+    get label() {
+      return m.web_page_count_guide_monthly()
+    },
+    pages: 32,
+    get hint() {
+      return m.web_page_count_guide_monthly_hint()
+    },
+  },
+  {
+    get label() {
+      return m.web_page_count_guide_oneshot()
+    },
+    pages: 31,
+    get hint() {
+      return m.web_page_count_guide_oneshot_hint()
+    },
+  },
+  {
+    get label() {
+      return m.web_page_count_guide_premiere()
+    },
+    pages: 50,
+    get hint() {
+      return m.web_page_count_guide_premiere_hint()
+    },
+  },
 ]
 
 const withTone = (tone: string, text: string) => {

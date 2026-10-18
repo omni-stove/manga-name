@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { RenderOptions } from '@manga/render'
 import type { Page } from '@manga/schema'
 import { Button, Checkbox, Dialog, FieldGroup, Input, Select, Typography } from '@manga/ui'
@@ -20,22 +21,26 @@ type Range = 'current' | 'all' | 'custom'
 /** JSON はページを描かずプロジェクトをそのまま書くので、ExportFormat とは分ける */
 type Format = ExportFormat | 'json'
 
-const FORMATS: readonly { value: Format; label: string }[] = [
-  { value: 'png', label: 'PNG（複数ページは zip）' },
+const formatOptions = (): readonly { value: Format; label: string }[] => [
+  { value: 'png', label: m.web_export_format_png() },
   { value: 'pdf', label: 'PDF' },
-  { value: 'json', label: 'JSON（プロジェクトのデータ。画像は含まない）' },
+  { value: 'json', label: m.web_export_format_json() },
 ]
 
-const RANGES: readonly { value: Range; label: string }[] = [
-  { value: 'current', label: 'このページ' },
-  { value: 'all', label: 'エピソードの全ページ' },
-  { value: 'custom', label: 'ページを指定' },
+const rangeOptions = (): readonly { value: Range; label: string }[] => [
+  { value: 'current', label: m.web_export_range_current() },
+  { value: 'all', label: m.web_export_range_all() },
+  { value: 'custom', label: m.web_export_range_custom() },
 ]
 
-const NOTES: readonly { value: RenderOptions['notes']; label: string; pdfOnly?: boolean }[] = [
-  { value: 'none', label: '印字しない' },
-  { value: 'margin', label: 'コマ横の余白に印字する' },
-  { value: 'sheet', label: '各ページの後ろに一覧ページを足す', pdfOnly: true },
+const noteOptions = (): readonly {
+  value: RenderOptions['notes']
+  label: string
+  pdfOnly?: boolean
+}[] => [
+  { value: 'none', label: m.web_export_notes_none() },
+  { value: 'margin', label: m.web_export_notes_margin() },
+  { value: 'sheet', label: m.web_export_notes_sheet(), pdfOnly: true },
 ]
 
 /**
@@ -79,12 +84,12 @@ export function ExportDialog({
   const rangeError =
     Number.isInteger(from) && Number.isInteger(to) && from >= 1 && from <= to && to <= pages.length
       ? undefined
-      : `1〜${pages.length} の範囲で、始まりを終わり以下にしてください`
+      : m.web_export_range_error({ max: pages.length })
   const dpiValue = Number(dpiText)
   const dpiError =
     Number.isInteger(dpiValue) && dpiValue >= 72 && dpiValue <= 1200
       ? undefined
-      : '72〜1200 の整数にしてください'
+      : m.web_export_dpi_error()
   const rendersPages = format !== 'json'
   const missing = !rendersPages || rangeError ? 0 : countMissingArts(pages.slice(from - 1, to))
   const effectiveNotes = format === 'png' && notes === 'sheet' ? 'none' : notes
@@ -105,24 +110,28 @@ export function ExportDialog({
 
   return (
     <Dialog
-      title="書き出し"
+      title={m.web_export_title()}
       onClose={onCancel}
       onSubmit={submit}
       actions={
         <>
-          <Button onClick={onCancel}>キャンセル</Button>
+          <Button onClick={onCancel}>{m.web_common_cancel()}</Button>
           <Button
             type="submit"
             variant="primary"
             disabled={rendersPages && (!!rangeError || !!dpiError)}
           >
-            書き出す
+            {m.web_export_submit()}
           </Button>
         </>
       }
     >
-      <Select label="形式" value={format} onChange={(e) => setFormat(e.target.value as Format)}>
-        {FORMATS.map((f) => (
+      <Select
+        label={m.web_export_format()}
+        value={format}
+        onChange={(e) => setFormat(e.target.value as Format)}
+      >
+        {formatOptions().map((f) => (
           <option key={f.value} value={f.value}>
             {f.label}
           </option>
@@ -130,18 +139,22 @@ export function ExportDialog({
       </Select>
       {rendersPages && (
         <>
-          <Select label="範囲" value={range} onChange={(e) => setRange(e.target.value as Range)}>
-            {RANGES.map((r) => (
+          <Select
+            label={m.web_export_range()}
+            value={range}
+            onChange={(e) => setRange(e.target.value as Range)}
+          >
+            {rangeOptions().map((r) => (
               <option key={r.value} value={r.value}>
                 {r.label}
               </option>
             ))}
           </Select>
           {range === 'custom' && (
-            <FieldGroup label="ページ" error={rangeError}>
+            <FieldGroup label={m.web_export_pages()} error={rangeError}>
               <Input
                 type="number"
-                label="開始ページ"
+                label={m.web_export_from_page()}
                 hideLabel
                 min={1}
                 max={pages.length}
@@ -151,7 +164,7 @@ export function ExportDialog({
               〜
               <Input
                 type="number"
-                label="終了ページ"
+                label={m.web_export_to_page()}
                 hideLabel
                 min={1}
                 max={pages.length}
@@ -161,24 +174,26 @@ export function ExportDialog({
             </FieldGroup>
           )}
           <Select
-            label="指示メモ"
+            label={m.web_export_notes()}
             value={effectiveNotes}
             onChange={(e) => setNotes(e.target.value as RenderOptions['notes'])}
           >
-            {NOTES.filter((n) => format === 'pdf' || !n.pdfOnly).map((n) => (
-              <option key={n.value} value={n.value}>
-                {n.label}
-              </option>
-            ))}
+            {noteOptions()
+              .filter((n) => format === 'pdf' || !n.pdfOnly)
+              .map((n) => (
+                <option key={n.value} value={n.value}>
+                  {n.label}
+                </option>
+              ))}
           </Select>
           <Checkbox
-            label="コマ番号を入れる"
+            label={m.web_export_panel_numbers()}
             checked={panelNumbers}
             onChange={(e) => setPanelNumbers(e.target.checked)}
           />
           {format === 'pdf' && (
             <Checkbox
-              label="見開きでまとめる"
+              label={m.web_export_spread()}
               checked={spread}
               onChange={(e) => setSpread(e.target.checked)}
             />
@@ -195,9 +210,7 @@ export function ExportDialog({
         </>
       )}
       {missing > 0 && (
-        <Typography role="status">
-          未生成のコマが {missing} 個あります。枠だけのまま書き出します。
-        </Typography>
+        <Typography role="status">{m.web_export_missing_arts({ count: missing })}</Typography>
       )}
     </Dialog>
   )
