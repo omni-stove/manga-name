@@ -1,5 +1,5 @@
 import { createEmptyProject, type ID, newId, type Project } from '@manga/schema'
-import type { ProjectSummary, StorageAdapter, YDocStore } from '@manga/storage'
+import type { ProjectSummary, ProjectsByOrigin, StorageAdapter, YDocStore } from '@manga/storage'
 import { Awareness } from 'y-protocols/awareness'
 import * as Y from 'yjs'
 import type { StoreApi } from 'zustand/vanilla'
@@ -16,6 +16,8 @@ import { createYjsProjectStore } from './store/yjs-project-store'
  */
 export interface ProjectLibrary {
   list(): Promise<ProjectSummary[]>
+  /** list と同じ一覧を、手元の分とクラウドにしか無い分に分ける。一覧の画面がクラウドを待たずに手元の分を出すのに使う */
+  listByOrigin(): ProjectsByOrigin
   /** ProjectStore を開く。同じ id には同じ store を返す。保存されていなければ undefined */
   open(id: ID): Promise<WebProjectStore | undefined>
   /** open 済みのプロジェクトでの自分のロール。open していなければ undefined */
@@ -215,6 +217,11 @@ export function createProjectLibrary(
 
   return {
     list: () => storage.listProjects(),
+    listByOrigin: () =>
+      storage.listProjectsByOrigin?.() ?? {
+        local: storage.listProjects(),
+        cloudOnly: Promise.resolve([]),
+      },
     open(id) {
       let store = opened.get(id)
       if (!store) {

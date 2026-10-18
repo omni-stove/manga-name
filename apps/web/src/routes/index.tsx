@@ -1,21 +1,28 @@
 import type { ProjectSummary } from '@manga/storage'
 import { Button, ConfirmDialog, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { Suspense, use, useState } from 'react'
 import common from '../common.module.css'
 import { errorMessage } from '../route-error'
+
+interface CardProps {
+  busy: boolean
+  onRemove(project: ProjectSummary): void
+}
 
 export const Route = createFileRoute('/')({
   loader: async ({ context }) => {
     // debounce 待ちの変更を storage に反映してから読まないと、一覧に古いタイトルと並び順が出る
     await context.library.flushAll()
-    return context.library.list()
+    // クラウドにしか無い分は待たずに渡し、手元の分だけで一覧を出す。API が遅くても手元のプロジェクトを開ける
+    const { local, cloudOnly } = context.library.listByOrigin()
+    return { local: await local, cloudOnly }
   },
   component: ProjectList,
 })
 
 function ProjectList() {
-  const projects = Route.useLoaderData()
+  const { local, cloudOnly } = Route.useLoaderData()
   const { library } = Route.useRouteContext()
   const router = useRouter()
   const navigate = useNavigate()
@@ -49,33 +56,25 @@ function ProjectList() {
           {error}
         </Typography>
       )}
-      {projects.length === 0 && (
-        <Typography tone="muted">まだプロジェクトがありません。</Typography>
-      )}
       <ul className={common.cards}>
-        {projects.map((project) => (
-          <YStack as="li" gap={6} key={project.id} className={common.card}>
-            <Link to="/p/$projectId" params={{ projectId: project.id }} className={common.cardLink}>
-              <YStack gap={4}>
-                <strong>{project.title || '無題'}</strong>
-                <Typography as="small" variant="caption" tone="muted">
-                  更新 {new Date(project.updatedAt).toLocaleString()}
-                </Typography>
-              </YStack>
-            </Link>
-            <XStack as="span" wrap gap={6} className={common.cardActions}>
-              <Button
-                size="small"
-                variant="ghost"
-                disabled={busy}
-                onClick={() => setRemoving(project)}
-              >
-                削除
-              </Button>
-            </XStack>
-          </YStack>
+        {local.map((project) => (
+          <ProjectCard key={project.id} project={project} busy={busy} onRemove={setRemoving} />
         ))}
+        <Suspense
+          fallback={
+            <Typography as="li" tone="muted">
+              クラウドのプロジェクトを読み込み中…
+            </Typography>
+          }
+        >
+          <CloudOnlyCards projects={cloudOnly} busy={busy} onRemove={setRemoving} />
+        </Suspense>
       </ul>
+      {local.length === 0 && (
+        <Suspense>
+          <NoProjects cloudOnly={cloudOnly} />
+        </Suspense>
+      )}
       {removing && (
         <ConfirmDialog
           title="プロジェクトを削除"
@@ -94,4 +93,39 @@ function ProjectList() {
       )}
     </YStack>
   )
+}
+
+function ProjectCard({ project, busy, onRemove }: CardProps & { project: ProjectSummary }) {
+  return (
+    <YStack as="li" gap={6} className={common.card}>
+      <Link to="/p/$projectId" params={{ projectId: project.id }} className={common.cardLink}>
+        <YStack gap={4}>
+          <strong>{project.title || '無題'}</strong>
+          <Typography as="small" variant="caption" tone="muted">
+            更新 {new Date(project.updatedAt).toLocaleString()}
+          </Typography>
+        </YStack>
+      </Link>
+      <XStack as="span" wrap gap={6} className={common.cardActions}>
+        <Button size="small" variant="ghost" disabled={busy} onClick={() => onRemove(project)}>
+          削除
+        </Button>
+      </XStack>
+    </YStack>
+  )
+}
+
+/** クラウドにしか無いプロジェクト。届いた時点で手元の分の後ろに足す。並べ直すと開こうとしたカードが動くため */
+function CloudOnlyCards({
+  projects,
+  ...card
+}: CardProps & { projects: Promise<ProjectSummary[]> }) {
+  return use(projects).map((project) => (
+    <ProjectCard key={project.id} project={project} {...card} />
+  ))
+}
+
+function NoProjects({ cloudOnly }: { cloudOnly: Promise<ProjectSummary[]> }) {
+  if (use(cloudOnly).length > 0) return null
+  return <Typography tone="muted">まだプロジェクトがありません。</Typography>
 }

@@ -9,11 +9,11 @@ import {
   type Rect,
   type ReferenceImage,
 } from '@manga/schema'
-import { memo } from 'react'
+import { memo, Suspense, use, useState } from 'react'
+import { type AssetState, loadAsset } from './asset'
 import { type Box, bodyPath, bubbleGeometry, clipTextBox, tailPath, textBox } from './bubble-shape'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
-import type { AssetState } from './use-asset-urls'
 import { COLUMN_PITCH, layoutVertical } from './vertical-text'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
@@ -36,12 +36,11 @@ interface PageLayerProps {
   showArt: boolean
   /** 参考画像のレイヤーを出すか。出しても `page.reference.visible` が false なら隠す */
   showReference: boolean
-  assets: ReadonlyMap<string, AssetState>
+  resolveAsset(ref: string): Promise<string>
   generating: Set<ID>
   selection: Selection
   /** clipPath の id の接頭辞。同じ文書に複数のキャンバスがあっても衝突しない値 */
   idPrefix: string
-  onArtError(ref: string): void
   onGenerate?(panelId: ID): void
 }
 
@@ -67,10 +66,9 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
       {props.showReference && page.reference && (
         <ReferenceView
           reference={page.reference}
-          asset={props.assets.get(page.reference.ref)}
+          resolveAsset={props.resolveAsset}
           width={width}
           height={height}
-          onError={props.onArtError}
         />
       )}
       {page.panels.map((panel, i) => {
@@ -83,7 +81,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
             width={width}
             height={height}
             artRef={props.showArt ? ref : undefined}
-            asset={props.showArt && ref !== undefined ? props.assets.get(ref) : undefined}
+            resolveAsset={props.resolveAsset}
             generating={props.generating.has(panel.id)}
             selected={isSelected(selection, 'panel', panel.id)}
             // 他のコマのフキダシを選んでもこのコマを描き直さないよう、自分のフキダシのときだけ渡す
@@ -93,7 +91,6 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
                 : undefined
             }
             clipId={`${props.idPrefix}-clip-${i}`}
-            onArtError={props.onArtError}
           />
         )
       })}
@@ -139,53 +136,47 @@ const PanelView = memo(function PanelView({
   width,
   height,
   artRef,
-  asset,
+  resolveAsset,
   generating,
   selected,
   selectedBubble,
   clipId,
-  onArtError,
 }: {
   panel: Panel
   width: number
   height: number
   artRef: string | undefined
-  asset: AssetState | undefined
+  resolveAsset(ref: string): Promise<string>
   generating: boolean
   selected: boolean
   selectedBubble: ID | undefined
   clipId: string
-  onArtError(ref: string): void
 }) {
   const rect = panelBox(panel, width, height)
   const outline = panelPolygon(panel, width, height)
   const points = polygonPoints(outline)
-  const url = asset && 'url' in asset ? asset.url : undefined
+  const placeholder = (
+    <g clipPath={`url(#${clipId})`}>
+      <Placeholder panel={panel} rect={rect} error={false} />
+    </g>
+  )
   return (
-    <g
-      className="ec-panel"
-      data-panel-id={panel.id}
-      data-generating={generating || undefined}
-      data-art-error={(asset && 'error' in asset) || undefined}
-    >
+    <g className="ec-panel" data-panel-id={panel.id} data-generating={generating || undefined}>
       <clipPath id={clipId}>
         <polygon points={points} />
       </clipPath>
-      {artRef !== undefined && url !== undefined ? (
-        <image
-          href={url}
-          x={rect.x}
-          y={rect.y}
-          width={rect.w}
-          height={rect.h}
-          preserveAspectRatio="xMidYMid slice"
-          clipPath={`url(#${clipId})`}
-          onError={() => onArtError(artRef)}
-        />
+      {artRef === undefined ? (
+        placeholder
       ) : (
-        <g clipPath={`url(#${clipId})`}>
-          <Placeholder panel={panel} rect={rect} error={asset !== undefined && 'error' in asset} />
-        </g>
+        <Suspense fallback={placeholder}>
+          <PanelArt
+            key={artRef}
+            panel={panel}
+            rect={rect}
+            clipId={clipId}
+            loaded={loadAsset(resolveAsset, artRef)}
+          />
+        </Suspense>
       )}
       <PanelNumber order={panel.order} outline={outline} />
       {/* 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く */}
@@ -214,6 +205,40 @@ const PanelView = memo(function PanelView({
     </g>
   )
 })
+
+/** コマの絵。解決か読み込みに失敗したら、エラーを添えたプレースホルダーに戻す */
+function PanelArt({
+  panel,
+  rect,
+  clipId,
+  loaded,
+}: {
+  panel: Panel
+  rect: Box
+  clipId: string
+  loaded: Promise<AssetState>
+}) {
+  const asset = use(loaded)
+  const [broken, setBroken] = useState(false)
+  if ('error' in asset || broken)
+    return (
+      <g clipPath={`url(#${clipId})`} data-art-error="">
+        <Placeholder panel={panel} rect={rect} error />
+      </g>
+    )
+  return (
+    <image
+      href={asset.url}
+      x={rect.x}
+      y={rect.y}
+      width={rect.w}
+      height={rect.h}
+      preserveAspectRatio="xMidYMid slice"
+      clipPath={`url(#${clipId})`}
+      onError={() => setBroken(true)}
+    />
+  )
+}
 
 /** コマの上に重ねるスピナーと生成ボタン */
 const PanelOverlay = memo(function PanelOverlay({
@@ -253,35 +278,57 @@ const PanelOverlay = memo(function PanelOverlay({
  */
 function ReferenceView({
   reference,
-  asset,
+  resolveAsset,
   width,
   height,
-  onError,
 }: {
   reference: ReferenceImage
-  asset: AssetState | undefined
+  resolveAsset(ref: string): Promise<string>
   width: number
   height: number
-  onError(ref: string): void
 }) {
-  const url = asset && 'url' in asset ? asset.url : undefined
   return (
-    <g data-layer="reference" data-reference-error={(asset && 'error' in asset) || undefined}>
-      {url !== undefined && (
-        <image
-          href={url}
-          x={0}
-          y={0}
+    <g data-layer="reference">
+      <Suspense>
+        <ReferenceArt
+          key={reference.ref}
+          reference={reference}
+          loaded={loadAsset(resolveAsset, reference.ref)}
           width={width}
           height={height}
-          preserveAspectRatio="xMidYMid meet"
-          opacity={reference.opacity}
-          visibility={reference.visible ? 'visible' : 'hidden'}
-          pointerEvents="none"
-          onError={() => onError(reference.ref)}
         />
-      )}
+      </Suspense>
     </g>
+  )
+}
+
+function ReferenceArt({
+  reference,
+  loaded,
+  width,
+  height,
+}: {
+  reference: ReferenceImage
+  loaded: Promise<AssetState>
+  width: number
+  height: number
+}) {
+  const asset = use(loaded)
+  const [broken, setBroken] = useState(false)
+  if ('error' in asset || broken) return null
+  return (
+    <image
+      href={asset.url}
+      x={0}
+      y={0}
+      width={width}
+      height={height}
+      preserveAspectRatio="xMidYMid meet"
+      opacity={reference.opacity}
+      visibility={reference.visible ? 'visible' : 'hidden'}
+      pointerEvents="none"
+      onError={() => setBroken(true)}
+    />
   )
 }
 

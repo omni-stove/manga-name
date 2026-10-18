@@ -1,8 +1,10 @@
 import {
   type Character,
+  createLayoutTemplate,
   createPage,
   type Episode,
   type ID,
+  type LayoutTemplate,
   newId,
   type Page,
   type PageTemplate,
@@ -50,12 +52,72 @@ export function artStatus(page: Page): ArtStatus {
   return '一部'
 }
 
-export const PAGE_TEMPLATES: readonly { value: PageTemplate; label: string }[] = [
+const PAGE_TEMPLATES: readonly { value: PageTemplate; label: string }[] = [
   { value: '2rows', label: '2 段' },
   { value: '3rows', label: '3 段' },
   { value: '4rows', label: '4 段' },
   { value: 'blank', label: '白紙' },
 ]
+
+/**
+ * ページを足すときのテンプレートの選択肢。組み込み（PAGE_TEMPLATES）の後に、登録したコマ割りを登録順に並べる。
+ * 登録したものの value はその id
+ */
+export function templateOptions(
+  project: Pick<Project, 'layoutTemplates'>,
+): { value: string; label: string; registered: boolean }[] {
+  return [
+    ...PAGE_TEMPLATES.map((t) => ({ ...t, registered: false })),
+    ...(project.layoutTemplates ?? []).map((t) => ({
+      value: t.id,
+      label: t.name,
+      registered: true,
+    })),
+  ]
+}
+
+/** templateOptions の value をテンプレートに戻す。登録したコマ割りが消えていれば throw */
+export function resolveTemplate(
+  project: Pick<Project, 'layoutTemplates'>,
+  value: string,
+): PageTemplate | LayoutTemplate {
+  const builtIn = PAGE_TEMPLATES.find((t) => t.value === value)
+  if (builtIn) return builtIn.value
+  const registered = project.layoutTemplates?.find((t) => t.id === value)
+  if (!registered) throw new Error('テンプレートが見つかりません。選び直してください')
+  return registered
+}
+
+/** ページのコマ割りを name のテンプレートとして末尾に登録する。コマが無いページと空の名前は throw */
+export function addLayoutTemplatePatch(
+  project: Project,
+  pageId: ID,
+  name: string,
+): { patch: Patch; template: LayoutTemplate } {
+  const found = findPage(project, pageId)
+  if (!found) throw new Error(`page ${pageId} is not in project ${project.id}`)
+  if (found.page.panels.length === 0) throw new Error('コマが無いページは登録できません')
+  if (!name.trim()) throw new Error('名前を入れてください')
+  const template = createLayoutTemplate(found.page, name)
+  // 登録が無いプロジェクトは layoutTemplates を持たないので、配列ごと足す
+  const patch: Patch = project.layoutTemplates
+    ? [{ op: 'add', path: '/layoutTemplates/-', value: template }]
+    : [{ op: 'add', path: '/layoutTemplates', value: [template] }]
+  return { patch, template }
+}
+
+/** 登録したコマ割りを消す。最後の 1 つなら layoutTemplates ごと消す。無ければ空の patch */
+export function removeLayoutTemplatePatch(project: Project, templateId: ID): Patch {
+  const templates = project.layoutTemplates ?? []
+  const index = templates.findIndex((t) => t.id === templateId)
+  if (index < 0) return []
+  return [
+    {
+      op: 'remove',
+      path: templates.length === 1 ? '/layoutTemplates' : `/layoutTemplates/${index}`,
+    },
+  ]
+}
 
 const newEpisode = (project: Project, pages: Page[] = []): Episode => ({
   id: newId(),
@@ -92,7 +154,7 @@ export function removeEpisodePatch(project: Project, episodeId: ID): Patch {
  */
 export function addPagePatch(
   project: Project,
-  template: PageTemplate,
+  template: PageTemplate | LayoutTemplate,
   episodeId?: ID,
 ): { patch: Patch; page: Page } {
   const page = createPage(template, project.settings.direction)
@@ -333,6 +395,50 @@ if (import.meta.vitest) {
       store.applyPatch(removePagePatch(store.get(), firstPage().id))
       expect(store.get().episodes[0]?.pages).toEqual([])
       expect(removePagePatch(store.get(), firstPage().id)).toEqual([])
+    })
+  })
+
+  describe('layout templates', () => {
+    test('register a page layout, add a page from it, and remove it', () => {
+      const store = storeOf(structuredClone(sample))
+      const source = store.get().episodes[0]?.pages[0]
+      if (!source) throw new Error('fixture に page がない')
+      const first = addLayoutTemplatePatch(store.get(), source.id, ' 6 コマ ')
+      store.applyPatch(first.patch)
+      const second = addLayoutTemplatePatch(store.get(), source.id, '別名')
+      store.applyPatch(second.patch)
+      expect(ProjectSchema.safeParse(store.get()).success).toBe(true)
+      expect(store.get().layoutTemplates?.map((t) => t.name)).toEqual(['6 コマ', '別名'])
+      expect(templateOptions(store.get()).at(-2)).toEqual({
+        value: first.template.id,
+        label: '6 コマ',
+        registered: true,
+      })
+
+      const template = resolveTemplate(store.get(), first.template.id)
+      store.applyPatch(addPagePatch(store.get(), template).patch)
+      const added = store.get().episodes[0]?.pages.at(-1)
+      expect(added?.panels.map((p) => p.rect)).toEqual(source.panels.map((p) => p.rect))
+      expect(added?.panels.every((p) => p.bubbles.length === 0)).toBe(true)
+      expect(resolveTemplate(store.get(), '2rows')).toBe('2rows')
+
+      store.applyPatch(removeLayoutTemplatePatch(store.get(), first.template.id))
+      expect(store.get().layoutTemplates?.map((t) => t.id)).toEqual([second.template.id])
+      store.applyPatch(removeLayoutTemplatePatch(store.get(), second.template.id))
+      expect(store.get().layoutTemplates).toBeUndefined()
+      expect(removeLayoutTemplatePatch(store.get(), second.template.id)).toEqual([])
+      expect(() => resolveTemplate(store.get(), first.template.id)).toThrow('見つかりません')
+    })
+
+    test('refuses a page without panels and an empty name', () => {
+      const store = storeOf(createEmptyProject('t'))
+      const { page } = addPagePatch(store.get(), 'blank')
+      store.applyPatch(addPagePatch(store.get(), 'blank').patch)
+      const blank = store.get().episodes[0]?.pages[0]
+      if (!blank) throw new Error('page を足せていない')
+      expect(() => addLayoutTemplatePatch(store.get(), blank.id, 'a')).toThrow('コマが無い')
+      expect(() => addLayoutTemplatePatch(sample, firstPage().id, ' ')).toThrow('名前')
+      expect(() => addLayoutTemplatePatch(sample, page.id, 'a')).toThrow()
     })
   })
 

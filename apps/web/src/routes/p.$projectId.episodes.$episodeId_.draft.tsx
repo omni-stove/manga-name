@@ -1,5 +1,5 @@
 import { BUBBLE_SHAPES } from '@manga/inspector'
-import type { Character, PagePlan, PageTemplate, PlanLine, Project } from '@manga/schema'
+import type { Character, PagePlan, PlanLine, Project } from '@manga/schema'
 import {
   Button,
   Checkbox,
@@ -14,6 +14,7 @@ import {
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import common from '../common.module.css'
+import { TemplateSelect, useTemplateChoice } from '../layout-templates'
 import {
   abortable,
   MAX_PAGE_COUNT,
@@ -24,7 +25,7 @@ import {
   plannedPage,
   planRequest,
 } from '../page-plan'
-import { appendPagesPatch, PAGE_TEMPLATES } from '../project-ops'
+import { appendPagesPatch, resolveTemplate } from '../project-ops'
 import { errorMessage } from '../route-error'
 import { FailureAlert } from '../sign-in'
 import { useProject } from '../use-project'
@@ -45,7 +46,7 @@ type Phase =
 /**
  * 「脚本から下書き」のページ。脚本、ページ数、トーンから `llmProvider.planPages` でページ割り
  * （ページごとの流れ、登場キャラ、セリフ）を作り、全ページを並べて直せる形で見せる。脚本のセリフで
- * どのページにも入っていないものは一覧で知らせる。確かめた割り振りはテンプレートのページにし、
+ * どのページにも入っていないものは一覧で知らせる。確かめた割り振りはテンプレート（登録したコマ割りも選べる）のページにし、
  * セリフはコマのフキダシにして、エピソードの末尾に `source: 'ai'` の 1 回の applyPatch で足す。
  * ページを離れると進行中の要求を abort し、後から届いた応答は捨てる
  */
@@ -58,7 +59,7 @@ function ScriptDraft() {
   const [script, setScript] = useState('')
   const [pageCountText, setPageCountText] = useState('')
   const [tone, setTone] = useState('')
-  const [template, setTemplate] = useState<PageTemplate>('3rows')
+  const [template, setTemplate] = useTemplateChoice(project)
   const [phase, setPhase] = useState<Phase>({ kind: 'input' })
   const [plans, setPlans] = useState<PagePlan[]>([])
   /** ページ割りを作ったときの脚本とページ数。後から脚本の欄を直しても、抜けの比べ先は変えない */
@@ -105,10 +106,11 @@ function ScriptDraft() {
   }
 
   const append = () => {
-    const pages = plans.map((p) =>
-      plannedPage(normalizePlan(p, project.characters), template, project),
-    )
     try {
+      const layout = resolveTemplate(project, template)
+      const pages = plans.map((p) =>
+        plannedPage(normalizePlan(p, project.characters), layout, project),
+      )
       store.applyPatch(appendPagesPatch(store.get(), pages, episodeId), {
         source: 'ai',
         label: '脚本から下書き',
@@ -241,18 +243,7 @@ function ScriptDraft() {
                 <Typography>
                   {plans.length} ページ / セリフ {lineCount}
                 </Typography>
-                <Select
-                  label="テンプレート"
-                  inline
-                  value={template}
-                  onChange={(e) => setTemplate(e.currentTarget.value as PageTemplate)}
-                >
-                  {PAGE_TEMPLATES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </Select>
+                <TemplateSelect project={project} value={template} onChange={setTemplate} />
                 <Button type="submit" variant="primary" disabled={isRunning}>
                   {plans.length} ページを追加
                 </Button>

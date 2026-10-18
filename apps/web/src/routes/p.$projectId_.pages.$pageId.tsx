@@ -71,6 +71,7 @@ import {
   settingsInspectorPatch,
   vectorPatch,
 } from '../inspector-ops'
+import { LayoutTemplateForm } from '../layout-templates'
 import {
   exportProjectJson,
   PROJECT_FILE_FILTERS,
@@ -572,6 +573,10 @@ function Editor() {
                 />
                 {referencePicker.input}
                 <BatchOptions batch={pageBatch} />
+              </details>
+              <details>
+                <summary>コマ割りを登録</summary>
+                <LayoutTemplateForm page={page} pageId={pageId} apply={apply} />
               </details>
               <PageCast
                 page={page}

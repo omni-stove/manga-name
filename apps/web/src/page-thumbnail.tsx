@@ -5,39 +5,31 @@ import {
   type ProjectSettings,
   panelOutline,
 } from '@manga/schema'
-import { useEffect, useId, useState } from 'react'
+import { Suspense, use, useId } from 'react'
 import styles from './page-thumbnail.module.css'
 
 type ResolveAsset = (ref: string) => Promise<string>
 
+// resolveAsset ごとに持つのは、差し替えたら解決し直す約束を守るため
+const urlsBy = new WeakMap<ResolveAsset, Map<string, Promise<string | null>>>()
+
 /**
- * `ref` を `resolve` で表示用 URL にし、使い終わったら解放する。解決できるまでと、解決できなかったときは undefined。
+ * `ref` を `resolve` で表示用 URL にする Promise。use() に渡す。同じ `resolve` と `ref` には同じ Promise を返す。
+ * 解決できなかったら `null` で満ち、reject はしない。URL の解放は `resolve` を作った側が持つ
  */
-function useAssetUrl(resolve: ResolveAsset, ref: string | undefined): string | undefined {
-  const [resolved, setResolved] = useState<{ ref: string; url: string }>()
-  useEffect(() => {
-    if (ref === undefined) return
-    let cancelled = false
-    let url: string | undefined
-    resolve(ref).then(
-      (u) => {
-        if (cancelled) {
-          URL.revokeObjectURL(u)
-          return
-        }
-        url = u
-        setResolved({ ref, url: u })
-      },
-      () => {
-        // 別の端末のローカルにしか無い画像は解決できない。コマの塗りだけ残す
-      },
-    )
-    return () => {
-      cancelled = true
-      if (url !== undefined) URL.revokeObjectURL(url)
-    }
-  }, [resolve, ref])
-  return resolved !== undefined && resolved.ref === ref ? resolved.url : undefined
+function assetUrl(resolve: ResolveAsset, ref: string): Promise<string | null> {
+  let cache = urlsBy.get(resolve)
+  if (!cache) {
+    cache = new Map()
+    urlsBy.set(resolve, cache)
+  }
+  let url = cache.get(ref)
+  if (!url) {
+    // 別の端末のローカルにしか無い画像は解決できない。コマの塗りだけ残す
+    url = resolve(ref).catch(() => null)
+    cache.set(ref, url)
+  }
+  return url
 }
 
 const noAsset: ResolveAsset = () => Promise.reject(new Error('no asset resolver'))
@@ -54,7 +46,28 @@ function PanelArt({
   h: number
   resolveAsset: ResolveAsset
 }) {
-  const url = useAssetUrl(resolveAsset, currentArt(panel)?.ref)
+  const ref = currentArt(panel)?.ref
+  const fill = <polygon points={outlinePoints(panel, w, h)} className={styles.art} />
+  if (ref === undefined) return fill
+  return (
+    <Suspense fallback={fill}>
+      <PanelImage key={ref} panel={panel} w={w} h={h} url={assetUrl(resolveAsset, ref)} />
+    </Suspense>
+  )
+}
+
+function PanelImage({
+  panel,
+  w,
+  h,
+  url: loaded,
+}: {
+  panel: Panel
+  w: number
+  h: number
+  url: Promise<string | null>
+}) {
+  const url = use(loaded)
   const clipId = `thumb${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   const box = {
     x: panel.rect.x * w,
@@ -62,8 +75,7 @@ function PanelArt({
     width: panel.rect.w * w,
     height: panel.rect.h * h,
   }
-  if (url === undefined)
-    return <polygon points={outlinePoints(panel, w, h)} className={styles.art} />
+  if (url === null) return <polygon points={outlinePoints(panel, w, h)} className={styles.art} />
   // 入れ子の svg ははみ出しを切るので、slice で埋めた絵がコマを囲む矩形の外に出ない。多角形のコマはさらに輪郭で切る
   return (
     <svg {...box} role="img" aria-label="コマの絵">

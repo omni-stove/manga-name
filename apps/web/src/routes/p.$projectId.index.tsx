@@ -6,6 +6,7 @@ import common from '../common.module.css'
 import { PageThumbnail } from '../page-thumbnail'
 import { addEpisodePatch, removeEpisodePatch } from '../project-ops'
 import { RemoveEpisodeDialog } from '../remove-episode-dialog'
+import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
 import styles from './pages.module.css'
 
@@ -18,6 +19,7 @@ function EpisodeList() {
   const { projectId } = Route.useParams()
   const { store } = projectRoute.useLoaderData()
   const { library } = Route.useRouteContext()
+  const resolveAsset = useAssetResolver(library.resolveAsset)
   const project = useProject(store)
   const { apply, error } = useApplyPatch(store)
   const navigate = useNavigate()
@@ -67,7 +69,7 @@ function EpisodeList() {
                     <PageThumbnail
                       page={first}
                       pageSize={project.settings.pageSize}
-                      resolveAsset={library.resolveAsset}
+                      resolveAsset={resolveAsset}
                     />
                   ) : (
                     <div
