@@ -379,6 +379,11 @@ const StrokeLine = memo(function StrokeLine({
   )
 })
 
+// React Compiler 1.0 が Highlight の中の Math.max でコード生成に失敗するので、コンポーネントの外で計算する
+function highlightRadius(weight: number): number {
+  return Math.max(focusRadius(weight), 1.5)
+}
+
 /** ホバー中の要素の輪郭。選択中の要素には出さない */
 function Highlight({
   page,
@@ -429,7 +434,7 @@ function Highlight({
     const c = toPagePoint(at.panel, width, height, focus.pos)
     return (
       <g data-layer="highlight" data-hovered-id={target.id}>
-        <circle cx={c.x} cy={c.y} r={Math.max(focusRadius(focus.weight), 1.5)} {...stroke} />
+        <circle cx={c.x} cy={c.y} r={highlightRadius(focus.weight)} {...stroke} />
       </g>
     )
   }

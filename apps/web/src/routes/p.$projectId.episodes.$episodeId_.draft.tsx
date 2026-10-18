@@ -94,11 +94,9 @@ function ScriptDraft() {
       setPhase({ kind: 'plan' })
     } catch (e) {
       // 中止とページを離れたときは、そちらの操作が画面を決める
-      if (controller.signal.aborted) return
-      setPhase({ kind: 'failed', error: e })
-    } finally {
-      if (running.current === controller) running.current = null
+      if (!controller.signal.aborted) setPhase({ kind: 'failed', error: e })
     }
+    if (running.current === controller) running.current = null
   }
 
   const stop = () => {

@@ -236,18 +236,23 @@ const LEGEND: readonly {
 
 const LEGEND_STATUS: readonly FocusStatus[] = ['ok', 'weak', 'miss']
 
-function Legend({ y }: { y: number }) {
+function legendStarts(labels: readonly string[]): number[] {
   let x = 0
-  const step = (label: string) => {
+  return labels.map((label) => {
     const at = x
     x += LEGEND_SWATCH + 1 + label.length * LABEL_SIZE * 0.9 + 3
     return at
-  }
+  })
+}
+
+function Legend({ y }: { y: number }) {
+  const labels = LEGEND.map((l) => l.label())
+  const starts = legendStarts([...labels, ...LEGEND_STATUS])
   return (
     <g data-diagnosis="legend" fontFamily={FONT_FAMILY} fontSize={LABEL_SIZE}>
-      {LEGEND.map((l) => {
-        const label = l.label()
-        const at = step(label)
+      {LEGEND.map((l, i) => {
+        const label = labels[i] as string
+        const at = starts[i] as number
         return (
           <g key={l.key}>
             <line
@@ -271,8 +276,8 @@ function Legend({ y }: { y: number }) {
           </g>
         )
       })}
-      {LEGEND_STATUS.map((s) => {
-        const at = step(s)
+      {LEGEND_STATUS.map((s, i) => {
+        const at = starts[LEGEND.length + i] as number
         return (
           <text
             key={s}

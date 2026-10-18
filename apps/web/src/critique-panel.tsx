@@ -2,7 +2,7 @@ import type { CritiqueResponse, LlmProvider } from '@manga/ai'
 import { m } from '@manga/i18n'
 import type { ID, Page, PageDiagnosis, Patch, ProjectSettings } from '@manga/schema'
 import { Button, Typography, XStack, YStack } from '@manga/ui'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import {
   applySuggestion,
   critiqueRequest,
@@ -64,19 +64,18 @@ const counts = (diagnosis: PageDiagnosis): Counts => ({
  * 絵のあるコマに提案を入れたら、そのコマの再生成を促す。ページを替えるときは key で作り直す
  */
 export function CritiquePanel(props: CritiquePanelProps) {
-  const { store, page, pageId, diagnosis, llmProvider, canEdit, generating } = props
+  const { store, page, pageId, diagnosis, llmProvider, canEdit, generating, onPreview } = props
   const [consultation, setConsultation] = useState<Consultation>({ status: 'idle' })
   const [applyError, setApplyError] = useState<string>()
   const [regenerate, setRegenerate] = useState<Regenerate[]>([])
   const requestId = useRef(0)
-  const onPreview = useRef(props.onPreview)
-  onPreview.current = props.onPreview
+  const clearPreview = useEffectEvent(() => onPreview(null))
 
   // ページを離れたら仮適用を消し、遅れて届いた応答を捨てる
   useEffect(
     () => () => {
       requestId.current++
-      onPreview.current(null)
+      clearPreview()
     },
     [],
   )
@@ -87,7 +86,7 @@ export function CritiquePanel(props: CritiquePanelProps) {
     setConsultation({ status: 'loading' })
     setApplyError(undefined)
     setRegenerate([])
-    onPreview.current(null)
+    onPreview(null)
     try {
       const response = await llmProvider.critique(critiqueRequest(page, diagnosis))
       if (requestId.current === id) setConsultation({ status: 'done', response, before })
@@ -99,7 +98,7 @@ export function CritiquePanel(props: CritiquePanelProps) {
   const apply = (suggestion: Suggestion, index: number) => {
     try {
       const patch = applySuggestion(store, pageId, suggestion)
-      onPreview.current(null)
+      onPreview(null)
       setApplyError(undefined)
       const drawn = touchedPanelIds(page, patch).flatMap((panelId) => {
         const artId = page.panels.find((p) => p.id === panelId)?.artId
@@ -142,7 +141,7 @@ export function CritiquePanel(props: CritiquePanelProps) {
           generating={generating}
           regenerate={regenerate}
           applyError={applyError}
-          onPreview={(patch) => onPreview.current(patch)}
+          onPreview={onPreview}
           onApply={apply}
           onGenerate={props.onGenerate}
           onDismiss={(panelId) =>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /**
  * `resolve` を EditorCanvas や PageThumbnail の resolveAsset として渡せる形にする。
@@ -8,27 +8,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 export function useAssetResolver(
   resolve: (ref: string) => Promise<string>,
 ): (ref: string) => Promise<string> {
-  const [generation, setGeneration] = useState(0)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: generation は cache を作り直すためだけの依存
-  const { cache, resolveAsset } = useMemo(() => {
-    const cache = new Map<string, Promise<string>>()
-    const resolveAsset = (ref: string) => {
-      let url = cache.get(ref)
-      if (!url) {
-        url = resolve(ref)
-        cache.set(ref, url)
-        // 失敗した ref は次の呼び出しで解決し直す
-        url.catch(() => cache.delete(ref))
-      }
-      return url
-    }
-    return { cache, resolveAsset }
-  }, [resolve, generation])
+  const [resolver, setResolver] = useState(() => cachedResolver(resolve))
+  if (resolver.resolve !== resolve) setResolver(cachedResolver(resolve))
+  const { cache } = resolver
 
   const released = useRef<Map<string, Promise<string>> | null>(null)
   useEffect(() => {
     // StrictMode は cleanup 後に同じ cache で effect を再実行する。解放済みの URL を覚えた Promise が use() 側に残らないよう、その時だけ別の関数に差し替える
-    if (released.current === cache) setGeneration((g) => g + 1)
+    if (released.current === cache) setResolver(cachedResolver(resolve))
     return () => {
       for (const url of cache.values())
         url.then(
@@ -38,7 +25,22 @@ export function useAssetResolver(
       cache.clear()
       released.current = cache
     }
-  }, [cache])
+  }, [cache, resolve])
 
-  return resolveAsset
+  return resolver.resolveAsset
+}
+
+function cachedResolver(resolve: (ref: string) => Promise<string>) {
+  const cache = new Map<string, Promise<string>>()
+  const resolveAsset = (ref: string) => {
+    let url = cache.get(ref)
+    if (!url) {
+      url = resolve(ref)
+      cache.set(ref, url)
+      // 失敗した ref は次の呼び出しで解決し直す
+      url.catch(() => cache.delete(ref))
+    }
+    return url
+  }
+  return { resolve, cache, resolveAsset }
 }

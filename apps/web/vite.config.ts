@@ -1,7 +1,8 @@
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { compilerOptions } from '@manga/i18n/compiler-options'
+import babel from '@rolldown/plugin-babel'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
-import react from '@vitejs/plugin-react'
+import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
@@ -14,6 +15,10 @@ export default defineConfig({
       semicolons: false,
     }),
     react(),
+    // plugin-react の compiler オプションは Rust 移植で experimental なので、安定版の Babel プラグインを使う。
+    // コンパイルできないコンポーネントは黙って最適化から外れ、Biome の useReactCompiler も構文の未対応は拾わないので、ビルドを落とす。
+    // @babel/core を 7 に留めるのは、babel-plugin-react-compiler 1.0 が Babel 8 の AST では分割代入の既定値を扱えないため
+    babel({ presets: [reactCompilerPreset({ panicThreshold: 'all_errors' })] }),
     // messages/*.json を変えたら dev サーバーのまま作り直すため。install 時の生成だけだと古いまま残る
     paraglideVitePlugin(compilerOptions),
   ],

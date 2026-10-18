@@ -78,9 +78,8 @@ function NewCharacter() {
       }
     } catch (err) {
       setFailure({ failure: stage, error: err })
-    } finally {
-      setBusy(undefined)
     }
+    setBusy(undefined)
   }
 
   return (

@@ -16,10 +16,14 @@
     "check": "mise run check"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@rolldown/plugin-babel": "^0.2.4",
+    "@types/node": "^26.6.5",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@vitest/coverage-v8": "catalog:",
+    "babel-plugin-react-compiler": "^1.0.0",
     "knip": "^6.41.0",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "@types/node": "^26.6.5",
-    "@vitest/coverage-v8": "catalog:"
+    "vitest": "catalog:"
   }
 }

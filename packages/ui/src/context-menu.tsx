@@ -1,4 +1,11 @@
-import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  type KeyboardEvent,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import styles from './context-menu.module.css'
 
 export interface ContextMenuItem {
@@ -30,8 +37,7 @@ interface ContextMenuProps {
 export function ContextMenu({ label, x, y, items, onClose }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ x, y })
-  const latestClose = useRef(onClose)
-  latestClose.current = onClose
+  const close = useEffectEvent(() => onClose())
 
   // 項目へのフォーカスより先に控え、閉じたときに戻す。戻さないとフォーカスが body に落ち、キャンバスのキー操作が効かなくなる
   useLayoutEffect(() => {
@@ -53,7 +59,6 @@ export function ContextMenu({ label, x, y, items, onClose }: ContextMenuProps) {
   }, [x, y])
 
   useEffect(() => {
-    const close = () => latestClose.current()
     const onPointerDown = (e: PointerEvent) => {
       if (!(e.target instanceof Node && ref.current?.contains(e.target))) close()
     }

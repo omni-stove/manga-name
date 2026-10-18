@@ -61,9 +61,8 @@ function MembersView({
       await reload()
     } catch (e) {
       setError(errorMessage(e))
-    } finally {
-      setBusy(false)
     }
+    setBusy(false)
   }
 
   if (members === null) {
