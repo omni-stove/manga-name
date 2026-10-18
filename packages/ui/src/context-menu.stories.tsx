@@ -45,3 +45,23 @@ export const EscapeCloses: Story = {
     await expect(undo).not.toHaveBeenCalled()
   },
 }
+
+export const RadioItems: Story = {
+  args: {
+    label: 'フキダシの形',
+    items: [
+      { label: '普通', checked: true, onSelect: fn() },
+      { label: '叫び', checked: false, onSelect: fn() },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('menuitemradio', { name: /普通/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    await expect(canvas.getByRole('menuitemradio', { name: /叫び/ })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    )
+  },
+}

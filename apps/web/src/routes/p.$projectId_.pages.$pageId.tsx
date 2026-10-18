@@ -3,6 +3,7 @@ import {
   type CanvasMenuRequest,
   EditorCanvas,
   type Layers,
+  removePatch,
   type ScribbleTool,
   type Selection,
   type Tool,
@@ -37,6 +38,7 @@ import {
   Button,
   Checkbox,
   ContextMenu,
+  type ContextMenuItem,
   IconButton,
   SegmentedControl,
   type SegmentedOption,
@@ -50,6 +52,7 @@ import { createFileRoute, Link, notFound, useNavigate, useParams } from '@tansta
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
+import { elementMenuItems, shapeMenuItems, toolMenuItems } from '../canvas-menu'
 import { CollaborationBar, PeerBadge, peerColor, usePeers } from '../collaboration-view'
 import { previewPage } from '../critique'
 import { CritiquePanel } from '../critique-panel'
@@ -172,6 +175,29 @@ interface HintToggle {
   set(panelId: ID, use: boolean): void
 }
 
+/** 開いている右クリックメニュー。`shapes` はフキダシの形を選ぶメニューに切り替えたあと */
+type OpenMenu = CanvasMenuRequest & { shapes?: boolean }
+
+const MENU_LABELS: Record<NonNullable<Selection>['kind'], () => string> = {
+  panel: m.web_editor_menu_panel,
+  bubble: m.web_editor_menu_bubble,
+  focus: m.web_editor_menu_focus,
+  vector: m.web_editor_menu_vector,
+}
+
+/** 要素 root の Patch を Project root に */
+function elementPatch(
+  project: Project,
+  pageId: ID,
+  target: NonNullable<Selection>,
+  patch: Patch,
+): Patch {
+  if (target.kind === 'panel') return panelPatch(project, pageId, target.id, patch)
+  if (target.kind === 'bubble') return bubblePatch(project, pageId, target.id, patch)
+  if (target.kind === 'focus') return focusPatch(project, pageId, target.id, patch)
+  return vectorPatch(project, pageId, target.id, patch)
+}
+
 /** 書き出しダイアログが開いているか。`{ done, total }` は書き出し中で、描き終えたページ数と対象のページ数 */
 type Exporting = 'closed' | 'dialog' | { done: number; total: number }
 
@@ -226,7 +252,7 @@ function Editor() {
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
   const [inspectorExpanded, setInspectorExpanded] = useStoredFlag('manga.inspector.expanded', true)
-  const [menu, setMenu] = useState<CanvasMenuRequest | null>(null)
+  const [menu, setMenu] = useState<OpenMenu | null>(null)
   const [registeringLayout, setRegisteringLayout] = useState(false)
   const canUndo = useStore(store.state, (s) => s.canUndo)
   const canRedo = useStore(store.state, (s) => s.canRedo)
@@ -331,6 +357,73 @@ function Editor() {
     } finally {
       setExporting('closed')
     }
+  }
+  const undoItems: ContextMenuItem[] = [
+    { label: 'Undo', shortcut: `${MOD}Z`, disabled: !canUndo, onSelect: () => store.undo() },
+    { label: 'Redo', shortcut: `${MOD}Shift+Z`, disabled: !canRedo, onSelect: () => store.redo() },
+  ]
+  const pageMenuItems: (ContextMenuItem | 'separator')[] = [
+    ...undoItems,
+    'separator',
+    { label: m.web_editor_menu_fit(), onSelect: () => menu?.fit() },
+    ...(canEdit
+      ? [
+          { label: m.web_editor_menu_import_reference(), onSelect: referencePicker.open },
+          {
+            label: m.web_editor_menu_register_layout(),
+            disabled: page.panels.length === 0,
+            onSelect: () => setRegisteringLayout(true),
+          },
+        ]
+      : []),
+    ...(tools.length > 1 ? ['separator' as const, ...toolMenuItems(tools, tool, setTool)] : []),
+    'separator',
+    {
+      label: m.web_editor_prev_page(),
+      shortcut: PREV_PAGE_KEY,
+      disabled: !prevPage,
+      onSelect: () => prevPage && openPage(prevPage.id),
+    },
+    {
+      label: m.web_editor_next_page(),
+      shortcut: NEXT_PAGE_KEY,
+      disabled: !nextPage,
+      onSelect: () => nextPage && openPage(nextPage.id),
+    },
+  ]
+  // 編集できない人には要素への操作が無いので、要素の上でもページのメニューを出す
+  const menuTarget = canEdit && menu?.target && hasElement(page, menu.target) ? menu.target : null
+  const menuContext = {
+    page,
+    tools,
+    generating,
+    edit: (label: string, target: NonNullable<Selection>, patch: Patch) =>
+      apply(label, (p) => elementPatch(p, pageId, target, patch)),
+    remove: (target: NonNullable<Selection>) => {
+      const removed = apply(m.web_editor_history_remove_element(), (p) => {
+        const current = findPage(p, pageId)
+        if (!current) throw new Error(m.web_common_page_gone())
+        return pagePatch(p, pageId, removePatch(current.page, target))
+      })
+      if (removed) setSelection(null)
+    },
+    generate: (panelId: ID) => generate(panelId),
+    setTool,
+    openShapes: () => menu && setMenu({ ...menu, shapes: true }),
+  }
+  const shapesOf =
+    menuTarget?.kind === 'bubble' && menu?.shapes ? findBubble(page, menuTarget.id) : undefined
+  const openMenu = menu && {
+    label: shapesOf
+      ? m.web_editor_menu_bubble_shapes()
+      : menuTarget
+        ? MENU_LABELS[menuTarget.kind]()
+        : m.web_editor_page_menu(),
+    items: shapesOf
+      ? shapeMenuItems(shapesOf.bubble, menuContext)
+      : menuTarget
+        ? [...elementMenuItems(menuTarget, menuContext), 'separator' as const, ...undoItems]
+        : pageMenuItems,
   }
   const exportProject = () => {
     setExporting('closed')
@@ -448,51 +541,15 @@ function Editor() {
           )}
         </XStack>
       </XStack>
-      {menu && (
+      {menu && openMenu && (
         <ContextMenu
-          label={m.web_editor_page_menu()}
+          // 形のメニューに切り替えたら付け直し、最初の項目にフォーカスを移す
+          key={openMenu.label}
+          label={openMenu.label}
           x={menu.x}
           y={menu.y}
           onClose={() => setMenu(null)}
-          items={[
-            {
-              label: 'Undo',
-              shortcut: `${MOD}Z`,
-              disabled: !canUndo,
-              onSelect: () => store.undo(),
-            },
-            {
-              label: 'Redo',
-              shortcut: `${MOD}Shift+Z`,
-              disabled: !canRedo,
-              onSelect: () => store.redo(),
-            },
-            'separator',
-            { label: m.web_editor_menu_fit(), onSelect: menu.fit },
-            ...(canEdit
-              ? [
-                  { label: m.web_editor_menu_import_reference(), onSelect: referencePicker.open },
-                  {
-                    label: m.web_editor_menu_register_layout(),
-                    disabled: page.panels.length === 0,
-                    onSelect: () => setRegisteringLayout(true),
-                  },
-                ]
-              : []),
-            'separator',
-            {
-              label: m.web_editor_prev_page(),
-              shortcut: PREV_PAGE_KEY,
-              disabled: !prevPage,
-              onSelect: () => prevPage && openPage(prevPage.id),
-            },
-            {
-              label: m.web_editor_next_page(),
-              shortcut: NEXT_PAGE_KEY,
-              disabled: !nextPage,
-              onSelect: () => nextPage && openPage(nextPage.id),
-            },
-          ]}
+          items={openMenu.items}
         />
       )}
       {registeringLayout && (

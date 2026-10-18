@@ -45,6 +45,11 @@
   font-size: var(--text-xs);
 }
 
+.check {
+  display: inline-block;
+  width: 1.25em;
+}
+
 .separator {
   margin: var(--space-4) 0;
   border: 0;

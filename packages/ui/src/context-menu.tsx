@@ -6,6 +6,8 @@ export interface ContextMenuItem {
   /** 右端に添えるキーの表記。押せるようにはしない */
   shortcut?: string
   disabled?: boolean
+  /** 選べる値の並びで、今の値なら true。渡すと `menuitemradio` になり、先頭に印を付ける */
+  checked?: boolean
   onSelect(): void
 }
 
@@ -98,7 +100,9 @@ export function ContextMenu({ label, x, y, items, onClose }: ContextMenuProps) {
           <button
             key={item.label}
             type="button"
-            role="menuitem"
+            {...(item.checked === undefined
+              ? { role: 'menuitem' }
+              : { role: 'menuitemradio', 'aria-checked': item.checked })}
             tabIndex={-1}
             disabled={item.disabled}
             className={styles.item}
@@ -107,7 +111,14 @@ export function ContextMenu({ label, x, y, items, onClose }: ContextMenuProps) {
               item.onSelect()
             }}
           >
-            <span>{item.label}</span>
+            <span>
+              {item.checked !== undefined && (
+                <span aria-hidden className={styles.check}>
+                  {item.checked ? '✓' : ''}
+                </span>
+              )}
+              {item.label}
+            </span>
             {item.shortcut && <kbd className={styles.shortcut}>{item.shortcut}</kbd>}
           </button>
         ),
@@ -117,5 +128,5 @@ export function ContextMenu({ label, x, y, items, onClose }: ContextMenuProps) {
 }
 
 function enabledItems(menu: HTMLElement): HTMLButtonElement[] {
-  return [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')]
+  return [...menu.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]:not(:disabled)')]
 }

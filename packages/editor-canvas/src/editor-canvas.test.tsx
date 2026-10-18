@@ -884,9 +884,10 @@ describe('zoom and pan', () => {
     expect(viewBox(panelTool)).toEqual([base.x, base.y, base.w, base.h])
   })
 
-  test('right-clicking where nothing is asks for the menu, which can fit the page back', async () => {
+  test('right-clicking asks for the menu of what was pressed, which can fit the page back', async () => {
     const onContextMenu = vi.fn()
-    const svg = await render({ onContextMenu })
+    const onSelect = vi.fn()
+    const svg = await render({ onContextMenu, onSelect, selection: { kind: 'panel', id: 'pn_2' } })
     layout(svg)
     const menuAt = (at: { x: number; y: number }) => {
       const e = pointer('contextmenu', { id: 1, button: 2, ...at })
@@ -896,16 +897,42 @@ describe('zoom and pan', () => {
     // 作業台と、pn_2 と pn_3 の隙間
     expect(menuAt({ x: 4, y: 4 }).defaultPrevented).toBe(true)
     expect(menuAt(clientAt(0.49, 0.4)).defaultPrevented).toBe(true)
-    expect(onContextMenu).toHaveBeenCalledTimes(2)
-    expect(onContextMenu).toHaveBeenLastCalledWith(expect.objectContaining(clientAt(0.49, 0.4)))
-    // コマの上ではブラウザのメニューのまま
-    expect(menuAt(clientAt(0.75, 0.4)).defaultPrevented).toBe(false)
-    expect(onContextMenu).toHaveBeenCalledTimes(2)
+    expect(onContextMenu).toHaveBeenLastCalledWith(
+      expect.objectContaining({ ...clientAt(0.49, 0.4), target: null }),
+    )
+    expect(onSelect).not.toHaveBeenCalled()
+    // 選んでいるコマはそのまま
+    expect(menuAt(clientAt(0.75, 0.4)).defaultPrevented).toBe(true)
+    expect(onContextMenu).toHaveBeenLastCalledWith(
+      expect.objectContaining({ target: { kind: 'panel', id: 'pn_2' } }),
+    )
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(onContextMenu).toHaveBeenCalledTimes(3)
 
     drag(svg, { x: 4, y: 4 }, { x: 44, y: 24 })
     expect(viewBox(svg)).not.toEqual([base.x, base.y, base.w, base.h])
     act(() => onContextMenu.mock.calls[0]?.[0].fit())
     expect(viewBox(svg)).toEqual([base.x, base.y, base.w, base.h])
+  })
+
+  test('right-clicking an element that is not selected selects it first', async () => {
+    const onContextMenu = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ onContextMenu, onSelect })
+    layout(svg)
+    fire(svg, pointer('contextmenu', { id: 1, button: 2, ...clientAt(0.75, 0.4) }))
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'panel', id: 'pn_2' })
+    expect(onContextMenu).toHaveBeenCalledWith(
+      expect.objectContaining({ target: { kind: 'panel', id: 'pn_2' } }),
+    )
+  })
+
+  test('without onContextMenu the browser menu stays', async () => {
+    const svg = await render()
+    layout(svg)
+    const e = pointer('contextmenu', { id: 1, button: 2, ...clientAt(0.75, 0.4) })
+    fire(svg, e)
+    expect(e.defaultPrevented).toBe(false)
   })
 
   test('one finger from where nothing is pans, and a second finger turns it into a pinch', async () => {
