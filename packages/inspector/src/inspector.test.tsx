@@ -82,7 +82,11 @@ const choose = (select: HTMLSelectElement, value: string) =>
   })
 
 const buttonNamed = (container: HTMLElement, name: string) =>
-  must([...container.querySelectorAll('button')].find((b) => b.textContent === name))
+  must(
+    [...container.querySelectorAll('button')].find(
+      (b) => (b.getAttribute('aria-label') ?? b.textContent) === name,
+    ),
+  )
 
 describe('PanelInspector', () => {
   test('lists the cast with why each character is in it and adds or removes only cast entries', async () => {
@@ -170,7 +174,7 @@ describe('PanelInspector', () => {
     }
     const removeOf = (container: HTMLElement, id: string) =>
       [...container.querySelectorAll(`[data-art-id="${id}"] button`)].find(
-        (b) => b.textContent === '削除',
+        (b) => b.getAttribute('aria-label') === '削除',
       ) as HTMLButtonElement | undefined
 
     const { container, root } = await render(<PanelInspector {...props} />)
@@ -617,9 +621,11 @@ describe('PageInspector', () => {
     )
     expect(container.querySelector('input[type="range"]')).toBeNull()
     expect(container.querySelector('input[type="checkbox"]')).toBeNull()
-    expect([...container.querySelectorAll('button')].some((b) => b.textContent === '削除')).toBe(
-      false,
-    )
+    expect(
+      [...container.querySelectorAll('button')].some(
+        (b) => b.getAttribute('aria-label') === '削除',
+      ),
+    ).toBe(false)
     await act(async () => buttonNamed(container, '読み込む').click())
     expect(onPickReference).toHaveBeenCalledTimes(1)
   })

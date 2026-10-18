@@ -1,6 +1,6 @@
 import { m } from '@manga/i18n'
 import type { Episode, ID } from '@manga/schema'
-import { Button, Typography, XStack, YStack } from '@manga/ui'
+import { Button, RemoveButton, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import common from '../common.module.css'
@@ -87,9 +87,11 @@ function EpisodeList() {
                 {m.web_episodes_page_count({ count: episode.pages.length })}
               </Typography>
               <XStack as="span" wrap gap={6} className={common.cardActions}>
-                <Button size="small" variant="ghost" onClick={() => setRemoving(episode)}>
-                  {m.web_common_delete()}
-                </Button>
+                <RemoveButton
+                  size="small"
+                  label={m.web_common_delete()}
+                  onClick={() => setRemoving(episode)}
+                />
               </XStack>
             </YStack>
           )

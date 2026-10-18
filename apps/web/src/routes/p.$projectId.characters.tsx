@@ -1,6 +1,6 @@
 import { m } from '@manga/i18n'
 import type { Character } from '@manga/schema'
-import { Button, ConfirmDialog, Typography, XStack, YStack } from '@manga/ui'
+import { Button, ConfirmDialog, RemoveButton, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { CharacterPane } from '../character-pane'
@@ -61,9 +61,11 @@ function CharacterList() {
               {m.web_characters_usage({ count: characterUsage(project, character.id) })}
             </Typography>
             <XStack as="span" wrap gap={6} className={common.cardActions}>
-              <Button size="small" variant="ghost" onClick={() => setRemoving(character)}>
-                {m.web_common_delete()}
-              </Button>
+              <RemoveButton
+                size="small"
+                label={m.web_common_delete()}
+                onClick={() => setRemoving(character)}
+              />
             </XStack>
           </YStack>
         ))}
