@@ -13,6 +13,18 @@ import {
   StrengthSchema,
   VectorKindSchema,
 } from '@manga/schema'
+import { critiqueSystem } from './critique.prompt'
+import {
+  CHARACTER_ART_TAIL,
+  NAME_NEGATIVE,
+  NAME_STYLE,
+  PAGE_ART_HEAD,
+  PANEL_ART_TAIL,
+  PLACEMENT_GUIDE,
+} from './image.prompt'
+import { suggestLayoutSystem } from './layout.prompt'
+import { LINE_FIELDS } from './lines.prompt'
+import { planPagesSystem } from './plan-pages.prompt'
 import {
   type CharacterArtRequest,
   type CritiqueRequest,
@@ -43,25 +55,6 @@ export type PanelArtPromptRequest = Omit<
   /** 再生成時の修正指示 */
   instruction?: string
 }
-
-/**
- * 画像生成の画風。ネームは本原稿の下描きの前段なので、構図と芝居が読める線だけを描かせ、
- * 顔の造作、服、背景、陰影の描き込みは本原稿に残す
- */
-const NAME_STYLE =
-  'manga storyboard thumbnail (nemu), a quick rough sketch in loose grey pencil on white paper. Draw only what the composition and acting need: simple figures with round heads, a cross line for the face direction and just the eyes and mouth for the expression; the pose and gesture carry the acting. Hint the setting with a horizon line or a few perspective lines, or leave it blank. Keep hair and clothes to their silhouette, leave everything else for the final art.'
-
-/** 画風で抑えきれない描き込みと、配置図の白い領域（フキダシ）に入れられがちな文字を除く */
-const NAME_NEGATIVE =
-  'color, shading, hatching, screentone, solid blacks, inked or clean line art, detailed background, detailed hair or clothing, finished illustration, text, letters, speech bubbles'
-
-/** 画像生成の固定の末尾。配置図の白い領域（フキダシ）を空けさせる */
-const PANEL_ART_TAIL =
-  'no text, no letters, no speech bubbles, leave the white areas of the layout image empty'
-
-/** 配置図に重ねた配置の印（render の drawPlacement）の読み方。印そのものは描かせない */
-const PLACEMENT_GUIDE =
-  'the coloured marks on the layout image are a placement guide, not part of the art: each circle marks where its labelled subject goes (blue: a character or face, orange: a key object, purple: a sound effect), and a larger circle means the subject is drawn larger and more prominent; green arrows show the direction of a gaze or a motion, thicker ones stronger. Do not draw the circles, dots, arrows or labels.'
 
 const hasPlacement = (panel: Panel) => panel.focusPoints.length > 0 || panel.vectors.length > 0
 
@@ -141,10 +134,6 @@ export type PageArtPromptRequest = Omit<
   'layoutPng' | 'referencePng' | 'characterRefs'
 >
 
-/** ページ全体の生成の説明。配置図のどこが何かと、コマの枠を動かさないこと */
-const PAGE_ART_HEAD =
-  'one whole manga page drawn to the layout image: each grey area is a panel and the black lines are its border. Draw every panel inside its border and keep the gutters between panels white.'
-
 const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from + size).toFixed(2)}`
 
 /**
@@ -179,10 +168,6 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
   }
 }
 
-/** キャラの参照画像の固定の末尾。コマの生成で参照しやすいよう、1 人を全身で正面から描かせる */
-const CHARACTER_ART_TAIL =
-  'character reference sheet, a single character, full body, front view, standing, plain white background, no text, no letters'
-
 /** キャラの参照画像のプロンプト。画風、名前と外見、固定の末尾を改行で連結する */
 function characterArt(req: CharacterArtRequest): { prompt: string; negative: string } {
   const { name, appearance } = req.character
@@ -203,12 +188,6 @@ function characterList(characters: Character[]): string[] {
   ]
 }
 
-/** セリフ（PlanLine）の話し手と形の決め方。ページ割りとコマ割りの提案で同じにする */
-const LINE_FIELDS = [
-  '  - speakerId: the id of the listed character who says it. Omit it for narration or when the speaker is not listed.',
-  '  - shape: normal for speech, shout for shouting, thought for inner monologue, whisper for whispering, tremble for a shaky or frightened voice, electronic for a voice through a phone, TV, radio or machine, urchin for a flustered or startled inner voice, none for a murmur written straight on the art, narration for narration and captions.',
-]
-
 /**
  * ページ割りのプロンプト。脚本をページに割り振り、ページごとの流れ、脚本の原文、登場キャラ、セリフの配列を返させる。
  * system に出力規則と JSON Schema、user にキャラ一覧、ページ数、脚本を入れる。
@@ -216,19 +195,7 @@ const LINE_FIELDS = [
 function planPages(req: PagePlanRequest): LlmPrompt {
   const schema = pagePlanJsonSchema()
 
-  const system = [
-    'You are a manga story editor. Split the script into pages and say roughly what happens on each page.',
-    'Reply with the pages in reading order as JSON that conforms to the JSON Schema below.',
-    '- note: what happens on the page, in the language of the script. Keep every action, stage direction, setting, sound effect and prop the script gives for this part; do not summarise them away.',
-    '- script: the part of the script that falls on the page, copied verbatim with its speaker names, brackets, stage directions and line breaks. Joined in page order, the scripts of all pages give back the whole script. Leave out a tone note in parentheses at the very top of the script.',
-    '- cast: the ids of the listed characters who appear on the page. Empty when none appears.',
-    '- lines: every line of dialogue, inner monologue and narration that falls on the page, in reading order, copied verbatim without the speaker name and brackets.',
-    ...LINE_FIELDS,
-    '- Every line of the script goes on exactly one page. Never drop, merge, shorten or paraphrase a line.',
-    '- Give the key scenes more pages and keep transitions short. Put a reveal at the top of a page, not at the bottom.',
-    'JSON Schema:',
-    JSON.stringify(schema),
-  ].join('\n')
+  const system = planPagesSystem(schema)
 
   const user = [
     ...characterList(req.project.characters),
@@ -256,21 +223,7 @@ const POINT_JSON_SCHEMA: JsonSchema = {
 function suggestLayout(req: LayoutSuggestionRequest): LlmPrompt {
   const schema = layoutSuggestionJsonSchema()
 
-  const system = [
-    'You are a manga storyboard artist. Lay out one manga page from its script as rows of panels.',
-    'Reply with one JSON object that conforms to the JSON Schema below, and nothing else.',
-    'Rules:',
-    `- Give ${LAYOUT_OPTIONS} options that read differently, for example with a different number of panels or a different beat in the largest panel. summary is one Japanese sentence on what the option stresses.`,
-    '- rows go from the top of the page down, and the panels of a row are in reading order. height is the size of a row relative to the other rows, width the size of a panel relative to the other panels of its row.',
-    '- Use 3 to 7 panels unless the script calls for a splash page, and at most 3 panels in a row. Give the most important beat the largest panel, and end the page on a beat that makes the reader turn the page.',
-    '- note: what the panel shows, in the language of the script: who does what, where. One or two sentences.',
-    '- camera: the shot in the language of the script, such as ロング, バストアップ, アップ, 俯瞰 or あおり. Omit it when the shot does not matter.',
-    '- lines: the lines of dialogue, inner monologue and narration that fall in the panel, in reading order, copied verbatim without the speaker name and brackets.',
-    ...LINE_FIELDS,
-    '- In every option, every line of the script goes in exactly one panel. Never drop, merge, shorten or paraphrase a line. Give a panel with many or long lines enough room.',
-    'JSON Schema:',
-    JSON.stringify(schema),
-  ].join('\n')
+  const system = suggestLayoutSystem(LAYOUT_OPTIONS, schema)
 
   const user = [...characterList(req.project.characters), 'Script:', req.script].join('\n')
 
@@ -353,23 +306,7 @@ function critique(req: CritiqueRequest): LlmPrompt {
   const { page, diagnosis } = req
   const schema = critiqueJsonSchema()
 
-  const system = [
-    'You are a manga editor who reviews how the eye flows across a storyboard page.',
-    'You get the elements of one page and the result of an automatic diagnosis of the reading path. Explain the problems and propose fixes.',
-    'Reply with one JSON object that conforms to the JSON Schema below, and nothing else.',
-    'Rules:',
-    '- Write summary and every message in Japanese. summary is two or three sentences about the overall eye flow and the main problems.',
-    `- Give at most ${MAX_SUGGESTIONS} suggestions, most effective first. Each suggestion is one fix described by message and applied by patch.`,
-    '- patch is a JSON Patch (RFC 6902) whose paths start at the page, for example /panels/3/focusPoints/1/pos. Indexes are the array indexes given in brackets, not panel order.',
-    '- Only these operations are allowed: replace the pos of a focus point (/panels/<i>/focusPoints/<j>/pos), replace the pos of a bubble (/panels/<i>/bubbles/<j>/pos), and add a vector (/panels/<i>/vectors/-).',
-    '- Never change panel rect, panel shape, panel order, or anything else. Never remove anything.',
-    '- Coordinates are between 0 and 1, relative to the panel, with the origin at the top left.',
-    '- A new vector has a new unique id that starts with "vc_ai_". Its sourceFocusId and targetFocusId, when set, are ids of focus points or bubbles of the same panel.',
-    '- Prefer fixes that turn "miss" and "weak" focus points into "ok", that is, move them closer to the sweep path or add a strong vector toward them.',
-    '- When the page has no problems, return an empty suggestions array.',
-    'JSON Schema:',
-    JSON.stringify(schema),
-  ].join('\n')
+  const system = critiqueSystem(MAX_SUGGESTIONS, schema)
 
   const panels = page.panels.flatMap((panel, i) => [
     `[${i}] panel ${panel.id}, order ${panel.order}, rect x ${panel.rect.x.toFixed(2)} y ${panel.rect.y.toFixed(2)} w ${panel.rect.w.toFixed(2)} h ${panel.rect.h.toFixed(2)}${panel.camera ? `, camera ${panel.camera}` : ''}`,
@@ -599,7 +536,7 @@ if (import.meta.vitest) {
   test('critique embeds its JSON Schema and limits the patch to pos and vectors', () => {
     const { system, schema } = prompts.critique({ page, diagnosis })
     expect(system).toContain(`JSON Schema:\n${JSON.stringify(schema)}`)
-    expect(system).toContain('Never change panel rect')
+    expect(system).toContain(`at most ${MAX_SUGGESTIONS}`)
     const ops = JSON.stringify(schema)
     expect(ops).toContain('"enum":["replace"]')
     expect(ops).toContain('"enum":["add"]')
