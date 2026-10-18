@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as NewRouteImport } from './routes/new'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as PProjectIdRouteImport } from './routes/p.$projectId'
 import { Route as PProjectIdIndexRouteImport } from './routes/p.$projectId.index'
@@ -28,6 +29,11 @@ const IndexRoute = IndexRouteImport.update({
 const NewRoute = NewRouteImport.update({
   id: '/new',
   path: '/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
@@ -76,6 +82,7 @@ const PProjectIdEpisodesEpisodeIdDraftRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/new': typeof NewRoute
+  '/onboarding': typeof OnboardingRoute
   '/invite/$token': typeof InviteTokenRoute
   '/p/$projectId': typeof PProjectIdRouteWithChildren
   '/p/$projectId/characters': typeof PProjectIdCharactersRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/new': typeof NewRoute
+  '/onboarding': typeof OnboardingRoute
   '/invite/$token': typeof InviteTokenRoute
   '/p/$projectId/characters': typeof PProjectIdCharactersRoute
   '/p/$projectId': typeof PProjectIdIndexRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/new': typeof NewRoute
+  '/onboarding': typeof OnboardingRoute
   '/invite/$token': typeof InviteTokenRoute
   '/p/$projectId': typeof PProjectIdRouteWithChildren
   '/p/$projectId/characters': typeof PProjectIdCharactersRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/new'
+    | '/onboarding'
     | '/invite/$token'
     | '/p/$projectId'
     | '/p/$projectId/characters'
@@ -126,6 +136,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/new'
+    | '/onboarding'
     | '/invite/$token'
     | '/p/$projectId/characters'
     | '/p/$projectId'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/new'
+    | '/onboarding'
     | '/invite/$token'
     | '/p/$projectId'
     | '/p/$projectId/characters'
@@ -150,6 +162,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   NewRoute: typeof NewRoute
+  OnboardingRoute: typeof OnboardingRoute
   InviteTokenRoute: typeof InviteTokenRoute
   PProjectIdRoute: typeof PProjectIdRouteWithChildren
   PProjectIdPagesPageIdRoute: typeof PProjectIdPagesPageIdRoute
@@ -169,6 +182,13 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/new'
       preLoaderRoute: typeof NewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite/$token': {
@@ -253,6 +273,7 @@ const PProjectIdRouteWithChildren = PProjectIdRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   NewRoute: NewRoute,
+  OnboardingRoute: OnboardingRoute,
   InviteTokenRoute: InviteTokenRoute,
   PProjectIdRoute: PProjectIdRouteWithChildren,
   PProjectIdPagesPageIdRoute: PProjectIdPagesPageIdRoute,

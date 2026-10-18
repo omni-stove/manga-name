@@ -49,6 +49,7 @@ export function SideNav() {
           icon={<GridIcon />}
           label={m.web_project_list()}
         />
+        <NavItem to="/onboarding" icon={<SparkIcon />} label={m.web_nav_onboarding()} />
       </YStack>
       {opened && (
         <ProjectItems
@@ -193,6 +194,13 @@ const GridIcon = () => (
     <rect x="13.5" y="4" width="6.5" height="6.5" rx="1" />
     <rect x="4" y="13.5" width="6.5" height="6.5" rx="1" />
     <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1" />
+  </Icon>
+)
+
+const SparkIcon = () => (
+  <Icon>
+    <path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1-5.1-1.9 5.1-1.9z" />
+    <path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
   </Icon>
 )
 
