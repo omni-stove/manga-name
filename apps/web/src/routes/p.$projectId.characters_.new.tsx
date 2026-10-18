@@ -1,6 +1,6 @@
 import { Button, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { REFERENCE_ACCEPT } from '../file-picker'
 import { addCharacterPatch, type CharacterFields } from '../project-ops'
 import { toCharacterImage } from '../reference-image'
@@ -34,6 +34,15 @@ function NewCharacter() {
   const [busy, setBusy] = useState<'adding' | 'generating'>()
   const [failure, setFailure] = useState<{ failure: string; error: unknown }>()
 
+  // 生成中にキャンセルや別ページへの移動で離れたら、終わっても追加も遷移もしない
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
   const backToList = () => navigate({ to: '/p/$projectId/characters', params: { projectId } })
 
   const add = async (fields: CharacterFields, image: File | undefined) => {
@@ -60,6 +69,7 @@ function NewCharacter() {
         await toCharacterImage(source),
         'reference',
       )
+      if (!mounted.current) return
       if (apply('キャラクターを追加', () => addCharacterPatch({ ...fields, referenceRef }).patch)) {
         await backToList()
       }
