@@ -45,8 +45,18 @@ export type PageTemplate = 'blank' | '2rows' | '3rows' | '4rows'
 
 const ROWS = { blank: 0, '2rows': 2, '3rows': 3, '4rows': 4 } as const
 const COLUMNS = 2
-const MARGIN = 0.05
 const GUTTER = 0.02
+
+/**
+ * 内枠（基本枠）。ページ（仕上がり）に対する正規化座標で、中央に置く。B5 の投稿原稿の 182x257mm に対する
+ * 150x220mm で、他の判型でも同じ比率にする
+ */
+export const INNER_FRAME = {
+  x: (1 - 150 / 182) / 2,
+  y: (1 - 220 / 257) / 2,
+  w: 150 / 182,
+  h: 220 / 257,
+} as const
 
 const emptyPanel = (order: number, rect: Panel['rect']): Panel => ({
   id: newId(),
@@ -60,8 +70,8 @@ const emptyPanel = (order: number, rect: Panel['rect']): Panel => ({
 
 /**
  * テンプレートからページを作る。登録したコマ割り（LayoutTemplate）なら、その枠と order のまま空のコマを置き、
- * direction は見ない。組み込みのテンプレートなら、行数ぶんの行を縦に並べ、各行を 2 列に割る。
- * コマは余白（MARGIN）とコマ間（GUTTER）を空けて重ならない。
+ * direction は見ない。組み込みのテンプレートなら、内枠（INNER_FRAME）を行数ぶんの行に縦に割り、
+ * 各行を 2 列に割る。コマはコマ間（GUTTER）を空けて重ならない。
  * order は行ごとに上から、行内は rtl なら右から、ltr なら左から振る。
  */
 export function createPage(
@@ -77,16 +87,15 @@ export function createPage(
   }
   const rows = ROWS[template]
   const panels: Panel[] = []
-  const inner = 1 - 2 * MARGIN
-  const h = (inner - GUTTER * (rows - 1)) / rows
-  const w = (inner - GUTTER * (COLUMNS - 1)) / COLUMNS
+  const h = (INNER_FRAME.h - GUTTER * (rows - 1)) / rows
+  const w = (INNER_FRAME.w - GUTTER * (COLUMNS - 1)) / COLUMNS
   for (let row = 0; row < rows; row++) {
     for (let k = 0; k < COLUMNS; k++) {
       const col = direction === 'rtl' ? COLUMNS - 1 - k : k
       panels.push(
         emptyPanel(panels.length + 1, {
-          x: MARGIN + col * (w + GUTTER),
-          y: MARGIN + row * (h + GUTTER),
+          x: INNER_FRAME.x + col * (w + GUTTER),
+          y: INNER_FRAME.y + row * (h + GUTTER),
           w,
           h,
         }),
@@ -189,6 +198,12 @@ if (import.meta.vitest) {
               expect(next.rect.y).toBeGreaterThan(p.rect.y)
             }
           })
+          const right = Math.max(...page.panels.map((p) => p.rect.x + p.rect.w))
+          const bottom = Math.max(...page.panels.map((p) => p.rect.y + p.rect.h))
+          expect(Math.min(...page.panels.map((p) => p.rect.x))).toBeCloseTo(INNER_FRAME.x)
+          expect(Math.min(...page.panels.map((p) => p.rect.y))).toBeCloseTo(INNER_FRAME.y)
+          expect(right).toBeCloseTo(INNER_FRAME.x + INNER_FRAME.w)
+          expect(bottom).toBeCloseTo(INNER_FRAME.y + INNER_FRAME.h)
         })
       }
     }

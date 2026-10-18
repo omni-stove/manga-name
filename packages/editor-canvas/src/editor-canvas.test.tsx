@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { fixtures, type Page, type Panel, type Patch, panelOutline } from '@manga/schema'
+import {
+  fixtures,
+  INNER_FRAME,
+  type Page,
+  type Panel,
+  type Patch,
+  panelOutline,
+} from '@manga/schema'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -116,6 +123,15 @@ describe('drawing the fixture', () => {
     const panel = must(samplePage.panels.find((p) => p.id === 'pn_3'))
     const edge = (panel.rect.x + panel.rect.w) * project.settings.pageSize.w
     const columns = [...svg.querySelectorAll('[data-bubble-id="bb_3"] tspan')]
+    expect(columns.length).toBeGreaterThan(0)
+    for (const column of columns) expect(Number(column.getAttribute('x'))).toBeLessThan(edge)
+  })
+
+  test('dialogue of a bubble past the inner frame sits inside the inner frame', async () => {
+    // bb_1 は裁ち切りのコマ pn_1 の右端寄りに置かれ、本体が内枠の右に出ている
+    const svg = await render()
+    const edge = (INNER_FRAME.x + INNER_FRAME.w) * project.settings.pageSize.w
+    const columns = [...svg.querySelectorAll('[data-bubble-id="bb_1"] tspan')]
     expect(columns.length).toBeGreaterThan(0)
     for (const column of columns) expect(Number(column.getAttribute('x'))).toBeLessThan(edge)
   })
