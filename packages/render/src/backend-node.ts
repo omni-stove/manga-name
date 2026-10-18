@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { createCanvas, GlobalFonts, loadImage } from '@napi-rs/canvas'
-import type { Backend } from './backend'
+import type { Backend } from './types'
 
 /** @napi-rs/canvas で描く Backend。Node のテストとベンチで使う */
 export function createNodeBackend(): Backend {

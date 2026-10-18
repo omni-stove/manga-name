@@ -1,17 +1,4 @@
-/** 1 枚のキャンバス。描き終えたら toPng で PNG にする */
-export interface Surface {
-  ctx: CanvasRenderingContext2D
-  width: number
-  height: number
-  toPng(): Promise<Blob>
-}
-
-/** 描画先の環境差を閉じ込める。ブラウザは OffscreenCanvas、Node は @napi-rs/canvas */
-export interface Backend {
-  createSurface(width: number, height: number): Surface
-  decodeImage(blob: Blob): Promise<CanvasImageSource>
-  registerFont(family: string, url: URL): Promise<void>
-}
+import type { Backend } from './types'
 
 export const FONT_FAMILY = 'Noto Sans JP'
 // Google Fonts の NotoSansJP[wght].ttf（SIL OFL 1.1、fonts/OFL.txt）

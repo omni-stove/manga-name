@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { ProjectStore } from './store/project-store'
+import type { ProjectStore } from './store/project-store-types'
 
 // 押すだけの input は文字を受けないので、フォーカスがあってもショートカットを効かせる
 const PRESSABLE_INPUTS = ['checkbox', 'radio', 'button', 'submit', 'reset']

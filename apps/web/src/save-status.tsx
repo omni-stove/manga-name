@@ -3,7 +3,7 @@ import { Button } from '@manga/ui'
 import { useStore } from 'zustand'
 import { errorMessage } from './route-error'
 import styles from './save-status.module.css'
-import type { SaveStatus, WebProjectStore } from './store/project-store'
+import type { SaveStatus, WebProjectStore } from './store/project-store-types'
 import { SyncStatusIndicator } from './sync-status'
 
 const LABEL: Record<SaveStatus, () => string> = {

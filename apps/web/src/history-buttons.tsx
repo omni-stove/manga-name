@@ -3,7 +3,7 @@ import { IconButton, XStack } from '@manga/ui'
 import type { ReactNode } from 'react'
 import { useStore } from 'zustand'
 import styles from './history-buttons.module.css'
-import type { WebProjectStore } from './store/project-store'
+import type { WebProjectStore } from './store/project-store-types'
 
 /** キーの表記に添える修飾キー */
 export const MOD =

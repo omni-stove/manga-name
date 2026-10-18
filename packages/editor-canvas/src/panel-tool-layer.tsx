@@ -111,10 +111,15 @@ export function PanelToolLayer({
   ].reduce<Slot[]>((acc, { labels }) => {
     const w = buttonWidth(labels)
     const prev = acc.at(-1)
-    if (!prev) return [{ x: left, y: bottom, w }]
+    if (!prev) {
+      acc.push({ x: left, y: bottom, w })
+      return acc
+    }
     const x = prev.x + prev.w + BUTTON_GAP
-    if (x + w <= right) return [...acc, { x, y: prev.y, w }]
-    return [...acc, { x: left, y: prev.y - BUTTON_H - BUTTON_GAP, w }]
+    acc.push(
+      x + w <= right ? { x, y: prev.y, w } : { x: left, y: prev.y - BUTTON_H - BUTTON_GAP, w },
+    )
+    return acc
   }, [])
   const [vertical, horizontal, cut, merge] = buttons as [Slot, Slot, Slot, Slot]
   return (

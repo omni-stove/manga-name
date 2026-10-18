@@ -9,7 +9,7 @@ import {
 import * as Y from 'yjs'
 import { createStore } from 'zustand/vanilla'
 import { toImmerPatch } from './json-patch'
-import type { ProjectStoreOptions, ProjectStoreState, WebProjectStore } from './project-store'
+import type { ProjectStoreOptions, ProjectStoreState, WebProjectStore } from './project-store-types'
 import { createSaveScheduler } from './save-scheduler'
 import { applyPatchToY, applyYEvents, writeYMap } from './yjs-mapping'
 

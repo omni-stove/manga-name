@@ -4,7 +4,6 @@ import * as encoding from 'lib0/encoding'
 import * as syncProtocol from 'y-protocols/sync'
 import * as Y from 'yjs'
 import { type ProjectRole, updateAllowed } from './access'
-import type { Env } from './env'
 import { readYDocSnapshot, writeYDocSnapshot } from './project-store'
 import { createRoomStorage, type RoomStorage } from './room-storage'
 
@@ -114,7 +113,8 @@ export async function restoreDoc(
 }
 
 /** ProjectRoom の中身。1 プロジェクトの Y.Doc を、接続中の WebSocket と DO storage と D1 に同期する */
-function createRoom(ctx: DurableObjectState, env: Env) {
+// env.ts が ProjectRoom を型に使うので、ここは env.ts の Env を import せずに大域の Cloudflare.Env を使う
+function createRoom(ctx: DurableObjectState, env: Cloudflare.Env) {
   const storage = createRoomStorage(ctx.storage)
   let opening: Promise<Y.Doc> | undefined
   let dirty = false
@@ -332,10 +332,10 @@ function createRoom(ctx: DurableObjectState, env: Env) {
  * 接続のロールで許されない更新（commenter の scribbles 以外、viewer のすべて）は当てずに CLOSE_FORBIDDEN で閉じる。
  * Durable Object はクラスでしか定義できないので、処理は createRoom に置いて委ねる。
  */
-export class ProjectRoom extends DurableObject<Env> {
+export class ProjectRoom extends DurableObject<Cloudflare.Env> {
   private readonly room: ReturnType<typeof createRoom>
 
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env)
     this.room = createRoom(ctx, env)
   }

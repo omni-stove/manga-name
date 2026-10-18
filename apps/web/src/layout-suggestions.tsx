@@ -16,7 +16,7 @@ import { PageThumbnail } from './page-thumbnail'
 import { findPage } from './project-ops'
 import { errorMessage } from './route-error'
 import { FailureAlert } from './sign-in'
-import type { ProjectStore } from './store/project-store'
+import type { ProjectStore } from './store/project-store-types'
 
 type Suggestion =
   | { status: 'idle' }

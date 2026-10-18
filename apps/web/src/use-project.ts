@@ -2,7 +2,7 @@ import type { Patch, Project } from '@manga/schema'
 import { useCallback, useState } from 'react'
 import { useStore } from 'zustand'
 import { errorMessage } from './route-error'
-import type { WebProjectStore } from './store/project-store'
+import type { WebProjectStore } from './store/project-store-types'
 
 export function useProject(store: WebProjectStore): Project {
   return useStore(store.state, (s) => s.project)

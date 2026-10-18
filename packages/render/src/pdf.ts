@@ -8,11 +8,11 @@ import {
   popGraphicsState,
   pushGraphicsState,
 } from 'pdf-lib'
-import { FONT_FAMILY, getBackend, loadFonts, type Surface } from './backend'
+import { FONT_FAMILY, getBackend, loadFonts } from './backend'
 import { pagePixelSize } from './geometry'
 import { drawPage } from './page'
 import { alphabeticY, wrapHorizontal } from './text'
-import type { RenderContext, RenderOptions } from './types'
+import type { RenderContext, RenderOptions, Surface } from './types'
 
 export interface ExportPdfOptions extends RenderOptions {
   pages: 'all' | ID[]

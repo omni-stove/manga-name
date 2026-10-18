@@ -32,7 +32,7 @@ import {
   templateOptions,
 } from '../project-ops'
 import { RemoveEpisodeDialog } from '../remove-episode-dialog'
-import type { ProjectStore } from '../store/project-store'
+import type { ProjectStore } from '../store/project-store-types'
 import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
 import styles from './pages.module.css'
