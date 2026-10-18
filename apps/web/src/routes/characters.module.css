@@ -2,22 +2,19 @@
   grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
 }
 
-.form {
-  display: grid;
-}
-
-.form > button {
-  justify-self: start;
-}
-
-.addSection {
-  margin-top: var(--space-24);
-}
-
 .add {
+  display: grid;
+  gap: var(--space-12);
   max-width: 28rem;
   padding: var(--space-14);
   border: 1px solid var(--border);
   border-radius: var(--radius-l);
   background: var(--surface-raised);
+}
+
+.fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
 }

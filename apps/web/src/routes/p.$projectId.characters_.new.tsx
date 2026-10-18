@@ -1,0 +1,136 @@
+import { Button, Input, Typography, XStack, YStack } from '@manga/ui'
+import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
+import { REFERENCE_ACCEPT } from '../file-picker'
+import { addCharacterPatch, type CharacterFields } from '../project-ops'
+import { toCharacterImage } from '../reference-image'
+import { FailureAlert } from '../sign-in'
+import { useApplyPatch, useProject } from '../use-project'
+import styles from './characters.module.css'
+
+export const Route = createFileRoute('/p/$projectId/characters_/new')({ component: NewCharacter })
+
+const projectRoute = getRouteApi('/p/$projectId')
+
+const FIELDS = [
+  { name: 'name', label: '名前', required: true },
+  { name: 'shortName', label: '略称', required: true },
+  { name: 'appearance', label: '外見（生成プロンプトに入る）', required: false },
+  { name: 'note', label: 'メモ', required: false },
+] as const
+
+/**
+ * キャラクターを追加するページ。参照画像を選べばそれを、選ばなければ名前と外見から
+ * `imageProvider.generateCharacterArt` で作った画像を、toCharacterImage で縮めて参照画像にする。
+ * 足せたらキャラクター一覧に戻り、失敗したら入力を残したまま理由を出す
+ */
+function NewCharacter() {
+  const { projectId } = Route.useParams()
+  const { store } = projectRoute.useLoaderData()
+  const { library, imageProvider } = Route.useRouteContext()
+  const project = useProject(store)
+  const { apply, error } = useApplyPatch(store)
+  const navigate = useNavigate()
+  const [busy, setBusy] = useState<'adding' | 'generating'>()
+  const [failure, setFailure] = useState<{ failure: string; error: unknown }>()
+
+  const backToList = () => navigate({ to: '/p/$projectId/characters', params: { projectId } })
+
+  const add = async (fields: CharacterFields, image: File | undefined) => {
+    setFailure(undefined)
+    setBusy(image ? 'adding' : 'generating')
+    let stage = 'キャラクターを追加できませんでした'
+    try {
+      const { character } = addCharacterPatch(fields)
+      let source: Blob
+      if (image) {
+        stage = '参照画像を読み込めませんでした'
+        source = image
+      } else {
+        stage = '参照画像を生成できませんでした'
+        source = (
+          await imageProvider.generateCharacterArt({
+            project: { settings: project.settings },
+            character,
+          })
+        ).image
+      }
+      const referenceRef = await library.putAsset(
+        projectId,
+        await toCharacterImage(source),
+        'reference',
+      )
+      if (apply('キャラクターを追加', () => addCharacterPatch({ ...fields, referenceRef }).patch)) {
+        await backToList()
+      }
+    } catch (err) {
+      setFailure({ failure: stage, error: err })
+    } finally {
+      setBusy(undefined)
+    }
+  }
+
+  return (
+    <YStack gap={12}>
+      <XStack wrap gap={12}>
+        <Link to="/p/$projectId/characters" params={{ projectId }}>
+          キャラクター一覧
+        </Link>
+        <Typography as="h1" variant="heading">
+          キャラクターを追加
+        </Typography>
+      </XStack>
+      <form
+        className={styles.add}
+        onSubmit={(e) => {
+          e.preventDefault()
+          const data = new FormData(e.currentTarget)
+          const text = (key: string) => String(data.get(key) ?? '')
+          const image = data.get('reference')
+          void add(
+            {
+              name: text('name'),
+              shortName: text('shortName'),
+              appearance: text('appearance'),
+              note: text('note'),
+            },
+            // 何も選ばないと空の File が入る
+            image instanceof File && image.size > 0 ? image : undefined,
+          )
+        }}
+      >
+        <YStack as="fieldset" gap={8} className={styles.fieldset} disabled={busy !== undefined}>
+          {FIELDS.map((field) => (
+            <Input
+              key={field.name}
+              label={field.label}
+              name={field.name}
+              required={field.required}
+            />
+          ))}
+          <Input
+            label="参照画像"
+            name="reference"
+            type="file"
+            accept={REFERENCE_ACCEPT}
+            hint="選ばなければ名前と外見から生成します"
+          />
+        </YStack>
+        {failure && <FailureAlert {...failure} signInButton={false} />}
+        {error && (
+          <Typography tone="alert" role="alert">
+            {error}
+          </Typography>
+        )}
+        <XStack wrap gap={8}>
+          <Button type="submit" size="small" variant="primary" disabled={busy !== undefined}>
+            {busy === 'generating' ? '生成中…' : busy === 'adding' ? '追加中…' : '追加'}
+          </Button>
+          <Button size="small" onClick={() => void backToList()}>
+            キャンセル
+          </Button>
+        </XStack>
+      </form>
+    </YStack>
+  )
+}
