@@ -1,12 +1,12 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { type LlmPrompt, type LlmProvider, prompts } from '@manga/ai'
-import type { CritiqueResponse, LayoutProposalResponse, PagePlanResponse } from '@manga/schema'
+import type { CritiqueResponse, PagePlan } from '@manga/schema'
 import { generateText, type JSONSchema7, jsonSchema, Output } from 'ai'
 
 const ANTHROPIC_LLM_MODEL = 'claude-haiku-5-5'
 
-/** 脚本 20,000 字から数十ページの提案を返しても、ページ割りで脚本を丸ごと書き写しても切れない上限 */
-const MAX_OUTPUT_TOKENS = 64_000
+/** 64 ページ分の流れと登場キャラを返しても切れない上限 */
+const MAX_PLAN_OUTPUT_TOKENS = 16_000
 /** 1 ページの講評と提案 5 件で切れない上限 */
 const MAX_CRITIQUE_OUTPUT_TOKENS = 8_000
 
@@ -15,14 +15,18 @@ export interface AnthropicLlmProviderOptions {
 }
 
 /**
- * AI SDK 経由で Anthropic `claude-haiku-5-5` に planPages、proposeLayout、critique をさせる LlmProvider。
+ * AI SDK 経由で Anthropic `claude-haiku-5-5` に planPages と critique をさせる LlmProvider。
  * prompts の system と user を送り、schema を構造化出力に渡して、応答の JSON をそのまま返す。
  * 型どおりかの検証と再試行は呼び出し側に任せる。JSON にならない応答や HTTP エラーは throw する。
  */
 export function createAnthropicLlmProvider(opts: AnthropicLlmProviderOptions): LlmProvider {
   const model = createAnthropic({ apiKey: opts.apiKey })(ANTHROPIC_LLM_MODEL)
 
-  async function generate<T>({ system, user, schema }: LlmPrompt, maxOutputTokens: number) {
+  async function generate<T>(
+    { system, user }: LlmPrompt,
+    spec: Output.Output<T>,
+    maxOutputTokens: number,
+  ) {
     const { output } = await generateText({
       model,
       system,
@@ -30,8 +34,7 @@ export function createAnthropicLlmProvider(opts: AnthropicLlmProviderOptions): L
       // AI SDK の再試行は切る。呼び出し側の再試行と重なると、1 要求で何度も課金されるため
       maxRetries: 0,
       maxOutputTokens,
-      // jsonSchema に validate を渡さないのは、範囲と参照整合まで見る Zod の検証を呼び出し側が持つため
-      output: Output.object({ schema: jsonSchema<T>(schema as JSONSchema7) }),
+      output: spec,
       providerOptions: {
         // ざっくり提案してざっくり直す用途なので、思考を浅くして費用と待ち時間を抑える
         anthropic: { structuredOutputMode: 'outputFormat', effort: 'low' },
@@ -40,11 +43,20 @@ export function createAnthropicLlmProvider(opts: AnthropicLlmProviderOptions): L
     return output
   }
 
+  // jsonSchema に validate を渡さないのは、範囲と参照整合まで見る Zod の検証を呼び出し側が持つため
+  const schemaOf = <T>(schema: LlmPrompt['schema']) => jsonSchema<T>(schema as JSONSchema7)
+
   return {
-    planPages: (req) => generate<PagePlanResponse>(prompts.planPages(req), MAX_OUTPUT_TOKENS),
-    proposeLayout: (req) =>
-      generate<LayoutProposalResponse>(prompts.proposeLayout(req), MAX_OUTPUT_TOKENS),
-    critique: (req) =>
-      generate<CritiqueResponse>(prompts.critique(req), MAX_CRITIQUE_OUTPUT_TOKENS),
+    planPages: (req) => {
+      const prompt = prompts.planPages(req)
+      // 構造化出力は根を object に限るので、AI SDK に { elements: [...] } で包ませて配列で受け取る
+      const element = schemaOf<PagePlan>(prompt.schema.items as LlmPrompt['schema'])
+      return generate(prompt, Output.array({ element }), MAX_PLAN_OUTPUT_TOKENS)
+    },
+    critique: (req) => {
+      const prompt = prompts.critique(req)
+      const schema = schemaOf<CritiqueResponse>(prompt.schema)
+      return generate(prompt, Output.object({ schema }), MAX_CRITIQUE_OUTPUT_TOKENS)
+    },
   }
 }

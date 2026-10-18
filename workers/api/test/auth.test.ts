@@ -26,10 +26,10 @@ async function seedSession(userId: string, token: string, expiresAt: number) {
 
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` })
 
-function proposeLayout(headers: Record<string, string>, target = env) {
+function planPages(headers: Record<string, string>, target = env) {
   const { settings, characters } = fixtures.samplePage01
   return app.request(
-    '/v1/ai/propose-layout',
+    '/v1/ai/plan-pages',
     {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...headers },
@@ -71,10 +71,10 @@ describe('Bearer token', () => {
 
   test('/v1/ai/* is authenticated and counted for the session user', async () => {
     await seedSession('u_alice', 'tok-alice', Date.now() + DAY)
-    expect((await proposeLayout({}, staging)).status).toBe(401)
-    expect((await proposeLayout(bearer('nope'), staging)).status).toBe(401)
+    expect((await planPages({}, staging)).status).toBe(401)
+    expect((await planPages(bearer('nope'), staging)).status).toBe(401)
 
-    expect((await proposeLayout(bearer('tok-alice'), staging)).status).toBe(200)
+    expect((await planPages(bearer('tok-alice'), staging)).status).toBe(200)
     const { results } = await env.DB.prepare('SELECT user_id FROM ai_usage').all()
     expect(results).toEqual([{ user_id: 'u_alice' }])
   })
@@ -85,7 +85,7 @@ describe('X-Debug-User', () => {
     expect(env.ENVIRONMENT).toBe('development')
     const headers = { [DEBUG_USER_HEADER]: 'alice' }
     expect((await app.request('/v1/projects', { headers }, env)).status).toBe(200)
-    expect((await proposeLayout(headers)).status).toBe(200)
+    expect((await planPages(headers)).status).toBe(200)
   })
 
   test('accepts up to 128 letters, digits and ._@+- and rejects anything else', async () => {
@@ -107,7 +107,7 @@ describe('X-Debug-User', () => {
     expect((await app.request('/v1/projects', { headers }, env)).status).toBe(401)
 
     const asBob = { ...bearer('tok-alice'), [DEBUG_USER_HEADER]: 'bob' }
-    expect((await proposeLayout(asBob)).status).toBe(200)
+    expect((await planPages(asBob)).status).toBe(200)
     const { results } = await env.DB.prepare('SELECT user_id FROM ai_usage').all()
     expect(results).toEqual([{ user_id: 'bob' }])
   })
@@ -115,13 +115,13 @@ describe('X-Debug-User', () => {
   test('is ignored outside development', async () => {
     const headers = { [DEBUG_USER_HEADER]: 'alice' }
     expect((await app.request('/v1/projects', { headers }, staging)).status).toBe(401)
-    expect((await proposeLayout(headers, staging)).status).toBe(401)
+    expect((await planPages(headers, staging)).status).toBe(401)
   })
 
   test('does not override the Bearer user outside development', async () => {
     await seedSession('u_alice', 'tok-alice', Date.now() + DAY)
     const headers = { ...bearer('tok-alice'), [DEBUG_USER_HEADER]: 'mallory' }
-    const res = await proposeLayout(headers, staging)
+    const res = await planPages(headers, staging)
     expect(res.status).toBe(200)
     const { results } = await env.DB.prepare('SELECT user_id FROM ai_usage').all()
     expect(results).toEqual([{ user_id: 'u_alice' }])

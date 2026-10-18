@@ -75,10 +75,7 @@ describe('POST /v1/ai/plan-pages', () => {
   })
 
   test('retries a plan that names an unknown character, then succeeds', async () => {
-    const unknown = async () => ({
-      pages: [{ note: 'n', cast: ['chr_missing'], script: 's' }],
-      rationale: 'r',
-    })
+    const unknown = async () => [{ note: 'n', cast: ['chr_missing'] }]
     const { provider, calls } = scripted([unknown, async () => aiFixtures.pagePlan])
     const res = await post(createApp({ llmProvider: () => provider }))
     expect(res.status).toBe(200)
@@ -87,7 +84,7 @@ describe('POST /v1/ai/plan-pages', () => {
   })
 
   test('502 after the retry still returns an invalid plan', async () => {
-    const empty = async () => ({ pages: [], rationale: 'r' })
+    const empty = async () => []
     const { provider, calls } = scripted([empty, empty])
     expect((await post(createApp({ llmProvider: () => provider }))).status).toBe(502)
     expect(calls).toHaveLength(2)

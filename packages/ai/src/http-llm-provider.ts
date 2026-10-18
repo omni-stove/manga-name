@@ -1,14 +1,9 @@
-import {
-  CritiqueResponseSchema,
-  LayoutProposalResponseSchema,
-  PagePlanResponseSchema,
-  readApiError,
-} from '@manga/schema'
+import { CritiqueResponseSchema, PagePlanResponseSchema, readApiError } from '@manga/schema'
 import { type HttpProviderOptions, SignInRequiredError } from './http-image-provider'
 import type { LlmProvider } from './provider'
 
 /**
- * Workers のプロキシ `POST /v1/ai/plan-pages`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique` に JSON を送る LlmProvider。
+ * Workers のプロキシ `POST /v1/ai/plan-pages`、`POST /v1/ai/critique` に JSON を送る LlmProvider。
  * 応答は `@manga/schema` で検証して返す。トークン無しと 401 は SignInRequiredError、
  * ほかの HTTP エラーは readApiError の Error（多くは ApiError）を、検証に通らない応答は Error を throw する。
  */
@@ -33,9 +28,6 @@ export function createHttpLlmProvider(opts: HttpProviderOptions): LlmProvider {
     async planPages(req) {
       return PagePlanResponseSchema.parse(await postJson('/v1/ai/plan-pages', req))
     },
-    async proposeLayout(req) {
-      return LayoutProposalResponseSchema.parse(await postJson('/v1/ai/propose-layout', req))
-    },
     async critique(req) {
       return CritiqueResponseSchema.parse(await postJson('/v1/ai/critique', req))
     },
@@ -52,14 +44,14 @@ if (import.meta.vitest) {
 
   afterEach(() => vi.unstubAllGlobals())
 
-  test('proposeLayout posts the request as JSON with the bearer token', async () => {
+  test('planPages posts the request as JSON with the bearer token and validates the reply', async () => {
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
       expect(JSON.parse(init.body as string)).toEqual(req)
       expect(init.headers).toMatchObject({
         authorization: 'Bearer tok',
         'content-type': 'application/json',
       })
-      return Response.json(aiFixtures.layoutProposal)
+      return Response.json(aiFixtures.pagePlan)
     })
     vi.stubGlobal('fetch', fetchMock)
 
@@ -67,40 +59,23 @@ if (import.meta.vitest) {
       baseUrl: 'https://api.example/',
       getToken: async () => 'tok',
     })
-    expect(await provider.proposeLayout(req)).toEqual(aiFixtures.layoutProposal)
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example/v1/ai/propose-layout')
+    expect(await provider.planPages(req)).toEqual(aiFixtures.pagePlan)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example/v1/ai/plan-pages')
   })
 
-  test('proposeLayout throws without a token, on HTTP errors and on invalid JSON', async () => {
+  test('planPages throws without a token, on HTTP errors and on invalid JSON', async () => {
     await expect(
-      createHttpLlmProvider({ baseUrl: 'x', getToken: async () => null }).proposeLayout(req),
+      createHttpLlmProvider({ baseUrl: 'x', getToken: async () => null }).planPages(req),
     ).rejects.toBeInstanceOf(SignInRequiredError)
 
     const provider = createHttpLlmProvider({ baseUrl: 'x', getToken: async () => 't' })
     vi.stubGlobal('fetch', async () => new Response('no', { status: 401 }))
-    await expect(provider.proposeLayout(req)).rejects.toBeInstanceOf(SignInRequiredError)
+    await expect(provider.planPages(req)).rejects.toBeInstanceOf(SignInRequiredError)
 
     vi.stubGlobal('fetch', async () => new Response('no', { status: 502 }))
-    await expect(provider.proposeLayout(req)).rejects.toThrow('502')
+    await expect(provider.planPages(req)).rejects.toThrow('502')
 
-    vi.stubGlobal('fetch', async () => Response.json({ pages: 'none' }))
-    await expect(provider.proposeLayout(req)).rejects.toThrow()
-  })
-
-  test('planPages posts to plan-pages and validates the reply', async () => {
-    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
-      expect(JSON.parse(init.body as string)).toEqual(req)
-      return Response.json(aiFixtures.pagePlan)
-    })
-    vi.stubGlobal('fetch', fetchMock)
-    const provider = createHttpLlmProvider({
-      baseUrl: 'https://api.example',
-      getToken: async () => 't',
-    })
-    expect(await provider.planPages(req)).toEqual(aiFixtures.pagePlan)
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example/v1/ai/plan-pages')
-
-    vi.stubGlobal('fetch', async () => Response.json({ pages: [], rationale: 'r' }))
+    vi.stubGlobal('fetch', async () => Response.json([]))
     await expect(provider.planPages(req)).rejects.toThrow()
   })
 
