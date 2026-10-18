@@ -2,6 +2,8 @@ import { env } from 'cloudflare:workers'
 import { fixtures } from '@manga/schema'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createApp } from '../src/app'
+import { INVITE_EMAIL_MISMATCH, INVITE_REQUIRED, validateSignUp } from '../src/auth'
+import { hashToken } from '../src/token'
 import { DEBUG_USER_HEADER } from '../src/user'
 
 const app = createApp()
@@ -45,6 +47,7 @@ beforeEach(async () => {
     env.DB.prepare('DELETE FROM auth_users'),
     env.DB.prepare('DELETE FROM ai_usage'),
     env.DB.prepare('DELETE FROM rate_limits'),
+    env.DB.prepare('DELETE FROM project_invites'),
   ])
 })
 
@@ -125,5 +128,51 @@ describe('X-Debug-User', () => {
     expect(res.status).toBe(200)
     const { results } = await env.DB.prepare('SELECT user_id FROM ai_usage').all()
     expect(results).toEqual([{ user_id: 'u_alice' }])
+  })
+})
+
+describe('sign-up', () => {
+  /** alice のプロジェクトに email 宛ての招待を expiresAt まで入れ、リンクのトークンを返す */
+  async function seedInvite(email: string, expiresAt: number) {
+    const headers = { [DEBUG_USER_HEADER]: 'alice', 'content-type': 'application/json' }
+    const res = await app.request(
+      '/v1/projects',
+      { method: 'POST', headers, body: JSON.stringify({ title: '招待' }) },
+      env,
+    )
+    const { id } = (await res.json()) as { id: string }
+    const token = crypto.randomUUID()
+    await env.DB.prepare(
+      `INSERT INTO project_invites (id, project_id, email, role, token_hash, created_at, expires_at)
+       VALUES (?1, ?2, ?3, 'viewer', ?4, 0, ?5)`,
+    )
+      .bind(crypto.randomUUID(), id, email, await hashToken(token), expiresAt)
+      .run()
+    return token
+  }
+
+  const validate = (email: string, token: unknown, action = 'create-user') =>
+    validateSignUp(env, async () => token)({ user: { email }, source: { action } })
+
+  test('lets the invited email sign up through the link, whatever its case', async () => {
+    const token = await seedInvite('carol@example.com', Date.now() + DAY)
+    expect(await validate('Carol@Example.com', token)).toBeUndefined()
+  })
+
+  test('refuses a sign-up without a link in time', async () => {
+    const expired = await seedInvite('dave@example.com', Date.now() - 1_000)
+    for (const token of [undefined, 42, 'unknown', expired]) {
+      expect(await validate('dave@example.com', token)).toEqual({ error: INVITE_REQUIRED })
+    }
+  })
+
+  test('refuses another email than the invited one, even with the link', async () => {
+    const token = await seedInvite('carol@example.com', Date.now() + DAY)
+    expect(await validate('eve@example.com', token)).toEqual({ error: INVITE_EMAIL_MISMATCH })
+  })
+
+  test('lets an existing user sign in without a link', async () => {
+    expect(await validate('eve@example.com', undefined, 'sign-in')).toBeUndefined()
+    expect(await validate('eve@example.com', undefined, 'link-account')).toBeUndefined()
   })
 })

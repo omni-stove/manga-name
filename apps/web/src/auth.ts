@@ -16,8 +16,11 @@ export interface AuthClient {
   subscribe(listener: () => void): () => void
   /** API の Cookie のセッションからトークンを取り直す。起動時と Google からの戻りで呼ぶ */
   restore(): Promise<void>
-  /** Google のログイン画面へ移る。戻ってくると今の URL に着く */
-  signIn(): Promise<void>
+  /**
+   * Google のログイン画面へ移る。戻ってくると今の URL に着く。
+   * まだ登録していないユーザーは、招待リンクのトークンを `inviteToken` に渡したときだけ登録される
+   */
+  signIn(opts?: { inviteToken?: string }): Promise<void>
   /** 表示名を変える。未ログインか、API が名前を受け付けなければ throw */
   setName(name: string): Promise<void>
   /** サーバのセッションを消し、手元のトークンとユーザーを捨てる */
@@ -170,12 +173,18 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
     async restore() {
       await refreshOnce()
     },
-    async signIn() {
+    async signIn({ inviteToken } = {}) {
       if (baseUrl === '') throw new Error('API の URL が設定されていない')
       const res = await authFetch('/sign-in/social', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ provider: 'google', callbackURL: window.location.href }),
+        // 失敗しても今の画面へ戻し、takeSignInError で理由を出す。省くと API の既定のエラーページに着く
+        body: JSON.stringify({
+          provider: 'google',
+          callbackURL: window.location.href,
+          errorCallbackURL: window.location.href,
+          ...(inviteToken !== undefined && { additionalData: { inviteToken } }),
+        }),
       })
       if (!res.ok) throw new Error(`sign-in failed: ${res.status}`)
       const { url } = (await res.json()) as { url?: string }
@@ -205,6 +214,28 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
     getToken,
     fetch: fetchWithAuth,
   }
+}
+
+// キーは workers/api の validateSignUp が返す値
+const SIGN_IN_ERRORS: Record<string, string> = {
+  invite_required:
+    'アカウントは招待リンクからしか作れません。招待した人にリンクを頼み、そのリンクからログインしてください',
+  invite_email_mismatch:
+    'この招待は別のメールアドレス宛てです。招待されたメールアドレスの Google アカウントでログインしてください',
+}
+
+/**
+ * Google からの戻りでログインできなかったとき Better Auth が戻り先に付ける `?error=` を読み、
+ * 画面向けの文言と、`error` と `error_description` を外した URL を返す。付いていなければ null
+ */
+export function takeSignInError(url: URL): { message: string; url: URL } | null {
+  const code = url.searchParams.get('error')
+  if (code === null) return null
+  const rest = new URL(url)
+  rest.searchParams.delete('error')
+  rest.searchParams.delete('error_description')
+  const message = SIGN_IN_ERRORS[code] ?? `ログインできませんでした（${code}）`
+  return { message, url: rest }
 }
 
 interface GetSessionBody {
@@ -392,8 +423,34 @@ if (import.meta.vitest) {
       expect(JSON.parse(String(init?.body))).toEqual({
         provider: 'google',
         callbackURL: 'https://app.test/p/1',
+        errorCallbackURL: 'https://app.test/p/1',
       })
       expect(new Headers(init?.headers).get('content-type')).toBe('application/json')
+    })
+
+    test('takeSignInError explains the error and drops it from the URL', () => {
+      expect(takeSignInError(new URL('https://app.test/p/1?settings=1'))).toBeNull()
+      const refused = takeSignInError(new URL('https://app.test/invite/t?error=invite_required'))
+      expect(refused?.message).toContain('招待リンク')
+      expect(refused?.url.href).toBe('https://app.test/invite/t')
+      const other = takeSignInError(
+        new URL('https://app.test/?settings=1&error=access_denied&error_description=x'),
+      )
+      expect(other?.message).toContain('access_denied')
+      expect(other?.url.href).toBe('https://app.test/?settings=1')
+    })
+
+    test('signIn passes the invite token through the OAuth state', async () => {
+      vi.stubGlobal('window', { location: { href: 'https://app.test/invite/t1' } })
+      const { client, fetch } = setup(
+        () => new Response(JSON.stringify({ url: 'https://accounts.test/o' })),
+        { navigate: vi.fn() },
+      )
+      await client.signIn({ inviteToken: 't1' })
+      const [, init] = fetch.mock.calls[0] ?? []
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        additionalData: { inviteToken: 't1' },
+      })
     })
 
     test('signIn fails on an error status or a missing URL', async () => {

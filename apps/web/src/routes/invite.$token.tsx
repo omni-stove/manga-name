@@ -34,7 +34,7 @@ function AcceptInvite() {
         <Typography>
           招待を受け取るには、招待されたメールアドレスの Google アカウントでログインしてください。
         </Typography>
-        <SignInButton variant="primary" />
+        <SignInButton variant="primary" inviteToken={token} />
       </YStack>
     )
   }

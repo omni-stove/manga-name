@@ -9,7 +9,7 @@ import { applyThemePreference, readThemePreference } from '@manga/ui'
 import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createAuthClient } from './auth'
+import { createAuthClient, takeSignInError } from './auth'
 import { createDesktopTokenStore } from './desktop/desktop-store'
 import { createPanelGeneration } from './generate-panel'
 import { createImageProvider, readApiBaseUrl } from './image-provider'
@@ -29,6 +29,13 @@ applyThemePreference(readThemePreference())
 
 const container = document.getElementById('root')
 if (!container) throw new Error('#root がない')
+
+// ルーターが URL を読む前に外す
+const signInError = takeSignInError(new URL(window.location.href))
+if (signInError) {
+  window.history.replaceState(window.history.state, '', signInError.url)
+  toasts.push(signInError.message)
+}
 
 const platform = detectPlatform()
 const baseUrl = readApiBaseUrl()
