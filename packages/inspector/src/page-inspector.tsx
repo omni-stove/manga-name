@@ -89,6 +89,7 @@ export function PageInspector({
       <XStack wrap className={section.group}>
         <Button
           variant="primary"
+          data-action="generate-all"
           disabled={generating || page.panels.length === 0 || !onGenerateAll}
           onClick={onGenerateAll}
         >

@@ -1,0 +1,48 @@
+/* 右クリックメニューとトーストは z-index 10 で、それより下に敷く */
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  background: color-mix(in srgb, var(--surface-desk) 40%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.ring {
+  position: fixed;
+  z-index: 5;
+  border-radius: var(--radius-m);
+  box-shadow: 0 0 0 2px var(--guide);
+  pointer-events: none;
+}
+
+/* 吹き出しがぼかさずに残した操作に重なっても、押せるようにする */
+.tip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 6;
+  max-width: min(22rem, calc(100vw - 2 * var(--space-16)));
+  padding: var(--space-10) var(--space-12);
+  border-radius: var(--radius-m);
+  background: var(--guide);
+  color: var(--on-guide);
+  font-size: var(--text-m);
+  line-height: var(--leading-normal);
+  box-shadow: var(--shadow);
+}
+
+.tip::before {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--space-6));
+  left: calc(var(--arrow-x) - var(--space-6));
+  border: var(--space-6) solid transparent;
+  border-top: 0;
+  border-bottom-color: var(--guide);
+}
+
+.tip[data-above]::before {
+  top: auto;
+  bottom: calc(-1 * var(--space-6));
+  border-top: var(--space-6) solid var(--guide);
+  border-bottom: 0;
+}
