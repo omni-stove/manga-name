@@ -19,15 +19,15 @@ function useDisplayNameInput(initial: string) {
     }
     setBusy(true)
     setError(undefined)
+    let saved = true
     try {
       await setName(parsed.data)
-      return true
     } catch (e) {
       setError(errorMessage(e))
-      return false
-    } finally {
-      setBusy(false)
+      saved = false
     }
+    setBusy(false)
+    return saved
   }
   const input = (
     <Input

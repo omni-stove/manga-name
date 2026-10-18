@@ -13,6 +13,9 @@ export function useDraft<T>(
   delayMs: number | null,
 ): { draft: T; set(next: T): void; flush(): void } {
   const [draft, setDraft] = useState(value)
+  const [seen, setSeen] = useState(value)
+  // flush の中で同期に読むため ref に持ち、描画で見るために state にも写す
+  const [dirty, setDirty] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const pending = useRef<{ value: T } | undefined>(undefined)
   const commitRef = useRef(commit)
@@ -26,12 +29,14 @@ export function useDraft<T>(
     timer.current = undefined
     const { value } = pending.current
     pending.current = undefined
+    setDirty(false)
     commitRef.current(value)
   }, [])
 
-  useEffect(() => {
-    if (pending.current === undefined) setDraft(value)
-  }, [value])
+  if (!Object.is(seen, value)) {
+    setSeen(value)
+    if (!dirty) setDraft(value)
+  }
 
   useEffect(() => flush, [flush])
 
@@ -43,6 +48,7 @@ export function useDraft<T>(
         return
       }
       pending.current = { value: next }
+      setDirty(true)
       clearTimeout(timer.current)
       if (delayMs !== null) timer.current = setTimeout(flush, delayMs)
     },

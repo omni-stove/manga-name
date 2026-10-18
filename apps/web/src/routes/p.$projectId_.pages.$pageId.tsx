@@ -49,7 +49,7 @@ import {
   YStack,
 } from '@manga/ui'
 import { createFileRoute, Link, notFound, useNavigate, useParams } from '@tanstack/react-router'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { elementMenuItems, shapeMenuItems, toolMenuItems } from '../canvas-menu'
@@ -285,16 +285,10 @@ function Editor() {
   // presence は早期 return より前に送るので、page を待たずに今ある要素の選択だけを選ぶ
   const selectedId = found && hasElement(found.page, selected) ? selected?.id : undefined
   const foundPage = found?.page
-  const diagnosis = useMemo(
-    () => (foundPage ? diagnosePage(foundPage, project.settings) : null),
-    [foundPage, project.settings],
-  )
+  const diagnosis = foundPage ? diagnosePage(foundPage, project.settings) : null
   // 提案の Patch だけを持ち、ゴーストは今のページに当てて作る。ホバー中に編集されても古いページを描かない
   const [preview, setPreview] = useState<Patch | null>(null)
-  const ghostPage = useMemo(
-    () => (foundPage && preview ? previewPage(foundPage, preview) : undefined),
-    [foundPage, preview],
-  )
+  const ghostPage = foundPage && preview ? previewPage(foundPage, preview) : undefined
 
   const episodePages = found ? project.episodes[found.episodeIndex]?.pages : undefined
   const prevPage = found ? episodePages?.[found.pageIndex - 1] : undefined
@@ -334,6 +328,8 @@ function Editor() {
   // ダイアログは先に閉じ、描いている間も編集できるようにする。終わればダウンロードか保存先の選択が始まる
   const exportPages = async ({ format, from, to, dpi, ...opts }: ExportSettings) => {
     const total = to - from + 1
+    const numbers = Array.from({ length: total }, (_, i) => from + i)
+    const ext = format === 'pdf' ? 'pdf' : total === 1 ? 'png' : 'zip'
     setExporting({ done: 0, total })
     try {
       const pageIds = episode.pages.slice(from - 1, to).map((p) => p.id)
@@ -347,16 +343,13 @@ function Editor() {
         library.loadAsset,
       )
       const blob = await pageExporter.run(job, (done) => setExporting({ done, total }))
-      const numbers = Array.from({ length: total }, (_, i) => from + i)
-      const ext = format === 'pdf' ? 'pdf' : total === 1 ? 'png' : 'zip'
       await saveFile(blob, exportFileName(project.title, numbers, ext), [
         { name: ext.toUpperCase(), extensions: [ext] },
       ])
     } catch (e) {
       toasts.push(m.web_page_export_failed({ reason: errorMessage(e) }))
-    } finally {
-      setExporting('closed')
     }
+    setExporting('closed')
   }
   const undoItems: ContextMenuItem[] = [
     { label: 'Undo', shortcut: `${MOD}Z`, disabled: !canUndo, onSelect: () => store.undo() },
@@ -901,23 +894,21 @@ function SelectionInspector({
  * クリップボードのファイルを onFile に渡す。文字入力欄への貼り付けとファイルを含まない貼り付けには触らない
  */
 function useReferencePaste(onFile: (file: File) => void) {
-  const latest = useRef(onFile)
-  latest.current = onFile
-  useEffect(() => {
-    const onPaste = (e: ClipboardEvent) => {
-      const target = e.target
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        (target instanceof HTMLElement && target.isContentEditable)
-      ) {
-        return
-      }
-      const file = firstFile(e.clipboardData)
-      if (!file) return
-      e.preventDefault()
-      latest.current(file)
+  const onPaste = useEffectEvent((e: ClipboardEvent) => {
+    const target = e.target
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    ) {
+      return
     }
+    const file = firstFile(e.clipboardData)
+    if (!file) return
+    e.preventDefault()
+    onFile(file)
+  })
+  useEffect(() => {
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
   }, [])

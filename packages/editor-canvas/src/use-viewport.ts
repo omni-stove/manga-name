@@ -55,8 +55,6 @@ export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: numb
   const hovered = useRef(false)
   const pointers = useRef(new Map<number, Pos>())
   const gesture = useRef<Gesture | null>(null)
-  const viewRef = useRef(view)
-  viewRef.current = view
 
   useEffect(() => {
     const svg = svgRef.current
@@ -132,7 +130,7 @@ export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: numb
             kind: 'pinch',
             ids: [a[0], b[0]],
             from: [a[1], b[1]],
-            start: viewRef.current,
+            start: view,
           }
           setPanning(true)
         }

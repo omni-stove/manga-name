@@ -34,7 +34,8 @@
       "preset": "recommended",
       "nursery": {
         "noFloatingPromises": "error",
-        "noMisusedPromises": "error"
+        "noMisusedPromises": "error",
+        "useReactCompiler": "error"
       }
     }
   },

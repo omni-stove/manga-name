@@ -23,9 +23,8 @@ function NewProject() {
       await task()
     } catch (e) {
       setError(errorMessage(e))
-    } finally {
-      setBusy(false)
     }
+    setBusy(false)
   }
 
   const importFile = (file: File) =>

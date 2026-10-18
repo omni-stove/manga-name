@@ -30,11 +30,6 @@ export function TemplateSelect({
 }) {
   const options = templateOptions(project)
   const registered = options.filter((o) => o.registered)
-  const option = (o: (typeof options)[number]) => (
-    <option key={o.value} value={o.value}>
-      {o.label}
-    </option>
-  )
   return (
     <Select
       label={m.web_layout_template()}
@@ -42,13 +37,21 @@ export function TemplateSelect({
       value={value}
       onChange={(e) => onChange(e.currentTarget.value)}
     >
-      {options.filter((o) => !o.registered).map(option)}
+      {options.filter((o) => !o.registered).map(templateOption)}
       {registered.length > 0 && (
         <optgroup label={m.web_layout_template_registered_group()}>
-          {registered.map(option)}
+          {registered.map(templateOption)}
         </optgroup>
       )}
     </Select>
+  )
+}
+
+function templateOption(o: ReturnType<typeof templateOptions>[number]) {
+  return (
+    <option key={o.value} value={o.value}>
+      {o.label}
+    </option>
   )
 }
 
