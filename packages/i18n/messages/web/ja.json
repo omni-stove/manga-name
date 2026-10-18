@@ -382,5 +382,8 @@
   "web_draft_speaker": "話し手",
   "web_draft_no_speaker": "（なし）",
   "web_draft_shape": "形",
-  "web_draft_line": "セリフ"
+  "web_draft_line": "セリフ",
+  "web_art_status_none": "未生成",
+  "web_art_status_partial": "一部",
+  "web_art_status_all": "全部"
 }

@@ -118,10 +118,8 @@ const scribbleToolOptions = (): readonly SegmentedOption<ScribbleTool>[] => [
   { value: 'eraser', label: m.web_editor_pen_eraser(), shortcut: '4' },
 ]
 
-const FOCUS_KIND_OPTIONS: readonly SegmentedOption<FocusKind>[] = FOCUS_KINDS.map((k, i) => ({
-  ...k,
-  shortcut: String(i + 1),
-}))
+const focusKindOptions = (): readonly SegmentedOption<FocusKind>[] =>
+  FOCUS_KINDS.map((k, i) => ({ value: k.value, label: k.label, shortcut: String(i + 1) }))
 
 const PREV_PAGE_KEY = '['
 const NEXT_PAGE_KEY = ']'
@@ -278,7 +276,7 @@ function Editor() {
   useKeyShortcuts({
     ...shortcutsOf(tools, setTool),
     ...(tool === 'scribble' ? shortcutsOf(scribbleTools, setScribbleTool) : {}),
-    ...(tool === 'focus' ? shortcutsOf(FOCUS_KIND_OPTIONS, setFocusKind) : {}),
+    ...(tool === 'focus' ? shortcutsOf(focusKindOptions(), setFocusKind) : {}),
     [PREV_PAGE_KEY]: () => prevPage && openPage(prevPage.id),
     [NEXT_PAGE_KEY]: () => nextPage && openPage(nextPage.id),
   })
@@ -413,7 +411,7 @@ function Editor() {
           <SegmentedControl
             label={m.web_editor_focus_kind()}
             value={focusKind}
-            options={FOCUS_KIND_OPTIONS}
+            options={focusKindOptions()}
             onChange={(k) => setFocusKind(k)}
           />
         )}

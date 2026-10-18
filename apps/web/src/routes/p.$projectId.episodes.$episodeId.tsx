@@ -10,6 +10,7 @@ import common from '../common.module.css'
 import { TemplateSelect, useTemplateChoice } from '../layout-templates'
 import { PageThumbnail } from '../page-thumbnail'
 import {
+  ART_STATUS_LABELS,
   addPagePatch,
   artStatus,
   movePagePatch,
@@ -167,7 +168,7 @@ function EpisodePages() {
               <Typography as="small" variant="caption" tone="muted">
                 {m.web_episode_page_summary({ panels: page.panels.length })}{' '}
                 <span className={styles.status} data-status={status}>
-                  {status}
+                  {ART_STATUS_LABELS[status]()}
                 </span>
               </Typography>
               {page.note !== undefined && (

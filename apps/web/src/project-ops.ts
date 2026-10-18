@@ -43,14 +43,20 @@ export function pagePatch(project: Project, pageId: ID, patch: Patch): Patch {
   return patch.map((op) => ({ ...op, path: `${prefix}${op.path}` }))
 }
 
-type ArtStatus = '未生成' | '一部' | '全部'
+type ArtStatus = 'none' | 'partial' | 'all'
 
-/** ページ内のコマのうち、現在の絵が選ばれているものの割合で 3 段階に分ける。コマが無いページは未生成 */
+/** ページ内のコマのうち、現在の絵が選ばれているものの割合で 3 段階に分ける。コマが無いページは none */
 export function artStatus(page: Page): ArtStatus {
   const done = page.panels.filter((panel) => panel.artId !== undefined).length
-  if (done === 0) return '未生成'
-  if (done === page.panels.length) return '全部'
-  return '一部'
+  if (done === 0) return 'none'
+  if (done === page.panels.length) return 'all'
+  return 'partial'
+}
+
+export const ART_STATUS_LABELS: Record<ArtStatus, () => string> = {
+  none: () => m.web_art_status_none(),
+  partial: () => m.web_art_status_partial(),
+  all: () => m.web_art_status_all(),
 }
 
 const PAGE_TEMPLATES: readonly { value: PageTemplate; label: () => string }[] = [
@@ -286,8 +292,8 @@ if (import.meta.vitest) {
 
   test('artStatus', () => {
     const page = firstPage()
-    expect(artStatus(page)).toBe('未生成')
-    expect(artStatus({ ...page, panels: [] })).toBe('未生成')
+    expect(artStatus(page)).toBe('none')
+    expect(artStatus({ ...page, panels: [] })).toBe('none')
     const [first, ...rest] = page.panels
     if (!first) throw new Error('fixture に panel がない')
     const art = {
@@ -299,13 +305,13 @@ if (import.meta.vitest) {
     }
     expect(
       artStatus({ ...page, panels: [{ ...first, arts: [art], artId: art.id }, ...rest] }),
-    ).toBe('一部')
+    ).toBe('partial')
     expect(
       artStatus({
         ...page,
         panels: page.panels.map((p) => ({ ...p, arts: [art], artId: art.id })),
       }),
-    ).toBe('全部')
+    ).toBe('all')
   })
 
   describe('pages', () => {
