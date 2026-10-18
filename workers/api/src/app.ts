@@ -114,9 +114,10 @@ export interface AppOptions {
 
 /**
  * call を最大 MAX_ATTEMPTS 回呼び、最初に undefined 以外を返した値と、呼んだ回数を返す。
- * 使い切れば value は undefined。call の throw も不正応答と同じ失敗として数える。
+ * 使い切れば value は undefined。call の throw も不正応答と同じ失敗として数え、`kind` を添えてログに出す。
  */
 async function retryUntilValid<T>(
+  kind: string,
   call: () => Promise<T | undefined>,
 ): Promise<{ value: T | undefined; attempts: number }> {
   let attempts = 0
@@ -125,8 +126,9 @@ async function retryUntilValid<T>(
     try {
       const value = await call()
       if (value !== undefined) return { value, attempts }
-    } catch {
+    } catch (e) {
       // プロバイダの一時的な失敗も不正応答と同じく再試行し、使い切れば 502 にする
+      console.error(`${kind}: provider call failed on attempt ${attempts}`, e)
     }
   }
   return { value: undefined, attempts }
@@ -246,10 +248,12 @@ export function createApp(options: AppOptions = {}) {
     const usageId = await reserve(c, kind)
     const provider = createImage(c.env)
 
-    const { value, attempts } = await retryUntilValid(async () => {
+    const { value, attempts } = await retryUntilValid(kind, async () => {
       const res = await call(provider)
       const bytes = new Uint8Array(await res.image.arrayBuffer())
-      return isDecodablePng(bytes) ? { res, bytes } : undefined
+      if (isDecodablePng(bytes)) return { res, bytes }
+      console.error(`${kind}: provider returned an image that is not a decodable PNG`)
+      return undefined
     })
     await settleUsage(c.env.DB, usageId, attempts)
 
@@ -308,17 +312,23 @@ export function createApp(options: AppOptions = {}) {
     const provider = createLlm(c.env)
     const characterIds = new Set(req.project.characters.map((ch) => ch.id))
 
-    const { value, attempts } = await retryUntilValid(async () => {
-      // 戻り型を信用せず検証し直すのは、実プロバイダの応答が LLM の出力をそのまま詰めたものだから。
-      // 居ないキャラを指す割り振りも、ページの登場キャラがスキーマを通らなくなるので不正として作り直させる
+    const { value, attempts } = await retryUntilValid('plan-pages', async () => {
+      // 戻り型を信用せず検証し直すのは、実プロバイダの応答が LLM の出力をそのまま詰めたものだから
       const result = PagePlanResponseSchema.safeParse(await provider.planPages(req))
-      if (!result.success) return undefined
-      const count = result.data.length
-      if (count > MAX_PAGE_COUNT || (req.pageCount !== undefined && count !== req.pageCount)) {
+      if (!result.success) {
+        console.error('plan-pages: invalid page plan', z.prettifyError(result.error))
         return undefined
       }
-      const known = result.data.every((p) => p.cast.every((id) => characterIds.has(id)))
-      return known ? result.data : undefined
+      if (result.data.length > MAX_PAGE_COUNT) {
+        console.error(`plan-pages: ${result.data.length} pages exceed ${MAX_PAGE_COUNT}`)
+        return undefined
+      }
+      // 指定とのページ数のずれと居ないキャラは作り直させない。ページ数が多いとモデルは再試行してもずれがちで、
+      // ずれは Web が警告して利用者に直させる。居ないキャラはページの登場キャラがスキーマを通らなくなるので落とす
+      return result.data.map((p) => ({
+        ...p,
+        cast: p.cast.filter((id, i) => p.cast.indexOf(id) === i && characterIds.has(id)),
+      }))
     })
     await settleUsage(c.env.DB, usageId, attempts)
 
@@ -345,10 +355,12 @@ export function createApp(options: AppOptions = {}) {
       const usageId = await reserve(c, 'critique')
       const provider = createLlm(c.env)
 
-      const { value, attempts } = await retryUntilValid(async () => {
+      const { value, attempts } = await retryUntilValid('critique', async () => {
         // plan-pages と同じく、実プロバイダの応答は LLM の出力そのままなので検証し直す
         const result = CritiqueResponseSchema.safeParse(await provider.critique(req))
-        return result.success ? result.data : undefined
+        if (result.success) return result.data
+        console.error('critique: invalid critique', z.prettifyError(result.error))
+        return undefined
       })
       await settleUsage(c.env.DB, usageId, attempts)
 

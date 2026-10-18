@@ -74,9 +74,35 @@ describe('POST /v1/ai/plan-pages', () => {
     expect((await usageRows()).results).toHaveLength(0)
   })
 
-  test('retries a plan that names an unknown character, then succeeds', async () => {
-    const unknown = async () => [{ note: 'n', cast: ['chr_missing'] }]
-    const { provider, calls } = scripted([unknown, async () => aiFixtures.pagePlan])
+  test('drops unknown and repeated characters from the cast without retrying', async () => {
+    const plan = async () => [
+      { note: 'n', cast: ['chr_e', 'chr_missing', 'chr_e'] },
+      { note: 'm', cast: [] },
+    ]
+    const { provider, calls } = scripted([plan])
+    const res = await post(createApp({ llmProvider: () => provider }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([
+      { note: 'n', cast: ['chr_e'] },
+      { note: 'm', cast: [] },
+    ])
+    expect(calls).toHaveLength(1)
+  })
+
+  test('returns a plan whose page count differs from the requested one without retrying', async () => {
+    const three = async () => [...aiFixtures.pagePlan, { note: 'n', cast: [] }]
+    const { provider, calls } = scripted([three])
+    const res = await post(createApp({ llmProvider: () => provider }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toHaveLength(3)
+    expect(calls).toHaveLength(1)
+  })
+
+  test('retries a provider failure, then succeeds', async () => {
+    const fail = async (): Promise<PagePlanResponse> => {
+      throw new Error('overloaded')
+    }
+    const { provider, calls } = scripted([fail, async () => aiFixtures.pagePlan])
     const res = await post(createApp({ llmProvider: () => provider }))
     expect(res.status).toBe(200)
     expect(calls).toHaveLength(2)
