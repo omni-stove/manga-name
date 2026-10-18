@@ -93,12 +93,13 @@ export function planRequest(project: Project, input: ScriptDraftInput): PagePlan
 
 /**
  * プロジェクトに居ないキャラと重複を `cast` から落とし、居ない話し手を `speakerId` から落とす。
- * 流れとセリフの前後の空白を落とし、空になったセリフは捨てる
+ * 流れ、脚本、セリフの前後の空白を落とし、空になったセリフは捨てる
  */
 export function normalizePlan(plan: PagePlan, characters: readonly Character[]): PagePlan {
   const known = (id: string) => characters.some((c) => c.id === id)
   return {
     note: plan.note.trim(),
+    script: plan.script.trim(),
     cast: plan.cast.filter((id, i) => plan.cast.indexOf(id) === i && known(id)),
     lines: plan.lines.flatMap(({ speakerId, ...line }) => {
       const text = line.text.trim()
@@ -171,8 +172,8 @@ function distributeLines(
 }
 
 /**
- * テンプレートのページに、ページ割りの流れと登場キャラとセリフを入れる。セリフはコマに配ったフキダシにし、
- * コマの無いテンプレートでは流れの後ろに 1 行ずつ書き足す。空の流れと登場キャラは項目ごと持たない
+ * テンプレートのページに、ページ割りの流れ、脚本、登場キャラ、セリフを入れる。セリフはコマに配ったフキダシにし、
+ * コマの無いテンプレートでは流れの後ろに 1 行ずつ書き足す。空の流れ、脚本、登場キャラは項目ごと持たない
  */
 export function plannedPage(
   plan: PagePlan,
@@ -181,6 +182,7 @@ export function plannedPage(
 ): Page {
   const page = createPage(template, project.settings.direction)
   const panelless = page.panels.length === 0
+  const script = plan.script.trim()
   const note = [
     plan.note.trim(),
     ...(panelless ? plan.lines.map((l) => formatLine(l, project.characters)) : []),
@@ -191,6 +193,7 @@ export function plannedPage(
     ...page,
     panels: panelless ? page.panels : distributeLines(page.panels, plan.lines, project.settings),
     ...(note !== '' && { note }),
+    ...(script !== '' && { script }),
     ...(plan.cast.length > 0 && { cast: plan.cast }),
   }
 }
@@ -245,6 +248,7 @@ if (import.meta.vitest) {
       normalizePlan(
         {
           note: ' n ',
+          script: ' s\n ',
           cast: ['chr_e', 'chr_x', 'chr_e'],
           lines: [
             { speakerId: 'chr_e', text: ' a ', shape: 'normal' },
@@ -256,6 +260,7 @@ if (import.meta.vitest) {
       ),
     ).toEqual({
       note: 'n',
+      script: 's',
       cast: ['chr_e'],
       lines: [
         { speakerId: 'chr_e', text: 'a', shape: 'normal' },
@@ -266,21 +271,30 @@ if (import.meta.vitest) {
 
   test('missingLines lists the quoted lines of the script that no page carries', () => {
     const plans = [
-      { note: 'n', cast: [], lines: [{ text: '……ここ か', shape: 'normal' as const }] },
+      {
+        note: 'n',
+        script: 's',
+        cast: [],
+        lines: [{ text: '……ここ か', shape: 'normal' as const }],
+      },
     ]
     expect(missingLines('E「……ここか」\nE『待って』\n森。「 」', plans)).toEqual(['待って'])
     expect(missingLines('森を歩く。', [])).toEqual([])
   })
 
-  test('plannedPage puts the note, cast and lines as bubbles on a template page', () => {
+  test('plannedPage puts the note, script, cast and lines as bubbles on a template page', () => {
     const project = fixtures.samplePage01
     const lines = [
       { speakerId: 'chr_e', text: 'a', shape: 'normal' as const },
       { text: 'b', shape: 'narration' as const },
       { text: 'c', shape: 'thought' as const },
     ]
-    const planned = plannedPage({ note: 'n', cast: ['chr_e'], lines }, '2rows', project)
-    expect(planned).toMatchObject({ note: 'n', cast: ['chr_e'] })
+    const planned = plannedPage(
+      { note: 'n', script: 'E「a」', cast: ['chr_e'], lines },
+      '2rows',
+      project,
+    )
+    expect(planned).toMatchObject({ note: 'n', script: 'E「a」', cast: ['chr_e'] })
     expect(planned.panels).toHaveLength(createPage('2rows', 'rtl').panels.length)
     const bubbles = [...planned.panels].sort((a, b) => a.order - b.order).flatMap((p) => p.bubbles)
     expect(bubbles.map((b) => [b.text, b.shape, b.speakerId])).toEqual([
@@ -288,8 +302,8 @@ if (import.meta.vitest) {
       ['b', 'narration', undefined],
       ['c', 'thought', undefined],
     ])
-    const empty = plannedPage({ note: ' ', cast: [], lines: [] }, '3rows', project)
-    expect('cast' in empty || 'note' in empty).toBe(false)
+    const empty = plannedPage({ note: ' ', script: ' ', cast: [], lines: [] }, '3rows', project)
+    expect('cast' in empty || 'note' in empty || 'script' in empty).toBe(false)
     expect(empty.panels.every((p) => p.bubbles.length === 0)).toBe(true)
     expect(() =>
       parseProject({
@@ -306,7 +320,7 @@ if (import.meta.vitest) {
       { text: 'b', shape: 'narration' as const },
     ]
     const name = project.characters.find((c) => c.id === 'chr_e')?.name
-    expect(plannedPage({ note: 'n', cast: [], lines }, 'blank', project).note).toBe(
+    expect(plannedPage({ note: 'n', script: 's', cast: [], lines }, 'blank', project).note).toBe(
       `n\n${name}「a」\nb`,
     )
   })

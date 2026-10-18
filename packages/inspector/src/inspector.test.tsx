@@ -7,6 +7,7 @@ import { BubbleInspector } from './bubble-inspector'
 import { CharacterInspector } from './character-inspector'
 import { FocusInspector } from './focus-inspector'
 import { PageInspector } from './page-inspector'
+import { PageScriptInspector } from './page-script-inspector'
 import { PanelInspector } from './panel-inspector'
 import { VectorInspector } from './vector-inspector'
 
@@ -579,6 +580,36 @@ describe('VectorInspector', () => {
     const target = selectLabelled(container, '指す焦点')
     expect(target.value).toBe('fp_gone')
     expect([...target.options].at(-1)?.textContent).toBe('fp_gone')
+  })
+})
+
+describe('PageScriptInspector', () => {
+  const page = project.episodes[0]?.pages[0] as Page
+
+  test('the script is debounced and an emptied script removes the field', async () => {
+    vi.useFakeTimers()
+    const onChange = vi.fn<(patch: Patch) => void>()
+    const { container } = await render(<PageScriptInspector page={page} onChange={onChange} />)
+    await act(async () => setValue(inputLabelled(container, 'このページの脚本'), 'E「……ここか」'))
+    expect(onChange).not.toHaveBeenCalled()
+    await act(async () => vi.advanceTimersByTime(300))
+    expect(onChange).toHaveBeenLastCalledWith([
+      { op: 'add', path: '/script', value: 'E「……ここか」' },
+    ])
+
+    const scripted = await render(
+      <PageScriptInspector page={{ ...page, script: 's' }} onChange={onChange} />,
+    )
+    await act(async () => setValue(inputLabelled(scripted.container, 'このページの脚本'), ''))
+    await act(async () => vi.advanceTimersByTime(300))
+    expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/script' }])
+  })
+
+  test('is read-only when not editable', async () => {
+    const { container } = await render(
+      <PageScriptInspector page={page} editable={false} onChange={() => {}} />,
+    )
+    expect(inputLabelled(container, 'このページの脚本').matches(':disabled')).toBe(true)
   })
 })
 

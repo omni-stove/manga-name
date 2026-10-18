@@ -1,11 +1,13 @@
 [
   {
     "note": "結晶の森。E が奥へ歩いていく。",
+    "script": "結晶の森。E が奥へ歩いていく。\nE「……ここか」",
     "cast": ["chr_e"],
     "lines": [{ "speakerId": "chr_e", "text": "……ここか", "shape": "normal" }]
   },
   {
     "note": "E が足元を見て、何かに気づく。",
+    "script": "E が足元を見る。\nN「その足元に、光るものがあった。」",
     "cast": ["chr_e"],
     "lines": [{ "text": "その足元に、光るものがあった。", "shape": "narration" }]
   }

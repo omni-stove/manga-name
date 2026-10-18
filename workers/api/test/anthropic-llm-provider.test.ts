@@ -52,7 +52,7 @@ afterEach(() => {
 
 describe('createAnthropicLlmProvider', () => {
   test('planPages sends the prompts and the wrapped array schema to the Messages API with the key', async () => {
-    const plan = [{ note: 'n', cast: [], lines: [] }]
+    const plan = [{ note: 'n', script: 's', cast: [], lines: [] }]
     fetchMock.mockResolvedValueOnce(message(JSON.stringify({ elements: plan })))
     const provider = createAnthropicLlmProvider({ apiKey: 'test-key' })
     expect(await provider.planPages(planRequest)).toEqual(plan)

@@ -189,6 +189,8 @@ const PageBaseSchema = z.object({
   reference: ReferenceImageSchema.optional(),
   scribbles: z.array(StrokeSchema),
   note: z.string().optional(),
+  /** このページに当たる脚本の原文（ト書きとセリフ）。`note` は作業のメモで、脚本とは分けて持つ */
+  script: z.string().optional(),
   cast: z.array(IdSchema).optional(),
 })
 

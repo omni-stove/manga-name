@@ -16,6 +16,7 @@ import {
   FocusInspector,
   IssueList,
   PageInspector,
+  PageScriptInspector,
   PanelInspector,
   removeCastPatch,
   VectorInspector,
@@ -163,7 +164,7 @@ const ALL_LAYERS: Layers = {
 
 /**
  * 編集画面のうち、まとめて使えるようにしたり止めたりする領域。
- * `navigation` はページ送り、`canvas` はキャンバスの操作と参考画像の取り込み、`inspector` は要素一覧と要素とページの編集、
+ * `navigation` はページ送り、`canvas` はキャンバスの操作と参考画像の取り込み、`inspector` は要素一覧と要素とページの編集とページの脚本、
  * `generate` は「このページを全部生成」と「生成済みも含める」
  */
 export type EditorArea =
@@ -277,7 +278,7 @@ function issueTarget(page: Page, issue: Issue): Selection {
 }
 
 /**
- * ページの編集画面。ツールバー、キャンバス、インスペクタ。
+ * ページの編集画面。ツールバー、左にページの脚本、キャンバス、右にインスペクタ。
  * `unlocked` を渡すと、そこに無い領域をキーボードでも操作できなくする
  */
 export function PageEditor({
@@ -316,6 +317,7 @@ export function PageEditor({
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
   const [inspectorExpanded, setInspectorExpanded] = useStoredFlag('manga.inspector.expanded', true)
+  const [scriptExpanded, setScriptExpanded] = useStoredFlag('manga.script.expanded', true)
   const [menu, setMenu] = useState<OpenMenu | null>(null)
   const [registeringLayout, setRegisteringLayout] = useState(false)
   const canUndo = useStore(store.state, (s) => s.canUndo)
@@ -657,6 +659,23 @@ export function PageEditor({
         </Typography>
       )}
       <div className={styles.body}>
+        <Sidebar
+          title={m.web_editor_script()}
+          side="left"
+          expanded={scriptExpanded}
+          onExpandedChange={setScriptExpanded}
+          className={styles.scriptSidebar}
+        >
+          <Area open={can('inspector')}>
+            <PageScriptInspector
+              page={page}
+              editable={canEdit}
+              onChange={(patch) =>
+                apply(m.web_editor_history_edit_page_script(), (p) => pagePatch(p, pageId, patch))
+              }
+            />
+          </Area>
+        </Sidebar>
         <div
           className={styles.canvas}
           role="application"

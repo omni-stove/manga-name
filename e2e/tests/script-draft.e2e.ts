@@ -30,6 +30,7 @@ test('ページ割りで流れと登場キャラとセリフを確かめて直�
   const second = page.locator('[data-plan-page="2"]')
   await expect(first.getByLabel('セリフ', { exact: true })).toHaveValue('……ここか')
   await expect(second.getByLabel('流れ')).toHaveValue(/何かに気づく/)
+  await expect(second.getByLabel('このページの脚本')).toHaveValue(/光るものがあった/)
   await expect(second.getByRole('checkbox', { name: 'E' })).toBeChecked()
   await expect(page.locator('[data-missing-lines]')).toHaveCount(0)
   await second.getByLabel('流れ').fill('E が足元の結晶に気づき、しゃがみ込む。')
@@ -49,4 +50,8 @@ test('ページ割りで流れと登場キャラとセリフを確かめて直�
   await expect(page.locator('[data-page-cast]').nth(2)).toHaveText('登場: E')
   // 下書きのテンプレート（既定は 3 段）でコマを割る。フィクスチャの 1 ページ目もコマ 6
   await expect(page.getByText('コマ 6 / 生成')).toHaveCount(3)
+
+  // ページ割りの脚本が、ページの編集画面の左の欄に出る
+  await pageLinks(page).nth(2).click()
+  await expect(page.getByLabel('このページの脚本')).toHaveValue(/光るものがあった/)
 })
