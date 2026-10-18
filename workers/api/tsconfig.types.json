@@ -1,0 +1,12 @@
+{
+  // web が workers の型（D1Database など）無しで読めるよう、経路の型を .d.ts に出す。web の skipLibCheck がその参照を見逃す
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "src",
+    "outDir": "dist/types"
+  },
+  "include": ["src/rpc.ts"]
+}

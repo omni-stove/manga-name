@@ -1,6 +1,6 @@
 import type { ID } from '@manga/schema'
 import { Button, Input, Select, Typography, XStack, YStack } from '@manga/ui'
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, startTransition, use, useState } from 'react'
 import { errorMessage } from './route-error'
 import { type MemberRole, type Members, ROLE_LABELS, type SharingClient } from './sharing'
 import styles from './sharing-panel.module.css'
@@ -19,20 +19,38 @@ const RoleOptions = () =>
  * アプリはメールを送らないので、作ったリンクは owner がコピーして招待先に渡す
  */
 export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: SharingClient }) {
-  const [members, setMembers] = useState<Members | null | undefined>()
+  // 読めなければ未ログインと同じ案内を出す
+  const load = () => sharing.members(projectId).catch(() => null)
+  // Promise を Suspense の外に持つのは、中で作ると読み込みのたびに作り直して終わらないため
+  const [members, setMembers] = useState(load)
+  const reload = () => {
+    const next = load()
+    // transition にするのは、操作のたびに fallback に戻して入力中のフォームと招待リンクを消さないため
+    startTransition(() => setMembers(next))
+    return next
+  }
+  return (
+    <Suspense fallback={<Typography tone="muted">参加者を読み込み中…</Typography>}>
+      <MembersView members={members} reload={reload} projectId={projectId} sharing={sharing} />
+    </Suspense>
+  )
+}
+
+function MembersView({
+  members: membersPromise,
+  reload,
+  projectId,
+  sharing,
+}: {
+  members: Promise<Members | null>
+  reload: () => Promise<unknown>
+  projectId: ID
+  sharing: SharingClient
+}) {
+  const members = use(membersPromise)
   const [link, setLink] = useState<string>()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
-
-  const reload = useCallback(
-    () =>
-      sharing.members(projectId).then(setMembers, (e: unknown) => {
-        setMembers(null)
-        setError(errorMessage(e))
-      }),
-    [sharing, projectId],
-  )
-  useEffect(() => void reload(), [reload])
 
   const run = async (task: () => Promise<void>) => {
     setBusy(true)
@@ -47,7 +65,6 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
     }
   }
 
-  if (members === undefined) return <Typography tone="muted">参加者を読み込み中…</Typography>
   if (members === null) {
     return (
       <Typography tone="muted">

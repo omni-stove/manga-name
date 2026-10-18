@@ -1,4 +1,6 @@
+import type { InviteApp, MemberRoutes } from '@manga/api/rpc'
 import { type ID, readApiError } from '@manga/schema'
+import { hc } from 'hono/client'
 
 /** workers/api の ProjectRole。owner はプロジェクトを作った人 */
 export type ProjectRole = 'owner' | 'editor' | 'commenter' | 'viewer'
@@ -33,7 +35,7 @@ export interface Members {
   invites: PendingInvite[]
 }
 
-export interface InvitePreview {
+interface InvitePreview {
   email: string
   role: MemberRole
   projectId: ID
@@ -102,17 +104,16 @@ export function createSharingClient(opts: SharingClientOptions): SharingClient {
     }
   }
 
-  const call = (path: string, init: RequestInit = {}) =>
-    opts.fetch(`${baseUrl}/v1${path}`, {
-      ...init,
-      headers: init.body === undefined ? undefined : { 'content-type': 'application/json' },
-    })
+  const projects = hc<MemberRoutes>(`${baseUrl}/v1/projects`, { fetch: opts.fetch })
+  const invites = hc<InviteApp>(`${baseUrl}/v1/invites`, { fetch: opts.fetch })
+  // hc は経路のパラメータを符号化せずに埋めるので、呼ぶ側で符号化する
+  const param = encodeURIComponent
 
-  /** クラウドの id のプロジェクトへの path。クラウドに無ければ throw */
-  const projectPath = async (localId: ID, rest: string) => {
+  /** クラウドの id。クラウドに無ければ throw */
+  const requireCloudId = async (localId: ID) => {
     const cloudId = baseUrl === '' ? null : await opts.cloudId(localId)
     if (cloudId === null) throw new Error('このプロジェクトはまだクラウドにありません')
-    return `/projects/${encodeURIComponent(cloudId)}${rest}`
+    return cloudId
   }
 
   const expectOk = async (res: Response, what: string) => {
@@ -122,10 +123,10 @@ export function createSharingClient(opts: SharingClientOptions): SharingClient {
   const members = async (localId: ID): Promise<Members | null> => {
     const cloudId = baseUrl === '' ? null : await opts.cloudId(localId)
     if (cloudId === null) return null
-    const res = await call(`/projects/${encodeURIComponent(cloudId)}/members`)
+    const res = await projects[':id'].members.$get({ param: { id: param(cloudId) } })
     if (res.status === 401 || res.status === 404) return null
     await expectOk(res, 'GET members')
-    const body = (await res.json()) as Members
+    const body: Members = await res.json()
     rememberRole(localId, body.role)
     return body
   }
@@ -140,40 +141,49 @@ export function createSharingClient(opts: SharingClientOptions): SharingClient {
     },
     members,
     async invite(localId, email, role) {
-      const res = await call(await projectPath(localId, '/invites'), {
-        method: 'POST',
-        body: JSON.stringify({ email, role }),
+      const res = await projects[':id'].invites.$post({
+        param: { id: param(await requireCloudId(localId)) },
+        json: { email, role },
       })
       await expectOk(res, 'POST invite')
-      const { token, ...invite } = (await res.json()) as PendingInvite & { token: string }
+      const { token, ...invite } = await res.json()
       const origin = opts.appOrigin ?? globalThis.location.origin
       return { invite, url: new URL(invitePath(token), origin).toString() }
     },
     async revokeInvite(localId, inviteId) {
-      const path = await projectPath(localId, `/invites/${encodeURIComponent(inviteId)}`)
-      await expectOk(await call(path, { method: 'DELETE' }), 'DELETE invite')
+      const id = param(await requireCloudId(localId))
+      const res = await projects[':id'].invites[':inviteId'].$delete({
+        param: { id, inviteId: param(inviteId) },
+      })
+      await expectOk(res, 'DELETE invite')
     },
     async setRole(localId, userId, role) {
-      const path = await projectPath(localId, `/members/${encodeURIComponent(userId)}`)
-      const res = await call(path, { method: 'PUT', body: JSON.stringify({ role }) })
+      const id = param(await requireCloudId(localId))
+      const res = await projects[':id'].members[':userId'].$put({
+        param: { id, userId: param(userId) },
+        json: { role },
+      })
       await expectOk(res, 'PUT member')
     },
     async removeMember(localId, userId) {
-      const path = await projectPath(localId, `/members/${encodeURIComponent(userId)}`)
-      await expectOk(await call(path, { method: 'DELETE' }), 'DELETE member')
+      const id = param(await requireCloudId(localId))
+      const res = await projects[':id'].members[':userId'].$delete({
+        param: { id, userId: param(userId) },
+      })
+      await expectOk(res, 'DELETE member')
     },
     async previewInvite(token) {
-      const res = await call(`/invites/${encodeURIComponent(token)}`)
+      const res = await invites[':token'].$get({ param: { token: param(token) } })
       if (res.status === 404) return null
       await expectOk(res, 'GET invite')
-      return (await res.json()) as InvitePreview
+      return res.json()
     },
     async acceptInvite(token) {
-      const res = await call(`/invites/${encodeURIComponent(token)}/accept`, { method: 'POST' })
+      const res = await invites[':token'].accept.$post({ param: { token: param(token) } })
       if (res.status === 403) throw new Error('この招待は別のメールアドレス宛てです')
       if (res.status === 404) throw new Error('招待が見つからないか、期限が切れています')
       await expectOk(res, 'POST accept invite')
-      const { projectId, role } = (await res.json()) as { projectId: ID; role: ProjectRole }
+      const { projectId, role } = await res.json()
       // 招待で開くプロジェクトはクラウドの id のまま一覧に並ぶので、ローカルの id もクラウドの id になる
       rememberRole(projectId, role)
       return projectId
@@ -226,16 +236,25 @@ if (import.meta.vitest) {
       ...overrides,
       storage,
     })
-    return { client, fetch, storage }
+    /** 呼んだ要求を `<method> <url>`、本文、content-type にして並べる */
+    const sent = () =>
+      fetch.mock.calls.map(([url, init]) => ({
+        request: `${init?.method} ${url}`,
+        body: init?.body,
+        contentType: new Headers(init?.headers).get('content-type'),
+      }))
+    return { client, fetch, sent, storage }
   }
 
   describe('createSharingClient', () => {
     test('members reads the cloud project and role uses it', async () => {
-      const { client, fetch } = setup(() => json(members))
+      const { client, sent } = setup(() => json(members))
       expect(await client.members('local')).toEqual(members)
       expect(await client.role('local')).toBe('editor')
-      expect(fetch).toHaveBeenCalledWith('https://api.test/v1/projects/cloud%201/members', {
-        headers: undefined,
+      expect(sent()[0]).toEqual({
+        request: 'GET https://api.test/v1/projects/cloud%201/members',
+        body: undefined,
+        contentType: null,
       })
     })
 
@@ -297,16 +316,18 @@ if (import.meta.vitest) {
 
     test('invite posts the email and role and links to the app', async () => {
       const invite = { id: 'i1', email: 'b@example.com', role: 'commenter', expiresAt: 'x' }
-      const { client, fetch } = setup(() => json({ ...invite, token: 'a/b' }))
+      const { client, sent } = setup(() => json({ ...invite, token: 'a/b' }))
       expect(await client.invite('local', 'b@example.com', 'commenter')).toEqual({
         invite,
         url: 'https://app.test/invite/a%2Fb',
       })
-      expect(fetch).toHaveBeenCalledWith('https://api.test/v1/projects/cloud%201/invites', {
-        method: 'POST',
-        body: JSON.stringify({ email: 'b@example.com', role: 'commenter' }),
-        headers: { 'content-type': 'application/json' },
-      })
+      expect(sent()).toEqual([
+        {
+          request: 'POST https://api.test/v1/projects/cloud%201/invites',
+          body: JSON.stringify({ email: 'b@example.com', role: 'commenter' }),
+          contentType: 'application/json',
+        },
+      ])
     })
 
     test('changes to a project that is not in the cloud throw before calling the API', async () => {
@@ -344,10 +365,13 @@ if (import.meta.vitest) {
       const storage = memoryStorage()
       const accepted = setup(() => json({ projectId: 'c1', role: 'commenter' }), { storage })
       expect(await accepted.client.acceptInvite('t')).toBe('c1')
-      expect(accepted.fetch).toHaveBeenCalledWith('https://api.test/v1/invites/t/accept', {
-        method: 'POST',
-        headers: undefined,
-      })
+      expect(accepted.sent()).toEqual([
+        {
+          request: 'POST https://api.test/v1/invites/t/accept',
+          body: undefined,
+          contentType: null,
+        },
+      ])
       const offline = setup(
         () => {
           throw new TypeError('network')

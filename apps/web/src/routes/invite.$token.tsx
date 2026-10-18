@@ -1,12 +1,17 @@
 import { Button, Typography, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { errorMessage } from '../route-error'
-import { type InvitePreview, ROLE_LABELS } from '../sharing'
+import { ROLE_LABELS } from '../sharing'
 import { SignInButton } from '../sign-in'
 import { useAuth } from '../use-auth'
 
-export const Route = createFileRoute('/invite/$token')({ component: AcceptInvite })
+export const Route = createFileRoute('/invite/$token')({
+  // 招待を見るにはログインが要る。ログインとサインアウトで main がルーターを invalidate するので読み直される
+  loader: ({ context, params }) =>
+    context.auth.getUser() === null ? undefined : context.sharing.previewInvite(params.token),
+  component: AcceptInvite,
+})
 
 /**
  * 招待リンクの受け口。ログインしていなければログインさせ、招待先のメールアドレスでログインしていれば参加させて
@@ -15,17 +20,11 @@ export const Route = createFileRoute('/invite/$token')({ component: AcceptInvite
 function AcceptInvite() {
   const { token } = Route.useParams()
   const { sharing } = Route.useRouteContext()
+  const invite = Route.useLoaderData()
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const [invite, setInvite] = useState<InvitePreview | null>()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
-
-  useEffect(() => {
-    if (user === null) return
-    setError(undefined)
-    sharing.previewInvite(token).then(setInvite, (e: unknown) => setError(errorMessage(e)))
-  }, [sharing, token, user])
 
   if (user === null) {
     return (
