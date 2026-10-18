@@ -1,4 +1,4 @@
-import type { Page, Patch } from '@manga/schema'
+import type { Page, Patch, Rect } from '@manga/schema'
 import { findFocus, findVector, moveFocusPatch } from './hint-ops'
 import type { Selection } from './types'
 
@@ -52,6 +52,15 @@ export function removePatch(page: Page, selection: Selection): Patch {
   return patch
 }
 
+/** コマの rect を (dx, dy) 動かし、ページの中に収めたもの */
+export function movedRect(rect: Rect, dx: number, dy: number): Rect {
+  return {
+    ...rect,
+    x: round(clamp(rect.x + dx, 0, 1 - rect.w)),
+    y: round(clamp(rect.y + dy, 0, 1 - rect.h)),
+  }
+}
+
 /**
  * 選択要素を正規化座標で (dx, dy) 動かす Patch。コマはページの中に、
  * フキダシの中心としっぽ、焦点、ベクトルの両端はコマ内座標の 0..1 に収める。動かない軸は出さない。
@@ -69,8 +78,11 @@ export function nudgePatch(page: Page, selection: Selection, dx: number, dy: num
   if (selection.kind === 'panel') {
     const panel = page.panels.find((p) => p.id === selection.id)
     if (!panel) return []
-    move('/rect/x', panel.rect.x, dx, 1 - panel.rect.w)
-    move('/rect/y', panel.rect.y, dy, 1 - panel.rect.h)
+    const to = movedRect(panel.rect, dx, dy)
+    if (dx !== 0 && to.x !== panel.rect.x)
+      patch.push({ op: 'replace', path: `${pointer}/rect/x`, value: to.x })
+    if (dy !== 0 && to.y !== panel.rect.y)
+      patch.push({ op: 'replace', path: `${pointer}/rect/y`, value: to.y })
     return patch
   }
   if (selection.kind === 'bubble') {

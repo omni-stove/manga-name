@@ -1437,6 +1437,65 @@ describe('bubble tool', () => {
   })
 })
 
+describe('moving with the select tool', () => {
+  test('dragging the selected panel draws a draft, then moves it inside the page', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ onChange, onSelect, selection: { kind: 'panel', id: 'pn_2' } })
+    layout(svg)
+    const to = clientAt(0.65, 0.4)
+    drag(svg, clientAt(0.75, 0.4), to, { release: false })
+    expect(svg.querySelector('[data-draft="pn_2"]')).not.toBeNull()
+    expect(onChange).not.toHaveBeenCalled()
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(svg.querySelector('[data-draft]')).toBeNull()
+    expect(patchOf(onChange)).toEqual([{ op: 'replace', path: '/panels/1/rect/x', value: 0.4 }])
+    expect(onSelect).not.toHaveBeenCalled()
+
+    // pn_2 は右端にあるので、右へは動かない
+    onChange.mockClear()
+    drag(svg, clientAt(0.75, 0.4), clientAt(0.9, 0.4))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  test('dragging the selected bubble moves it with its tail', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ onChange, selection: { kind: 'bubble', id: 'bb_3' } })
+    layout(svg)
+    const to = inPanel('pn_3', 0.75, 0.25)
+    drag(svg, inPanel('pn_3', 0.85, 0.25), to, { release: false })
+    expect(svg.querySelector('[data-layer="bubble-tool"][data-draft="bb_3"]')).not.toBeNull()
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(patchOf(onChange)).toEqual([
+      { op: 'replace', path: '/panels/2/bubbles/0/pos', value: { x: 0.75, y: 0.25 } },
+      { op: 'replace', path: '/panels/2/bubbles/0/tail', value: { x: 0.54, y: 0.38 } },
+    ])
+  })
+
+  test('an element that is not selected does not move', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ onChange, selection: { kind: 'panel', id: 'pn_1' } })
+    layout(svg)
+    drag(svg, clientAt(0.75, 0.4), clientAt(0.65, 0.4))
+    drag(svg, inPanel('pn_3', 0.85, 0.25), inPanel('pn_3', 0.75, 0.25))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  test('Escape cancels a move without a patch or a deselect', async () => {
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({ onChange, onSelect, selection: { kind: 'panel', id: 'pn_2' } })
+    layout(svg)
+    const to = clientAt(0.65, 0.4)
+    drag(svg, clientAt(0.75, 0.4), to, { release: false })
+    key(svg, { key: 'Escape' })
+    expect(svg.querySelector('[data-draft]')).toBeNull()
+    fire(svg, pointer('pointerup', { id: 1, ...to }))
+    expect(onChange).not.toHaveBeenCalled()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+})
+
 describe('scribble', () => {
   const stroke = (id: string, points: { x: number; y: number }[]) => ({
     id,
