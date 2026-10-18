@@ -65,6 +65,7 @@ function boxOf(el: Element): ClientBox {
 /**
  * `focus` と `vector` ツールの操作。
  * `focus` はコマの上のクリックで `focusKind` の焦点を置いて選び、既存の焦点はドラッグで動かす。
+ * 位置をロックした焦点は動かさない。
  * `vector` はコマの上のドラッグで始点から終点へのベクトルを作って選ぶ。動かずに離したときは何もせず、
  * クリックの選択は useSelection に任せる。
  * ドラッグ中は `draft` を描くだけで、Patch は pointerup で 1 回だけ出す。Escape でドラッグを取り消す
@@ -112,6 +113,10 @@ export function useHintTool(opts: Options) {
       if (opts.tool === 'focus') {
         const hit = hintAt(opts.page, opts.width, opts.height, at, tolerance)
         const hitFocus = hit?.kind === 'focus' ? findFocus(opts.page, hit.id) : undefined
+        if (hit?.kind === 'focus' && hitFocus?.panel.focusPoints[hitFocus.index]?.locked) {
+          // ロックした焦点の上には新しい焦点も置かず、クリックの選択だけを useSelection に任せる
+          return
+        }
         if (hit?.kind === 'focus' && hitFocus) {
           take(e, {
             kind: 'move',

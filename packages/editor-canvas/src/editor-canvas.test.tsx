@@ -1351,6 +1351,30 @@ describe('bubble tool', () => {
     expect(onSelect).toHaveBeenCalledWith({ kind: 'bubble', id: 'bb_3' })
   })
 
+  test('a locked bubble is not moved, has no handles, and a click on it only selects it', async () => {
+    const page = {
+      ...samplePage,
+      panels: samplePage.panels.map((panel) => ({
+        ...panel,
+        bubbles: panel.bubbles.map((b) => (b.id === 'bb_3' ? { ...b, locked: true } : b)),
+      })),
+    }
+    const onChange = vi.fn()
+    const onSelect = vi.fn()
+    const svg = await render({
+      tool: 'bubble',
+      page,
+      selection: { kind: 'bubble', id: 'bb_3' },
+      onChange,
+      onSelect,
+    })
+    layout(svg)
+    expect(svg.querySelector('[data-layer="bubble-tool"]')).toBeNull()
+    drag(svg, inPanel('pn_3', 0.85, 0.25), inPanel('pn_3', 0.75, 0.25))
+    click(svg, inPanel('pn_3', 0.85, 0.25))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   test('the selected bubble shows four corner handles and its tail handle', async () => {
     const svg = await render({ tool: 'bubble', selection: { kind: 'bubble', id: 'bb_3' } })
     const layer = must(svg.querySelector('[data-layer="bubble-tool"]'))
@@ -1470,6 +1494,27 @@ describe('moving with the select tool', () => {
       { op: 'replace', path: '/panels/2/bubbles/0/pos', value: { x: 0.75, y: 0.25 } },
       { op: 'replace', path: '/panels/2/bubbles/0/tail', value: { x: 0.54, y: 0.38 } },
     ])
+  })
+
+  test('a locked panel or bubble does not move', async () => {
+    const page = {
+      ...samplePage,
+      panels: samplePage.panels.map((panel) => ({
+        ...panel,
+        locked: panel.id === 'pn_2' || undefined,
+        bubbles: panel.bubbles.map((b) => (b.id === 'bb_3' ? { ...b, locked: true } : b)),
+      })),
+    }
+    const onChange = vi.fn()
+    const panel = await render({ page, onChange, selection: { kind: 'panel', id: 'pn_2' } })
+    layout(panel)
+    drag(panel, clientAt(0.75, 0.4), clientAt(0.65, 0.4), { release: false })
+    expect(panel.querySelector('[data-draft]')).toBeNull()
+    fire(panel, pointer('pointerup', { id: 1, ...clientAt(0.65, 0.4) }))
+    const bubble = await render({ page, onChange, selection: { kind: 'bubble', id: 'bb_3' } })
+    layout(bubble)
+    drag(bubble, inPanel('pn_3', 0.85, 0.25), inPanel('pn_3', 0.75, 0.25))
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   test('an element that is not selected does not move', async () => {

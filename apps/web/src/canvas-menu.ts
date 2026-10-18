@@ -3,7 +3,7 @@ import { m } from '@manga/i18n'
 import { BUBBLE_SHAPES, FOCUS_KINDS } from '@manga/inspector'
 import type { Bubble, Page, Patch } from '@manga/schema'
 import type { ContextMenuItem, SegmentedOption } from '@manga/ui'
-import { findBubble, findFocus, findPanel } from './inspector-ops'
+import { findBubble, findFocus, findPanel, findVector } from './inspector-ops'
 
 type MenuItems = (ContextMenuItem | 'separator')[]
 type Target = NonNullable<Selection>
@@ -84,6 +84,16 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
     return option ? [{ label, shortcut: option.shortcut, onSelect: () => ctx.setTool(tool) }] : []
   }
   const move = (label: string, patch: Patch) => ctx.edit(label, target, patch)
+  const lock = (locked: boolean | undefined): ContextMenuItem => ({
+    label: m.web_canvas_menu_lock(),
+    checked: locked === true,
+    onSelect: () =>
+      locked
+        ? ctx.edit(m.web_canvas_menu_history_unlock(), target, [{ op: 'remove', path: '/locked' }])
+        : ctx.edit(m.web_canvas_menu_history_lock(), target, [
+            { op: 'add', path: '/locked', value: true },
+          ]),
+  })
 
   if (target.kind === 'panel') {
     const found = findPanel(ctx.page, target.id)
@@ -99,6 +109,7 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
         move,
       ),
       'separator',
+      lock(found.panel.locked),
       remove,
     ]
   }
@@ -119,6 +130,7 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
         move,
       ),
       'separator',
+      lock(found.bubble.locked),
       remove,
     ]
   }
@@ -136,10 +148,13 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
           ]),
       })),
       'separator',
+      lock(found.focus.locked),
       remove,
     ]
   }
-  return [remove]
+  const found = findVector(ctx.page, target.id)
+  if (!found) return []
+  return [lock(found.vector.locked), remove]
 }
 
 /** フキダシの形を選ぶ項目。今の形に印を付ける */
@@ -214,6 +229,34 @@ if (import.meta.vitest) {
       expect(shape.label).toMatch(/^形（.+）…$/)
       shape.onSelect()
       expect(ctx.openShapes).toHaveBeenCalled()
+    })
+
+    test('locking toggles the locked flag of the element', () => {
+      const ctx = contextOf()
+      item(elementMenuItems({ kind: 'bubble', id: 'bb_3' }, ctx), '位置をロック').onSelect()
+      expect(ctx.edit).toHaveBeenCalledWith('位置をロック', { kind: 'bubble', id: 'bb_3' }, [
+        { op: 'add', path: '/locked', value: true },
+      ])
+
+      const locked = {
+        ...page,
+        panels: page.panels.map((p) => ({
+          ...p,
+          bubbles: p.bubbles.map((b) => (b.id === 'bb_3' ? { ...b, locked: true } : b)),
+        })),
+      }
+      const lockedCtx = contextOf({ page: locked })
+      const lockItem = item(
+        elementMenuItems({ kind: 'bubble', id: 'bb_3' }, lockedCtx),
+        '位置をロック',
+      )
+      expect(lockItem.checked).toBe(true)
+      lockItem.onSelect()
+      expect(lockedCtx.edit).toHaveBeenCalledWith(
+        '位置のロックを解除',
+        { kind: 'bubble', id: 'bb_3' },
+        [{ op: 'remove', path: '/locked' }],
+      )
     })
 
     test('an element that is gone has no items', () => {

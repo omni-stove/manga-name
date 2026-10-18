@@ -28,7 +28,8 @@ const BUTTON_INSET = 4
 
 /**
  * `panel` ツールの UI。ドラッグ中は作成、リサイズ、頂点の移動の後の輪郭か、分割線がコマを横切る区間を
- * 破線で描く。それ以外は選択中のコマにリサイズのハンドル、多角形なら頂点のハンドル、分割と結合のボタンを出す
+ * 破線で描く。それ以外は選択中のコマにリサイズのハンドル、多角形なら頂点のハンドル、分割と結合のボタンを出す。
+ * 位置をロックしたコマにはハンドルを出さない
  */
 export function PanelToolLayer({
   selected,
@@ -99,7 +100,7 @@ export function PanelToolLayer({
   const left = box.x + BUTTON_INSET
   const right = Math.max(left, box.x + box.w - GENERATE_SPACE)
   const bottom = box.y + box.h - BUTTON_H - BUTTON_INSET
-  const vertices = selected.shape ? panelPolygon(selected, width, height) : []
+  const vertices = selected.shape && !selected.locked ? panelPolygon(selected, width, height) : []
   // 押下中に文字が変わっても後ろのボタンが動かないよう、幅は長い方の文字に合わせる。
   // 1 行に収まらなければ上の行へ折り返す
   const buttons = [
@@ -118,7 +119,7 @@ export function PanelToolLayer({
   const [vertical, horizontal, cut, merge] = buttons as [Slot, Slot, Slot, Slot]
   return (
     <g data-layer="panel-tool">
-      {handlePoints(box).map((h) => (
+      {(selected.locked ? [] : handlePoints(box)).map((h) => (
         <rect
           key={h.handle}
           data-handle={h.handle}

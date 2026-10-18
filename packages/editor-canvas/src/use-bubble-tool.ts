@@ -104,7 +104,7 @@ const toPanel = (box: Box, p: PagePoint): Pos => ({
 /**
  * `bubble` ツールの操作。コマの何も無いところをクリックすると既定のフキダシを作って選び、
  * フキダシのドラッグで移動、選択中のフキダシの隅のハンドルでリサイズ、しっぽの先端のドラッグで
- * しっぽを動かす（無ければ作る）。作成では本体をコマの枠に収め、移動とリサイズでは収めない。
+ * しっぽを動かす（無ければ作る）。位置をロックしたフキダシは動かさず、ハンドルも出さない。作成では本体をコマの枠に収め、移動とリサイズでは収めない。
  * ドラッグ中は `draft` を描くだけで、Patch は pointerup で 1 回だけ出す。
  * フキダシを動かさずに離したときの選択は useSelection に任せる。Escape でドラッグを取り消す
  */
@@ -114,10 +114,10 @@ export function useBubbleTool(opts: Options) {
   const active = opts.tool === 'bubble'
   const selectedId = opts.selection?.kind === 'bubble' ? opts.selection.id : undefined
   const found = active && selectedId !== undefined ? findBubble(opts.page, selectedId) : undefined
-  const selected = found && {
-    bubble: found.bubble,
-    panel: panelBox(found.panel, opts.width, opts.height),
-  }
+  const selected =
+    found && !found.bubble.locked
+      ? { bubble: found.bubble, panel: panelBox(found.panel, opts.width, opts.height) }
+      : undefined
   const handleSize = opts.view.w * HANDLE_RATIO
 
   const pointAt = (e: ReactPointerEvent<SVGSVGElement>) =>
@@ -186,7 +186,8 @@ export function useBubbleTool(opts: Options) {
       const hit = hitTest(opts.page, opts.width, opts.height, at)
       if (hit?.kind === 'bubble') {
         const start = findBubble(opts.page, hit.id)?.bubble
-        if (!start) return
+        // ロックしたフキダシの上では新しいフキダシも作らず、クリックの選択だけを useSelection に任せる
+        if (!start || start.locked) return
         // 動かさずに離せば useSelection のクリックになるよう、preventDefault しない
         capture(e.currentTarget, e.pointerId)
         gesture.current = {
