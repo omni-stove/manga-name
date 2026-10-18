@@ -43,7 +43,14 @@ const defaults: EditorCanvasProps = {
   diagnosis: null,
   selection: null,
   tool: 'select',
-  layers: { reference: true, art: true, scribble: true, hints: true, diagnosis: true },
+  layers: {
+    reference: true,
+    art: true,
+    scribble: true,
+    hints: true,
+    diagnosis: true,
+    frames: true,
+  },
   generating: new Set(),
   onChange: () => {},
   onSelect: () => {},
@@ -1043,6 +1050,22 @@ describe('hints layer', () => {
   test('layers.hints = false draws no hints', async () => {
     const svg = await render({ layers: { ...defaults.layers, hints: false } })
     expect(svg.querySelector('[data-layer="hints"]')).toBeNull()
+  })
+
+  test('layers.frames draws the bleed 3mm outside the trim and a centred inner frame', async () => {
+    const svg = await render({
+      settings: { ...project.settings, pageSize: { w: 182, h: 257, unit: 'mm' } },
+    })
+    const frame = (name: string) => {
+      const r = must(svg.querySelector(`[data-layer="frames"] [data-frame="${name}"]`))
+      return ['x', 'y', 'width', 'height'].map((a) => Number(r.getAttribute(a)))
+    }
+    expect(frame('bleed')).toEqual([-3, -3, 188, 263])
+    expect(frame('trim')).toEqual([0, 0, 182, 257])
+    expect(frame('inner').map((v) => Math.round(v * 10) / 10)).toEqual([16, 18.5, 150, 220])
+
+    const hidden = await render({ layers: { ...defaults.layers, frames: false } })
+    expect(hidden.querySelector('[data-layer="frames"]')).toBeNull()
   })
 })
 
