@@ -2,6 +2,7 @@ import type { ID, Page } from '@manga/schema'
 import { getBackend } from './backend'
 import { bubbleGeometry, fillBubble } from './bubble'
 import type { PxRect } from './geometry'
+import { withClip } from './panel'
 
 const GRAY = '#e0e0e0'
 /** pageSize の既定値。コマのアスペクト比の計算に使う */
@@ -10,7 +11,8 @@ const FRAME_WIDTH = 0.006
 
 /**
  * 生成に渡す配置図。対象コマの rect を切り出し、薄灰で塗ってフキダシ領域を白にし、コマの輪郭に黒い枠線を引く。
- * 多角形のコマでは輪郭の外も薄灰のまま残す。絵は rect いっぱいに描かせ、輪郭で切るのは合成のとき。
+ * 多角形のコマでは輪郭の外も薄灰のまま残し、overflow でないフキダシも輪郭の外は塗らない。
+ * 絵は rect いっぱいに描かせ、輪郭で切るのは合成のとき。
  * 文字は描かない。`pageSize` はコマのアスペクト比の計算に使い、省略時は既定の 182x257。
  */
 export async function renderLayoutPng(
@@ -32,8 +34,11 @@ export async function renderLayoutPng(
 
   c.fillStyle = GRAY
   c.fillRect(0, 0, width, height)
+  const outline = (panel.shape ?? []).map((p) => ({ x: p.x * width, y: p.y * height }))
   for (const bubble of panel.bubbles) {
-    fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff')
+    const fill = () => fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff')
+    if (bubble.overflow || outline.length === 0) fill()
+    else withClip(c, outline, fill)
   }
 
   const lineWidth = Math.max(1, Math.round(width * FRAME_WIDTH))

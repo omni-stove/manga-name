@@ -69,6 +69,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
       )}
       {page.panels.map((panel, i) => {
         const ref = currentArt(panel)?.ref
+        const { selection } = props
         return (
           <PanelView
             key={panel.id}
@@ -78,7 +79,13 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
             artRef={props.showArt ? ref : undefined}
             asset={props.showArt && ref !== undefined ? props.assets.get(ref) : undefined}
             generating={props.generating.has(panel.id)}
-            selected={isSelected(props.selection, 'panel', panel.id)}
+            selected={isSelected(selection, 'panel', panel.id)}
+            // 他のコマのフキダシを選んでもこのコマを描き直さないよう、自分のフキダシのときだけ渡す
+            selectedBubble={
+              selection?.kind === 'bubble' && panel.bubbles.some((b) => b.id === selection.id)
+                ? selection.id
+                : undefined
+            }
             clipId={`${props.idPrefix}-clip-${i}`}
             onArtError={props.onArtError}
           />
@@ -88,18 +95,16 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
       {[...page.panels]
         .sort((a, b) => a.order - b.order)
         .map((panel) =>
-          [...panel.bubbles]
-            .sort((a, b) => a.order - b.order)
-            .map((bubble) => (
-              <BubbleView
-                key={bubble.id}
-                bubble={bubble}
-                panelRect={panel.rect}
-                width={width}
-                height={height}
-                selected={isSelected(props.selection, 'bubble', bubble.id)}
-              />
-            )),
+          byOrder(panel.bubbles.filter((b) => b.overflow)).map((bubble) => (
+            <BubbleView
+              key={bubble.id}
+              bubble={bubble}
+              panelRect={panel.rect}
+              width={width}
+              height={height}
+              selected={isSelected(props.selection, 'bubble', bubble.id)}
+            />
+          )),
         )}
       {/* スピナーと生成ボタンはエディタだけの UI なので、フキダシに隠れないよう最後に描く */}
       {page.panels.map((panel) => (
@@ -121,6 +126,8 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
 const isSelected = (selection: Selection, kind: 'panel' | 'bubble', id: ID) =>
   selection?.kind === kind && selection.id === id
 
+const byOrder = (bubbles: Bubble[]) => [...bubbles].sort((a, b) => a.order - b.order)
+
 const PanelView = memo(function PanelView({
   panel,
   width,
@@ -129,6 +136,7 @@ const PanelView = memo(function PanelView({
   asset,
   generating,
   selected,
+  selectedBubble,
   clipId,
   onArtError,
 }: {
@@ -139,6 +147,7 @@ const PanelView = memo(function PanelView({
   asset: AssetState | undefined
   generating: boolean
   selected: boolean
+  selectedBubble: ID | undefined
   clipId: string
   onArtError(ref: string): void
 }) {
@@ -172,6 +181,19 @@ const PanelView = memo(function PanelView({
           <Placeholder panel={panel} rect={rect} error={asset !== undefined && 'error' in asset} />
         </g>
       )}
+      <PanelNumber order={panel.order} outline={outline} />
+      {/* 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く */}
+      {byOrder(panel.bubbles.filter((b) => !b.overflow)).map((bubble) => (
+        <BubbleView
+          key={bubble.id}
+          bubble={bubble}
+          panelRect={panel.rect}
+          width={width}
+          height={height}
+          selected={bubble.id === selectedBubble}
+          clipId={clipId}
+        />
+      ))}
       <polygon
         data-panel-frame=""
         points={points}
@@ -183,7 +205,6 @@ const PanelView = memo(function PanelView({
         strokeLinejoin="miter"
         vectorEffect="non-scaling-stroke"
       />
-      <PanelNumber order={panel.order} outline={outline} />
     </g>
   )
 })
@@ -386,7 +407,7 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
 
 /**
  * フキダシ。太線で輪郭を描いてから同じ形を白で塗り重ね、本体としっぽの継ぎ目の線を消す。
- * 外側に残る線は太線の半分になる
+ * 外側に残る線は太線の半分になる。clipId を渡すと、輪郭と文字をその clipPath で切る
  */
 const BubbleView = memo(function BubbleView({
   bubble,
@@ -394,12 +415,14 @@ const BubbleView = memo(function BubbleView({
   width,
   height,
   selected,
+  clipId,
 }: {
   bubble: Bubble
   panelRect: Rect
   width: number
   height: number
   selected: boolean
+  clipId?: string
 }) {
   const g = bubbleGeometry(bubble, panelBox({ rect: panelRect }, width, height))
   const body = bodyPath(bubble.shape, g)
@@ -413,20 +436,39 @@ const BubbleView = memo(function BubbleView({
   const shapes = tail === null ? [body] : [tail, body]
   return (
     <g className="ec-bubble" data-bubble-id={bubble.id} data-shape={bubble.shape}>
-      {shapes.map((d) => (
-        <path
-          key={`stroke-${d}`}
-          d={d}
-          fill="#fff"
-          stroke="#000"
-          strokeWidth={2}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      ))}
-      {shapes.map((d) => (
-        <path key={`fill-${d}`} d={d} fill="#fff" />
-      ))}
+      <g clipPath={clipId && `url(#${clipId})`}>
+        {shapes.map((d) => (
+          <path
+            key={`stroke-${d}`}
+            d={d}
+            fill="#fff"
+            stroke="#000"
+            strokeWidth={2}
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+        {shapes.map((d) => (
+          <path key={`fill-${d}`} d={d} fill="#fff" />
+        ))}
+        {layout.columns.length > 0 && (
+          <text
+            writingMode="vertical-rl"
+            fontFamily={FONT_FAMILY}
+            fontSize={layout.fontSize}
+            textAnchor="middle"
+            fill="#000"
+            data-truncated={layout.truncated || undefined}
+          >
+            {layout.columns.map((column, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
+              <tspan key={i} x={right - i * pitch} y={box.y + box.h / 2}>
+                {column}
+              </tspan>
+            ))}
+          </text>
+        )}
+      </g>
       {selected && (
         <path
           d={body}
@@ -436,23 +478,6 @@ const BubbleView = memo(function BubbleView({
           strokeDasharray="4 2"
           vectorEffect="non-scaling-stroke"
         />
-      )}
-      {layout.columns.length > 0 && (
-        <text
-          writingMode="vertical-rl"
-          fontFamily={FONT_FAMILY}
-          fontSize={layout.fontSize}
-          textAnchor="middle"
-          fill="#000"
-          data-truncated={layout.truncated || undefined}
-        >
-          {layout.columns.map((column, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
-            <tspan key={i} x={right - i * pitch} y={box.y + box.h / 2}>
-              {column}
-            </tspan>
-          ))}
-        </text>
       )}
       <text
         x={g.cx + g.rx}

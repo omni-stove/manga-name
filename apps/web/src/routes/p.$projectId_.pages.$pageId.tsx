@@ -29,7 +29,6 @@ import {
   type Panel,
   type Patch,
   type Project,
-  type ProjectSettings,
   pageCharacterIds,
   panelCharacterIds,
 } from '@manga/schema'
@@ -506,7 +505,6 @@ function Editor() {
                 page={page}
                 pageId={pageId}
                 characters={project.characters}
-                pageSize={project.settings.pageSize}
                 diagnosis={diagnosis}
                 selection={selection}
                 generating={generating}
@@ -656,7 +654,6 @@ function SelectionInspector({
   page,
   pageId,
   characters,
-  pageSize,
   diagnosis,
   selection,
   generating,
@@ -669,7 +666,6 @@ function SelectionInspector({
   page: Page
   pageId: ID
   characters: Character[]
-  pageSize: ProjectSettings['pageSize']
   diagnosis: PageDiagnosis | null
   selection: Selection
   generating: Set<ID>
@@ -719,7 +715,6 @@ function SelectionInspector({
         key={selection.id}
         bubble={found.bubble}
         characters={characters}
-        frame={{ panel: found.panel, pageSize }}
         onChange={(patch) =>
           apply('フキダシを編集', (p) => bubblePatch(p, pageId, selection.id, patch))
         }

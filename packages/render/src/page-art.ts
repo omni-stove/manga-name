@@ -2,7 +2,7 @@ import { type ID, type Page, panelOutline } from '@manga/schema'
 import { getBackend } from './backend'
 import { bubbleGeometry, fillBubble } from './bubble'
 import { type PxRect, pointToPx, rectToPx } from './geometry'
-import { drawFrame } from './panel'
+import { drawFrame, withClip } from './panel'
 
 const GRAY = '#e0e0e0'
 /** pageSize の既定値。ページのアスペクト比の計算に使う */
@@ -11,7 +11,8 @@ const DEFAULT_PAGE_SIZE = { w: 182, h: 257 }
 const FRAME_WIDTH = 0.003
 
 /**
- * ページ全体の生成に渡す配置図。白地に各コマの輪郭の内側を薄灰で塗り、輪郭に黒い枠線を引いてから、フキダシ領域を白にする。
+ * ページ全体の生成に渡す配置図。白地に各コマの輪郭の内側を薄灰で塗ってフキダシ領域を白にし、輪郭に黒い枠線を引く。
+ * overflow でないフキダシは輪郭の外を切り、overflow のフキダシは枠線の上に塗る。
  * 幅は `width`、高さは判型の縦横比から決める。文字は描かない。`pageSize` の既定は 182x257。
  */
 export async function renderPageLayoutPng(
@@ -29,8 +30,17 @@ export async function renderPageLayoutPng(
 
   c.fillStyle = '#fff'
   c.fillRect(0, 0, width, height)
+  const fillBubbles = (panel: Page['panels'][number], overflow: boolean) => {
+    const rect = rectToPx(panel.rect, pageRect)
+    for (const bubble of panel.bubbles) {
+      if ((bubble.overflow === true) !== overflow) continue
+      fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff')
+    }
+  }
+  const outlineOf = (panel: Page['panels'][number]) =>
+    panelOutline(panel).map((p) => pointToPx(p, pageRect))
   for (const panel of page.panels) {
-    const outline = panelOutline(panel).map((p) => pointToPx(p, pageRect))
+    const outline = outlineOf(panel)
     c.fillStyle = GRAY
     c.beginPath()
     outline.forEach((p, i) => {
@@ -39,22 +49,12 @@ export async function renderPageLayoutPng(
     })
     c.closePath()
     c.fill()
+    withClip(c, outline, () => fillBubbles(panel, false))
   }
   const lineWidth = Math.max(1, Math.round(width * FRAME_WIDTH))
-  for (const panel of page.panels) {
-    drawFrame(
-      c,
-      panelOutline(panel).map((p) => pointToPx(p, pageRect)),
-      lineWidth,
-    )
-  }
+  for (const panel of page.panels) drawFrame(c, outlineOf(panel), lineWidth)
   // はみ出したフキダシを後ろのコマの塗りと枠線が隠さないよう、全コマの後に塗る
-  for (const panel of page.panels) {
-    const rect = rectToPx(panel.rect, pageRect)
-    for (const bubble of panel.bubbles) {
-      fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff')
-    }
-  }
+  for (const panel of page.panels) fillBubbles(panel, true)
   return surface.toPng()
 }
 

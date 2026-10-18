@@ -2,7 +2,14 @@ import { currentArt, type Page, type Panel, panelOutline } from '@manga/schema'
 import { getBackend, loadFonts, type Surface } from './backend'
 import { bubbleGeometry, drawBubble, textBox } from './bubble'
 import { type PxRect, pagePixelSize, pointToPx, rectToPx } from './geometry'
-import { drawCover, drawFrame, drawNotesMargin, drawPanelNumber, drawPlaceholder } from './panel'
+import {
+  drawCover,
+  drawFrame,
+  drawNotesMargin,
+  drawPanelNumber,
+  drawPlaceholder,
+  withClip,
+} from './panel'
 import { drawVerticalText, layoutBubbleText } from './text'
 import type { RenderContext, RenderOptions } from './types'
 
@@ -57,22 +64,10 @@ export async function drawPage(
 
   const panels = byOrder(page.panels)
   const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx)))
-
-  panels.forEach((panel, i) => {
-    const rect = rectToPx(panel.rect, pageRect)
-    const outline = panelOutline(panel).map((p) => pointToPx(p, pageRect))
-    const image = arts[i]
-    if (image) drawCover(c, image, rect, outline)
-    else drawPlaceholder(c, panel, rect, outline, pageSize.w * NOTE_FONT)
-    drawFrame(c, outline, pageSize.w * FRAME_WIDTH)
-    if (opts.panelNumbers) {
-      drawPanelNumber(c, panel.order, outline, pageSize.w * NOTE_FONT * 1.5)
-    }
-  })
-
-  for (const panel of panels) {
+  const drawBubbles = (panel: Panel, overflow: boolean) => {
     const rect = rectToPx(panel.rect, pageRect)
     for (const bubble of byOrder(panel.bubbles)) {
+      if ((bubble.overflow === true) !== overflow) continue
       const g = bubbleGeometry(bubble, rect)
       drawBubble(c, bubble.shape, g, pageSize.w * BUBBLE_LINE_WIDTH)
       const box = textBox(bubble.shape, g)
@@ -80,6 +75,23 @@ export async function drawPage(
       drawVerticalText(c, lines, fontPx, box)
     }
   }
+
+  panels.forEach((panel, i) => {
+    const rect = rectToPx(panel.rect, pageRect)
+    const outline = panelOutline(panel).map((p) => pointToPx(p, pageRect))
+    const image = arts[i]
+    if (image) drawCover(c, image, rect, outline)
+    else drawPlaceholder(c, panel, rect, outline, pageSize.w * NOTE_FONT)
+    if (opts.panelNumbers) {
+      drawPanelNumber(c, panel.order, outline, pageSize.w * NOTE_FONT * 1.5)
+    }
+    // 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く
+    withClip(c, outline, () => drawBubbles(panel, false))
+    drawFrame(c, outline, pageSize.w * FRAME_WIDTH)
+  })
+
+  // はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く
+  for (const panel of panels) drawBubbles(panel, true)
 
   if (margin > 0) {
     const area: PxRect = { x: marginOnLeft ? 0 : pageSize.w, y: 0, w: margin, h: pageSize.h }
