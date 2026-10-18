@@ -10,7 +10,6 @@ import type {
   Panel,
   PanelDiagnosis,
   Patch,
-  ProjectSettings,
   Vector,
 } from '@manga/schema'
 
@@ -30,6 +29,8 @@ export interface PanelInspectorProps {
   /** 生成に診断の `hint` を渡すか。既定はオン */
   useHint?: boolean
   onUseHintChange?(use: boolean): void
+  /** 採用中でない絵を履歴から消す。渡さなければ履歴に削除ボタンを出さない */
+  onRemoveArt?(artId: ID): void
   /** PanelArt.ref を表示用 URL にする */
   resolveAsset(ref: string): Promise<string>
 }
@@ -81,9 +82,4 @@ export interface PageInspectorProps {
   onGenerateAll(): void
   /** 参考画像を選ぶ UI を開く。選んだ結果は親が `reference` の Patch にする */
   onPickReference(): void
-}
-
-export interface ProjectSettingsInspectorProps {
-  settings: ProjectSettings
-  onChange(patch: Patch): void
 }

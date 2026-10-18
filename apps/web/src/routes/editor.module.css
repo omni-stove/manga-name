@@ -41,15 +41,6 @@
   --sidebar-width: 24rem;
 }
 
-.section {
-  margin: var(--space-12) 0;
-}
-
-.section > summary {
-  cursor: pointer;
-  font-weight: var(--weight-medium);
-}
-
 .inspectorFields {
   display: contents;
 }
@@ -112,12 +103,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.artRemove {
-  list-style: none;
-  margin: var(--space-8) 0 0;
-  padding: 0;
 }
 
 /* iPad 横向きではインスペクタを詰め、キャンバスの幅を残す */

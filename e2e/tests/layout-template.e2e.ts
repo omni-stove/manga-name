@@ -1,15 +1,20 @@
 import { expect, test } from '@playwright/test'
-import { FIXTURE_EPISODE, FIXTURE_PROJECT, importProject, inspector, openPage } from './app'
+import { FIXTURE_EPISODE, FIXTURE_PROJECT, importProject, openPage } from './app'
 
 test('ページのコマ割りをテンプレートに登録し、そのテンプレートでページを足して、確認を経て登録を消せる', async ({
   page,
 }) => {
   await importProject(page, FIXTURE_PROJECT)
   await openPage(page, 1)
-  const side = inspector(page)
-  await side.getByText('コマ割りを登録').first().click()
-  await side.getByLabel('テンプレート名').fill('6 コマの基本')
-  await side.getByRole('button', { name: 'コマ割りを登録' }).click()
+  // 左上の隅は作業台
+  await page
+    .getByRole('application', { name: 'キャンバス' })
+    .click({ button: 'right', position: { x: 4, y: 4 } })
+  await page.getByRole('menuitem', { name: 'コマ割りをテンプレートに登録…' }).click()
+  const register = page.getByRole('dialog', { name: 'コマ割りをテンプレートに登録' })
+  await register.getByLabel('テンプレート名').fill('6 コマの基本')
+  await register.getByRole('button', { name: '登録' }).click()
+  await expect(register).toBeHidden()
   await expect(page.getByText('「6 コマの基本」をテンプレートに登録しました')).toBeVisible()
 
   await page.getByRole('link', { name: FIXTURE_EPISODE }).click()

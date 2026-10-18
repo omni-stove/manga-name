@@ -8,7 +8,6 @@ import { CharacterInspector } from './character-inspector'
 import { FocusInspector } from './focus-inspector'
 import { PageInspector } from './page-inspector'
 import { PanelInspector } from './panel-inspector'
-import { ProjectSettingsInspector } from './project-settings-inspector'
 import { VectorInspector } from './vector-inspector'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -158,6 +157,29 @@ describe('PanelInspector', () => {
       must(container.querySelector<HTMLElement>('[data-art-id="art_2"] button')).click(),
     )
     expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  test('every art but the current one has a remove button that calls onRemoveArt', async () => {
+    const onRemoveArt = vi.fn<(artId: string) => void>()
+    const props = {
+      panel: panelWithArts,
+      characters: project.characters,
+      onChange: () => {},
+      onGenerate: () => {},
+      resolveAsset,
+    }
+    const removeOf = (container: HTMLElement, id: string) =>
+      [...container.querySelectorAll(`[data-art-id="${id}"] button`)].find(
+        (b) => b.textContent === '削除',
+      ) as HTMLButtonElement | undefined
+
+    const { container, root } = await render(<PanelInspector {...props} />)
+    expect(removeOf(container, 'art_1')).toBeUndefined()
+
+    await act(async () => root.render(<PanelInspector {...props} onRemoveArt={onRemoveArt} />))
+    expect(removeOf(container, 'art_2')).toBeUndefined()
+    await act(async () => must(removeOf(container, 'art_3')).click())
+    expect(onRemoveArt).toHaveBeenCalledWith('art_3')
   })
 
   test('note is debounced 300ms, order commits on Enter, an invalid order emits nothing', async () => {
@@ -316,23 +338,6 @@ describe('BubbleInspector', () => {
     expect(checkbox.checked).toBe(true)
     await act(async () => checkbox.click())
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/overflow' }])
-  })
-})
-
-describe('ProjectSettingsInspector', () => {
-  test('a dpi outside the schema emits nothing and a valid one replaces /dpi', async () => {
-    const onChange = vi.fn<(patch: Patch) => void>()
-    const { container } = await render(
-      <ProjectSettingsInspector settings={project.settings} onChange={onChange} />,
-    )
-    const dpi = inputLabelled(container, 'dpi')
-    await act(async () => setValue(dpi, '-1'))
-    await act(async () => setValue(dpi, '72.5'))
-    await act(async () => setValue(dpi, ''))
-    expect(onChange).not.toHaveBeenCalled()
-    expect(dpi.getAttribute('aria-invalid')).toBe('true')
-    await act(async () => setValue(dpi, '600'))
-    expect(onChange).toHaveBeenCalledWith([{ op: 'replace', path: '/dpi', value: 600 }])
   })
 })
 

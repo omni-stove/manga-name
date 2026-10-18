@@ -144,11 +144,6 @@ export function characterPatch(project: Project, characterId: ID, patch: Patch):
   return prefixed(`/characters/${index}`, patch)
 }
 
-/** ProjectSettings root の Patch を Project root に */
-export function settingsInspectorPatch(patch: Patch): Patch {
-  return prefixed('/settings', patch)
-}
-
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
   const { fixtures } = await import('@manga/schema')
@@ -306,13 +301,5 @@ if (import.meta.vitest) {
       { op: 'remove', path: '/characters/0/appearance' },
     ])
     expect(() => characterPatch(sample, 'nope', [])).toThrow('character')
-  })
-
-  test('settingsInspectorPatch prefixes /settings', () => {
-    const patch = settingsInspectorPatch([{ op: 'replace', path: '/dpi', value: 600 }])
-    expect(patch).toEqual([{ op: 'replace', path: '/settings/dpi', value: 600 }])
-    const store = storeOf()
-    store.applyPatch(patch)
-    expect(store.get().settings.dpi).toBe(600)
   })
 }
