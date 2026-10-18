@@ -1,22 +1,4 @@
-/* キャンバスを主役にするため、エディタと同じく main の余白を打ち消して画面の端まで使う */
-.onboarding {
-  height: 100vh;
-  margin: calc(-1 * var(--space-16));
-}
-
-.toolbar {
+.notice {
   padding: var(--space-6) var(--space-16);
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-chrome);
-}
-
-.actions {
-  margin-left: auto;
-}
-
-.canvas {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--surface-desk);
+  background: var(--guide-tint);
 }

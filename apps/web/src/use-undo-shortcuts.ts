@@ -15,10 +15,11 @@ export function isEditable(target: EventTarget | null): boolean {
 
 /**
  * Cmd / Ctrl + Z で Undo、Shift を足すか Ctrl + Y で Redo。
- * テキスト入力の中では入力欄自身の取り消しに任せる
+ * テキスト入力の中では入力欄自身の取り消しに任せる。`enabled` が false の間は受けない
  */
-export function useUndoShortcuts(store: ProjectStore): void {
+export function useUndoShortcuts(store: ProjectStore, enabled = true): void {
   useEffect(() => {
+    if (!enabled) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || isEditable(e.target)) return
       const k = e.key.toLowerCase()
@@ -30,5 +31,5 @@ export function useUndoShortcuts(store: ProjectStore): void {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [store])
+  }, [store, enabled])
 }
