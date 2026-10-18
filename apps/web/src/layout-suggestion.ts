@@ -51,7 +51,9 @@ export function suggestedPanels(
         panel.lines.flatMap(({ speakerId, ...line }) => {
           const text = line.text.trim()
           if (text === '') return []
-          return [{ ...line, text, ...(speakerId !== undefined && known(speakerId) && { speakerId }) }]
+          return [
+            { ...line, text, ...(speakerId !== undefined && known(speakerId) && { speakerId }) },
+          ]
         }),
         settings,
       ),

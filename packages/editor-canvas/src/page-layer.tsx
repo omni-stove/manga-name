@@ -637,7 +637,6 @@ function IllegibleAlert({ x, y, truncated }: { x: number; y: number; truncated: 
     ? m.editor_canvas_bubble_text_truncated()
     : m.editor_canvas_bubble_text_too_small()
   return (
-    // biome-ignore lint/a11y/useSemanticElements: SVG の <g> に <img> は使えず、role="img" で名前を伝える
     // biome-ignore lint/a11y/noInteractiveElementToNoninteractiveRole: biome が <g> を対話要素と誤判定する。警告の印は操作できず、名前だけを伝える
     <g role="img" aria-label={message} data-bubble-alert={truncated ? 'truncated' : 'small'}>
       <title>{message}</title>
