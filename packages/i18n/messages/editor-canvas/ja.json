@@ -21,6 +21,7 @@
   "editor_canvas_panel_merging_aria": "結合するのをやめる",
   "editor_canvas_panel_image_load_failed": "画像を読み込めません",
   "editor_canvas_panel_generating": "生成中",
+  "editor_canvas_page_generating": "ページを生成中",
   "editor_canvas_panel_generate": "生成",
   "editor_canvas_panel_generate_aria": "このコマを生成",
   "editor_canvas_bubble_text_truncated": "セリフがフキダシに収まりません。フキダシを広げるかセリフを短くしてください",

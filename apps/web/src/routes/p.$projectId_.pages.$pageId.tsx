@@ -60,7 +60,7 @@ import { ExportDialog, type ExportSettings } from '../export-dialog'
 import { exportFileName, pageExporter } from '../export-page'
 import { collectExportJob } from '../export-page-job'
 import { REFERENCE_ACCEPT, useFilePicker } from '../file-picker'
-import { generatingPanels, usesHint, usesReference } from '../generate-panel'
+import { generatingPage, generatingPanels, usesHint, usesReference } from '../generate-panel'
 import { HistoryButtons, Icon, MOD } from '../history-buttons'
 import {
   bubblePatch,
@@ -599,6 +599,7 @@ function Editor() {
             focusKind={focusKind}
             layers={layers}
             generating={generating}
+            generatingPage={generatingPage(generatingState, projectId, pageId)}
             onChange={(patch) =>
               apply(m.web_editor_history_edit_canvas(), (p) => pagePatch(p, pageId, patch))
             }

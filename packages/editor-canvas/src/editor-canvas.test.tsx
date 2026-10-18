@@ -260,6 +260,17 @@ test('the generate button calls onGenerate and is hidden while generating', asyn
   expect(onGenerate).toHaveBeenCalledWith('pn_4')
 })
 
+test('a page generated in one call gets one spinner over the page and no generate buttons', async () => {
+  const svg = await render({
+    onGenerate: vi.fn(),
+    generating: new Set(['pn_1', 'pn_2']),
+    generatingPage: true,
+  })
+  expect(svg.querySelectorAll('[data-spinner]')).toHaveLength(1)
+  expect(svg.querySelector('[data-overlay-panel-id] [data-spinner]')).toBeNull()
+  expect(svg.querySelector('.ec-generate')).toBeNull()
+})
+
 const base = fitView(project.settings.pageSize.w, project.settings.pageSize.h)
 
 /** base と同じ縦横比で 2px / mm になる大きさに固定する */

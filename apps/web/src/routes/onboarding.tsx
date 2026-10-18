@@ -4,7 +4,7 @@ import { currentArt } from '@manga/schema'
 import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from 'zustand'
-import { batchRunning, generatingPanels } from '../generate-panel'
+import { batchRunning, generatingPage, generatingPanels } from '../generate-panel'
 import { exportOnboarding, openOnboarding } from '../onboarding/onboarding'
 import { errorMessage } from '../route-error'
 import { saveFile } from '../save-file'
@@ -89,6 +89,7 @@ function Onboarding() {
           tool="select"
           layers={LAYERS}
           generating={generatingPanels(generatingState, projectId)}
+          generatingPage={generatingPage(generatingState, projectId, pageId)}
           onChange={noop}
           onSelect={noop}
           resolveAsset={resolveAsset}
