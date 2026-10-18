@@ -25,11 +25,13 @@ export interface Layers {
   frames: boolean
 }
 
-/** ページの何も無いところかページの外側の右クリック */
+/** キャンバスの右クリック */
 export interface CanvasMenuRequest {
   /** 押した位置の画面座標 */
   x: number
   y: number
+  /** 押した要素。ページの何も無いところかページの外側なら null */
+  target: Selection
   /** ズームとパンを全体表示に戻す */
   fit(): void
 }
@@ -62,8 +64,8 @@ export interface EditorCanvasProps {
   /** PanelArt.ref と Page.reference.ref を表示用 URL にする */
   resolveAsset(ref: string): Promise<string>
   /**
-   * 要素の無いところ（作業台とコマの外）の右クリックで呼ぶ。渡すとブラウザのメニューを出さない。
-   * 要素の上の右クリックでは呼ばない
+   * 右クリックで呼ぶ。渡すとブラウザのメニューを出さない。
+   * 要素の上なら、先にその要素を `onSelect` で選んでから呼ぶ
    */
   onContextMenu?(request: CanvasMenuRequest): void
 }

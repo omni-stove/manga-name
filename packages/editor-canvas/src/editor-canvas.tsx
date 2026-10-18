@@ -42,7 +42,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * ズームとパンは viewBox で表す。ページの外側は作業台の色（`--surface-desk`）。
  * クリックで選択、ホバーで強調、Delete で削除、矢印キーで 0.01 刻みの移動。
  * `panel` ツールと手描きの最中を除き、要素の無いところ（作業台とコマの外）のドラッグでページを動かす。
- * 要素の無いところの右クリックは `onContextMenu` に渡す。
+ * 右クリックは押した要素を選んでから `onContextMenu` に渡す。
  * `panel` ツールではドラッグでコマを作り、選択中のコマをハンドルでリサイズ、ボタンで縦横に分割、
  * 「線で分割」か Alt + ドラッグで引いた斜めの線で分割、「結合」か Shift + クリックで押したコマと結合する。多角形のコマは
  * 頂点をドラッグで動かし、矩形のコマも Alt + 隅のドラッグで頂点を動かせる。
@@ -226,9 +226,13 @@ export function EditorCanvas(props: EditorCanvasProps) {
         scribble.handlers.onPointerCancel(e)
       }}
       onContextMenu={(e) => {
-        if (!props.onContextMenu || selection.hitAt(e) !== null) return
+        if (!props.onContextMenu) return
         e.preventDefault()
-        props.onContextMenu({ x: e.clientX, y: e.clientY, fit: viewport.fit })
+        // メニューを閉じたときにフォーカスがキャンバスへ戻り、続けて Delete や矢印キーが効くようにする
+        e.currentTarget.focus({ preventScroll: true })
+        const target = selection.hitAt(e)
+        if (target !== null && !sameSelection(target, props.selection)) props.onSelect(target)
+        props.onContextMenu({ x: e.clientX, y: e.clientY, target, fit: viewport.fit })
       }}
       onKeyDown={(e) => {
         if (
