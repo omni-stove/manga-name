@@ -132,8 +132,8 @@ describe('X-Debug-User', () => {
 })
 
 describe('sign-up', () => {
-  /** alice のプロジェクトに email 宛ての招待を expiresAt まで入れ、リンクのトークンを返す */
-  async function seedInvite(email: string, expiresAt: number) {
+  /** alice のプロジェクトに email 宛て（null なら誰でも受け取れる）の招待を expiresAt まで入れ、リンクのトークンを返す */
+  async function seedInvite(email: string | null, expiresAt: number) {
     const headers = { [DEBUG_USER_HEADER]: 'alice', 'content-type': 'application/json' }
     const res = await app.request(
       '/v1/projects',
@@ -169,6 +169,11 @@ describe('sign-up', () => {
   test('refuses another email than the invited one, even with the link', async () => {
     const token = await seedInvite('carol@example.com', Date.now() + DAY)
     expect(await validate('eve@example.com', token)).toEqual({ error: INVITE_EMAIL_MISMATCH })
+  })
+
+  test('lets any email sign up through a link without an email', async () => {
+    const token = await seedInvite(null, Date.now() + DAY)
+    expect(await validate('eve@example.com', token)).toBeUndefined()
   })
 
   test('lets an existing user sign in without a link', async () => {

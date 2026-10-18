@@ -40,17 +40,18 @@ async function createProject(user = 'alice', title = '共有') {
 
 interface Invite {
   id: string
-  email: string
+  email: string | null
   role: string
   expiresAt: string
   token: string
 }
 
-async function invite(projectId: string, email: string, role: string, user = 'alice') {
+/** email が null なら、誰でも受け取れる招待を作る */
+async function invite(projectId: string, email: string | null, role: string, user = 'alice') {
   const res = await call(`/v1/projects/${projectId}/invites`, {
     method: 'POST',
     user,
-    body: { email, role },
+    body: email === null ? { role } : { email, role },
   })
   expect(res.status).toBe(201)
   return (await res.json()) as Invite
@@ -71,7 +72,7 @@ async function join(projectId: string, userId: string, role: string) {
 interface Members {
   role: string
   members: { userId: string; role: string; email: string | null; name: string | null }[]
-  invites: { id: string; email: string; role: string; expiresAt: string }[]
+  invites: { id: string; email: string | null; role: string; expiresAt: string }[]
 }
 
 async function members(projectId: string, user = 'alice') {
@@ -532,6 +533,49 @@ describe('POST /v1/invites/:token/accept', () => {
     expect((await members(project.id)).members.filter((m) => m.userId === EDITOR)).toEqual([
       { userId: EDITOR, role: 'viewer', email: null, name: null },
     ])
+  })
+
+  test('an invite without an email lets anyone join, until it expires or is revoked', async () => {
+    const project = await createProject()
+    const created = await invite(project.id, null, 'commenter')
+    expect(created.email).toBeNull()
+    const preview = await call(`/v1/invites/${created.token}`, { user: 'carol' })
+    expect(((await preview.json()) as { email: unknown }).email).toBeNull()
+    for (const user of ['carol', 'dave@example.com']) {
+      clock += 1
+      const res = await accept(created.token, user)
+      expect(res.status, user).toBe(200)
+      expect(await res.json()).toEqual({ projectId: project.id, role: 'commenter' })
+    }
+    expect((await members(project.id)).members.map((m) => [m.userId, m.role])).toEqual([
+      ['alice', 'owner'],
+      ['carol', 'commenter'],
+      ['dave@example.com', 'commenter'],
+    ])
+    expect((await members(project.id)).invites.map((i) => i.id)).toEqual([created.id])
+
+    await call(`/v1/projects/${project.id}/invites/${created.id}`, { method: 'DELETE' })
+    expect((await accept(created.token, 'erin')).status).toBe(404)
+  })
+
+  test('an invite without an email keeps the role of those already in the project', async () => {
+    const project = await sharedProject()
+    const { token } = await invite(project.id, null, 'viewer')
+    for (const [user, role] of [
+      [EDITOR, 'editor'],
+      ['alice', 'owner'],
+    ] as const) {
+      const res = await accept(token, user)
+      expect(await res.json()).toEqual({ projectId: project.id, role })
+    }
+    expect((await members(project.id, EDITOR)).role).toBe('editor')
+  })
+
+  test('another invite without an email does not replace the first', async () => {
+    const project = await createProject()
+    const first = await invite(project.id, null, 'viewer')
+    const second = await invite(project.id, null, 'editor')
+    expect((await members(project.id)).invites.map((i) => i.id)).toEqual([first.id, second.id])
   })
 
   test('the owner accepting an invite to their own project stays the owner', async () => {
