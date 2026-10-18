@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Character } from '@manga/schema'
 import { Button, ConfirmDialog, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, useNavigate } from '@tanstack/react-router'
@@ -25,7 +26,7 @@ function CharacterList() {
   return (
     <YStack gap={8}>
       <XStack wrap gap={12}>
-        <Typography variant="heading">キャラクター一覧</Typography>
+        <Typography variant="heading">{m.web_characters_title()}</Typography>
         <Button
           size="small"
           variant="primary"
@@ -33,7 +34,7 @@ function CharacterList() {
             void navigate({ to: '/p/$projectId/characters/new', params: { projectId } })
           }
         >
-          キャラクターを追加
+          {m.web_characters_add()}
         </Button>
       </XStack>
       {error && (
@@ -42,7 +43,7 @@ function CharacterList() {
         </Typography>
       )}
       {project.characters.length === 0 && (
-        <Typography tone="muted">まだキャラクターがいません。</Typography>
+        <Typography tone="muted">{m.web_characters_empty()}</Typography>
       )}
       <ul className={`${common.cards} ${styles.cards}`}>
         {project.characters.map((character) => (
@@ -57,11 +58,11 @@ function CharacterList() {
               resolveAsset={resolveAsset}
             />
             <Typography as="small" variant="caption" tone="muted">
-              使用コマ {characterUsage(project, character.id)}
+              {m.web_characters_usage({ count: characterUsage(project, character.id) })}
             </Typography>
             <XStack as="span" wrap gap={6} className={common.cardActions}>
               <Button size="small" variant="ghost" onClick={() => setRemoving(character)}>
-                削除
+                {m.web_common_delete()}
               </Button>
             </XStack>
           </YStack>
@@ -69,11 +70,11 @@ function CharacterList() {
       </ul>
       {removing && (
         <ConfirmDialog
-          title="キャラクターを削除"
-          message={`${removing.name} を削除しますか？`}
-          confirmLabel="削除"
+          title={m.web_characters_remove()}
+          message={m.web_characters_remove_confirm({ name: removing.name })}
+          confirmLabel={m.web_common_delete()}
           onConfirm={() => {
-            apply('キャラクターを削除', (p) => removeCharacterPatch(p, removing.id))
+            apply(m.web_characters_remove(), (p) => removeCharacterPatch(p, removing.id))
             setRemoving(undefined)
           }}
           onCancel={() => setRemoving(undefined)}
