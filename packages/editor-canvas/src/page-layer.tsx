@@ -510,7 +510,8 @@ function IllegibleAlert({ x, y, truncated }: { x: number; y: number; truncated: 
     ? 'セリフがフキダシに収まりません。フキダシを広げるかセリフを短くしてください'
     : 'セリフの文字が小さすぎて読めません。フキダシを広げるかセリフを短くしてください'
   return (
-    <g aria-label={message} data-bubble-alert={truncated ? 'truncated' : 'small'}>
+    // biome-ignore lint/a11y/useSemanticElements: SVG の <g> に <img> は使えず、role="img" で名前を伝える
+    <g role="img" aria-label={message} data-bubble-alert={truncated ? 'truncated' : 'small'}>
       <title>{message}</title>
       <circle cx={x} cy={y} r={ALERT_RADIUS} style={{ fill: 'var(--alert)' }} />
       <text
