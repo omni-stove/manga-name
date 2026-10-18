@@ -1,8 +1,9 @@
 import { type ID, type Page, panelOutline } from '@manga/schema'
-import { getBackend } from './backend'
+import { getBackend, loadFonts } from './backend'
 import { bubbleGeometry, fillBubble } from './bubble'
 import { type PxRect, pointToPx, rectToPx } from './geometry'
 import { drawFrame, withClip } from './panel'
+import { drawPlacement, hasPlacement } from './placement'
 
 const GRAY = '#e0e0e0'
 /** pageSize の既定値。ページのアスペクト比の計算に使う */
@@ -13,7 +14,8 @@ const FRAME_WIDTH = 0.003
 /**
  * ページ全体の生成に渡す配置図。白地に各コマの輪郭の内側を薄灰で塗ってフキダシ領域を白にし、輪郭に黒い枠線を引く。
  * overflow でないフキダシは輪郭の外を切り、overflow のフキダシは枠線の上に塗る。
- * 幅は `width`、高さは判型の縦横比から決める。文字は描かない。`pageSize` の既定は 182x257。
+ * 最後に焦点と誘導線のあるコマへ配置の印（drawPlacement）を重ねる。
+ * 幅は `width`、高さは判型の縦横比から決める。セリフは描かない。`pageSize` の既定は 182x257。
  */
 export async function renderPageLayoutPng(
   page: Page,
@@ -23,7 +25,7 @@ export async function renderPageLayoutPng(
   const width = Math.max(1, Math.round(opts.width))
   const height = Math.max(1, Math.round((width * pageSize.h) / pageSize.w))
 
-  const backend = await getBackend()
+  const [backend] = await Promise.all([getBackend(), loadFonts()])
   const surface = backend.createSurface(width, height)
   const c = surface.ctx
   const pageRect: PxRect = { x: 0, y: 0, w: width, h: height }
@@ -55,6 +57,10 @@ export async function renderPageLayoutPng(
   for (const panel of page.panels) drawFrame(c, outlineOf(panel), lineWidth)
   // はみ出したフキダシを後ろのコマの塗りと枠線が隠さないよう、全コマの後に塗る
   for (const panel of page.panels) fillBubbles(panel, true)
+  const mm = width / pageSize.w
+  for (const panel of page.panels) {
+    if (hasPlacement(panel)) drawPlacement(c, panel, rectToPx(panel.rect, pageRect), mm)
+  }
   return surface.toPng()
 }
 
@@ -117,7 +123,11 @@ if (import.meta.vitest) {
       png.at(pn6.rect.x + x * pn6.rect.w, pn6.rect.y + y * pn6.rect.h)
     // renderLayoutPng のテストと同じ点。pn_6 のフキダシと地
     expect(inPanel(0.85, 0.3)).toEqual([255, 255, 255])
-    expect(inPanel(0.3, 0.5)).toEqual([224, 224, 224])
+    expect(inPanel(0.1, 0.15)).toEqual([224, 224, 224])
+    // pn_6 の焦点（keyObject）の中心。点が小さく縁がぼけるので、橙に寄っていることだけを見る
+    const [r, , b] = inPanel(0.4, 0.5)
+    expect(r).toBeGreaterThan(200)
+    expect(b).toBeLessThan(100)
     // pn_3 と pn_2 の間の隙間
     expect(png.at(0.49, 0.39)).toEqual([255, 255, 255])
   })
