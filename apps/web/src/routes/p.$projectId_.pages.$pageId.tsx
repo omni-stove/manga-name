@@ -145,6 +145,7 @@ const LAYERS: readonly { key: keyof Layers; label: string }[] = [
   { key: 'art', label: '絵' },
   { key: 'scribble', label: '手描き' },
   { key: 'hints', label: 'ヒント' },
+  { key: 'frames', label: '枠線' },
   ...(GAZE_EVALUATION ? [{ key: 'diagnosis' as const, label: '診断' }] : []),
 ]
 
@@ -154,6 +155,7 @@ const ALL_LAYERS: Layers = {
   scribble: true,
   hints: true,
   diagnosis: GAZE_EVALUATION,
+  frames: true,
 }
 
 type Apply = (label: string, build: (project: Project) => Patch) => boolean

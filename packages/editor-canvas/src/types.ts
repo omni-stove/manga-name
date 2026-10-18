@@ -21,6 +21,8 @@ export interface Layers {
   scribble: boolean
   hints: boolean
   diagnosis: boolean
+  /** タチキリ枠、外枠（仕上がり線）、内枠 */
+  frames: boolean
 }
 
 /** ページの何も無いところかページの外側の右クリック */

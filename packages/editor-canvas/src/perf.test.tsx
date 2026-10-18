@@ -149,7 +149,14 @@ test(`dragging a bubble on ${ROWS * COLUMNS} panels and ${BUBBLES} bubbles stays
     diagnosis: null,
     selection: { kind: 'bubble', id: 'bb_8' },
     tool: 'bubble',
-    layers: { reference: true, art: true, scribble: true, hints: true, diagnosis: true },
+    layers: {
+      reference: true,
+      art: true,
+      scribble: true,
+      hints: true,
+      diagnosis: true,
+      frames: true,
+    },
     generating: new Set(),
     onChange: () => {
       changed++
@@ -266,7 +273,14 @@ test(`drawing on a page with ${STROKES} strokes stays within ${FRAME_MS}ms per f
     selection: null,
     tool: 'scribble',
     scribbleTool: 'red',
-    layers: { reference: true, art: true, scribble: true, hints: true, diagnosis: true },
+    layers: {
+      reference: true,
+      art: true,
+      scribble: true,
+      hints: true,
+      diagnosis: true,
+      frames: true,
+    },
     generating: new Set(),
     onChange: (patch) => {
       const op = patch[0]
