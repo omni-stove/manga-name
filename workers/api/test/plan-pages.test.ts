@@ -78,13 +78,14 @@ describe('POST /v1/ai/plan-pages', () => {
     const plan = async () => [
       {
         note: 'n',
+        script: 's',
         cast: ['chr_e', 'chr_missing', 'chr_e'],
         lines: [
           { speakerId: 'chr_e', text: 'a', shape: 'normal' as const },
           { speakerId: 'chr_missing', text: 'b', shape: 'shout' as const },
         ],
       },
-      { note: 'm', cast: [], lines: [] },
+      { note: 'm', script: 't', cast: [], lines: [] },
     ]
     const { provider, calls } = scripted([plan])
     const res = await post(createApp({ llmProvider: () => provider }))
@@ -92,19 +93,23 @@ describe('POST /v1/ai/plan-pages', () => {
     expect(await res.json()).toEqual([
       {
         note: 'n',
+        script: 's',
         cast: ['chr_e'],
         lines: [
           { speakerId: 'chr_e', text: 'a', shape: 'normal' },
           { text: 'b', shape: 'shout' },
         ],
       },
-      { note: 'm', cast: [], lines: [] },
+      { note: 'm', script: 't', cast: [], lines: [] },
     ])
     expect(calls).toHaveLength(1)
   })
 
   test('returns a plan whose page count differs from the requested one without retrying', async () => {
-    const three = async () => [...aiFixtures.pagePlan, { note: 'n', cast: [], lines: [] }]
+    const three = async () => [
+      ...aiFixtures.pagePlan,
+      { note: 'n', script: 's', cast: [], lines: [] },
+    ]
     const { provider, calls } = scripted([three])
     const res = await post(createApp({ llmProvider: () => provider }))
     expect(res.status).toBe(200)

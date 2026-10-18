@@ -45,7 +45,9 @@ function EpisodeList() {
     <YStack gap={8}>
       <XStack wrap gap={12} className={common.toolbar}>
         <Typography variant="heading">{m.web_nav_episodes()}</Typography>
-        <Button onClick={addEpisode}>{m.web_episodes_add()}</Button>
+        <Button onClick={addEpisode} data-guide="add-episode">
+          {m.web_episodes_add()}
+        </Button>
       </XStack>
       {error && (
         <Typography tone="alert" role="alert">

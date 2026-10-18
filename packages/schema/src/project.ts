@@ -191,6 +191,8 @@ const PageBaseSchema = z.object({
   /** 原作者の下描き。コメント用の scribbles と分け、コマとフキダシへの変換元にする */
   sketch: z.array(StrokeSchema).optional(),
   note: z.string().optional(),
+  /** このページに当たる脚本の原文（ト書きとセリフ）。`note` は作業のメモで、脚本とは分けて持つ */
+  script: z.string().optional(),
   cast: z.array(IdSchema).optional(),
 })
 

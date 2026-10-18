@@ -2,6 +2,7 @@ import { m } from '@manga/i18n'
 import { Typography, YStack } from '@manga/ui'
 import { createRootRouteWithContext, Link, Outlet } from '@tanstack/react-router'
 import { DisplayNameDialog } from '../display-name'
+import { TourGuide } from '../onboarding/tour-guide'
 import type { RouterContext } from '../router'
 import { SettingsDialog, validateSettingsSearch } from '../settings-dialog'
 import { SideNav } from '../side-nav'
@@ -24,6 +25,7 @@ function RootLayout() {
       <SettingsDialog />
       <DisplayNameDialog />
       <Toasts />
+      <TourGuide />
     </div>
   )
 }

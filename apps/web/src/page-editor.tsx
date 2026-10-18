@@ -19,6 +19,7 @@ import {
   FocusInspector,
   IssueList,
   PageInspector,
+  PageScriptInspector,
   PanelInspector,
   removeCastPatch,
   VectorInspector,
@@ -36,6 +37,7 @@ import {
   pageCharacterIds,
   panelCharacterIds,
 } from '@manga/schema'
+import { detectPlatform } from '@manga/storage'
 import {
   Button,
   Checkbox,
@@ -103,7 +105,6 @@ import { errorMessage } from './route-error'
 import { saveFile } from './save-file'
 import { SaveStatusIndicator } from './save-status'
 import { ROLE_LABELS } from './sharing'
-import { Spotlight } from './spotlight'
 import type { Peer } from './store/presence'
 import type { WebProjectStore } from './store/project-store'
 import { toasts } from './toasts'
@@ -181,7 +182,7 @@ const ALL_LAYERS: Layers = {
 
 /**
  * 編集画面のうち、まとめて使えるようにしたり止めたりする領域。
- * `navigation` はページ送り、`canvas` はキャンバスの操作と参考画像の取り込み、`inspector` は要素一覧と要素とページの編集、
+ * `navigation` はページ送り、`canvas` はキャンバスの操作と参考画像の取り込み、`inspector` は要素一覧と要素とページの編集とページの脚本、
  * `generate` は「このページを全部生成」と「生成済みも含める」
  */
 export type EditorArea =
@@ -204,22 +205,11 @@ export interface PageEditorProps {
   llmProvider: LlmProvider
   /** 使える領域。省略すると全部使える */
   unlocked?: ReadonlySet<EditorArea>
-  /** 手順の案内。`target` 以外をぼかして押せなくし、`target` に `message` の吹き出しを向ける */
-  guide?: { target: GuideTarget; message: string }
-  /** ツールバーの右端、書き出しの前に足す操作 */
-  actions?: ReactNode
+  /** レイヤーの表示を切り替えた */
+  onLayersChange?: (layers: Layers) => void
+  /** ページを書き出して保存した */
+  onExport?: () => void
 }
-
-/** 案内で吹き出しを向けられる操作。`generate` は「このページを全部生成」、`layers` はレイヤーの切り替え */
-export type GuideTarget = 'generate' | 'layers'
-
-const GUIDE_TARGETS: Record<GuideTarget, string> = {
-  generate: '[data-action="generate-all"]',
-  layers: '[data-area="layers"]',
-}
-
-// キャンバスは案内が指す丸や矢印と、生成した絵を見せる所なのでぼかさない。`actions` は案内する側が足した操作
-const GUIDE_KEEP = ['[data-area="canvas"]', '[data-area="actions"]']
 
 /** `open` でなければ中身を見た目そのままで押せなくし、フォーカスも当てない */
 function Area({ open, children }: { open: boolean; children: ReactNode }) {
@@ -295,7 +285,7 @@ function issueTarget(page: Page, issue: Issue): Selection {
 }
 
 /**
- * ページの編集画面。ツールバー、キャンバス、インスペクタ。
+ * ページの編集画面。ツールバー、左にページの脚本、キャンバス、右にインスペクタ。
  * `unlocked` を渡すと、そこに無い領域をキーボードでも操作できなくする
  */
 export function PageEditor({
@@ -307,10 +297,12 @@ export function PageEditor({
   generation,
   llmProvider,
   unlocked,
-  guide,
-  actions,
+  onLayersChange,
+  onExport,
 }: PageEditorProps) {
   const can = (area: EditorArea) => unlocked?.has(area) ?? true
+  // 案内が「このページを全部生成」を指す間は、ボタンが畳んだサイドバーや閉じたページの欄に隠れないよう開いておく
+  const guidingGenerate = unlocked?.has('generate') === true
   const project = useProject(store)
   const generatingState = useStore(generation.generating)
   const generating = generatingPanels(generatingState, projectId)
@@ -335,6 +327,7 @@ export function PageEditor({
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
   const [inspectorExpanded, setInspectorExpanded] = useStoredFlag('manga.inspector.expanded', true)
+  const [scriptExpanded, setScriptExpanded] = useStoredFlag('manga.script.expanded', true)
   const [menu, setMenu] = useState<OpenMenu | null>(null)
   const [registeringLayout, setRegisteringLayout] = useState(false)
   const canUndo = useStore(store.state, (s) => s.canUndo)
@@ -420,6 +413,8 @@ export function PageEditor({
     const numbers = Array.from({ length: total }, (_, i) => from + i)
     const ext = format === 'pdf' ? 'pdf' : total === 1 ? 'png' : 'zip'
     setExporting({ done: 0, total })
+    /** 保存したパス。書き出せなければ undefined */
+    let path: string | null | undefined
     try {
       const pageIds = episode.pages.slice(from - 1, to).map((p) => p.id)
       const width = Math.round((project.settings.pageSize.w / MM_PER_INCH) * dpi)
@@ -432,13 +427,16 @@ export function PageEditor({
         library.loadAsset,
       )
       const blob = await pageExporter.run(job, (done) => setExporting({ done, total }))
-      await saveFile(blob, exportFileName(project.title, numbers, ext), [
+      path = await saveFile(blob, exportFileName(project.title, numbers, ext), [
         { name: ext.toUpperCase(), extensions: [ext] },
       ])
     } catch (e) {
       toasts.push(m.web_page_export_failed({ reason: errorMessage(e) }))
     }
     setExporting('closed')
+    // React Compiler は try の中の条件式を扱えないので、try を出てから見る。
+    // Web は常に null を返すので、保存先の選択を閉じたかどうかは Desktop でだけ分かる
+    if (path !== undefined && (path !== null || detectPlatform() === 'web')) onExport?.()
   }
   const convertSketch = () => {
     let converted = { panels: 0, bubbles: 0 }
@@ -593,41 +591,43 @@ export function PageEditor({
           <HistoryButtons store={store} />
         </Area>
         <Area open={can('tools')}>
-          <SegmentedControl
-            label={m.web_editor_tools()}
-            value={tool}
-            options={tools}
-            onChange={(t) => setTool(t)}
-          />
-          {tool === 'scribble' && (
+          <XStack as="span" gap={20} rowGap={12} wrap data-area="tools">
             <SegmentedControl
-              label={m.web_editor_pen()}
-              value={scribbleTool}
-              options={scribbleTools}
-              onChange={(t) => setScribbleTool(t)}
+              label={m.web_editor_tools()}
+              value={tool}
+              options={tools}
+              onChange={(t) => setTool(t)}
             />
-          )}
-          {tool === 'sketch' && (
-            <>
+            {tool === 'scribble' && (
               <SegmentedControl
                 label={m.web_editor_pen()}
-                value={sketchTool}
-                options={sketchTools}
-                onChange={(t) => setSketchTool(t)}
+                value={scribbleTool}
+                options={scribbleTools}
+                onChange={(t) => setScribbleTool(t)}
               />
-              <Button size="small" disabled={!page.sketch?.length} onClick={convertSketch}>
-                {m.web_editor_convert_sketch()}
-              </Button>
-            </>
-          )}
-          {tool === 'focus' && (
-            <SegmentedControl
-              label={m.web_editor_focus_kind()}
-              value={focusKind}
-              options={focusKindOptions()}
-              onChange={(k) => setFocusKind(k)}
-            />
-          )}
+            )}
+            {tool === 'sketch' && (
+              <>
+                <SegmentedControl
+                  label={m.web_editor_pen()}
+                  value={sketchTool}
+                  options={sketchTools}
+                  onChange={(t) => setSketchTool(t)}
+                />
+                <Button size="small" disabled={!page.sketch?.length} onClick={convertSketch}>
+                  {m.web_editor_convert_sketch()}
+                </Button>
+              </>
+            )}
+            {tool === 'focus' && (
+              <SegmentedControl
+                label={m.web_editor_focus_kind()}
+                value={focusKind}
+                options={focusKindOptions()}
+                onChange={(k) => setFocusKind(k)}
+              />
+            )}
+          </XStack>
         </Area>
         <Area open={can('layers')}>
           <XStack role="group" aria-label={m.web_editor_layers()} data-area="layers">
@@ -639,18 +639,17 @@ export function PageEditor({
                 key={l.key}
                 label={l.label}
                 checked={layers[l.key]}
-                onChange={(e) => setLayers({ ...layers, [l.key]: e.target.checked })}
+                onChange={(e) => {
+                  const next = { ...layers, [l.key]: e.target.checked }
+                  setLayers(next)
+                  onLayersChange?.(next)
+                }}
               />
             ))}
           </XStack>
         </Area>
         <XStack as="span" gap={6} className={styles.actions}>
           <SaveStatusIndicator store={store} />
-          {actions && (
-            <XStack as="span" gap={6} data-area="actions">
-              {actions}
-            </XStack>
-          )}
           <Area open={can('export')}>
             {typeof exporting === 'object' ? (
               <XStack as="span" className={styles.exportProgress} role="status">
@@ -662,7 +661,12 @@ export function PageEditor({
                 />
               </XStack>
             ) : (
-              <Button size="small" variant="primary" onClick={() => setExporting('dialog')}>
+              <Button
+                size="small"
+                variant="primary"
+                data-guide="export"
+                onClick={() => setExporting('dialog')}
+              >
                 {m.web_editor_export()}
               </Button>
             )}
@@ -697,17 +701,29 @@ export function PageEditor({
           onExportProject={exportProject}
         />
       )}
-      {guide && (
-        <Spotlight target={GUIDE_TARGETS[guide.target]} keep={GUIDE_KEEP}>
-          {guide.message}
-        </Spotlight>
-      )}
       {error && (
         <Typography tone="alert" className={styles.error}>
           {error}
         </Typography>
       )}
       <div className={styles.body}>
+        <Sidebar
+          title={m.web_editor_script()}
+          side="left"
+          expanded={scriptExpanded}
+          onExpandedChange={setScriptExpanded}
+          className={styles.scriptSidebar}
+        >
+          <Area open={can('inspector')}>
+            <PageScriptInspector
+              page={page}
+              editable={canEdit}
+              onChange={(patch) =>
+                apply(m.web_editor_history_edit_page_script(), (p) => pagePatch(p, pageId, patch))
+              }
+            />
+          </Area>
+        </Sidebar>
         <div
           className={styles.canvas}
           role="application"
@@ -750,8 +766,7 @@ export function PageEditor({
         <Sidebar
           title={m.web_editor_inspector()}
           side="right"
-          // 吹き出しを向けるボタンが畳んだサイドバーの中に隠れないよう、案内の間は開いたままにする
-          expanded={inspectorExpanded || guide?.target === 'generate'}
+          expanded={inspectorExpanded || guidingGenerate}
           onExpandedChange={setInspectorExpanded}
           className={styles.inspectorSidebar}
         >
@@ -786,7 +801,7 @@ export function PageEditor({
                   resolveAsset={resolveAsset}
                 />
               </Area>
-              <details open={selection === null}>
+              <details open={selection === null || guidingGenerate}>
                 <summary>{m.web_editor_page()}</summary>
                 <PageInspector
                   page={page}

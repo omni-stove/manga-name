@@ -86,3 +86,10 @@ export interface PageInspectorProps {
   /** 参考画像を選ぶ UI を開く。選んだ結果は親が `reference` の Patch にする */
   onPickReference(): void
 }
+
+export interface PageScriptInspectorProps {
+  page: Page
+  /** false なら書き換えられない。既定は true */
+  editable?: boolean
+  onChange(patch: Patch): void
+}
