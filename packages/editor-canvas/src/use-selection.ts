@@ -27,6 +27,12 @@ interface Options {
   onSelect(sel: Selection): void
 }
 
+/** 画面座標とその座標を測るキャンバス。マウスやポインターのイベントもそのまま渡せる */
+export type ClientPoint = Pick<
+  ReactMouseEvent<SVGSVGElement>,
+  'currentTarget' | 'clientX' | 'clientY'
+>
+
 /** 押した位置から動いてもクリックとみなす画面 px */
 export const CLICK_SLOP = 4
 
@@ -56,7 +62,7 @@ export function useSelection(opts: Options) {
   const [hovered, setHovered] = useState<Selection>(null)
   const pending = useRef<{ pointerId: number; x: number; y: number } | null>(null)
 
-  const hitAt = (e: ReactMouseEvent<SVGSVGElement>): Selection => {
+  const hitAt = (e: ClientPoint): Selection => {
     const p = clientToPage(opts.view, boxOf(e.currentTarget), { x: e.clientX, y: e.clientY })
     if (p === null) return null
     const hint = opts.hints

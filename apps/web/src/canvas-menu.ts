@@ -72,6 +72,17 @@ export function toolMenuItems(
   }))
 }
 
+/** 要素の位置をロックするか外す */
+export function setLocked(ctx: Pick<ElementMenuContext, 'edit'>, target: Target, locked: boolean) {
+  if (locked) {
+    ctx.edit(m.web_canvas_menu_history_lock(), target, [
+      { op: 'add', path: '/locked', value: true },
+    ])
+  } else {
+    ctx.edit(m.web_canvas_menu_history_unlock(), target, [{ op: 'remove', path: '/locked' }])
+  }
+}
+
 /** 要素を右クリックしたときの、その要素への操作。要素がもう無ければ空 */
 export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuItems {
   const remove: ContextMenuItem = {
@@ -87,12 +98,7 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
   const lock = (locked: boolean | undefined): ContextMenuItem => ({
     label: m.web_canvas_menu_lock(),
     checked: locked === true,
-    onSelect: () =>
-      locked
-        ? ctx.edit(m.web_canvas_menu_history_unlock(), target, [{ op: 'remove', path: '/locked' }])
-        : ctx.edit(m.web_canvas_menu_history_lock(), target, [
-            { op: 'add', path: '/locked', value: true },
-          ]),
+    onSelect: () => setLocked(ctx, target, !locked),
   })
 
   if (target.kind === 'panel') {

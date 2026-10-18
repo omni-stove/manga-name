@@ -12,6 +12,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { EditorCanvas } from './editor-canvas'
 import type { EditorCanvasProps } from './types'
+import { LONG_PRESS_MS } from './use-long-press'
 import { fitView } from './view'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -979,6 +980,93 @@ describe('zoom and pan', () => {
     const e = pointer('contextmenu', { id: 1, button: 2, ...clientAt(0.75, 0.4) })
     fire(svg, e)
     expect(e.defaultPrevented).toBe(false)
+  })
+
+  describe('long press', () => {
+    const touch = { pointerType: 'touch' }
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    test('holding a finger still asks for the menu of what was pressed', async () => {
+      const onContextMenu = vi.fn()
+      const onSelect = vi.fn()
+      const svg = await render({ onContextMenu, onSelect })
+      layout(svg)
+      vi.useFakeTimers()
+      const at = clientAt(0.75, 0.4)
+      fire(svg, pointer('pointerdown', { id: 1, ...at, ...touch }))
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS - 1))
+      expect(onContextMenu).not.toHaveBeenCalled()
+      act(() => vi.advanceTimersByTime(1))
+      expect(onSelect).toHaveBeenCalledWith({ kind: 'panel', id: 'pn_2' })
+      expect(onContextMenu).toHaveBeenCalledWith(
+        expect.objectContaining({ ...at, target: { kind: 'panel', id: 'pn_2' } }),
+      )
+    })
+
+    test('moving the finger after the menu opened neither drags the element nor pans', async () => {
+      const onChange = vi.fn()
+      const svg = await render({
+        onContextMenu: vi.fn(),
+        onChange,
+        selection: { kind: 'panel', id: 'pn_2' },
+      })
+      layout(svg)
+      vi.useFakeTimers()
+      fire(svg, pointer('pointerdown', { id: 1, ...clientAt(0.75, 0.4), ...touch }))
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS))
+      const to = clientAt(0.75, 0.6)
+      fire(svg, pointer('pointermove', { id: 1, ...to, ...touch }))
+      fire(svg, pointer('pointerup', { id: 1, ...to, ...touch }))
+      expect(onChange).not.toHaveBeenCalled()
+      expect(viewBox(svg)).toEqual([base.x, base.y, base.w, base.h])
+    })
+
+    test('moving, lifting or a second finger before the time cancels it', async () => {
+      const onContextMenu = vi.fn()
+      const svg = await render({ onContextMenu })
+      layout(svg)
+      vi.useFakeTimers()
+      fire(svg, pointer('pointerdown', { id: 1, x: 4, y: 4, ...touch }))
+      fire(svg, pointer('pointermove', { id: 1, x: 24, y: 4, ...touch }))
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS))
+      fire(svg, pointer('pointerup', { id: 1, x: 24, y: 4, ...touch }))
+      expect(viewBox(svg)[0]).toBeCloseTo(base.x - 10)
+
+      fire(svg, pointer('pointerdown', { id: 2, x: 4, y: 4, ...touch }))
+      fire(svg, pointer('pointerup', { id: 2, x: 4, y: 4, ...touch }))
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS))
+
+      fire(svg, pointer('pointerdown', { id: 3, x: 100, y: 200, ...touch }))
+      fire(svg, pointer('pointerdown', { id: 4, x: 200, y: 200, ...touch }))
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS))
+      expect(onContextMenu).not.toHaveBeenCalled()
+    })
+
+    test('the contextmenu Android sends on a long press opens the menu once', async () => {
+      const onContextMenu = vi.fn()
+      const svg = await render({ onContextMenu })
+      layout(svg)
+      vi.useFakeTimers()
+      const at = clientAt(0.75, 0.4)
+      fire(svg, pointer('pointerdown', { id: 1, ...at, ...touch }))
+      const e = pointer('contextmenu', { id: 1, ...at })
+      fire(svg, e)
+      expect(e.defaultPrevented).toBe(true)
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS))
+      expect(onContextMenu).toHaveBeenCalledTimes(1)
+    })
+
+    test('a mouse held still does not open it', async () => {
+      const onContextMenu = vi.fn()
+      const svg = await render({ onContextMenu })
+      layout(svg)
+      vi.useFakeTimers()
+      fire(svg, pointer('pointerdown', { id: 1, ...clientAt(0.75, 0.4) }))
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS))
+      expect(onContextMenu).not.toHaveBeenCalled()
+    })
   })
 
   test('one finger from where nothing is pans, and a second finger turns it into a pinch', async () => {

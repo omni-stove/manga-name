@@ -1,7 +1,6 @@
 import { type ID, type Page, type Patch, panelOutline } from '@manga/schema'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useRef,
   useState,
@@ -12,7 +11,7 @@ import { type PagePoint, panelBox } from './hit-test'
 import type { Selection } from './types'
 import type { BubbleDraft } from './use-bubble-tool'
 import type { Draft } from './use-panel-tool'
-import { CLICK_SLOP, sameSelection } from './use-selection'
+import { CLICK_SLOP, type ClientPoint, sameSelection } from './use-selection'
 import { capture } from './use-viewport'
 import { type ClientBox, clientToPage, type View } from './view'
 
@@ -28,7 +27,7 @@ interface Options {
   active: boolean
   selection: Selection
   /** 押した位置の要素。useSelection の hitAt */
-  hitAt(e: ReactMouseEvent<SVGSVGElement>): Selection
+  hitAt(e: ClientPoint): Selection
   onChange(patch: Patch): void
 }
 

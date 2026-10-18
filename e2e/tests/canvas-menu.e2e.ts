@@ -67,3 +67,52 @@ test('フキダシを右クリックして形を変えられる', async ({ page 
   await expect(shapes).toBeHidden()
   await expect(bubble).toHaveAttribute('data-shape', 'shout')
 })
+
+test('選んだコマは、右クリックしなくてもインスペクタからロックと削除ができる', async ({ page }) => {
+  await importProject(page, FIXTURE_PROJECT)
+  await openPage(page, 1)
+
+  const panels = page.locator('[data-panel-id]')
+  const count = await panels.count()
+  const box = await panels.first().boundingBox()
+  if (!box) throw new Error('panel is not rendered')
+  await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.3)
+  await expect(panelInspector(page)).toBeVisible()
+
+  const actions = page.locator('[data-section="element-actions"]')
+  const locks = page.locator('[data-locked]')
+  const lockCount = await locks.count()
+  await actions.getByRole('checkbox', { name: '位置をロック' }).check()
+  await expect(locks).toHaveCount(lockCount + 1)
+  await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.3, { button: 'right' })
+  await expect(
+    page.getByRole('menu', { name: 'コマのメニュー' }).getByRole('menuitemradio', {
+      name: '位置をロック',
+    }),
+  ).toHaveAttribute('aria-checked', 'true')
+  await page.keyboard.press('Escape')
+
+  await actions.getByRole('button', { name: '削除' }).click()
+  await expect(panels).toHaveCount(count - 1)
+})
+
+test.describe('タッチ', () => {
+  test.use({ hasTouch: true })
+
+  test('コマを長押しすると、右クリックと同じメニューが開く', async ({ page }) => {
+    await importProject(page, FIXTURE_PROJECT)
+    await openPage(page, 1)
+
+    const box = await page.locator('[data-panel-id]').first().boundingBox()
+    if (!box) throw new Error('panel is not rendered')
+    const at = { x: box.x + box.width * 0.3, y: box.y + box.height * 0.3 }
+    // Playwright の touchscreen は tap しかできないので、押して待って離すのは CDP で送る
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [at] })
+    const menu = page.getByRole('menu', { name: 'コマのメニュー' })
+    await expect(menu).toBeVisible()
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await expect(menu).toBeVisible()
+    await expect(panelInspector(page)).toBeVisible()
+  })
+})
