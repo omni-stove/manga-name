@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 /**
  * `resolve` を EditorCanvas や PageThumbnail の resolveAsset として渡せる形にする。
@@ -22,22 +22,23 @@ export function useAssetResolver(
       return url
     }
     return { cache, resolveAsset }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: generation は cache を作り直すためだけの依存
   }, [resolve, generation])
 
-  useEffect(
-    () => () => {
+  const released = useRef<Map<string, Promise<string>> | null>(null)
+  useEffect(() => {
+    // StrictMode は cleanup 後に同じ cache で effect を再実行する。解放済みの URL を覚えた Promise が use() 側に残らないよう、その時だけ別の関数に差し替える
+    if (released.current === cache) setGeneration((g) => g + 1)
+    return () => {
       for (const url of cache.values())
         url.then(
           (u) => URL.revokeObjectURL(u),
           () => {},
         )
       cache.clear()
-      // 解放した URL を覚えた Promise が use() 側に残らないよう、別の関数に差し替える。StrictMode の cleanup 対策
-      setGeneration((g) => g + 1)
-    },
-    [cache],
-  )
+      released.current = cache
+    }
+  }, [cache])
 
   return resolveAsset
 }
