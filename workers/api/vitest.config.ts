@@ -34,6 +34,7 @@ export default defineConfig(async () => {
         provider: 'istanbul' as const,
         include: ['src/**/*.ts'],
         reporter: ['text-summary', 'html'],
+        thresholds: { statements: 94, branches: 85, functions: 96, lines: 96 },
       },
     },
   }

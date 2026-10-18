@@ -15,8 +15,8 @@ description = "Pull skill-kit and re-sync this repo"
 run = "skill-kit code update"
 
 [lint]
-description = "Biome lint and format check, knip for unused files, exports and dependencies, then actionlint for the workflows"
-run = ["biome check .", "pnpm --silent knip", "actionlint"]
+description = "Biome lint and format check, knip for unused files, exports and dependencies, actionlint for the workflows, then the desktop version check"
+run = ["biome check .", "pnpm --silent knip", "actionlint", "pnpm --silent --filter @manga/desktop version:check"]
 
 [lint-rust]
 description = "rustfmt check and clippy for apps/desktop/src-tauri. Kept out of lint because clippy compiles Tauri"

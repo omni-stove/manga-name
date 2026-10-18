@@ -1,7 +1,7 @@
 name: CI
 
 # 共通 ci.yml の lint ジョブは依存の install を伴うが、Biome は standalone バイナリで動くので、lint は
-# checkout と Biome だけの自前ジョブにする (run-lint: false)。typecheck と knip は node_modules が要るので
+# 依存を install しない自前ジョブにする (run-lint: false)。typecheck と knip は node_modules が要るので
 # typecheck ジョブに置く。ci-gate.yml を呼ぶジョブ名は、必須チェック名 "ci / CI Gate" を保つため ci にする。
 # 必須チェックを毎回報告させるため、変更のない PR を on.paths で外さず、changes の結果で各ジョブを
 # skipped にする（CI Gate は skipped を失敗にしない）。
@@ -123,6 +123,15 @@ jobs:
           set -euo pipefail
           curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint"
+
+      # package.json と tauri.conf.json のずれにリリースのタグで初めて気づかないよう、PR で見る。
+      # スクリプトは node:fs しか使わないので、依存の install は要らない
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+
+      - name: Desktop version
+        run: node apps/desktop/scripts/version.ts check
 
   typecheck:
     needs: changes
