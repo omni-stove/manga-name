@@ -5,6 +5,7 @@ import {
   checkCritiquePatch,
   pageRootedPatch,
 } from '@manga/ai'
+import { m } from '@manga/i18n'
 import {
   type Bubble,
   fitBubble,
@@ -118,7 +119,7 @@ export function suggestionState(
   if (!checked.ok) return { kind: 'rejected', reason: checked.reason }
   const patch = fitBubbleMoves(page, checked.patch, pageSize)
   if (!previewPage(page, patch)) {
-    return { kind: 'rejected', reason: '今のページに当てられない提案です' }
+    return { kind: 'rejected', reason: m.web_critique_inapplicable() }
   }
   return { kind: 'ready', patch }
 }
@@ -140,10 +141,10 @@ export function touchedPanelIds(page: Page, patch: Patch): ID[] {
 export function applySuggestion(store: ProjectStore, pageId: ID, suggestion: Suggestion): Patch {
   const project = store.get()
   const page = findPage(project, pageId)?.page
-  if (!page) throw new Error('ページがもうありません')
+  if (!page) throw new Error(m.web_common_page_gone())
   const state = suggestionState(page, suggestion, project.settings.pageSize)
   if (state.kind === 'rejected') throw new Error(state.reason)
-  if (state.kind === 'applied') throw new Error('この提案はもう適用されています')
+  if (state.kind === 'applied') throw new Error(m.web_critique_already_applied())
   store.applyPatch(pagePatch(project, pageId, state.patch), {
     source: 'ai',
     label: suggestion.message,

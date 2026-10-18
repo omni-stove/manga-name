@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { ExportJob, ExportReply, ExportRequest } from './export-page-job'
 
 /** `Worker` のうち exporter が使う部分。テストでは Worker の代わりに同じ形のものを渡す */
@@ -57,7 +58,7 @@ function createPageExporter(spawn: () => WorkerLike = spawnWorker): PageExporter
       else p.reject(new Error(reply.message))
     }
     // 読み込みの失敗や onmessage の外の例外は、どの要求のものか分からない
-    w.onerror = (e) => drop(new Error(e.message || 'Worker が停止しました'))
+    w.onerror = (e) => drop(new Error(e.message || m.web_export_worker_stopped()))
     worker = w
     return w
   }
@@ -80,7 +81,7 @@ export const pageExporter = createPageExporter()
  * ファイル名に使えない文字は `_` にする
  */
 export function exportFileName(title: string, numbers: readonly number[], ext: string): string {
-  const safe = (title || '無題').replace(/[\\/:*?"<>|]/g, '_')
+  const safe = (title || m.web_common_untitled()).replace(/[\\/:*?"<>|]/g, '_')
   const pad = (n: number) => String(n).padStart(2, '0')
   const first = numbers[0] ?? 1
   const last = numbers.at(-1) ?? first

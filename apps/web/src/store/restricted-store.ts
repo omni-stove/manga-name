@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Patch } from '@manga/schema'
 import type { ProjectRole } from '../sharing'
 import type { WebProjectStore } from './project-store'
@@ -21,9 +22,7 @@ export function restrictStore(store: WebProjectStore, role: ProjectRole): WebPro
     applyPatch(patch, meta) {
       if (meta?.source !== 'remote' && !patchAllowed(patch, role)) {
         throw new Error(
-          role === 'viewer'
-            ? '閲覧のみのプロジェクトは変更できません'
-            : 'このプロジェクトで書けるのは手描きメモだけです',
+          role === 'viewer' ? m.web_restricted_viewer() : m.web_restricted_commenter(),
         )
       }
       store.applyPatch(patch, meta)

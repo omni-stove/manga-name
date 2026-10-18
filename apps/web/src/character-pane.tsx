@@ -1,4 +1,5 @@
 import type { ImageProvider } from '@manga/ai'
+import { m } from '@manga/i18n'
 import { CharacterInspector } from '@manga/inspector'
 import type { Character, ID, Patch, Project, ProjectSettings } from '@manga/schema'
 import { Typography } from '@manga/ui'
@@ -48,7 +49,7 @@ export function CharacterPane({
       )
 
   const picker = useFilePicker(REFERENCE_ACCEPT, (file) => {
-    void save('参照画像を差し替え', Promise.resolve(file))
+    void save(m.web_character_history_replace_reference(), Promise.resolve(file))
   })
 
   const generate = () => {
@@ -56,10 +57,12 @@ export function CharacterPane({
     const image = imageProvider.generateCharacterArt({ project: { settings }, character }).then(
       (res) => res.image,
       (err) => {
-        throw new Error(`参照画像を生成できませんでした: ${errorMessage(err)}`)
+        throw new Error(m.web_character_reference_generation_failed({ reason: errorMessage(err) }))
       },
     )
-    void save('参照画像を生成', image).finally(() => setGenerating(false))
+    void save(m.web_character_history_generate_reference(), image).finally(() =>
+      setGenerating(false),
+    )
   }
 
   return (
@@ -67,7 +70,7 @@ export function CharacterPane({
       <CharacterInspector
         character={character}
         onChange={(patch) =>
-          apply('キャラクターを編集', (p) => characterPatch(p, character.id, patch))
+          apply(m.web_character_history_edit(), (p) => characterPatch(p, character.id, patch))
         }
         onPickReference={picker.open}
         onGenerateReference={generate}

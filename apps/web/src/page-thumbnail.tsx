@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import {
   currentArt,
   type Page,
@@ -78,7 +79,7 @@ function PanelImage({
   if (url === null) return <polygon points={outlinePoints(panel, w, h)} className={styles.art} />
   // 入れ子の svg ははみ出しを切るので、slice で埋めた絵がコマを囲む矩形の外に出ない。多角形のコマはさらに輪郭で切る
   return (
-    <svg {...box} role="img" aria-label="コマの絵">
+    <svg {...box} role="img" aria-label={m.web_thumbnail_panel_art()}>
       {panel.shape && (
         <clipPath id={clipId}>
           <polygon
@@ -114,7 +115,12 @@ export function PageThumbnail({
 }) {
   const { w, h } = pageSize
   return (
-    <svg className={styles.thumbnail} viewBox={`0 0 ${w} ${h}`} role="img" aria-label="コマ割り">
+    <svg
+      className={styles.thumbnail}
+      viewBox={`0 0 ${w} ${h}`}
+      role="img"
+      aria-label={m.web_thumbnail_layout()}
+    >
       <rect width={w} height={h} className={styles.paper} />
       {page.panels.map((panel) =>
         panel.artId === undefined ? null : (

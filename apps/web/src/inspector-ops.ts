@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Bubble, FocusPoint, ID, Page, Panel, Patch, Project, Vector } from '@manga/schema'
 import { findPage } from './project-ops'
 
@@ -128,7 +129,7 @@ export function removeArtPatch(project: Project, pageId: ID, panelId: ID, artId:
   const { panel } = found
   const index = panel.arts.findIndex((a) => a.id === artId)
   if (index < 0) throw new Error(`art ${artId} is not in panel ${panelId}`)
-  if (panel.artId === artId) throw new Error('採用中の絵は削除できません')
+  if (panel.artId === artId) throw new Error(m.web_inspector_cannot_remove_current_art())
   return panelPatch(project, pageId, panelId, [
     ...panel.arts.flatMap((a, i) =>
       a.parentId === artId ? [{ op: 'remove' as const, path: `/arts/${i}/parentId` }] : [],

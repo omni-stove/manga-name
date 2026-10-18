@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Page, Patch, ProjectSettings, Rect } from '@manga/schema'
 
 /** 参考画像を保存するときの長辺の上限（px）。大きな画像でキャンバス操作が重くならないよう読み込み時に縮める */
@@ -68,7 +69,7 @@ async function decodeReference(
   maxSide: number,
 ): Promise<{ format: ReferenceFormat; raster: Raster }> {
   const format = await sniffFormat(blob)
-  if (format === null) throw new Error('PNG、JPEG、PDF のいずれかを選んでください')
+  if (format === null) throw new Error(m.web_reference_unsupported_format())
   const raster =
     format === 'pdf' ? await codec.rasterizePdf(blob, maxSide) : await codec.decodeImage(blob)
   return { format, raster }
@@ -252,7 +253,7 @@ const browserCodec: ReferenceCodec = {
     raster.draw(ctx, width, height)
     return new Promise((resolve, reject) =>
       canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error('画像を書き出せませんでした'))),
+        (b) => (b ? resolve(b) : reject(new Error(m.web_reference_encode_failed()))),
         type,
         quality,
       ),

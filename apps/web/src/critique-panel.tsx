@@ -1,4 +1,5 @@
 import type { CritiqueResponse, LlmProvider } from '@manga/ai'
+import { m } from '@manga/i18n'
 import type { ID, Page, PageDiagnosis, Patch, ProjectSettings } from '@manga/schema'
 import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { useEffect, useRef, useState } from 'react'
@@ -120,11 +121,15 @@ export function CritiquePanel(props: CritiquePanelProps) {
           disabled={!canEdit || loading}
           onClick={() => void ask()}
         >
-          {loading ? '相談中…' : consultation.status === 'done' ? 'もう一度相談' : 'AI に相談'}
+          {loading
+            ? m.web_critique_consulting()
+            : consultation.status === 'done'
+              ? m.web_critique_consult_again()
+              : m.web_critique_consult()}
         </Button>
       </XStack>
       {consultation.status === 'error' && (
-        <FailureAlert failure="AI に相談できませんでした" error={consultation.error} />
+        <FailureAlert failure={m.web_critique_consult_failed()} error={consultation.error} />
       )}
       {consultation.status === 'done' && (
         <Result
@@ -198,12 +203,18 @@ function Result({
       </Typography>
       {changed && (
         <Typography variant="caption" tone="muted" data-critique-delta>
-          問題 {before.issues} → {now.issues} 件、miss {before.miss} → {now.miss}、weak{' '}
-          {before.weak} → {now.weak}
+          {m.web_critique_delta({
+            issuesBefore: before.issues,
+            issuesNow: now.issues,
+            missBefore: before.miss,
+            missNow: now.miss,
+            weakBefore: before.weak,
+            weakNow: now.weak,
+          })}
         </Typography>
       )}
       {response.suggestions.length === 0 ? (
-        <Typography tone="muted">提案はありません</Typography>
+        <Typography tone="muted">{m.web_critique_no_suggestions()}</Typography>
       ) : (
         <YStack as="ol" gap={6} className={styles.cards}>
           {response.suggestions.map((suggestion, i) => {
@@ -232,7 +243,7 @@ function Result({
                 <XStack wrap>
                   {state.kind === 'applied' ? (
                     <Typography as="span" variant="caption" tone="muted">
-                      適用済み（Undo で戻せます）
+                      {m.web_critique_applied()}
                     </Typography>
                   ) : (
                     <Button
@@ -240,7 +251,7 @@ function Result({
                       disabled={!canEdit || state.kind === 'rejected'}
                       onClick={() => onApply(suggestion, i)}
                     >
-                      適用
+                      {m.web_critique_apply()}
                     </Button>
                   )}
                 </XStack>
@@ -251,7 +262,7 @@ function Result({
       )}
       {applyError && (
         <Typography tone="alert" role="alert">
-          適用できませんでした: {applyError}
+          {m.web_critique_apply_failed({ reason: applyError })}
         </Typography>
       )}
       {stale.length > 0 && (
@@ -260,17 +271,17 @@ function Result({
             const order = page.panels.find((p) => p.id === panelId)?.order
             return (
               <XStack as="li" wrap key={panelId}>
-                <span>コマ {order} の絵は提案前の配置で描かれています</span>
+                <span>{m.web_critique_stale_art({ order: order ?? '' })}</span>
                 <Button
                   size="small"
                   variant="primary"
                   disabled={!canEdit || generating.has(panelId)}
                   onClick={() => onGenerate(panelId)}
                 >
-                  再生成
+                  {m.web_critique_regenerate()}
                 </Button>
                 <Button size="small" variant="ghost" onClick={() => onDismiss(panelId)}>
-                  閉じる
+                  {m.web_common_close()}
                 </Button>
               </XStack>
             )

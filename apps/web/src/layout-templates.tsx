@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { ID, Project } from '@manga/schema'
 import { Button, Dialog, Input, Select } from '@manga/ui'
 import { useState } from 'react'
@@ -36,14 +37,16 @@ export function TemplateSelect({
   )
   return (
     <Select
-      label="テンプレート"
+      label={m.web_layout_template()}
       inline
       value={value}
       onChange={(e) => onChange(e.currentTarget.value)}
     >
       {options.filter((o) => !o.registered).map(option)}
       {registered.length > 0 && (
-        <optgroup label="登録したコマ割り">{registered.map(option)}</optgroup>
+        <optgroup label={m.web_layout_template_registered_group()}>
+          {registered.map(option)}
+        </optgroup>
       )}
     </Select>
   )
@@ -65,36 +68,36 @@ export function LayoutTemplateDialog({
   const [name, setName] = useState('')
   return (
     <Dialog
-      title="コマ割りをテンプレートに登録"
+      title={m.web_layout_template_register_title()}
       onClose={onClose}
       onSubmit={() => {
         if (
           apply(
-            'コマ割りをテンプレートに登録',
+            m.web_layout_template_register_title(),
             (p) => addLayoutTemplatePatch(p, pageId, name).patch,
           )
         ) {
-          toasts.push(`「${name.trim()}」をテンプレートに登録しました`, 'info')
+          toasts.push(m.web_layout_template_registered({ name: name.trim() }), 'info')
           onClose()
         }
       }}
       actions={
         <>
           <Button type="button" onClick={onClose}>
-            キャンセル
+            {m.web_common_cancel()}
           </Button>
           <Button type="submit" variant="primary" disabled={!name.trim()}>
-            登録
+            {m.web_layout_template_register()}
           </Button>
         </>
       }
     >
       <Input
-        label="テンプレート名"
+        label={m.web_layout_template_name()}
         required
         autoFocus
         value={name}
-        placeholder="例: 見開き前の 5 コマ"
+        placeholder={m.web_layout_template_name_placeholder()}
         onChange={(e) => setName(e.currentTarget.value)}
       />
     </Dialog>
