@@ -1,4 +1,4 @@
-import type { PageArtRequest, PanelArtRequest } from '@manga/ai'
+import { type PageArtRequest, type PanelArtRequest, prompts } from '@manga/ai'
 import { fixtures, type Page } from '@manga/schema'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createGeminiImageProvider } from '../src/gemini-image-provider'
@@ -77,17 +77,9 @@ describe('request', () => {
       inlineData: { mimeType: 'image/png', data: b64(new Uint8Array([1, 2, 3])) },
     })
     expect(parts[1]?.text).toBe(res.prompt)
-    expect(res.prompt.endsWith(`\navoid: ${settings.style.negative}`)).toBe(true)
+    const { prompt, negative } = prompts.panelArt(request())
+    expect(res.prompt).toBe(`${prompt}\navoid: ${negative}`)
     expect(res.provider).toBe('gemini-nano-banana-2.1')
-  })
-
-  test('leaves out avoid when the style has no negative', async () => {
-    const style = { prompt: settings.style.prompt }
-    const res = await provider.generatePanelArt(
-      request({ project: { settings: { ...settings, style }, characters } }),
-    )
-    expect(res.prompt).not.toContain('avoid:')
-    expect(sentBody().contents[0]?.parts.at(-1)?.text).toBe(res.prompt)
   })
 
   test('orders layout, reference, named character refs, the previous art and the prompt', async () => {
@@ -204,7 +196,7 @@ describe('response', () => {
       const res = await provider.generatePanelArt(request())
       expect(res.image.size, JSON.stringify(body)).toBe(0)
       expect(res.image.type).toBe('image/png')
-      expect(res.prompt).toContain(settings.style.prompt)
+      expect(res.prompt).toContain(prompts.panelArt(request()).prompt)
     }
   })
 
@@ -241,7 +233,7 @@ describe('generatePageArt', () => {
       { text: res.prompt },
     ])
     expect(res.prompt).toContain('panel 1 (')
-    expect(res.prompt.endsWith(`\navoid: ${settings.style.negative}`)).toBe(true)
+    expect(res.prompt.endsWith(`\navoid: ${prompts.pageArt(pageRequest()).negative}`)).toBe(true)
   })
 
   test.each([
@@ -286,14 +278,15 @@ describe('generateCharacterArt', () => {
   test('sends only the prompt with the negative appended, in 3:4', async () => {
     const character = { id: 'c', name: 'エル', shortName: 'L', appearance: '銀髪' }
     const res = await provider.generateCharacterArt({
-      project: { settings: { ...settings, style: { prompt: 'ink', negative: 'color' } } },
+      project: { settings },
       character,
     })
     const body = sentBody()
     expect(body.generationConfig.imageConfig).toEqual({ imageSize: '1K', aspectRatio: '3:4' })
     expect(body.contents[0]?.parts).toEqual([{ text: res.prompt }])
     expect(res.prompt).toContain('エル: 銀髪')
-    expect(res.prompt.endsWith('\navoid: color')).toBe(true)
+    const { prompt, negative } = prompts.characterArt({ project: { settings }, character })
+    expect(res.prompt).toBe(`${prompt}\navoid: ${negative}`)
     expect(new Uint8Array(await res.image.arrayBuffer())).toEqual(PNG_BYTES)
   })
 })

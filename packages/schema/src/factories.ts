@@ -15,12 +15,6 @@ import {
   SCHEMA_VERSION,
 } from './project'
 
-/** 既定の生成スタイル */
-const DEFAULT_STYLE = {
-  prompt: 'manga name rough, monochrome line art, loose sketch',
-  negative: 'text, letters, speech bubbles, color',
-}
-
 /** 既定設定の空プロジェクト（rtl、182x257mm、300dpi、エピソードなし） */
 export function createEmptyProject(title: string): Project {
   const now = new Date().toISOString()
@@ -34,7 +28,6 @@ export function createEmptyProject(title: string): Project {
       direction: 'rtl',
       pageSize: { w: 182, h: 257, unit: 'mm' },
       dpi: 300,
-      style: { ...DEFAULT_STYLE },
     },
     characters: [],
     episodes: [],
@@ -163,10 +156,6 @@ if (import.meta.vitest) {
       direction: 'rtl',
       pageSize: { w: 182, h: 257, unit: 'mm' },
       dpi: 300,
-      style: {
-        prompt: 'manga name rough, monochrome line art, loose sketch',
-        negative: 'text, letters, speech bubbles, color',
-      },
     })
     expect(ProjectSchema.safeParse(p).success).toBe(true)
   })

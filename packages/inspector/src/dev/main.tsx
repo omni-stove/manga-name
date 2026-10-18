@@ -21,7 +21,7 @@ const withArts = (panel: Page['panels'][number]) => ({
     id: `art_${panel.id}_${n}`,
     ref: `fixture:${panel.id}`,
     provider: 'fixture',
-    prompt: `${panel.note ?? ''}\nstyle: ${project.settings.style.prompt}`,
+    prompt: panel.note ?? '',
     instruction: n === 1 ? undefined : `${n} 版目の修正指示`,
     createdAt: `2026-10-16T0${n}:00:00.000Z`,
   })),

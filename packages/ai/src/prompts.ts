@@ -39,6 +39,17 @@ export type PanelArtPromptRequest = Omit<
   instruction?: string
 }
 
+/**
+ * 画像生成の画風。ネームは本原稿の下描きの前段なので、構図と芝居が読める線だけを描かせ、
+ * 顔の造作、服、背景、陰影の描き込みは本原稿に残す
+ */
+const NAME_STYLE =
+  'manga storyboard thumbnail (nemu), a quick rough sketch in loose grey pencil on white paper. Draw only what the composition and acting need: simple figures with round heads, a cross line for the face direction and just the eyes and mouth for the expression; the pose and gesture carry the acting. Hint the setting with a horizon line or a few perspective lines, or leave it blank. Keep hair and clothes to their silhouette, leave everything else for the final art.'
+
+/** 画風で抑えきれない描き込みと、配置図の白い領域（フキダシ）に入れられがちな文字を除く */
+const NAME_NEGATIVE =
+  'color, shading, hatching, screentone, solid blacks, inked or clean line art, detailed background, detailed hair or clothing, finished illustration, text, letters, speech bubbles'
+
 /** 画像生成の固定の末尾。配置図の白い領域（フキダシ）を空けさせる */
 const PANEL_ART_TAIL =
   'no text, no letters, no speech bubbles, leave the white areas of the layout image empty'
@@ -103,21 +114,20 @@ const joinLines = (parts: (string | undefined)[]) =>
 /**
  * 画像生成プロンプト。parts の順に要素を改行で連結し、空の要素は飛ばす。
  * 焦点か誘導線のあるコマでは、末尾の前に配置の印の読み方を入れる。
- * negative は settings.style.negative（無ければ空文字）。
  */
 function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: string } {
-  const { settings, characters } = req.project
+  const { characters } = req.project
   const panel = findPanel(req.page, req.panelId)
 
   return {
     prompt: joinLines([
-      settings.style.prompt,
+      NAME_STYLE,
       ...panelContent(panel, characters, req.hint, true),
       req.instruction && `revise the previous image: ${req.instruction}`,
       hasPlacement(panel) ? PLACEMENT_GUIDE : undefined,
       PANEL_ART_TAIL,
     ]),
-    negative: settings.style.negative ?? '',
+    negative: NAME_NEGATIVE,
   }
 }
 
@@ -133,13 +143,12 @@ const PAGE_ART_HEAD =
 const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from + size).toFixed(2)}`
 
 /**
- * ページ全体の画像生成プロンプト。スタイル、配置図の説明、ページの登場キャラの外見、
+ * ページ全体の画像生成プロンプト。画風、配置図の説明、ページの登場キャラの外見、
  * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで）、
  * 焦点か誘導線のあるコマがあれば配置の印の読み方、固定の末尾を改行で連結する。
- * negative は panelArt と同じ。
  */
 function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string } {
-  const { settings, characters } = req.project
+  const { characters } = req.project
   const cast = pageCharacterIds(req.page).flatMap((id) => characters.filter((c) => c.id === id))
   const panels = [...req.page.panels]
     .sort((a, b) => a.order - b.order)
@@ -154,14 +163,14 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
 
   return {
     prompt: joinLines([
-      settings.style.prompt,
+      NAME_STYLE,
       PAGE_ART_HEAD,
       cast.length > 0 ? `characters: ${cast.map(describeCharacter).join('; ')}` : undefined,
       ...panels,
       req.page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
       PANEL_ART_TAIL,
     ]),
-    negative: settings.style.negative ?? '',
+    negative: NAME_NEGATIVE,
   }
 }
 
@@ -171,17 +180,12 @@ const CHARACTER_ART_TAIL =
 
 /** キャラの参照画像のプロンプト。画風、名前と外見、固定の末尾を改行で連結する */
 function characterArt(req: CharacterArtRequest): { prompt: string; negative: string } {
-  const { settings } = req.project
   const { name, appearance } = req.character
   return {
-    prompt: [
-      settings.style.prompt,
-      appearance ? `${name}: ${appearance}` : name,
-      CHARACTER_ART_TAIL,
-    ]
-      .filter(Boolean)
-      .join('\n'),
-    negative: settings.style.negative ?? '',
+    prompt: [NAME_STYLE, appearance ? `${name}: ${appearance}` : name, CHARACTER_ART_TAIL].join(
+      '\n',
+    ),
+    negative: NAME_NEGATIVE,
   }
 }
 
@@ -389,12 +393,12 @@ if (import.meta.vitest) {
       instruction: '明るく',
     })
     const lines = prompt.split('\n')
-    expect(lines[0]).toBe(project.settings.style.prompt)
+    expect(lines[0]).toBe(NAME_STYLE)
     expect(lines).toContain('ヒント')
     expect(lines).toContain('revise the previous image: 明るく')
     expect(lines.at(-2)).toBe(PLACEMENT_GUIDE)
     expect(lines.at(-1)).toBe(PANEL_ART_TAIL)
-    expect(negative).toBe(project.settings.style.negative ?? '')
+    expect(negative).toBe(NAME_NEGATIVE)
   })
 
   test('pageArt lists the cast once and one line per panel in reading order with its span', () => {
@@ -406,7 +410,7 @@ if (import.meta.vitest) {
       hints: { [panel.id]: 'ヒント' },
     })
     const lines = prompt.split('\n')
-    expect(lines.slice(0, 2)).toEqual([project.settings.style.prompt, PAGE_ART_HEAD])
+    expect(lines.slice(0, 2)).toEqual([NAME_STYLE, PAGE_ART_HEAD])
     expect(lines.filter((l) => l.startsWith('characters: '))).toHaveLength(1)
     const panelLines = lines.filter((l) => l.startsWith('panel '))
     expect(panelLines.map((l) => Number(l.split(' ')[1]))).toEqual(
@@ -419,7 +423,7 @@ if (import.meta.vitest) {
     expect(panelLines[0]?.endsWith('; ヒント')).toBe(true)
     expect(lines.at(-2)).toBe(PLACEMENT_GUIDE)
     expect(lines.at(-1)).toBe(PANEL_ART_TAIL)
-    expect(negative).toBe(project.settings.style.negative ?? '')
+    expect(negative).toBe(NAME_NEGATIVE)
   })
 
   test('pageArt leaves out the cast line and the colon for a bare page', () => {
@@ -440,10 +444,11 @@ if (import.meta.vitest) {
       ],
     }
     const { prompt } = prompts.pageArt({
-      project: { settings: { ...project.settings, style: { prompt: '' } }, characters: [] },
+      project: { settings: project.settings, characters: [] },
       page: bare,
     })
     expect(prompt.split('\n')).toEqual([
+      NAME_STYLE,
       PAGE_ART_HEAD,
       'panel 1 (x 0.00-1.00, y 0.00-1.00)',
       PANEL_ART_TAIL,
@@ -453,17 +458,16 @@ if (import.meta.vitest) {
   test('characterArt joins the style, the name with the appearance, and the fixed tail', () => {
     const character = { id: 'c', name: 'エル', shortName: 'L', appearance: '銀髪、黒いコート' }
     const { prompt, negative } = prompts.characterArt({
-      project: { settings: { ...project.settings, style: { prompt: 'ink', negative: 'color' } } },
+      project: { settings: project.settings },
       character,
     })
-    expect(prompt.split('\n')).toEqual(['ink', 'エル: 銀髪、黒いコート', CHARACTER_ART_TAIL])
-    expect(negative).toBe('color')
+    expect(prompt.split('\n')).toEqual([NAME_STYLE, 'エル: 銀髪、黒いコート', CHARACTER_ART_TAIL])
+    expect(negative).toBe(NAME_NEGATIVE)
     const bare = prompts.characterArt({
-      project: { settings: { ...project.settings, style: { prompt: '' } } },
+      project: { settings: project.settings },
       character: { ...character, appearance: undefined },
     })
-    expect(bare.prompt.split('\n')).toEqual(['エル', CHARACTER_ART_TAIL])
-    expect(bare.negative).toBe('')
+    expect(bare.prompt.split('\n')).toEqual([NAME_STYLE, 'エル', CHARACTER_ART_TAIL])
   })
 
   test('planPages embeds the page plan JSON Schema and lists characters, the page count and the script', () => {

@@ -265,7 +265,7 @@ export function removeCharacterPatch(project: Project, id: ID): Patch {
   return [{ op: 'remove', path: `/characters/${index}` }]
 }
 
-const SETTINGS_FIELDS = ['direction', 'pageSize', 'dpi', 'style'] as const
+const SETTINGS_FIELDS = ['direction', 'pageSize', 'dpi'] as const
 
 /** 設定画面で編集する項目のうち、変わったものだけを置き換える */
 export function settingsPatch(

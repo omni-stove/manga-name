@@ -76,7 +76,7 @@ const CHARACTER_ASPECT_RATIO = '3:4'
 
 /** negative は Gemini に専用の欄が無いので「avoid: 」としてプロンプトの末尾に足す */
 const withNegative = ({ prompt, negative }: { prompt: string; negative: string }) =>
-  negative ? `${prompt}\navoid: ${negative}` : prompt
+  `${prompt}\navoid: ${negative}`
 
 /** キャラ参照の parts。直前のテキスト part にキャラ名を置く。居ないキャラは飛ばし、先頭から MAX_CHARACTER_REFS 人まで */
 async function characterParts(
