@@ -37,25 +37,16 @@ export const CharacterArtRequestSchema = z.object({
   character: CharacterSchema,
 })
 
-export const LayoutProposalResponseSchema = z.object({
-  pages: z.array(PageSchema),
-  rationale: z.string(),
-})
-
 /** 「脚本から下書き」の前段で作る 1 ページ分の割り振り */
 export const PagePlanSchema = z.object({
   /** このページで起きること。Page.note になる */
   note: z.string().min(1),
   /** このページに出るキャラ（Character.id）。Page.cast になる */
   cast: z.array(IdSchema),
-  /** このページに割り振った脚本の抜き書き。コマ割りを作るときに LLM へ渡す */
-  script: z.string(),
 })
 
-export const PagePlanResponseSchema = z.object({
-  pages: z.array(PagePlanSchema).min(1),
-  rationale: z.string(),
-})
+/** ページ割りの応答。読む順のページごとの割り振り */
+export const PagePlanResponseSchema = z.array(PagePlanSchema).min(1)
 
 export const CritiqueResponseSchema = z.object({
   summary: z.string(),
@@ -65,7 +56,6 @@ export const CritiqueResponseSchema = z.object({
 export type PanelArtRequest = z.infer<typeof PanelArtRequestSchema>
 export type PageArtRequest = z.infer<typeof PageArtRequestSchema>
 export type CharacterArtRequest = z.infer<typeof CharacterArtRequestSchema>
-export type LayoutProposalResponse = z.infer<typeof LayoutProposalResponseSchema>
 export type PagePlan = z.infer<typeof PagePlanSchema>
 export type PagePlanResponse = z.infer<typeof PagePlanResponseSchema>
 export type CritiqueResponse = z.infer<typeof CritiqueResponseSchema>
@@ -73,24 +63,11 @@ export type CritiqueResponse = z.infer<typeof CritiqueResponseSchema>
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('LayoutProposalResponseSchema validates pages with the Page rules', () => {
-    const page = { id: 'pg', side: 'single', panels: [], scribbles: [] }
-    expect(
-      LayoutProposalResponseSchema.parse({ pages: [page], rationale: 'r' }).pages,
-    ).toHaveLength(1)
-    const bad = { ...page, panels: [{ ...page, order: 1 }] }
-    expect(LayoutProposalResponseSchema.safeParse({ pages: [bad], rationale: 'r' }).success).toBe(
-      false,
-    )
-  })
-
   test('PagePlanResponseSchema needs at least one page with a non-empty note', () => {
-    const plan = { note: 'n', cast: [], script: 's' }
-    expect(PagePlanResponseSchema.parse({ pages: [plan], rationale: 'r' }).pages).toHaveLength(1)
-    expect(PagePlanResponseSchema.safeParse({ pages: [], rationale: 'r' }).success).toBe(false)
-    expect(
-      PagePlanResponseSchema.safeParse({ pages: [{ ...plan, note: '' }], rationale: 'r' }).success,
-    ).toBe(false)
+    const plan = { note: 'n', cast: [] }
+    expect(PagePlanResponseSchema.parse([plan])).toHaveLength(1)
+    expect(PagePlanResponseSchema.safeParse([]).success).toBe(false)
+    expect(PagePlanResponseSchema.safeParse([{ ...plan, note: '' }]).success).toBe(false)
   })
 
   test('CritiqueResponseSchema requires a Patch per suggestion', () => {

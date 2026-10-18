@@ -10,7 +10,6 @@ import {
 import {
   CharacterArtRequestSchema,
   CritiqueResponseSchema,
-  LayoutProposalResponseSchema,
   PageArtRequestSchema,
   PageDiagnosisSchema,
   PagePlanResponseSchema,
@@ -46,10 +45,8 @@ const MAX_ATTEMPTS = 2
 
 /** 脚本の最大文字数。LLM に渡すトークン数とその費用を 1 要求あたりで抑えるため */
 const MAX_SCRIPT_LENGTH = 20_000
-/** ページ数の目安の上限 */
+/** 脚本を割り振るページ数の上限。Web の MAX_PAGE_COUNT と @manga/ai のプロンプトの上限と揃える */
 const MAX_PAGE_COUNT = 64
-/** 1 分あたりの生成上限(10)に、ページ割り 1 回とコマ割りのまとまりが収まる最大ページ数。Web の MAX_PAGE_COUNT と揃える */
-const MAX_PLANNED_PAGES = 32
 /**
  * critique の本文の上限。ページの JSON は手描きの線や絵の履歴で際限なく膨らむので、
  * LLM に渡すトークン数を抑えるため本文の大きさで切る。Web は線と絵を外して送る
@@ -91,8 +88,8 @@ const PageArtJsonSchema = PageArtRequestSchema.omit({
   characterRefs: true,
 })
 
-/** `@manga/ai` の LayoutProposalRequest と PagePlanRequest */
-const LayoutProposalRequestSchema = z.object({
+/** `@manga/ai` の PagePlanRequest */
+const PagePlanRequestSchema = z.object({
   project: ProjectBaseSchema.pick({ settings: true, characters: true }),
   script: z.string().trim().min(1).max(MAX_SCRIPT_LENGTH),
   pageCount: z.number().int().min(1).max(MAX_PAGE_COUNT).optional(),
@@ -170,7 +167,7 @@ async function readImageForm<S extends z.ZodType>(c: Context<UserEnv>, schema: S
 }
 
 /**
- * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/page-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/propose-layout`、`POST /v1/ai/critique`、
+ * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/page-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/critique`、
  * `/v1/projects` の CRUD とアセットと参加者、招待リンクの受け口 `/v1/invites/:token`、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
  * `/v1/health`、`/v1/auth/*`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
  * CORS は WEB_ORIGINS と tauri://localhost だけに許す。
@@ -306,31 +303,21 @@ export function createApp(options: AppOptions = {}) {
   })
 
   app.post('/v1/ai/plan-pages', async (c) => {
-    const req = parseOrThrow(LayoutProposalRequestSchema, await requestJson(c.req.raw))
-
-    // 上限を超える枚数は必ず弾かれるので、生成回数を予約する前に断る
-    if ((req.pageCount ?? 0) > MAX_PLANNED_PAGES) {
-      throw new ApiException('invalid_request', {
-        detail: `pageCount must be at most ${MAX_PLANNED_PAGES}`,
-      })
-    }
-
+    const req = parseOrThrow(PagePlanRequestSchema, await requestJson(c.req.raw))
     const usageId = await reserve(c, 'plan-pages')
     const provider = createLlm(c.env)
     const characterIds = new Set(req.project.characters.map((ch) => ch.id))
 
     const { value, attempts } = await retryUntilValid(async () => {
-      // proposeLayout と同じく、実プロバイダの応答は LLM の出力そのままなので検証し直す。
+      // 戻り型を信用せず検証し直すのは、実プロバイダの応答が LLM の出力をそのまま詰めたものだから。
       // 居ないキャラを指す割り振りも、ページの登場キャラがスキーマを通らなくなるので不正として作り直させる
       const result = PagePlanResponseSchema.safeParse(await provider.planPages(req))
       if (!result.success) return undefined
-      // 割り振りの枚数がコマ割りの要求数を決めるので、上限超過と指定枚数との不一致は作り直させる
-      const expected = req.pageCount
-      const count = result.data.pages.length
-      if (count > MAX_PLANNED_PAGES || (expected !== undefined && count !== expected)) {
+      const count = result.data.length
+      if (count > MAX_PAGE_COUNT || (req.pageCount !== undefined && count !== req.pageCount)) {
         return undefined
       }
-      const known = result.data.pages.every((p) => p.cast.every((id) => characterIds.has(id)))
+      const known = result.data.every((p) => p.cast.every((id) => characterIds.has(id)))
       return known ? result.data : undefined
     })
     await settleUsage(c.env.DB, usageId, attempts)
@@ -338,27 +325,6 @@ export function createApp(options: AppOptions = {}) {
     if (value === undefined) {
       throw new ApiException('provider_invalid_response', {
         detail: 'llm provider returned an invalid page plan',
-      })
-    }
-    return c.json(value)
-  })
-
-  app.post('/v1/ai/propose-layout', async (c) => {
-    const req = parseOrThrow(LayoutProposalRequestSchema, await requestJson(c.req.raw))
-
-    const usageId = await reserve(c, 'propose-layout')
-    const provider = createLlm(c.env)
-
-    const { value, attempts } = await retryUntilValid(async () => {
-      // 戻り型を信用せず検証し直すのは、実プロバイダの応答が LLM の出力をそのまま詰めたものだから
-      const result = LayoutProposalResponseSchema.safeParse(await provider.proposeLayout(req))
-      return result.success ? result.data : undefined
-    })
-    await settleUsage(c.env.DB, usageId, attempts)
-
-    if (value === undefined) {
-      throw new ApiException('provider_invalid_response', {
-        detail: 'llm provider returned an invalid layout proposal',
       })
     }
     return c.json(value)
@@ -380,7 +346,7 @@ export function createApp(options: AppOptions = {}) {
       const provider = createLlm(c.env)
 
       const { value, attempts } = await retryUntilValid(async () => {
-        // proposeLayout と同じく、実プロバイダの応答は LLM の出力そのままなので検証し直す
+        // plan-pages と同じく、実プロバイダの応答は LLM の出力そのままなので検証し直す
         const result = CritiqueResponseSchema.safeParse(await provider.critique(req))
         return result.success ? result.data : undefined
       })
