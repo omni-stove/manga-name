@@ -14,6 +14,7 @@ import {
   Button,
   Checkbox,
   IconButton,
+  RemoveButton,
   Select,
   TextArea,
   Typography,
@@ -355,9 +356,12 @@ function ArtItem({
           <time dateTime={art.createdAt}>{formatDate(art.createdAt)}</time>
           {current && <b className={styles.badge}>{m.inspector_panel_art_current()}</b>}
           {onRemove && (
-            <Button size="small" variant="ghost" className={styles.remove} onClick={onRemove}>
-              {m.inspector_remove()}
-            </Button>
+            <RemoveButton
+              size="small"
+              label={m.inspector_remove()}
+              className={styles.remove}
+              onClick={onRemove}
+            />
           )}
         </XStack>
         {art.instruction && <p className={styles.instruction}>{art.instruction}</p>}

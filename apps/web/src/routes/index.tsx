@@ -1,6 +1,6 @@
 import { getLocale, m } from '@manga/i18n'
 import type { ProjectSummary } from '@manga/storage'
-import { Button, ConfirmDialog, Typography, XStack, YStack } from '@manga/ui'
+import { Button, ConfirmDialog, RemoveButton, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { Suspense, use, useState } from 'react'
 import common from '../common.module.css'
@@ -112,9 +112,12 @@ function ProjectCard({ project, busy, onRemove }: CardProps & { project: Project
         </YStack>
       </Link>
       <XStack as="span" wrap gap={6} className={common.cardActions}>
-        <Button size="small" variant="ghost" disabled={busy} onClick={() => onRemove(project)}>
-          {m.web_common_delete()}
-        </Button>
+        <RemoveButton
+          size="small"
+          label={m.web_common_delete()}
+          disabled={busy}
+          onClick={() => onRemove(project)}
+        />
       </XStack>
     </YStack>
   )

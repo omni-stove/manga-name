@@ -66,6 +66,11 @@
   aspect-ratio: 1;
 }
 
+.glyph {
+  width: 1.125em;
+  height: 1.125em;
+}
+
 /* 指で押す環境では小さいボタンも当たり判定を広げる */
 @media (pointer: coarse) {
   .button {

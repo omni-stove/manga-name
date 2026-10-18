@@ -1,6 +1,6 @@
 import { m } from '@manga/i18n'
 import type { Page } from '@manga/schema'
-import { Button, Checkbox, Field, Typography, XStack } from '@manga/ui'
+import { Button, Checkbox, Field, RemoveButton, Typography, XStack } from '@manga/ui'
 import { DEBOUNCE_MS, option, SelectField, TextField } from './fields'
 import styles from './page-inspector.module.css'
 import { optionalString, replace } from './patch'
@@ -78,13 +78,11 @@ export function PageInspector({
             {reference === undefined ? m.inspector_page_reference_load() : m.inspector_replace()}
           </Button>
           {reference !== undefined && (
-            <Button
+            <RemoveButton
               size="small"
-              variant="ghost"
+              label={m.inspector_remove()}
               onClick={() => onChange([{ op: 'remove', path: '/reference' }])}
-            >
-              {m.inspector_remove()}
-            </Button>
+            />
           )}
         </XStack>
       </fieldset>

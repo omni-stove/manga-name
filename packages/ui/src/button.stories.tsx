@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn } from 'storybook/test'
-import { Button, IconButton } from './button'
+import { Button, IconButton, RemoveButton } from './button'
 
 const meta = {
   component: Button,
@@ -25,6 +25,11 @@ export const Disabled: Story = { args: { disabled: true } }
 export const Icon: StoryObj<typeof IconButton> = {
   render: (args) => <IconButton {...args} />,
   args: { label: '閉じる', children: '×', onClick: fn() },
+}
+
+export const Remove: StoryObj<typeof RemoveButton> = {
+  render: (args) => <RemoveButton {...args} />,
+  args: { label: '削除', size: 'small', onClick: fn() },
 }
 
 // 操作後のフォーカスやホバーが見た目に残るので、見た目のストーリーとは分ける
