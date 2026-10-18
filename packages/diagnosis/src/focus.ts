@@ -1,4 +1,3 @@
-import { m } from '@manga/i18n'
 import type { FocusDiagnosis, Panel, Point } from '@manga/schema'
 
 /** フキダシを焦点とみなすときの weight（04 の 0 節） */
@@ -28,7 +27,7 @@ export const panelFoci = (panel: Panel): Focus[] => [
       id: b.id,
       kind: 'bubble' as const,
       // 合成焦点の label（04 の 10 節）。セリフ本文はヒントや Issue に出さない
-      label: m.diagnosis_bubble_label(),
+      label: 'フキダシ',
       pos: b.pos,
       weight: BUBBLE_WEIGHT,
     })),
