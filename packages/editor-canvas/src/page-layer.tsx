@@ -441,7 +441,8 @@ const BubbleView = memo(function BubbleView({
     layout.columns.length === 0 ? 0 : (layout.columns.length - 1) * pitch + layout.fontSize
   const right = box.x + box.w / 2 + blockWidth / 2 - layout.fontSize / 2
   const shapes = tail === null ? [body] : [tail, body]
-  const illegible = layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
+  const illegible =
+    layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
     <g className="ec-bubble" data-bubble-id={bubble.id} data-shape={bubble.shape}>
       <g clipPath={clipId && `url(#${clipId})`}>
@@ -498,9 +499,7 @@ const BubbleView = memo(function BubbleView({
       >
         {bubble.order}
       </text>
-      {illegible && (
-        <IllegibleAlert x={g.cx - g.rx} y={g.cy - g.ry} truncated={layout.truncated} />
-      )}
+      {illegible && <IllegibleAlert x={g.cx - g.rx} y={g.cy - g.ry} truncated={layout.truncated} />}
     </g>
   )
 })
@@ -511,7 +510,7 @@ function IllegibleAlert({ x, y, truncated }: { x: number; y: number; truncated: 
     ? 'セリフがフキダシに収まりません。フキダシを広げるかセリフを短くしてください'
     : 'セリフの文字が小さすぎて読めません。フキダシを広げるかセリフを短くしてください'
   return (
-    <g role="img" aria-label={message} data-bubble-alert={truncated ? 'truncated' : 'small'}>
+    <g aria-label={message} data-bubble-alert={truncated ? 'truncated' : 'small'}>
       <title>{message}</title>
       <circle cx={x} cy={y} r={ALERT_RADIUS} style={{ fill: 'var(--alert)' }} />
       <text

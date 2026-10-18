@@ -276,7 +276,12 @@ if (import.meta.vitest) {
 
   test('clipTextBox keeps the visible part of the box, and the whole box when none is visible', () => {
     const box = { x: 58, y: 70, w: 84, h: 60 }
-    expect(clipTextBox(box, { x: 100, y: 0, w: 200, h: 200 })).toEqual({ x: 100, y: 70, w: 42, h: 60 })
+    expect(clipTextBox(box, { x: 100, y: 0, w: 200, h: 200 })).toEqual({
+      x: 100,
+      y: 70,
+      w: 42,
+      h: 60,
+    })
     expect(clipTextBox(box, { x: 0, y: 0, w: 200, h: 200 })).toEqual(box)
     expect(clipTextBox(box, { x: 150, y: 0, w: 50, h: 200 })).toEqual(box)
   })
