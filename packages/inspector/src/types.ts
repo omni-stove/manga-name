@@ -78,8 +78,11 @@ export interface PageInspectorProps {
   diagnosis?: PageDiagnosis
   /** 生成中。「このページを全部生成」を押せなくする */
   generating?: boolean
+  /** false なら「このページを全部生成」以外を押せなくする。既定は true */
+  editable?: boolean
   onChange(patch: Patch): void
-  onGenerateAll(): void
+  /** 無ければ「このページを全部生成」を押せなくする */
+  onGenerateAll?(): void
   /** 参考画像を選ぶ UI を開く。選んだ結果は親が `reference` の Patch にする */
   onPickReference(): void
 }

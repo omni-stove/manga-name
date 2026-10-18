@@ -45,15 +45,22 @@
   display: contents;
 }
 
+/* Area で止めた領域。囲む枠を描かず、中身を止める前と同じ並びに置く */
+.locked {
+  display: contents;
+}
+
 .inspector > details,
-.inspectorFields > details {
+.inspectorFields > details,
+.inspectorFields > .locked > details {
   margin-top: var(--space-12);
   padding-top: var(--space-12);
   border-top: 1px solid var(--border);
 }
 
 .inspector > details > summary,
-.inspectorFields > details > summary {
+.inspectorFields > details > summary,
+.inspectorFields > .locked > details > summary {
   margin-bottom: var(--space-8);
   cursor: pointer;
   font-weight: var(--weight-bold);

@@ -90,6 +90,12 @@ if (import.meta.vitest) {
     expect(a.store.get().episodes[0]?.pages[0]?.panels).toHaveLength(5)
   })
 
+  test('どのコマにも焦点と誘導線がある', async () => {
+    const { store } = await openOnboarding(createFakeImageProvider())
+    const panels = store.get().episodes[0]?.pages[0]?.panels ?? []
+    expect(panels.every((p) => p.focusPoints.length > 0 && p.vectors.length > 0)).toBe(true)
+  })
+
   test('生成するとコマに絵が入り、zip には採用中の絵だけが入る', async () => {
     const session = await openOnboarding(createFakeImageProvider())
     const { store, generation, projectId, pageId, library } = session
