@@ -102,9 +102,9 @@ env = { VITE_API_BASE_URL = "http://localhost:8787" }
 run = "pnpm --filter @manga/web dev"
 
 [dev-api]
-description = "workers/api on :8787 with local D1/R2 and ENVIRONMENT=development"
+description = "workers/api on :8787 with local D1/R2, ENVIRONMENT=development and no country restriction"
 depends = ["db-migrate"]
-run = "pnpm --filter @manga/api exec wrangler dev --port 8787 --var ENVIRONMENT:development"
+run = "pnpm --filter @manga/api exec wrangler dev --port 8787 --var ENVIRONMENT:development --var ALLOWED_COUNTRIES:"
 
 [db-migrate]
 description = "Apply workers/api D1 migrations to the local database"

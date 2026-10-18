@@ -30,6 +30,7 @@ const MESSAGES: Messages = {
   invite_email_mismatch: () => m.api_error_invite_email_mismatch(),
   invalid_upload_url: () => m.api_error_invalid_upload_url(),
   upload_url_expired: () => m.api_error_upload_url_expired(),
+  country_blocked: () => m.api_error_country_blocked(),
   conflict: () => m.api_error_conflict(),
   asset_already_uploaded: () => m.api_error_asset_already_uploaded(),
   asset_uploads_unavailable: () => m.api_error_asset_uploads_unavailable(),

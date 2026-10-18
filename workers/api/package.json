@@ -9,7 +9,7 @@
     }
   },
   "scripts": {
-    "dev": "wrangler dev --var ENVIRONMENT:development",
+    "dev": "wrangler dev --var ENVIRONMENT:development --var ALLOWED_COUNTRIES:",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

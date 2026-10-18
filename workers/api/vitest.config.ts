@@ -15,6 +15,8 @@ export default defineConfig(async () => {
         miniflare: {
           bindings: {
             ENVIRONMENT: 'development',
+            // app.request の要求には cf が無いので、国の制限は geo.test.ts で env を差し替えて試す
+            ALLOWED_COUNTRIES: '',
             BETTER_AUTH_SECRET: 'test-better-auth-secret-0123456789abcdef',
             ASSET_URL_SECRET: 'test-asset-secret',
             TEST_MIGRATIONS: migrations,
