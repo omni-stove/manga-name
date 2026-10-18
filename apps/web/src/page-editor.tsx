@@ -93,6 +93,7 @@ import { errorMessage } from './route-error'
 import { saveFile } from './save-file'
 import { SaveStatusIndicator } from './save-status'
 import { ROLE_LABELS } from './sharing'
+import { Spotlight } from './spotlight'
 import type { Peer } from './store/presence'
 import type { WebProjectStore } from './store/project-store'
 import { toasts } from './toasts'
@@ -185,11 +186,22 @@ export interface PageEditorProps {
   llmProvider: LlmProvider
   /** 使える領域。省略すると全部使える */
   unlocked?: ReadonlySet<EditorArea>
-  /** ツールバーの下に出す案内 */
-  notice?: ReactNode
+  /** 手順の案内。`target` 以外をぼかして押せなくし、`target` に `message` の吹き出しを向ける */
+  guide?: { target: GuideTarget; message: string }
   /** ツールバーの右端、書き出しの前に足す操作 */
   actions?: ReactNode
 }
+
+/** 案内で吹き出しを向けられる操作。`generate` は「このページを全部生成」、`layers` はレイヤーの切り替え */
+export type GuideTarget = 'generate' | 'layers'
+
+const GUIDE_TARGETS: Record<GuideTarget, string> = {
+  generate: '[data-action="generate-all"]',
+  layers: '[data-area="layers"]',
+}
+
+// キャンバスは案内が指す丸や矢印と、生成した絵を見せる所なのでぼかさない。`actions` は案内する側が足した操作
+const GUIDE_KEEP = ['[data-area="canvas"]', '[data-area="actions"]']
 
 /** `open` でなければ中身を見た目そのままで押せなくし、フォーカスも当てない */
 function Area({ open, children }: { open: boolean; children: ReactNode }) {
@@ -266,7 +278,7 @@ function issueTarget(page: Page, issue: Issue): Selection {
 
 /**
  * ページの編集画面。ツールバー、キャンバス、インスペクタ。
- * `unlocked` を渡すと、そこに無い領域を見た目を変えずに操作できなくする
+ * `unlocked` を渡すと、そこに無い領域をキーボードでも操作できなくする
  */
 export function PageEditor({
   projectId,
@@ -277,7 +289,7 @@ export function PageEditor({
   generation,
   llmProvider,
   unlocked,
-  notice,
+  guide,
   actions,
 }: PageEditorProps) {
   const can = (area: EditorArea) => unlocked?.has(area) ?? true
@@ -567,7 +579,7 @@ export function PageEditor({
           )}
         </Area>
         <Area open={can('layers')}>
-          <XStack role="group" aria-label={m.web_editor_layers()}>
+          <XStack role="group" aria-label={m.web_editor_layers()} data-area="layers">
             <Typography as="span" variant="label" tone="muted" aria-hidden>
               {m.web_editor_layers()}
             </Typography>
@@ -583,7 +595,11 @@ export function PageEditor({
         </Area>
         <XStack as="span" gap={6} className={styles.actions}>
           <SaveStatusIndicator store={store} />
-          {actions}
+          {actions && (
+            <XStack as="span" gap={6} data-area="actions">
+              {actions}
+            </XStack>
+          )}
           <Area open={can('export')}>
             {typeof exporting === 'object' ? (
               <XStack as="span" className={styles.exportProgress} role="status">
@@ -630,7 +646,11 @@ export function PageEditor({
           onExportProject={exportProject}
         />
       )}
-      {notice}
+      {guide && (
+        <Spotlight target={GUIDE_TARGETS[guide.target]} keep={GUIDE_KEEP}>
+          {guide.message}
+        </Spotlight>
+      )}
       {error && (
         <Typography tone="alert" className={styles.error}>
           {error}
@@ -641,6 +661,7 @@ export function PageEditor({
           className={styles.canvas}
           role="application"
           aria-label={m.web_editor_canvas()}
+          data-area="canvas"
           inert={!can('canvas')}
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes('Files')) e.preventDefault()
@@ -677,7 +698,8 @@ export function PageEditor({
         <Sidebar
           title={m.web_editor_inspector()}
           side="right"
-          expanded={inspectorExpanded}
+          // 吹き出しを向けるボタンが畳んだサイドバーの中に隠れないよう、案内の間は開いたままにする
+          expanded={inspectorExpanded || guide?.target === 'generate'}
           onExpandedChange={setInspectorExpanded}
           className={styles.inspectorSidebar}
         >
