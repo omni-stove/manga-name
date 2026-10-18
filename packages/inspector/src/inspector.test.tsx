@@ -674,6 +674,27 @@ describe('PageInspector', () => {
 
     await act(async () => root.render(<PageInspector {...props} page={{ ...page, panels: [] }} />))
     expect(buttonNamed(container, 'このページを全部生成').disabled).toBe(true)
+
+    await act(async () => root.render(<PageInspector {...props} onGenerateAll={undefined} />))
+    expect(buttonNamed(container, 'このページを全部生成').disabled).toBe(true)
+  })
+
+  test('editable = false disables everything but generate all', async () => {
+    const { container } = await render(
+      <PageInspector
+        page={withReference}
+        editable={false}
+        onChange={() => {}}
+        onGenerateAll={() => {}}
+        onPickReference={() => {}}
+      />,
+    )
+    const enabled = [
+      ...container.querySelectorAll<HTMLButtonElement>('button, input, select, textarea'),
+    ]
+      .filter((el) => !el.matches(':disabled'))
+      .map((el) => el.textContent)
+    expect(enabled).toEqual(['このページを全部生成'])
   })
 
   test('shows the page diagnosis summary and issues', async () => {

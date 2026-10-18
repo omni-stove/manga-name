@@ -1,7 +1,7 @@
 {
   "schemaVersion": 6,
   "id": "prj_onboarding",
-  "title": "はじめてのネーム",
+  "title": "両面宿儺",
   "createdAt": "2026-10-19T00:00:00.000Z",
   "updatedAt": "2026-10-19T00:00:00.000Z",
   "settings": {
@@ -19,22 +19,28 @@
   },
   "characters": [
     {
-      "id": "chr_haru",
-      "name": "ハル",
-      "shortName": "ハル",
-      "appearance": "高校二年の少女。肩までのボブ。ブレザーの制服。明るい表情。"
+      "id": "chr_mae",
+      "name": "マエ",
+      "shortName": "マエ",
+      "appearance": "テレポート能力者の女性兵士。ゴールドのメッシュが入った黒髪のウルフカット。鋭い目。耳に複数のピアス。引き締まった体つき。"
     },
     {
-      "id": "chr_sora",
-      "name": "ソラ",
-      "shortName": "ソラ",
-      "appearance": "高校二年の少年。短い黒髪。学ランを着崩している。少しぶっきらぼう。"
+      "id": "chr_ushiro",
+      "name": "ウシロ",
+      "shortName": "ウシロ",
+      "appearance": "無能力者の男性兵士。短髪。穏やかな目だが戦闘中は鋭い。男性としては背が低く、引き締まった体つき。"
+    },
+    {
+      "id": "chr_enemy",
+      "name": "テロリスト",
+      "shortName": "テロリスト",
+      "appearance": "テロ組織の男。防弾ベストにアサルトライフル。"
     }
   ],
   "episodes": [
     {
       "id": "ep_onboarding",
-      "title": "放課後の屋上",
+      "title": "転移",
       "pages": [
         {
           "id": "pg_onboarding",
@@ -50,28 +56,95 @@
                 "w": 0.8242,
                 "h": 0.25
               },
-              "camera": "ロング",
-              "note": "放課後の学校の屋上。夕焼け空。フェンスの向こうに街並みが広がる。",
-              "cast": [],
+              "camera": "ミドル",
+              "note": "転移の直前。両面宿儺型スーツの中、マエとウシロが背中合わせに立つ。宇宙服のような密閉型の大型スーツで、バイザー越しに顔が見える。マエは胸の前で両掌を上下に合わせ、ウシロはショットガン二丁を抱えている。",
+              "cast": ["chr_mae", "chr_ushiro"],
               "bubbles": [
                 {
                   "id": "bb_1",
                   "order": 1,
-                  "text": "放課後。",
-                  "shape": "narration",
+                  "speakerId": "chr_mae",
+                  "tail": {
+                    "x": 0.72,
+                    "y": 0.42
+                  },
+                  "text": "３、２、１、\n転移",
+                  "shape": "normal",
                   "pos": {
-                    "x": 0.92,
-                    "y": 0.3
+                    "x": 0.87,
+                    "y": 0.36
                   },
                   "size": {
-                    "w": 0.06,
-                    "h": 0.45
+                    "w": 0.1,
+                    "h": 0.62
                   }
                 }
               ],
               "arts": [],
-              "focusPoints": [],
-              "vectors": []
+              "focusPoints": [
+                {
+                  "id": "fc_1",
+                  "kind": "face",
+                  "label": "マエ",
+                  "pos": {
+                    "x": 0.6,
+                    "y": 0.38
+                  },
+                  "weight": 0.45,
+                  "characterId": "chr_mae"
+                },
+                {
+                  "id": "fc_2",
+                  "kind": "face",
+                  "label": "ウシロ",
+                  "pos": {
+                    "x": 0.4,
+                    "y": 0.38
+                  },
+                  "weight": 0.35,
+                  "characterId": "chr_ushiro"
+                },
+                {
+                  "id": "fc_3",
+                  "kind": "keyObject",
+                  "label": "合わせた両掌",
+                  "pos": {
+                    "x": 0.66,
+                    "y": 0.72
+                  },
+                  "weight": 0.25
+                }
+              ],
+              "vectors": [
+                {
+                  "id": "vc_1",
+                  "kind": "gaze",
+                  "from": {
+                    "x": 0.6,
+                    "y": 0.38
+                  },
+                  "to": {
+                    "x": 0.74,
+                    "y": 0.38
+                  },
+                  "strength": "strong",
+                  "sourceFocusId": "fc_1"
+                },
+                {
+                  "id": "vc_2",
+                  "kind": "gaze",
+                  "from": {
+                    "x": 0.4,
+                    "y": 0.38
+                  },
+                  "to": {
+                    "x": 0.12,
+                    "y": 0.38
+                  },
+                  "strength": "weak",
+                  "sourceFocusId": "fc_2"
+                }
+              ]
             },
             {
               "id": "pn_2",
@@ -82,33 +155,79 @@
                 "w": 0.4021,
                 "h": 0.28
               },
-              "camera": "ミドル",
-              "note": "ハルがフェンスにもたれて、空を見上げている。",
-              "cast": ["chr_haru"],
-              "bubbles": [
+              "camera": "ロング",
+              "note": "敵施設の通信室で大爆発。閃光と爆風が放射状に広がり、無線機の並ぶ机がなぎ倒され、男たちが吹き飛ぶ。",
+              "cast": ["chr_enemy"],
+              "bubbles": [],
+              "arts": [],
+              "focusPoints": [
                 {
-                  "id": "bb_2",
-                  "order": 1,
-                  "speakerId": "chr_haru",
-                  "text": "今日も\n終わっちゃったね",
-                  "shape": "normal",
+                  "id": "fc_4",
+                  "kind": "sfx",
+                  "label": "ドォン",
                   "pos": {
-                    "x": 0.8,
-                    "y": 0.32
+                    "x": 0.5,
+                    "y": 0.42
                   },
-                  "size": {
-                    "w": 0.22,
-                    "h": 0.55
+                  "weight": 0.9
+                },
+                {
+                  "id": "fc_5",
+                  "kind": "face",
+                  "label": "吹き飛ぶ男",
+                  "pos": {
+                    "x": 0.18,
+                    "y": 0.78
                   },
-                  "tail": {
-                    "x": 0.55,
-                    "y": 0.6
-                  }
+                  "weight": 0.25,
+                  "characterId": "chr_enemy"
                 }
               ],
-              "arts": [],
-              "focusPoints": [],
-              "vectors": []
+              "vectors": [
+                {
+                  "id": "vc_3",
+                  "kind": "motion",
+                  "from": {
+                    "x": 0.5,
+                    "y": 0.42
+                  },
+                  "to": {
+                    "x": 0.18,
+                    "y": 0.78
+                  },
+                  "strength": "strong",
+                  "sourceFocusId": "fc_4",
+                  "targetFocusId": "fc_5"
+                },
+                {
+                  "id": "vc_4",
+                  "kind": "motion",
+                  "from": {
+                    "x": 0.5,
+                    "y": 0.42
+                  },
+                  "to": {
+                    "x": 0.9,
+                    "y": 0.12
+                  },
+                  "strength": "weak",
+                  "sourceFocusId": "fc_4"
+                },
+                {
+                  "id": "vc_5",
+                  "kind": "motion",
+                  "from": {
+                    "x": 0.5,
+                    "y": 0.42
+                  },
+                  "to": {
+                    "x": 0.88,
+                    "y": 0.85
+                  },
+                  "strength": "weak",
+                  "sourceFocusId": "fc_4"
+                }
+              ]
             },
             {
               "id": "pn_3",
@@ -119,33 +238,51 @@
                 "w": 0.4021,
                 "h": 0.28
               },
-              "camera": "バストアップ",
-              "note": "ソラが缶ジュースを二本持って、ハルの方へ振り返る。",
-              "cast": ["chr_sora"],
-              "bubbles": [
+              "camera": "ロング",
+              "note": "ホバーの噴流が煙を押し流し、爆心に両面宿儺型スーツが浮かぶ。前後に膨らんだ大型スーツで、脚部は裾広がりのホバーユニット。散らばった書類が舞い上がる。",
+              "cast": [],
+              "bubbles": [],
+              "arts": [],
+              "focusPoints": [
                 {
-                  "id": "bb_3",
-                  "order": 1,
-                  "speakerId": "chr_sora",
-                  "text": "ほら、\nおごり",
-                  "shape": "normal",
+                  "id": "fc_6",
+                  "kind": "keyObject",
+                  "label": "両面宿儺型スーツ",
                   "pos": {
-                    "x": 0.2,
-                    "y": 0.28
+                    "x": 0.5,
+                    "y": 0.45
                   },
-                  "size": {
-                    "w": 0.2,
-                    "h": 0.4
-                  },
-                  "tail": {
-                    "x": 0.42,
-                    "y": 0.55
-                  }
+                  "weight": 0.7
                 }
               ],
-              "arts": [],
-              "focusPoints": [],
-              "vectors": []
+              "vectors": [
+                {
+                  "id": "vc_6",
+                  "kind": "motion",
+                  "from": {
+                    "x": 0.5,
+                    "y": 0.82
+                  },
+                  "to": {
+                    "x": 0.1,
+                    "y": 0.92
+                  },
+                  "strength": "weak"
+                },
+                {
+                  "id": "vc_7",
+                  "kind": "motion",
+                  "from": {
+                    "x": 0.5,
+                    "y": 0.82
+                  },
+                  "to": {
+                    "x": 0.9,
+                    "y": 0.92
+                  },
+                  "strength": "weak"
+                }
+              ]
             },
             {
               "id": "pn_4",
@@ -156,29 +293,60 @@
                 "w": 0.27,
                 "h": 0.286
               },
-              "camera": "アップ",
-              "note": "ハルが目を丸くして驚く顔。",
-              "cast": ["chr_haru"],
+              "camera": "バストアップ",
+              "note": "爆風の届かなかった壁際で、生き残った男が銃を抱えたままスーツを見上げる。",
+              "cast": ["chr_enemy"],
               "bubbles": [
                 {
-                  "id": "bb_4",
+                  "id": "bb_2",
                   "order": 1,
-                  "speakerId": "chr_haru",
-                  "text": "えっ",
-                  "shape": "shout",
+                  "speakerId": "chr_enemy",
+                  "tail": {
+                    "x": 0.6,
+                    "y": 0.55
+                  },
+                  "text": "特殊部隊の――",
+                  "shape": "whisper",
                   "pos": {
-                    "x": 0.7,
-                    "y": 0.2
+                    "x": 0.78,
+                    "y": 0.4
                   },
                   "size": {
-                    "w": 0.34,
-                    "h": 0.24
+                    "w": 0.3,
+                    "h": 0.72
                   }
                 }
               ],
               "arts": [],
-              "focusPoints": [],
-              "vectors": []
+              "focusPoints": [
+                {
+                  "id": "fc_7",
+                  "kind": "face",
+                  "label": "見上げる男",
+                  "pos": {
+                    "x": 0.45,
+                    "y": 0.7
+                  },
+                  "weight": 0.5,
+                  "characterId": "chr_enemy"
+                }
+              ],
+              "vectors": [
+                {
+                  "id": "vc_8",
+                  "kind": "gaze",
+                  "from": {
+                    "x": 0.45,
+                    "y": 0.7
+                  },
+                  "to": {
+                    "x": 0.08,
+                    "y": 0.2
+                  },
+                  "strength": "strong",
+                  "sourceFocusId": "fc_7"
+                }
+              ]
             },
             {
               "id": "pn_5",
@@ -189,33 +357,89 @@
                 "w": 0.5342,
                 "h": 0.286
               },
-              "camera": "ロング",
-              "note": "フェンス際に二人で並び、夕日に向かって缶を軽く合わせる。後ろ姿。",
-              "cast": ["chr_haru", "chr_sora"],
-              "bubbles": [
+              "camera": "ミドル",
+              "note": "スーツの中で、ウシロが抱えていたショットガンの一丁を肩越しに後ろへ差し出し、背中合わせのマエの手袋がグリップを掴む。二人はそれぞれ反対の方向を向いたまま。",
+              "cast": ["chr_mae", "chr_ushiro"],
+              "bubbles": [],
+              "arts": [],
+              "focusPoints": [
                 {
-                  "id": "bb_5",
-                  "order": 1,
-                  "speakerId": "chr_haru",
-                  "text": "明日も\nがんばろ",
-                  "shape": "normal",
+                  "id": "fc_8",
+                  "kind": "face",
+                  "label": "ウシロ",
                   "pos": {
-                    "x": 0.85,
-                    "y": 0.3
+                    "x": 0.62,
+                    "y": 0.32
                   },
-                  "size": {
-                    "w": 0.16,
-                    "h": 0.45
+                  "weight": 0.35,
+                  "characterId": "chr_ushiro"
+                },
+                {
+                  "id": "fc_9",
+                  "kind": "face",
+                  "label": "マエ",
+                  "pos": {
+                    "x": 0.36,
+                    "y": 0.32
                   },
-                  "tail": {
-                    "x": 0.65,
-                    "y": 0.6
-                  }
+                  "weight": 0.35,
+                  "characterId": "chr_mae"
+                },
+                {
+                  "id": "fc_10",
+                  "kind": "keyObject",
+                  "label": "ショットガン",
+                  "pos": {
+                    "x": 0.48,
+                    "y": 0.55
+                  },
+                  "weight": 0.5
                 }
               ],
-              "arts": [],
-              "focusPoints": [],
-              "vectors": []
+              "vectors": [
+                {
+                  "id": "vc_9",
+                  "kind": "motion",
+                  "from": {
+                    "x": 0.62,
+                    "y": 0.6
+                  },
+                  "to": {
+                    "x": 0.36,
+                    "y": 0.5
+                  },
+                  "strength": "strong",
+                  "targetFocusId": "fc_10"
+                },
+                {
+                  "id": "vc_10",
+                  "kind": "gaze",
+                  "from": {
+                    "x": 0.62,
+                    "y": 0.32
+                  },
+                  "to": {
+                    "x": 0.94,
+                    "y": 0.32
+                  },
+                  "strength": "weak",
+                  "sourceFocusId": "fc_8"
+                },
+                {
+                  "id": "vc_11",
+                  "kind": "gaze",
+                  "from": {
+                    "x": 0.36,
+                    "y": 0.32
+                  },
+                  "to": {
+                    "x": 0.06,
+                    "y": 0.32
+                  },
+                  "strength": "weak",
+                  "sourceFocusId": "fc_9"
+                }
+              ]
             }
           ]
         }
