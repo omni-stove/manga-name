@@ -63,7 +63,7 @@ export function FileDrop({
     setDragging(false)
     const input = ref.current
     const file = e.dataTransfer.files[0]
-    if (!input || !file || disabled) return
+    if (!input || !file || input.disabled) return
     if (!matchesAccept(file, accept)) {
       setRejected(true)
       return
@@ -90,7 +90,7 @@ export function FileDrop({
           data-invalid={note ? true : undefined}
           onDragOver={(e) => {
             e.preventDefault()
-            if (!disabled) setDragging(true)
+            if (!ref.current?.disabled) setDragging(true)
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
@@ -140,9 +140,12 @@ export function FileDrop({
   )
 }
 
-/** input の accept と同じ規則（MIME、`type/*`、拡張子）で、ファイルが選べるかを返す */
+/**
+ * input の accept と同じ規則（MIME、`type/*`、拡張子）で、ファイルが選べるかを返す。
+ * ドロップした File は MIME が空のことがあるので、その場合は弾かず受け取り側の判定に任せる
+ */
 function matchesAccept(file: File, accept: string | undefined): boolean {
-  if (!accept) return true
+  if (!accept || file.type === '') return true
   const fileName = file.name.toLowerCase()
   return accept
     .split(',')
