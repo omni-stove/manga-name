@@ -51,6 +51,18 @@ export function textBox(shape: Shape, g: BubbleGeometry): Box {
   return { x: g.cx - w / 2, y: g.cy - h / 2, w, h }
 }
 
+/**
+ * セリフの箱を、フキダシを切るコマの矩形 clip の内側に寄せる。見切れたフキダシでも
+ * 見えている部分にセリフを置き、狭くなった分は割り付けが文字を小さくする。重ならなければ box をそのまま返す
+ */
+export function clipTextBox(box: Box, clip: Box): Box {
+  const x = Math.max(box.x, clip.x)
+  const y = Math.max(box.y, clip.y)
+  const w = Math.min(box.x + box.w, clip.x + clip.w) - x
+  const h = Math.min(box.y + box.h, clip.y + clip.h) - y
+  return w > 0 && h > 0 ? { x, y, w, h } : box
+}
+
 function pointAt(g: BubbleGeometry, angle: number, scale: number) {
   return { x: g.cx + g.rx * scale * Math.cos(angle), y: g.cy + g.ry * scale * Math.sin(angle) }
 }

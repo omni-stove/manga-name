@@ -82,6 +82,37 @@ describe('drawing the fixture', () => {
     expect(lines.map((t) => t.textContent).sort()).toEqual(['……', '……？', '……芽が'].sort())
   })
 
+  test('legible dialogue gets no alert', async () => {
+    const svg = await render()
+    expect(svg.querySelectorAll('[data-bubble-alert]')).toHaveLength(0)
+  })
+
+  /** pn_3 の唯一のフキダシ bb_3 を差し替えたページ */
+  const withBubble3 = (patch: Partial<Panel['bubbles'][number]>): Page => ({
+    ...samplePage,
+    panels: samplePage.panels.map((panel) =>
+      panel.id === 'pn_3'
+        ? { ...panel, bubbles: panel.bubbles.map((b) => ({ ...b, ...patch })) }
+        : panel,
+    ),
+  })
+
+  test('dialogue too long for its bubble gets an alert with a readable label', async () => {
+    const svg = await render({ page: withBubble3({ text: 'あ'.repeat(200) }) })
+    const alert = must(svg.querySelector('[data-bubble-id="bb_3"] [data-bubble-alert]'))
+    expect(alert.getAttribute('role')).toBe('img')
+    expect(alert.getAttribute('aria-label')).toContain('フキダシ')
+  })
+
+  test('dialogue of a bubble cut by the panel edge sits in the visible part', async () => {
+    const svg = await render({ page: withBubble3({ pos: { x: 1, y: 0.5 }, tail: undefined }) })
+    const panel = must(samplePage.panels.find((p) => p.id === 'pn_3'))
+    const edge = (panel.rect.x + panel.rect.w) * project.settings.pageSize.w
+    const columns = [...svg.querySelectorAll('[data-bubble-id="bb_3"] tspan')]
+    expect(columns.length).toBeGreaterThan(0)
+    for (const column of columns) expect(Number(column.getAttribute('x'))).toBeLessThan(edge)
+  })
+
   test('panels without art show camera and note in grey, and no image', async () => {
     const svg = await render()
     expect(svg.querySelectorAll('image')).toHaveLength(0)

@@ -11,7 +11,7 @@ import {
 } from '@manga/schema'
 import { memo, Suspense, use, useState } from 'react'
 import { type AssetState, loadAsset } from './asset'
-import { type Box, bodyPath, bubbleGeometry, tailPath, textBox } from './bubble-shape'
+import { type Box, bodyPath, bubbleGeometry, clipTextBox, tailPath, textBox } from './bubble-shape'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
 import { COLUMN_PITCH, layoutVertical } from './vertical-text'
@@ -21,6 +21,12 @@ export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
 export const GUIDE = 'var(--guide)'
 const NOTE_COLOR = 'var(--note)'
 const NUMBER_RADIUS = 3.2
+/**
+ * これより小さいセリフは読めないとして警告する（mm）。印刷で読める下限とされる 7pt（約 2.47mm）。
+ * 割り付けの下限 2mm まで縮めるのは、警告を出しつつ配置は崩さないため
+ */
+const LEGIBLE_FONT = 2.47
+const ALERT_RADIUS = 2.4
 
 interface PageLayerProps {
   page: Page
@@ -471,16 +477,19 @@ const BubbleView = memo(function BubbleView({
   selected: boolean
   clipId?: string
 }) {
-  const g = bubbleGeometry(bubble, panelBox({ rect: panelRect }, width, height))
+  const panel = panelBox({ rect: panelRect }, width, height)
+  const g = bubbleGeometry(bubble, panel)
   const body = bodyPath(bubble.shape, g)
   const tail = tailPath(bubble.shape, g)
-  const box = textBox(bubble.shape, g)
+  const box = clipId ? clipTextBox(textBox(bubble.shape, g), panel) : textBox(bubble.shape, g)
   const layout = layoutVertical(bubble.text, box)
   const pitch = layout.fontSize * COLUMN_PITCH
   const blockWidth =
     layout.columns.length === 0 ? 0 : (layout.columns.length - 1) * pitch + layout.fontSize
   const right = box.x + box.w / 2 + blockWidth / 2 - layout.fontSize / 2
   const shapes = tail === null ? [body] : [tail, body]
+  const illegible =
+    layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
     <g className="ec-bubble" data-bubble-id={bubble.id} data-shape={bubble.shape}>
       <g clipPath={clipId && `url(#${clipId})`}>
@@ -537,6 +546,34 @@ const BubbleView = memo(function BubbleView({
       >
         {bubble.order}
       </text>
+      {illegible && <IllegibleAlert x={g.cx - g.rx} y={g.cy - g.ry} truncated={layout.truncated} />}
     </g>
   )
 })
+
+/** 文字が小さすぎるか収まらないフキダシの左上に出す、出力に出ない警告の印 */
+function IllegibleAlert({ x, y, truncated }: { x: number; y: number; truncated: boolean }) {
+  const message = truncated
+    ? 'セリフがフキダシに収まりません。フキダシを広げるかセリフを短くしてください'
+    : 'セリフの文字が小さすぎて読めません。フキダシを広げるかセリフを短くしてください'
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: SVG の <g> に <img> は使えず、role="img" で名前を伝える
+    // biome-ignore lint/a11y/noInteractiveElementToNoninteractiveRole: biome が <g> を対話要素と誤判定する。警告の印は操作できず、名前だけを伝える
+    <g role="img" aria-label={message} data-bubble-alert={truncated ? 'truncated' : 'small'}>
+      <title>{message}</title>
+      <circle cx={x} cy={y} r={ALERT_RADIUS} style={{ fill: 'var(--alert)' }} />
+      <text
+        x={x}
+        y={y}
+        style={{ fill: 'var(--on-alert)' }}
+        fontFamily={FONT_FAMILY}
+        fontSize={ALERT_RADIUS * 1.4}
+        fontWeight="bold"
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        !
+      </text>
+    </g>
+  )
+}

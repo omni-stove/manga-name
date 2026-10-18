@@ -11,6 +11,9 @@ const FEWER_LINES_TOLERANCE = 0.8
 /** 縦書きで 90 度回転して置く字。長音、ダッシュ、三点リーダ、括弧 */
 const ROTATED = new Set('ー〜～…‥—―－()（）[]［］{}｛｝「」『』【】〈〉《》〔〕')
 
+/** 縦書きで 90 度回転して置く半角英数字。エディタの SVG（text-orientation: mixed）と向きを揃える */
+const SIDEWAYS = /^[A-Za-z0-9]$/
+
 /** 行頭に置かない字。前の行の末尾の字を道連れに次の行へ送る */
 const NO_LINE_START = new Set(
   '、。，．・）」』】〉》〕］｝!?！？ーゝゞヽヾ々ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ',
@@ -44,7 +47,7 @@ function toParagraphs(text: string): string[][] {
 
 /** その字を縦書きで 90 度回転して置くか */
 export function rotatesInVertical(glyph: string): boolean {
-  return ROTATED.has(glyph)
+  return ROTATED.has(glyph) || SIDEWAYS.test(glyph)
 }
 
 /** perColumn 字ごとに折り返す。禁則の字は前の行の末尾ごと次の行へ送る */
@@ -126,7 +129,14 @@ export function drawVerticalText(
     const top = box.y + box.h / 2 - (line.length * fontPx) / 2
     line.forEach((glyph, row) => {
       const cy = top + row * fontPx + fontPx / 2
-      if (rotatesInVertical(glyph)) {
+      if (SIDEWAYS.test(glyph)) {
+        // 英数字は字面の中心で回すと g や y が持ち上がって並びが揃わないので、ベースラインを保って回す
+        ctx.save()
+        ctx.translate(cx, cy)
+        ctx.rotate(Math.PI / 2)
+        ctx.fillText(glyph, 0, alphabeticY(0, fontPx, 'middle'))
+        ctx.restore()
+      } else if (rotatesInVertical(glyph)) {
         // 三点リーダや長音は仮想ボディの中で下や端に寄っているので、字面の中心を軸に回す
         const m = ctx.measureText(glyph)
         const dx = (m.actualBoundingBoxLeft - m.actualBoundingBoxRight) / 2
@@ -192,9 +202,12 @@ if (import.meta.vitest) {
     expect(fontPx).toBe(23)
   })
 
-  test('長音と括弧は回転し、仮名と漢字は回転しない', () => {
+  test('長音と括弧と半角英数字は回転し、仮名と漢字は回転しない', () => {
     expect(rotatesInVertical('ー')).toBe(true)
     expect(rotatesInVertical('「')).toBe(true)
+    expect(rotatesInVertical('A')).toBe(true)
+    expect(rotatesInVertical('z')).toBe(true)
+    expect(rotatesInVertical('7')).toBe(true)
     expect(rotatesInVertical('あ')).toBe(false)
     expect(rotatesInVertical('芽')).toBe(false)
   })
