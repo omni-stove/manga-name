@@ -3,6 +3,7 @@
  */
 export { Button, type ButtonProps, IconButton, type IconButtonProps } from './button'
 export { ConfirmDialog } from './confirm-dialog'
+export { ContextMenu, type ContextMenuItem } from './context-menu'
 export { Dialog } from './dialog'
 export {
   Checkbox,

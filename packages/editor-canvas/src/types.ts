@@ -23,6 +23,15 @@ export interface Layers {
   diagnosis: boolean
 }
 
+/** ページの何も無いところかページの外側の右クリック */
+export interface CanvasMenuRequest {
+  /** 押した位置の画面座標 */
+  x: number
+  y: number
+  /** ズームとパンを全体表示に戻す */
+  fit(): void
+}
+
 export interface EditorCanvasProps {
   page: Page
   settings: ProjectSettings
@@ -50,4 +59,9 @@ export interface EditorCanvasProps {
   onGenerate?(panelId: ID): void
   /** PanelArt.ref と Page.reference.ref を表示用 URL にする */
   resolveAsset(ref: string): Promise<string>
+  /**
+   * 要素の無いところ（作業台とコマの外）の右クリックで呼ぶ。渡すとブラウザのメニューを出さない。
+   * 要素の上の右クリックでは呼ばない
+   */
+  onContextMenu?(request: CanvasMenuRequest): void
 }

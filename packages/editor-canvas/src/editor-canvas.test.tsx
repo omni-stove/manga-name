@@ -827,6 +827,30 @@ describe('zoom and pan', () => {
     expect(viewBox(panelTool)).toEqual([base.x, base.y, base.w, base.h])
   })
 
+  test('right-clicking where nothing is asks for the menu, which can fit the page back', async () => {
+    const onContextMenu = vi.fn()
+    const svg = await render({ onContextMenu })
+    layout(svg)
+    const menuAt = (at: { x: number; y: number }) => {
+      const e = pointer('contextmenu', { id: 1, button: 2, ...at })
+      fire(svg, e)
+      return e
+    }
+    // 作業台と、pn_2 と pn_3 の隙間
+    expect(menuAt({ x: 4, y: 4 }).defaultPrevented).toBe(true)
+    expect(menuAt(clientAt(0.49, 0.4)).defaultPrevented).toBe(true)
+    expect(onContextMenu).toHaveBeenCalledTimes(2)
+    expect(onContextMenu).toHaveBeenLastCalledWith(expect.objectContaining(clientAt(0.49, 0.4)))
+    // コマの上ではブラウザのメニューのまま
+    expect(menuAt(clientAt(0.75, 0.4)).defaultPrevented).toBe(false)
+    expect(onContextMenu).toHaveBeenCalledTimes(2)
+
+    drag(svg, { x: 4, y: 4 }, { x: 44, y: 24 })
+    expect(viewBox(svg)).not.toEqual([base.x, base.y, base.w, base.h])
+    act(() => onContextMenu.mock.calls[0]?.[0].fit())
+    expect(viewBox(svg)).toEqual([base.x, base.y, base.w, base.h])
+  })
+
   test('one finger from where nothing is pans, and a second finger turns it into a pinch', async () => {
     const svg = await render()
     layout(svg)

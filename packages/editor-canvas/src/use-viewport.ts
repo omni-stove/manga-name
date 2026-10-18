@@ -39,7 +39,7 @@ function boxOf(el: Element): ClientBox {
  * 2 本指のタッチでピンチズームとパン、Space を押しながらのドラッグと中ボタンドラッグでパンする。
  * `panFromPress` を呼んだ押下も、CLICK_SLOP を超えて動いたらパンにする。動かずに離せばクリックのまま。
  * Space はカーソルがキャンバス上にあるか、キャンバスにフォーカスがあるときだけ奪う。
- * ページの大きさが変わったら全体表示に戻す
+ * ページの大きさが変わったときと `fit` を呼んだときに全体表示に戻す
  */
 export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: number, pageH: number) {
   const base = useMemo(() => fitView(pageW, pageH), [pageW, pageH])
@@ -191,5 +191,7 @@ export function useViewport(svgRef: RefObject<SVGSVGElement | null>, pageW: numb
     }
   }
 
-  return { view, base, spaceHeld, panning, handlers, panFromPress }
+  const fit = () => setView(() => base)
+
+  return { view, base, spaceHeld, panning, handlers, panFromPress, fit }
 }

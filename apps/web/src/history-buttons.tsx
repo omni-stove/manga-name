@@ -4,7 +4,8 @@ import { useStore } from 'zustand'
 import styles from './history-buttons.module.css'
 import type { WebProjectStore } from './store/project-store'
 
-const MOD =
+/** キーの表記に添える修飾キー */
+export const MOD =
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+'
 
 /** Undo と Redo のアイコンボタン。キーは useUndoShortcuts が受けるので、ここではヒントに出すだけ */
