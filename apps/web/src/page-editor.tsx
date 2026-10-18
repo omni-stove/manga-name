@@ -1,15 +1,16 @@
 import { diagnosePage } from '@manga/diagnosis'
 import {
   type CanvasMenuRequest,
+  convertSketchPatch,
   EditorCanvas,
   type Layers,
   removePatch,
   type ScribbleTool,
   type Selection,
+  type SketchTool,
   type Tool,
 } from '@manga/editor-canvas'
 import { m } from '@manga/i18n'
-import { detectPlatform } from '@manga/storage'
 import {
   addCastPatch,
   BubbleInspector,
@@ -34,6 +35,7 @@ import {
   pageCharacterIds,
   panelCharacterIds,
 } from '@manga/schema'
+import { detectPlatform } from '@manga/storage'
 import {
   Button,
   Checkbox,
@@ -111,6 +113,7 @@ const toolOptions = (): readonly SegmentedOption<Tool>[] => [
   { value: 'focus', label: m.web_editor_tool_focus(), shortcut: 'f' },
   { value: 'vector', label: m.web_editor_tool_vector(), shortcut: 'a' },
   { value: 'scribble', label: m.web_editor_tool_scribble(), shortcut: 'd' },
+  { value: 'sketch', label: m.web_editor_tool_sketch(), shortcut: 'n' },
 ]
 
 const scribbleToolOptions = (): readonly SegmentedOption<ScribbleTool>[] => [
@@ -118,6 +121,11 @@ const scribbleToolOptions = (): readonly SegmentedOption<ScribbleTool>[] => [
   { value: 'red', label: m.web_editor_pen_red(), shortcut: '2' },
   { value: 'blue', label: m.web_editor_pen_blue(), shortcut: '3' },
   { value: 'eraser', label: m.web_editor_pen_eraser(), shortcut: '4' },
+]
+
+const sketchToolOptions = (): readonly SegmentedOption<SketchTool>[] => [
+  { value: 'pen', label: m.web_editor_sketch_pen(), shortcut: '1' },
+  { value: 'eraser', label: m.web_editor_pen_eraser(), shortcut: '2' },
 ]
 
 const focusKindOptions = (): readonly SegmentedOption<FocusKind>[] =>
@@ -145,6 +153,7 @@ const layerOptions = (): readonly { key: keyof Layers; label: string }[] => [
   { key: 'reference', label: m.web_editor_layer_reference() },
   { key: 'art', label: m.web_editor_layer_art() },
   { key: 'scribble', label: m.web_editor_layer_scribble() },
+  { key: 'sketch', label: m.web_editor_layer_sketch() },
   { key: 'hints', label: m.web_editor_layer_hints() },
   { key: 'frames', label: m.web_editor_layer_frames() },
   ...(GAZE_EVALUATION
@@ -156,6 +165,7 @@ const ALL_LAYERS: Layers = {
   reference: true,
   art: true,
   scribble: true,
+  sketch: true,
   hints: true,
   diagnosis: GAZE_EVALUATION,
   frames: true,
@@ -302,6 +312,7 @@ export function PageEditor({
       )
   const [tool, setTool] = useState<Tool>('select')
   const [scribbleTool, setScribbleTool] = useState<ScribbleTool>('ink')
+  const [sketchTool, setSketchTool] = useState<SketchTool>('pen')
   const [focusKind, setFocusKind] = useState<FocusKind>('face')
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
   const [selected, setSelection] = useState<Selection>(null)
@@ -314,6 +325,7 @@ export function PageEditor({
   useUndoShortcuts(store, can('history'))
   const navigate = useNavigate()
   const scribbleTools = scribbleToolOptions()
+  const sketchTools = sketchToolOptions()
   const importReference = (file: Blob) => {
     toReferenceImage(file)
       .then((blob) => library.putAsset(projectId, blob, `reference-${pageId}`))
@@ -353,6 +365,7 @@ export function PageEditor({
   useKeyShortcuts({
     ...(can('tools') ? shortcutsOf(tools, setTool) : {}),
     ...(tool === 'scribble' ? shortcutsOf(scribbleTools, setScribbleTool) : {}),
+    ...(tool === 'sketch' ? shortcutsOf(sketchTools, setSketchTool) : {}),
     ...(tool === 'focus' ? shortcutsOf(focusKindOptions(), setFocusKind) : {}),
     ...(can('navigation')
       ? {
@@ -390,7 +403,8 @@ export function PageEditor({
     const numbers = Array.from({ length: total }, (_, i) => from + i)
     const ext = format === 'pdf' ? 'pdf' : total === 1 ? 'png' : 'zip'
     setExporting({ done: 0, total })
-    let saved = false
+    /** 保存したパス。書き出せなければ undefined */
+    let path: string | null | undefined
     try {
       const pageIds = episode.pages.slice(from - 1, to).map((p) => p.id)
       const width = Math.round((project.settings.pageSize.w / MM_PER_INCH) * dpi)
@@ -403,17 +417,33 @@ export function PageEditor({
         library.loadAsset,
       )
       const blob = await pageExporter.run(job, (done) => setExporting({ done, total }))
-      const path = await saveFile(blob, exportFileName(project.title, numbers, ext), [
+      path = await saveFile(blob, exportFileName(project.title, numbers, ext), [
         { name: ext.toUpperCase(), extensions: [ext] },
       ])
-      // Web は常に null を返すので、保存先の選択を閉じたかどうかは Desktop でだけ分かる
-      saved = path !== null || detectPlatform() === 'web'
     } catch (e) {
       toasts.push(m.web_page_export_failed({ reason: errorMessage(e) }))
     }
     setExporting('closed')
-    // React Compiler は try の中の optional call を扱えないので、呼ぶのは try を出てから
-    if (saved) onExport?.()
+    // React Compiler は try の中の条件式を扱えないので、try を出てから見る。
+    // Web は常に null を返すので、保存先の選択を閉じたかどうかは Desktop でだけ分かる
+    if (path !== undefined && (path !== null || detectPlatform() === 'web')) onExport?.()
+  }
+  const convertSketch = () => {
+    let converted = { panels: 0, bubbles: 0 }
+    const applied = apply(m.web_editor_history_convert_sketch(), (p) => {
+      const current = findPage(p, pageId)
+      if (!current) throw new Error(m.web_common_page_gone())
+      const { patch, ...counts } = convertSketchPatch(
+        current.page,
+        p.settings.pageSize,
+        p.settings.direction,
+      )
+      // 何も変えない変換を Undo の履歴に積まない
+      if (patch.length === 0) throw new Error(m.web_editor_sketch_nothing())
+      converted = counts
+      return pagePatch(p, pageId, patch)
+    })
+    if (applied) toasts.push(m.web_editor_sketch_converted(converted))
   }
   const undoItems: ContextMenuItem[] = [
     { label: 'Undo', shortcut: `${MOD}Z`, disabled: !canUndo, onSelect: () => store.undo() },
@@ -566,6 +596,19 @@ export function PageEditor({
                 onChange={(t) => setScribbleTool(t)}
               />
             )}
+            {tool === 'sketch' && (
+              <>
+                <SegmentedControl
+                  label={m.web_editor_pen()}
+                  value={sketchTool}
+                  options={sketchTools}
+                  onChange={(t) => setSketchTool(t)}
+                />
+                <Button size="small" disabled={!page.sketch?.length} onClick={convertSketch}>
+                  {m.web_editor_convert_sketch()}
+                </Button>
+              </>
+            )}
             {tool === 'focus' && (
               <SegmentedControl
                 label={m.web_editor_focus_kind()}
@@ -679,6 +722,7 @@ export function PageEditor({
             selection={selection}
             tool={tool}
             scribbleTool={scribbleTool}
+            sketchTool={sketchTool}
             focusKind={focusKind}
             layers={layers}
             generating={generating}

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 8 as const
+export const SCHEMA_VERSION = 9 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -188,6 +188,8 @@ const PageBaseSchema = z.object({
   panels: z.array(PanelSchema),
   reference: ReferenceImageSchema.optional(),
   scribbles: z.array(StrokeSchema),
+  /** 原作者の下描き。コメント用の scribbles と分け、コマとフキダシへの変換元にする */
+  sketch: z.array(StrokeSchema).optional(),
   note: z.string().optional(),
   cast: z.array(IdSchema).optional(),
 })

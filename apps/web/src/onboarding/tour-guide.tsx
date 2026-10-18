@@ -122,7 +122,7 @@ export function tourEditorAreas(step: TourStep | undefined): ReadonlySet<EditorA
 /**
  * オンボーディングの案内。今の手順で押す所だけを残して画面をぼかし、吹き出しで指す。
  * 案内で作ったプロジェクトを開いている間はその中身を見て、終えた手順を次に進める。
- * 締めくくりのあとにプロジェクト一覧へ戻ったら案内を終える
+ * 締めくくりのあとにプロジェクト一覧へ戻ったとき、またはプロジェクトを作る前に案内の外の画面へ移ったときに案内を終える
  */
 export function TourGuide() {
   const progress = useStore(tour.state)

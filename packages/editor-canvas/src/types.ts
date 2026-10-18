@@ -10,15 +10,20 @@ import type {
 
 export type Selection = { kind: 'panel' | 'bubble' | 'focus' | 'vector'; id: ID } | null
 
-export type Tool = 'select' | 'panel' | 'bubble' | 'focus' | 'vector' | 'scribble'
+export type Tool = 'select' | 'panel' | 'bubble' | 'focus' | 'vector' | 'scribble' | 'sketch'
 
 /** `scribble` ツールで使うペンの色か消しゴム */
 export type ScribbleTool = 'ink' | 'red' | 'blue' | 'eraser'
+
+/** `sketch` ツールで使うペンか消しゴム */
+export type SketchTool = 'pen' | 'eraser'
 
 export interface Layers {
   reference: boolean
   art: boolean
   scribble: boolean
+  /** 下描き（Page.sketch） */
+  sketch: boolean
   hints: boolean
   diagnosis: boolean
   /** タチキリ枠、外枠（仕上がり線）、内枠 */
@@ -51,6 +56,8 @@ export interface EditorCanvasProps {
   tool: Tool
   /** `tool === 'scribble'` のときの色か消しゴム。既定は ink */
   scribbleTool?: ScribbleTool
+  /** `tool === 'sketch'` のときのペンか消しゴム。既定は pen */
+  sketchTool?: SketchTool
   /** `focus` ツールで置く焦点の種別。ツールバーで選ぶ。既定は face */
   focusKind?: FocusKind
   layers: Layers

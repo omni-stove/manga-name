@@ -118,10 +118,11 @@ function read(storage: TourStorage | undefined): TourProgress | null {
   }
 }
 
-// ストレージを塞いだブラウザでも案内はできるので、覚えられないまま進める
+// ストレージを塞いだブラウザでも案内はできるので、覚えられないまま進める。
+// 最初の手順はまだ失う進み具合が無く、覚えると後で /new を開くたびに案内がフォーム以外を塞ぐので覚えない
 function write(storage: TourStorage | undefined, value: TourProgress | null) {
   try {
-    if (value) storage?.setItem(STORAGE_KEY, JSON.stringify(value))
+    if (value && value.step !== 'project') storage?.setItem(STORAGE_KEY, JSON.stringify(value))
     else storage?.removeItem(STORAGE_KEY)
   } catch {}
 }
@@ -324,10 +325,11 @@ if (import.meta.vitest) {
     expect(tour.state.getState()?.step).toBe('done')
   })
 
-  test('進み具合を覚えておき、作り直した Tour でも同じ手順から始める', () => {
+  test('プロジェクトを作ってからの進み具合を覚えておき、作り直した Tour でも同じ手順から始める', () => {
     const storage = memoryStorage()
     const first = createTour(storage)
     first.start()
+    expect(createTour(storage).state.getState()).toBeNull()
     first.created('p')
     expect(createTour(storage).state.getState()).toEqual({ step: 'character', projectId: 'p' })
     first.finish()
