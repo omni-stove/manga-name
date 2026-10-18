@@ -26,6 +26,7 @@ import { createUploadApp } from './assets'
 import { AUTH_BASE_PATH, getAuth } from './auth'
 import { requestJson } from './body'
 import type { Env } from './env'
+import { requireAllowedCountry } from './geo'
 import { createMeApp } from './me'
 import { createInviteApp } from './members'
 import { allowedOrigins } from './origins'
@@ -172,7 +173,7 @@ async function readImageForm<S extends z.ZodType>(c: Context<UserEnv>, schema: S
  * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/page-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/critique`、
  * `/v1/projects` の CRUD とアセットと参加者、招待リンクの受け口 `/v1/invites/:token`、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
  * `/v1/health`、`/v1/auth/*`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
- * CORS は WEB_ORIGINS と tauri://localhost だけに許す。
+ * CORS は WEB_ORIGINS と tauri://localhost だけに許す。`/v1/health` 以外は ALLOWED_COUNTRIES の国からの接続だけを通す。
  */
 export function createApp(options: AppOptions = {}) {
   const createImage = options.imageProvider ?? (() => createFakeImageProvider())
@@ -227,7 +228,10 @@ export function createApp(options: AppOptions = {}) {
 
   app.onError(handleError)
 
+  // GitHub Actions の runner は海外にあり、デプロイ後のヘルスチェックを通すため health だけは国で弾かない
   app.get('/v1/health', (c) => c.json({ ok: true }))
+
+  app.use('*', requireAllowedCountry())
 
   app.on(['GET', 'POST'], `${AUTH_BASE_PATH}/*`, (c) => getAuth(c.env).handler(c.req.raw))
 

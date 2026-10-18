@@ -25,6 +25,7 @@ export const API_ERRORS = {
   invite_email_mismatch: { status: 403 },
   invalid_upload_url: { status: 403 },
   upload_url_expired: { status: 403 },
+  country_blocked: { status: 403 },
   conflict: { status: 409, params: params<{ updatedAt: string }>() },
   asset_already_uploaded: { status: 409 },
   asset_uploads_unavailable: { status: 500 },

@@ -28,6 +28,8 @@ declare global {
       ASSET_URL_SECRET: string
       /** CORS で許可する apps/web のオリジン。カンマ区切り */
       WEB_ORIGINS: string
+      /** 接続を許す国（ISO 3166-1 alpha-2）。カンマ区切り。空なら国で制限しない */
+      ALLOWED_COUNTRIES?: string
       /** ユーザーあたりの月間生成回数の上限 */
       MONTHLY_GENERATION_LIMIT: string
     }

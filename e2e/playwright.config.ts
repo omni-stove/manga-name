@@ -79,6 +79,8 @@ export default defineConfig({
           [
             `dev --port ${new URL(CLOUD_API_ORIGIN).port}`,
             '--var ENVIRONMENT:development',
+            // CI の runner は海外にあるので国の制限を外す
+            '--var ALLOWED_COUNTRIES:',
             `--var WEB_ORIGINS:http://localhost:${CLOUD_PORT}`,
             '--var BETTER_AUTH_SECRET:e2e-better-auth-secret-0123456789abcdef',
             '--var ASSET_URL_SECRET:e2e-asset-url-secret-0123456789abcdef',

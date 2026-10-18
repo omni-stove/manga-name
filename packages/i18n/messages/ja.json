@@ -16,6 +16,7 @@
   "api_error_invite_email_mismatch": "この招待は別のメールアドレス宛てです",
   "api_error_invalid_upload_url": "アップロード先の URL が正しくありません",
   "api_error_upload_url_expired": "アップロード先の URL の期限が切れました",
+  "api_error_country_blocked": "お使いの地域からは接続できません",
   "api_error_conflict": "ほかの場所でプロジェクトが更新されています",
   "api_error_asset_already_uploaded": "この画像はアップロード済みです",
   "api_error_asset_uploads_unavailable": "画像のアップロードはいま使えません",

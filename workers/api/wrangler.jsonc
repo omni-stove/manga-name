@@ -21,6 +21,8 @@
     // env なしの deploy でも X-Debug-User が開かないよう、既定は閉じた値にする。development は wrangler dev の --var とテストの bindings で明示する
     "ENVIRONMENT": "production",
     "WEB_ORIGINS": "http://localhost:5173",
+    // 国内向けのサービスなので海外からの接続は弾く
+    "ALLOWED_COUNTRIES": "JP",
     // 課金の形が決まるまでの仮の値
     "MONTHLY_GENERATION_LIMIT": "300"
   },
@@ -45,6 +47,7 @@
         // staging の apps/web のオリジンが決まるまではローカルの apps/web から叩く
         "ENVIRONMENT": "staging",
         "WEB_ORIGINS": "http://localhost:5173",
+        "ALLOWED_COUNTRIES": "JP",
         "MONTHLY_GENERATION_LIMIT": "300"
       }
     }
