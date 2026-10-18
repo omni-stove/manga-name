@@ -9,6 +9,7 @@ export function useAssetResolver(
   resolve: (ref: string) => Promise<string>,
 ): (ref: string) => Promise<string> {
   const [generation, setGeneration] = useState(0)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: generation は cache を作り直すためだけの依存
   const { cache, resolveAsset } = useMemo(() => {
     const cache = new Map<string, Promise<string>>()
     const resolveAsset = (ref: string) => {
@@ -22,7 +23,6 @@ export function useAssetResolver(
       return url
     }
     return { cache, resolveAsset }
-    // biome-ignore lint/correctness/useExhaustiveDependencies: generation は cache を作り直すためだけの依存
   }, [resolve, generation])
 
   const released = useRef<Map<string, Promise<string>> | null>(null)
