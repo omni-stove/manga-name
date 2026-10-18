@@ -1,7 +1,7 @@
 {
   "schemaVersion": 6,
   "id": "prj_onboarding",
-  "title": "はじめてのネーム",
+  "title": "両面宿儺",
   "createdAt": "2026-10-19T00:00:00.000Z",
   "updatedAt": "2026-10-19T00:00:00.000Z",
   "settings": {
@@ -19,22 +19,28 @@
   },
   "characters": [
     {
-      "id": "chr_haru",
-      "name": "ハル",
-      "shortName": "ハル",
-      "appearance": "高校二年の少女。肩までのボブ。ブレザーの制服。明るい表情。"
+      "id": "chr_mae",
+      "name": "マエ",
+      "shortName": "マエ",
+      "appearance": "テレポート能力者の女性兵士。ゴールドのメッシュが入った黒髪のウルフカット。鋭い目。耳に複数のピアス。引き締まった体つき。"
     },
     {
-      "id": "chr_sora",
-      "name": "ソラ",
-      "shortName": "ソラ",
-      "appearance": "高校二年の少年。短い黒髪。学ランを着崩している。少しぶっきらぼう。"
+      "id": "chr_ushiro",
+      "name": "ウシロ",
+      "shortName": "ウシロ",
+      "appearance": "無能力者の男性兵士。短髪。穏やかな目だが戦闘中は鋭い。男性としては背が低く、引き締まった体つき。"
+    },
+    {
+      "id": "chr_soldier",
+      "name": "敵兵",
+      "shortName": "敵兵",
+      "appearance": "敵組織の兵士。ヘルメットと防弾ベスト、アサルトライフル。"
     }
   ],
   "episodes": [
     {
       "id": "ep_onboarding",
-      "title": "放課後の屋上",
+      "title": "転移",
       "pages": [
         {
           "id": "pg_onboarding",
@@ -51,27 +57,71 @@
                 "h": 0.25
               },
               "camera": "ロング",
-              "note": "放課後の学校の屋上。夕焼け空。フェンスの向こうに街並みが広がる。",
-              "cast": [],
+              "note": "敵施設の薄暗い通信室。端末と通信機が並び、武装した敵兵たちが持ち場についている。卓上の無線機から声が響く。",
+              "cast": [
+                "chr_soldier"
+              ],
               "bubbles": [
                 {
                   "id": "bb_1",
                   "order": 1,
-                  "text": "放課後。",
-                  "shape": "narration",
+                  "tail": {
+                    "x": 0.68,
+                    "y": 0.62
+                  },
+                  "text": "3…\n2…\n1…",
+                  "shape": "electronic",
                   "pos": {
-                    "x": 0.92,
-                    "y": 0.3
+                    "x": 0.85,
+                    "y": 0.4
                   },
                   "size": {
-                    "w": 0.06,
-                    "h": 0.45
+                    "w": 0.13,
+                    "h": 0.62
                   }
                 }
               ],
               "arts": [],
-              "focusPoints": [],
-              "vectors": []
+              "focusPoints": [
+                {
+                  "id": "fc_1",
+                  "kind": "keyObject",
+                  "label": "無線機",
+                  "pos": {
+                    "x": 0.64,
+                    "y": 0.68
+                  },
+                  "weight": 0.35
+                },
+                {
+                  "id": "fc_2",
+                  "kind": "face",
+                  "label": "敵兵",
+                  "pos": {
+                    "x": 0.3,
+                    "y": 0.42
+                  },
+                  "weight": 0.3,
+                  "characterId": "chr_soldier"
+                }
+              ],
+              "vectors": [
+                {
+                  "id": "vc_1",
+                  "kind": "gaze",
+                  "from": {
+                    "x": 0.3,
+                    "y": 0.42
+                  },
+                  "to": {
+                    "x": 0.6,
+                    "y": 0.66
+                  },
+                  "strength": "weak",
+                  "sourceFocusId": "fc_2",
+                  "targetFocusId": "fc_1"
+                }
+              ]
             },
             {
               "id": "pn_2",
@@ -82,33 +132,57 @@
                 "w": 0.4021,
                 "h": 0.28
               },
-              "camera": "ミドル",
-              "note": "ハルがフェンスにもたれて、空を見上げている。",
-              "cast": ["chr_haru"],
+              "camera": "アップ",
+              "note": "敵兵たちが一斉に振り向く。見開いた目。",
+              "cast": [
+                "chr_soldier"
+              ],
               "bubbles": [
                 {
                   "id": "bb_2",
                   "order": 1,
-                  "speakerId": "chr_haru",
-                  "text": "今日も\n終わっちゃったね",
-                  "shape": "normal",
+                  "text": "転移",
+                  "shape": "electronic",
                   "pos": {
-                    "x": 0.8,
-                    "y": 0.32
+                    "x": 0.84,
+                    "y": 0.2
                   },
                   "size": {
-                    "w": 0.22,
-                    "h": 0.55
-                  },
-                  "tail": {
-                    "x": 0.55,
-                    "y": 0.6
+                    "w": 0.14,
+                    "h": 0.3
                   }
                 }
               ],
               "arts": [],
-              "focusPoints": [],
-              "vectors": []
+              "focusPoints": [
+                {
+                  "id": "fc_3",
+                  "kind": "face",
+                  "label": "振り向く敵兵",
+                  "pos": {
+                    "x": 0.55,
+                    "y": 0.55
+                  },
+                  "weight": 0.6,
+                  "characterId": "chr_soldier"
+                }
+              ],
+              "vectors": [
+                {
+                  "id": "vc_2",
+                  "kind": "gaze",
+                  "from": {
+                    "x": 0.55,
+                    "y": 0.55
+                  },
+                  "to": {
+                    "x": 0.08,
+                    "y": 0.5
+                  },
+                  "strength": "strong",
+                  "sourceFocusId": "fc_3"
+                }
+              ]
             },
             {
               "id": "pn_3",
@@ -119,33 +193,81 @@
                 "w": 0.4021,
                 "h": 0.28
               },
-              "camera": "バストアップ",
-              "note": "ソラが缶ジュースを二本持って、ハルの方へ振り返る。",
-              "cast": ["chr_sora"],
-              "bubbles": [
+              "camera": "ロング",
+              "note": "通信室の中央で大爆発。閃光と爆風が放射状に広がり、敵兵たちが吹き飛ぶ。",
+              "cast": [
+                "chr_soldier"
+              ],
+              "bubbles": [],
+              "arts": [],
+              "focusPoints": [
                 {
-                  "id": "bb_3",
-                  "order": 1,
-                  "speakerId": "chr_sora",
-                  "text": "ほら、\nおごり",
-                  "shape": "normal",
+                  "id": "fc_4",
+                  "kind": "sfx",
+                  "label": "ドォン",
                   "pos": {
-                    "x": 0.2,
-                    "y": 0.28
+                    "x": 0.5,
+                    "y": 0.42
                   },
-                  "size": {
-                    "w": 0.2,
-                    "h": 0.4
+                  "weight": 0.9
+                },
+                {
+                  "id": "fc_5",
+                  "kind": "face",
+                  "label": "吹き飛ぶ敵兵",
+                  "pos": {
+                    "x": 0.18,
+                    "y": 0.78
                   },
-                  "tail": {
-                    "x": 0.42,
-                    "y": 0.55
-                  }
+                  "weight": 0.25,
+                  "characterId": "chr_soldier"
                 }
               ],
-              "arts": [],
-              "focusPoints": [],
-              "vectors": []
+              "vectors": [
+                {
+                  "id": "vc_3",
+                  "kind": "motion",
+                  "from": {
+                    "x": 0.5,
+                    "y": 0.42
+                  },
+                  "to": {
+                    "x": 0.18,
+                    "y": 0.78
+                  },
+                  "strength": "strong",
+                  "sourceFocusId": "fc_4",
+                  "targetFocusId": "fc_5"
+                },
+                {
+                  "id": "vc_4",
+                  "kind": "motion",
+                  "from": {
+                    "x": 0.5,
+                    "y": 0.42
+                  },
+                  "to": {
+                    "x": 0.9,
+                    "y": 0.12
+                  },
+                  "strength": "weak",
+                  "sourceFocusId": "fc_4"
+                },
+                {
+                  "id": "vc_5",
+                  "kind": "motion",
+                  "from": {
+                    "x": 0.5,
+                    "y": 0.42
+                  },
+                  "to": {
+                    "x": 0.88,
+                    "y": 0.85
+                  },
+                  "strength": "weak",
+                  "sourceFocusId": "fc_4"
+                }
+              ]
             },
             {
               "id": "pn_4",
@@ -156,29 +278,57 @@
                 "w": 0.27,
                 "h": 0.286
               },
-              "camera": "アップ",
-              "note": "ハルが目を丸くして驚く顔。",
-              "cast": ["chr_haru"],
+              "camera": "バストアップ",
+              "note": "爆風に倒れた敵兵が、身を起こして煙の向こうを見る。驚愕の表情。",
+              "cast": [
+                "chr_soldier"
+              ],
               "bubbles": [
                 {
-                  "id": "bb_4",
+                  "id": "bb_3",
                   "order": 1,
-                  "speakerId": "chr_haru",
-                  "text": "えっ",
+                  "text": "何だ！？",
                   "shape": "shout",
                   "pos": {
-                    "x": 0.7,
-                    "y": 0.2
+                    "x": 0.6,
+                    "y": 0.18
                   },
                   "size": {
-                    "w": 0.34,
+                    "w": 0.62,
                     "h": 0.24
                   }
                 }
               ],
               "arts": [],
-              "focusPoints": [],
-              "vectors": []
+              "focusPoints": [
+                {
+                  "id": "fc_6",
+                  "kind": "face",
+                  "label": "驚く敵兵",
+                  "pos": {
+                    "x": 0.55,
+                    "y": 0.6
+                  },
+                  "weight": 0.5,
+                  "characterId": "chr_soldier"
+                }
+              ],
+              "vectors": [
+                {
+                  "id": "vc_6",
+                  "kind": "gaze",
+                  "from": {
+                    "x": 0.55,
+                    "y": 0.6
+                  },
+                  "to": {
+                    "x": 0.05,
+                    "y": 0.55
+                  },
+                  "strength": "strong",
+                  "sourceFocusId": "fc_6"
+                }
+              ]
             },
             {
               "id": "pn_5",
@@ -190,32 +340,130 @@
                 "h": 0.286
               },
               "camera": "ロング",
-              "note": "フェンス際に二人で並び、夕日に向かって缶を軽く合わせる。後ろ姿。",
-              "cast": ["chr_haru", "chr_sora"],
+              "note": "煙が晴れ、両面宿儺型スーツが現れる。宇宙服のような密閉型の大型スーツに二人が背中合わせで入り、マエは左、ウシロは右を向く。脚部は裾広がりのホバーユニットで床から浮いている。ウシロが肩越しにマエへショットガンを渡す。",
+              "cast": [
+                "chr_mae",
+                "chr_ushiro"
+              ],
               "bubbles": [
                 {
-                  "id": "bb_5",
+                  "id": "bb_4",
                   "order": 1,
-                  "speakerId": "chr_haru",
-                  "text": "明日も\nがんばろ",
-                  "shape": "normal",
-                  "pos": {
-                    "x": 0.85,
+                  "speakerId": "chr_ushiro",
+                  "tail": {
+                    "x": 0.66,
                     "y": 0.3
                   },
-                  "size": {
-                    "w": 0.16,
-                    "h": 0.45
+                  "text": "マエ",
+                  "shape": "normal",
+                  "pos": {
+                    "x": 0.88,
+                    "y": 0.24
                   },
+                  "size": {
+                    "w": 0.1,
+                    "h": 0.3
+                  }
+                },
+                {
+                  "id": "bb_5",
+                  "order": 2,
+                  "speakerId": "chr_mae",
                   "tail": {
-                    "x": 0.65,
-                    "y": 0.6
+                    "x": 0.32,
+                    "y": 0.3
+                  },
+                  "text": "了解",
+                  "shape": "normal",
+                  "pos": {
+                    "x": 0.12,
+                    "y": 0.22
+                  },
+                  "size": {
+                    "w": 0.1,
+                    "h": 0.3
                   }
                 }
               ],
               "arts": [],
-              "focusPoints": [],
-              "vectors": []
+              "focusPoints": [
+                {
+                  "id": "fc_7",
+                  "kind": "face",
+                  "label": "マエ",
+                  "pos": {
+                    "x": 0.42,
+                    "y": 0.34
+                  },
+                  "weight": 0.45,
+                  "characterId": "chr_mae"
+                },
+                {
+                  "id": "fc_8",
+                  "kind": "face",
+                  "label": "ウシロ",
+                  "pos": {
+                    "x": 0.58,
+                    "y": 0.34
+                  },
+                  "weight": 0.45,
+                  "characterId": "chr_ushiro"
+                },
+                {
+                  "id": "fc_9",
+                  "kind": "keyObject",
+                  "label": "ショットガン",
+                  "pos": {
+                    "x": 0.45,
+                    "y": 0.64
+                  },
+                  "weight": 0.25
+                }
+              ],
+              "vectors": [
+                {
+                  "id": "vc_7",
+                  "kind": "gaze",
+                  "from": {
+                    "x": 0.42,
+                    "y": 0.34
+                  },
+                  "to": {
+                    "x": 0.06,
+                    "y": 0.4
+                  },
+                  "strength": "strong",
+                  "sourceFocusId": "fc_7"
+                },
+                {
+                  "id": "vc_8",
+                  "kind": "gaze",
+                  "from": {
+                    "x": 0.58,
+                    "y": 0.34
+                  },
+                  "to": {
+                    "x": 0.94,
+                    "y": 0.4
+                  },
+                  "strength": "strong",
+                  "sourceFocusId": "fc_8"
+                },
+                {
+                  "id": "vc_9",
+                  "kind": "motion",
+                  "from": {
+                    "x": 0.6,
+                    "y": 0.52
+                  },
+                  "to": {
+                    "x": 0.47,
+                    "y": 0.62
+                  },
+                  "strength": "weak",
+                  "targetFocusId": "fc_9"
+                }
+              ]
             }
           ]
         }

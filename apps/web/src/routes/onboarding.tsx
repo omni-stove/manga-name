@@ -24,7 +24,7 @@ const LAYERS: Layers = {
   reference: false,
   art: true,
   scribble: false,
-  hints: false,
+  hints: true,
   diagnosis: false,
   frames: false,
 }
@@ -32,7 +32,7 @@ const LAYERS: Layers = {
 const noop = () => {}
 
 /**
- * 用意したコマ割りとセリフの 1 ページを、編集できないキャンバスで見せる。「ネームを生成」でページの絵を生成してコマに入れる。
+ * 用意したコマ割り、セリフ、焦点と誘導線の 1 ページを、編集できないキャンバスで見せる。「ネームを生成」でページの絵を生成してコマに入れる。
  * 生成した絵は開いている間だけメモリに持ち、「書き出し」で固定のコンテンツにする zip を保存する
  */
 function Onboarding() {

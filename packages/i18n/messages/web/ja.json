@@ -404,7 +404,7 @@
   "web_art_status_all": "全部",
   "web_nav_onboarding": "はじめに",
   "web_onboarding_title": "はじめてのネーム",
-  "web_onboarding_description": "コマ割りとセリフを用意したページです。「ネームを生成」を押すと、AI がコマに絵を入れます。",
+  "web_onboarding_description": "コマ割りとセリフ、焦点と誘導線を用意したページです。丸は顔や物や効果音を置く場所と大きさ、矢印は視線や動きの向きです。「ネームを生成」を押すと、AI がそれに沿ってコマに絵を入れます。",
   "web_onboarding_generate": "ネームを生成",
   "web_onboarding_export_failed": "書き出せません: {reason}"
 }
