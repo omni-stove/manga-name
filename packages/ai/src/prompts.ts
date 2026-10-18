@@ -43,6 +43,12 @@ export type PanelArtPromptRequest = Omit<
 const PANEL_ART_TAIL =
   'no text, no letters, no speech bubbles, leave the white areas of the layout image empty'
 
+/** 配置図に重ねた配置の印（render の drawPlacement）の読み方。印そのものは描かせない */
+const PLACEMENT_GUIDE =
+  'the coloured marks on the layout image are a placement guide, not part of the art: each circle marks where its labelled subject goes (blue: a character or face, orange: a key object, purple: a sound effect), and a larger circle means the subject is drawn larger and more prominent; green arrows show the direction of a gaze or a motion, thicker ones stronger. Do not draw the circles, dots, arrows or labels.'
+
+const hasPlacement = (panel: Panel) => panel.focusPoints.length > 0 || panel.vectors.length > 0
+
 const formatPoint = (p: Point) => `(${p.x.toFixed(2)}, ${p.y.toFixed(2)})`
 
 /** Vector の端点の呼び名。焦点かフキダシを指していればその名前、無ければ座標 */
@@ -96,6 +102,7 @@ const joinLines = (parts: (string | undefined)[]) =>
 
 /**
  * 画像生成プロンプト。parts の順に要素を改行で連結し、空の要素は飛ばす。
+ * 焦点か誘導線のあるコマでは、末尾の前に配置の印の読み方を入れる。
  * negative は settings.style.negative（無ければ空文字）。
  */
 function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: string } {
@@ -107,6 +114,7 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
       settings.style.prompt,
       ...panelContent(panel, characters, req.hint, true),
       req.instruction && `revise the previous image: ${req.instruction}`,
+      hasPlacement(panel) ? PLACEMENT_GUIDE : undefined,
       PANEL_ART_TAIL,
     ]),
     negative: settings.style.negative ?? '',
@@ -126,7 +134,8 @@ const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from +
 
 /**
  * ページ全体の画像生成プロンプト。スタイル、配置図の説明、ページの登場キャラの外見、
- * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで）、固定の末尾を改行で連結する。
+ * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで）、
+ * 焦点か誘導線のあるコマがあれば配置の印の読み方、固定の末尾を改行で連結する。
  * negative は panelArt と同じ。
  */
 function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string } {
@@ -149,6 +158,7 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
       PAGE_ART_HEAD,
       cast.length > 0 ? `characters: ${cast.map(describeCharacter).join('; ')}` : undefined,
       ...panels,
+      req.page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
       PANEL_ART_TAIL,
     ]),
     negative: settings.style.negative ?? '',
@@ -382,6 +392,7 @@ if (import.meta.vitest) {
     expect(lines[0]).toBe(project.settings.style.prompt)
     expect(lines).toContain('ヒント')
     expect(lines).toContain('revise the previous image: 明るく')
+    expect(lines.at(-2)).toBe(PLACEMENT_GUIDE)
     expect(lines.at(-1)).toBe(PANEL_ART_TAIL)
     expect(negative).toBe(project.settings.style.negative ?? '')
   })
@@ -406,6 +417,7 @@ if (import.meta.vitest) {
       `panel 1 (x ${x.toFixed(2)}-${(x + w).toFixed(2)}, y ${y.toFixed(2)}-${(y + h).toFixed(2)}): `,
     )
     expect(panelLines[0]?.endsWith('; ヒント')).toBe(true)
+    expect(lines.at(-2)).toBe(PLACEMENT_GUIDE)
     expect(lines.at(-1)).toBe(PANEL_ART_TAIL)
     expect(negative).toBe(project.settings.style.negative ?? '')
   })

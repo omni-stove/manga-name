@@ -1,8 +1,9 @@
 import type { ID, Page } from '@manga/schema'
-import { getBackend } from './backend'
+import { getBackend, loadFonts } from './backend'
 import { bubbleGeometry, fillBubble } from './bubble'
 import type { PxRect } from './geometry'
 import { withClip } from './panel'
+import { drawPlacement, hasPlacement } from './placement'
 
 const GRAY = '#e0e0e0'
 /** pageSize の既定値。コマのアスペクト比の計算に使う */
@@ -13,7 +14,8 @@ const FRAME_WIDTH = 0.006
  * 生成に渡す配置図。対象コマの rect を切り出し、薄灰で塗ってフキダシ領域を白にし、コマの輪郭に黒い枠線を引く。
  * 多角形のコマでは輪郭の外も薄灰のまま残し、overflow でないフキダシも輪郭の外は塗らない。
  * 絵は rect いっぱいに描かせ、輪郭で切るのは合成のとき。
- * 文字は描かない。`pageSize` はコマのアスペクト比の計算に使い、省略時は既定の 182x257。
+ * 焦点と誘導線があれば、その上に配置の印（drawPlacement）を重ねる。セリフは描かない。
+ * `pageSize` はコマのアスペクト比と印の大きさの計算に使い、省略時は既定の 182x257。
  */
 export async function renderLayoutPng(
   page: Page,
@@ -27,7 +29,7 @@ export async function renderLayoutPng(
   const aspect = (panel.rect.h * pageSize.h) / (panel.rect.w * pageSize.w)
   const height = Math.max(1, Math.round(width * aspect))
 
-  const backend = await getBackend()
+  const [backend] = await Promise.all([getBackend(), loadFonts()])
   const surface = backend.createSurface(width, height)
   const c = surface.ctx
   const rect: PxRect = { x: 0, y: 0, w: width, h: height }
@@ -63,6 +65,7 @@ export async function renderLayoutPng(
   } else {
     c.strokeRect(lineWidth / 2, lineWidth / 2, width - lineWidth, height - lineWidth)
   }
+  if (hasPlacement(panel)) drawPlacement(c, panel, rect, width / (panel.rect.w * pageSize.w))
 
   return surface.toPng()
 }
@@ -90,10 +93,51 @@ if (import.meta.vitest) {
     // pn_6 は 0.48 x 0.165 のコマ。ページ 182x257 でのアスペクト比
     expect(h).toBe(Math.round((400 * 0.165 * 257) / (0.48 * 182)))
     expect(at(0.85, 0.3)).toEqual([255, 255, 255])
-    expect(at(0.75, 0.48)).toEqual([255, 255, 255])
-    expect(at(0.3, 0.5)).toEqual([224, 224, 224])
+    expect(at(0.85, 0.15)).toEqual([255, 255, 255])
+    expect(at(0.1, 0.15)).toEqual([224, 224, 224])
     expect(at(0.5, 0.85)).toEqual([224, 224, 224])
     expect(at(0, 0.5)).toEqual([0, 0, 0])
+  })
+
+  test('焦点はその位置に種別の色の点で、誘導線は緑で描く', async () => {
+    const page = fixtures.samplePage01.episodes[0]?.pages[0] as Page
+    const png = await renderLayoutPng(page, 'pn_6', { width: 400 })
+    const backend = await getBackend()
+    const image = await backend.decodeImage(png)
+    const w = (image as { width: number }).width
+    const h = (image as { height: number }).height
+    const probe = backend.createSurface(w, h)
+    probe.ctx.drawImage(image, 0, 0)
+    const at = (x: number, y: number) =>
+      Array.from(
+        probe.ctx.getImageData(Math.round(x * w), Math.round(y * h), 1, 1).data.subarray(0, 3),
+      )
+    // pn_6 の焦点 fresh sprouts in footprint（keyObject）は (0.4, 0.5)
+    expect(at(0.4, 0.5)).toEqual([0xe0, 0x90, 0x1e])
+    // strong の誘導線 (0.8, 0.4) → (0.43, 0.49) の途中
+    expect(at(0.6, 0.4 + (0.09 * 0.2) / 0.37)).toEqual([0x2f, 0x9e, 0x6a])
+  })
+
+  test('焦点も誘導線も無いコマには印を描かない', async () => {
+    const page = fixtures.samplePage01.episodes[0]?.pages[0] as Page
+    const bare: Page = {
+      ...page,
+      panels: page.panels.map((p) =>
+        p.id === 'pn_6' ? { ...p, focusPoints: [], vectors: [] } : p,
+      ),
+    }
+    const png = await renderLayoutPng(bare, 'pn_6', { width: 400 })
+    const backend = await getBackend()
+    const image = await backend.decodeImage(png)
+    const w = (image as { width: number }).width
+    const h = (image as { height: number }).height
+    const probe = backend.createSurface(w, h)
+    probe.ctx.drawImage(image, 0, 0)
+    expect(
+      Array.from(
+        probe.ctx.getImageData(Math.round(0.4 * w), Math.round(0.5 * h), 1, 1).data.subarray(0, 3),
+      ),
+    ).toEqual([224, 224, 224])
   })
 
   test('多角形のコマは輪郭に枠線を引き、輪郭の外も薄灰のまま', async () => {
