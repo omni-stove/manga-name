@@ -14,6 +14,7 @@ import { PanelToolLayer } from './panel-tool-layer'
 import type { EditorCanvasProps, Selection } from './types'
 import { useBubbleTool } from './use-bubble-tool'
 import { useHintTool } from './use-hint-tool'
+import { useMove } from './use-move'
 import { usePanelTool } from './use-panel-tool'
 import { polylinePoints, SCRIBBLE_WIDTH, useScribble } from './use-scribble'
 import { sameSelection, useSelection } from './use-selection'
@@ -41,6 +42,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * 1 ページを SVG で描くキャンバス。ユーザー単位はページの mm（`settings.pageSize`）で、
  * ズームとパンは viewBox で表す。ページの外側は作業台の色（`--surface-desk`）。
  * クリックで選択、ホバーで強調、Delete で削除、矢印キーで 0.01 刻みの移動。
+ * `select` ツールでは選択中のコマかフキダシをドラッグで動かす。
  * `panel` ツールと手描きの最中を除き、要素の無いところ（作業台とコマの外）のドラッグでページを動かす。
  * 右クリックは押した要素を選んでから `onContextMenu` に渡す。
  * `panel` ツールではドラッグでコマを作り、選択中のコマをハンドルでリサイズ、ボタンで縦横に分割、
@@ -115,6 +117,17 @@ export function EditorCanvas(props: EditorCanvasProps) {
     onChange: props.onChange,
     onSelect: props.onSelect,
   })
+  const move = useMove({
+    page,
+    width: pageW,
+    height: pageH,
+    view,
+    panning,
+    active: props.tool === 'select',
+    selection: props.selection,
+    hitAt: selection.hitAt,
+    onChange: props.onChange,
+  })
   const liveRef = useRef<SVGPolylineElement>(null)
   const scribbleTool = props.scribbleTool ?? 'ink'
   const scribble = useScribble({
@@ -139,6 +152,8 @@ export function EditorCanvas(props: EditorCanvasProps) {
     panelTool.draft !== null ||
     bubbleTool.draft !== null ||
     hintTool.draft !== null ||
+    move.panelDraft !== null ||
+    move.bubbleDraft !== null ||
     sameSelection(selection.hovered, props.selection)
       ? null
       : selection.hovered
@@ -160,9 +175,15 @@ export function EditorCanvas(props: EditorCanvasProps) {
           ? selection.hovered?.kind === 'bubble'
             ? 'move'
             : 'crosshair'
-          : !scribbleSelected && selection.hovered !== null
-            ? 'pointer'
-            : undefined
+          : move.panelDraft !== null ||
+              move.bubbleDraft !== null ||
+              (props.tool === 'select' &&
+                (selection.hovered?.kind === 'panel' || selection.hovered?.kind === 'bubble') &&
+                sameSelection(selection.hovered, props.selection))
+            ? 'move'
+            : !scribbleSelected && selection.hovered !== null
+              ? 'pointer'
+              : undefined
 
   return (
     <svg
@@ -195,6 +216,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         panelTool.handlers.onPointerDown(e)
         bubbleTool.handlers.onPointerDown(e)
         hintTool.handlers.onPointerDown(e)
+        move.handlers.onPointerDown(e)
         pointer.onPointerDown(e)
         // panel ツールは何も無いところのドラッグでコマを作り、手描きはどこからでも線を引くので、パンに回さない
         if (props.tool !== 'panel' && !scribbling && selection.hitAt(e) === null) {
@@ -206,6 +228,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         panelTool.handlers.onPointerMove(e)
         bubbleTool.handlers.onPointerMove(e)
         hintTool.handlers.onPointerMove(e)
+        move.handlers.onPointerMove(e)
         pointer.onPointerMove(e)
       }}
       onPointerUp={(e) => {
@@ -213,6 +236,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         panelTool.handlers.onPointerUp(e)
         bubbleTool.handlers.onPointerUp(e)
         hintTool.handlers.onPointerUp(e)
+        move.handlers.onPointerUp(e)
         // 押している間にツールが切り替わっても、各フックの状態が取り残されないよう両方に渡す
         selection.handlers.onPointerUp(e)
         scribble.handlers.onPointerUp(e)
@@ -222,6 +246,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         panelTool.handlers.onPointerCancel(e)
         bubbleTool.handlers.onPointerCancel(e)
         hintTool.handlers.onPointerCancel(e)
+        move.handlers.onPointerCancel(e)
         selection.handlers.onPointerCancel()
         scribble.handlers.onPointerCancel(e)
       }}
@@ -238,7 +263,8 @@ export function EditorCanvas(props: EditorCanvasProps) {
         if (
           panelTool.handlers.onKeyDown(e) ||
           bubbleTool.handlers.onKeyDown(e) ||
-          hintTool.handlers.onKeyDown(e)
+          hintTool.handlers.onKeyDown(e) ||
+          move.handlers.onKeyDown(e)
         ) {
           return
         }
@@ -255,6 +281,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         showReference={layers.reference}
         resolveAsset={props.resolveAsset}
         generating={props.generating}
+        generatingPage={props.generatingPage ?? false}
         selection={props.selection}
         idPrefix={idPrefix}
         onGenerate={props.onGenerate ? generate : undefined}
@@ -295,7 +322,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
       <Highlight page={page} width={pageW} height={pageH} target={hovered} />
       <PanelToolLayer
         selected={panelTool.selected}
-        draft={panelTool.draft}
+        draft={panelTool.draft ?? move.panelDraft}
         width={pageW}
         height={pageH}
         handleSize={panelTool.handleSize}
@@ -307,7 +334,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
       />
       <BubbleToolLayer
         selected={bubbleTool.selected}
-        draft={bubbleTool.draft}
+        draft={bubbleTool.draft ?? move.bubbleDraft}
         handleSize={bubbleTool.handleSize}
       />
     </svg>

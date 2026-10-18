@@ -101,7 +101,7 @@ if (import.meta.vitest) {
       [`/p/${projectId}/pages/${pageId}`, 'インスペクタ'],
       [`/p/${projectId}/characters`, 'キャラクター一覧'],
       [`/p/${projectId}/characters/new`, '外見から生成'],
-      ['/onboarding', 'ネームを生成'],
+      ['/onboarding', '焦点と誘導線'],
     ])('%s', async (path, heading) => {
       expect(await render(library, path)).toContain(heading)
     })

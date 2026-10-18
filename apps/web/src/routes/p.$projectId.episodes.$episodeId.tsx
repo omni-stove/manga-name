@@ -1,6 +1,6 @@
 import { m } from '@manga/i18n'
 import { type Episode, pageCharacterIds } from '@manga/schema'
-import { Button, ConfirmDialog, Input, Typography, XStack, YStack } from '@manga/ui'
+import { Button, ConfirmDialog, Input, RemoveButton, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
@@ -102,15 +102,13 @@ function EpisodePages() {
       >
         <TemplateSelect project={project} value={template} onChange={setTemplate} />
         {registeredTemplate && (
-          <Button
+          <RemoveButton
             size="small"
-            variant="ghost"
+            label={m.web_episode_remove_template()}
             onClick={() =>
               setRemovingTemplate({ id: registeredTemplate.value, name: registeredTemplate.label })
             }
-          >
-            {m.web_episode_remove_template()}
-          </Button>
+          />
         )}
         <Button type="submit" variant="primary">
           {m.web_episode_add_page()}
@@ -204,13 +202,11 @@ function EpisodePages() {
                 >
                   →
                 </Button>
-                <Button
+                <RemoveButton
                   size="small"
-                  variant="ghost"
+                  label={m.web_common_delete()}
                   onClick={() => setRemovingPage({ id: page.id, number: index + 1 })}
-                >
-                  {m.web_common_delete()}
-                </Button>
+                />
               </XStack>
             </YStack>
           )
