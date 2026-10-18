@@ -20,6 +20,8 @@ const migrations: Record<number, (json: Record<string, unknown>) => Record<strin
   7: (json) => ({ ...json, schemaVersion: 8 }),
   // v9 は Page.sketch を足しただけ。版を上げる理由は v2 と同じ
   8: (json) => ({ ...json, schemaVersion: 9 }),
+  // v10 は settings.characterDesign を足しただけ。版を上げる理由は v2 と同じ
+  9: (json) => ({ ...json, schemaVersion: 10 }),
 }
 
 /**
@@ -48,17 +50,17 @@ export function migrate(json: unknown): unknown {
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('migrate v9 → v9 is a no-op', () => {
-    const json = { schemaVersion: 9, title: 't' }
+  test('migrate v10 → v10 is a no-op', () => {
+    const json = { schemaVersion: 10, title: 't' }
     expect(migrate(json)).toBe(json)
   })
 
-  test('migrate v1 → v9 only bumps the version', () => {
-    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 9, title: 't' })
+  test('migrate v1 → v10 only bumps the version', () => {
+    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 10, title: 't' })
   })
 
   test('migrate rejects unknown, newer or missing versions and non-objects', () => {
-    expect(() => migrate({ schemaVersion: 10 })).toThrow()
+    expect(() => migrate({ schemaVersion: 11 })).toThrow()
     expect(() => migrate({ schemaVersion: 0 })).toThrow()
     expect(() => migrate({})).toThrow()
     expect(() => migrate(null)).toThrow()

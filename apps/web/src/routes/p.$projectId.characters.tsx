@@ -1,11 +1,19 @@
 import { m } from '@manga/i18n'
 import type { Character } from '@manga/schema'
-import { Button, ConfirmDialog, RemoveButton, Typography, XStack, YStack } from '@manga/ui'
+import {
+  Button,
+  ConfirmDialog,
+  RemoveButton,
+  TextArea,
+  Typography,
+  XStack,
+  YStack,
+} from '@manga/ui'
 import { createFileRoute, getRouteApi, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { CharacterPane } from '../character-pane'
 import common from '../common.module.css'
-import { characterUsage, removeCharacterPatch } from '../project-ops'
+import { characterDesignPatch, characterUsage, removeCharacterPatch } from '../project-ops'
 import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
 import styles from './characters.module.css'
@@ -38,6 +46,20 @@ function CharacterList() {
           {m.web_characters_add()}
         </Button>
       </XStack>
+      <TextArea
+        // 他の端末や取り消しで変わった値を欄に映すため、値ごとに作り直す
+        key={project.settings.characterDesign ?? ''}
+        className={styles.design}
+        label={m.web_characters_design()}
+        hint={m.web_characters_design_hint()}
+        placeholder={m.web_characters_design_placeholder()}
+        rows={3}
+        defaultValue={project.settings.characterDesign ?? ''}
+        onBlur={(e) => {
+          const next = e.currentTarget.value.trim()
+          apply(m.web_characters_design_history(), (p) => characterDesignPatch(p.settings, next))
+        }}
+      />
       {error && (
         <Typography tone="alert" role="alert">
           {error}

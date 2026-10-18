@@ -277,6 +277,15 @@ export function settingsPatch(
   ).map((key) => ({ op: 'replace' as const, path: `/settings/${key}`, value: next[key] }))
 }
 
+/** 全キャラ共通のデザインを変える。空なら項目ごと消し、同じ値なら空の Patch */
+export function characterDesignPatch(current: ProjectSettings, next: string): Patch {
+  const path = '/settings/characterDesign'
+  if (next === '') return current.characterDesign === undefined ? [] : [{ op: 'remove', path }]
+  if (next === current.characterDesign) return []
+  // JSON Patch の add は既存のメンバーを置き換えるので、有無を分けずに済む
+  return [{ op: 'add', path, value: next }]
+}
+
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
   const { createEmptyProject, fixtures, ProjectSchema } = await import('@manga/schema')
@@ -552,5 +561,19 @@ if (import.meta.vitest) {
     store.applyPatch(patch)
     expect(ProjectSchema.safeParse(store.get()).success).toBe(true)
     expect(store.get().settings.pageSize.w).toBe(210)
+  })
+
+  test('characterDesignPatch adds, replaces and removes the shared design', () => {
+    const project = createEmptyProject('t')
+    const store = storeOf(project)
+    expect(characterDesignPatch(project.settings, '')).toEqual([])
+    store.applyPatch(characterDesignPatch(store.get().settings, '6 頭身'))
+    expect(store.get().settings.characterDesign).toBe('6 頭身')
+    expect(characterDesignPatch(store.get().settings, '6 頭身')).toEqual([])
+    store.applyPatch(characterDesignPatch(store.get().settings, '8 頭身'))
+    expect(store.get().settings.characterDesign).toBe('8 頭身')
+    store.applyPatch(characterDesignPatch(store.get().settings, ''))
+    expect(store.get().settings).not.toHaveProperty('characterDesign')
+    expect(ProjectSchema.safeParse(store.get()).success).toBe(true)
   })
 }
