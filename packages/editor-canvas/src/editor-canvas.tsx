@@ -379,12 +379,12 @@ const StrokeLine = memo(function StrokeLine({
   )
 })
 
-/** ホバー中の要素の輪郭。選択中の要素には出さない */
 // React Compiler 1.0 が Highlight の中の Math.max でコード生成に失敗するので、コンポーネントの外で計算する
 function highlightRadius(weight: number): number {
   return Math.max(focusRadius(weight), 1.5)
 }
 
+/** ホバー中の要素の輪郭。選択中の要素には出さない */
 function Highlight({
   page,
   width,
