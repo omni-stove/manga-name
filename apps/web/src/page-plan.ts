@@ -5,6 +5,7 @@ import {
   createBubble,
   createPage,
   fitBubble,
+  type LayoutTemplate,
   type Page,
   type PagePlan,
   type PageTemplate,
@@ -142,7 +143,7 @@ function distributeLines(
  */
 export function plannedPage(
   plan: PagePlan,
-  template: PageTemplate,
+  template: PageTemplate | LayoutTemplate,
   project: Pick<Project, 'settings' | 'characters'>,
 ): Page {
   const page = createPage(template, project.settings.direction)

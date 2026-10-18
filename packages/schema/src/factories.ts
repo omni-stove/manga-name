@@ -3,6 +3,8 @@ import {
   type Bubble,
   BubbleSchema,
   type ID,
+  type LayoutTemplate,
+  LayoutTemplateSchema,
   type Page,
   PageSchema,
   type Panel,
@@ -57,11 +59,22 @@ const emptyPanel = (order: number, rect: Panel['rect']): Panel => ({
 })
 
 /**
- * テンプレートからページを作る。行数ぶんの行を縦に並べ、各行を 2 列に割る。
+ * テンプレートからページを作る。登録したコマ割り（LayoutTemplate）なら、その枠と order のまま空のコマを置き、
+ * direction は見ない。組み込みのテンプレートなら、行数ぶんの行を縦に並べ、各行を 2 列に割る。
  * コマは余白（MARGIN）とコマ間（GUTTER）を空けて重ならない。
  * order は行ごとに上から、行内は rtl なら右から、ltr なら左から振る。
  */
-export function createPage(template: PageTemplate, direction: ReadingDirection): Page {
+export function createPage(
+  template: PageTemplate | LayoutTemplate,
+  direction: ReadingDirection,
+): Page {
+  if (typeof template === 'object') {
+    const panels = template.panels.map(({ order, rect, shape }) => ({
+      ...emptyPanel(order, { ...rect }),
+      ...(shape && { shape: shape.map((p) => ({ ...p })) }),
+    }))
+    return { id: newId(), side: 'single', panels, scribbles: [] }
+  }
   const rows = ROWS[template]
   const panels: Panel[] = []
   const inner = 1 - 2 * MARGIN
@@ -81,6 +94,15 @@ export function createPage(template: PageTemplate, direction: ReadingDirection):
     }
   }
   return { id: newId(), side: 'single', panels, scribbles: [] }
+}
+
+/** page のコマの枠（order、rect、shape）を name のコマ割りにする。name は前後の空白を落とし、空なら throw */
+export function createLayoutTemplate(page: Page, name: string): LayoutTemplate {
+  return LayoutTemplateSchema.parse({
+    id: newId(),
+    name: name.trim(),
+    panels: page.panels.map(({ order, rect, shape }) => ({ order, rect, ...(shape && { shape }) })),
+  })
 }
 
 /** pos だけ必須。size 既定は 0.3x0.2、shape 既定は normal、order 既定は 1 */
@@ -170,6 +192,32 @@ if (import.meta.vitest) {
         })
       }
     }
+  })
+
+  test('createLayoutTemplate keeps only the panel frames, and createPage restores them', () => {
+    const page = createPage('3rows', 'rtl')
+    const [first] = page.panels
+    if (!first) throw new Error('3rows のページにコマがない')
+    first.shape = [
+      { x: first.rect.x, y: first.rect.y },
+      { x: first.rect.x + first.rect.w, y: first.rect.y },
+      { x: first.rect.x, y: first.rect.y + first.rect.h },
+    ]
+    first.note = 'n'
+    first.bubbles.push(createBubble({ pos: { x: 0.5, y: 0.5 } }))
+    const template = createLayoutTemplate(page, '  決め 3 段 ')
+    expect(template.name).toBe('決め 3 段')
+    expect(template.panels[0]).toEqual({ order: 1, rect: first.rect, shape: first.shape })
+    expect(template.panels[1]).not.toHaveProperty('shape')
+
+    const restored = createPage(template, 'ltr')
+    expect(PageSchema.safeParse(restored).success).toBe(true)
+    expect(restored.panels.map(({ order, rect, shape }) => ({ order, rect, shape }))).toEqual(
+      page.panels.map(({ order, rect, shape }) => ({ order, rect, shape })),
+    )
+    expect(restored.panels[0]).toMatchObject({ bubbles: [], arts: [] })
+    expect(restored.panels[0]?.id).not.toBe(first.id)
+    expect(() => createLayoutTemplate(page, ' ')).toThrow()
   })
 
   test('createBubble applies defaults and overrides', () => {

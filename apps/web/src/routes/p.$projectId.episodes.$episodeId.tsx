@@ -1,20 +1,23 @@
-import { type Episode, type PageTemplate, pageCharacterIds } from '@manga/schema'
-import { Button, ConfirmDialog, Input, Select, Typography, XStack, YStack } from '@manga/ui'
+import { type Episode, pageCharacterIds } from '@manga/schema'
+import { Button, ConfirmDialog, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { PeerBadge, usePeers } from '../collaboration-view'
 import collabStyles from '../collaboration-view.module.css'
 import common from '../common.module.css'
+import { TemplateSelect, useTemplateChoice } from '../layout-templates'
 import { PageThumbnail } from '../page-thumbnail'
 import {
   addPagePatch,
   artStatus,
   movePagePatch,
-  PAGE_TEMPLATES,
   removeEpisodePatch,
+  removeLayoutTemplatePatch,
   removePagePatch,
   renameEpisodePatch,
+  resolveTemplate,
+  templateOptions,
 } from '../project-ops'
 import { RemoveEpisodeDialog } from '../remove-episode-dialog'
 import type { ProjectStore } from '../store/project-store'
@@ -27,7 +30,10 @@ export const Route = createFileRoute('/p/$projectId/episodes/$episodeId')({
 
 const projectRoute = getRouteApi('/p/$projectId')
 
-/** 1 話分の見出し、ページの追加と下書きと一括生成、ページのカードを並べる */
+/**
+ * 1 話分の見出し、ページの追加と下書きと一括生成、ページのカードを並べる。
+ * ページの追加では登録したコマ割りもテンプレートに選べ、選んでいるときは確認を経てその登録を消せる
+ */
 function EpisodePages() {
   const { projectId, episodeId } = Route.useParams()
   const { store, collab } = projectRoute.useLoaderData()
@@ -35,8 +41,10 @@ function EpisodePages() {
   const project = useProject(store)
   const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
-  const [template, setTemplate] = useState<PageTemplate>('3rows')
+  const [template, setTemplate] = useTemplateChoice(project)
   const [removingEpisode, setRemovingEpisode] = useState(false)
+  /** 確認中の登録したコマ割り */
+  const [removingTemplate, setRemovingTemplate] = useState<{ id: string; name: string }>()
   /** 確認中のページの id と、確認の文言に出すページ番号 */
   const [removingPage, setRemovingPage] = useState<{ id: string; number: number }>()
   const navigate = useNavigate()
@@ -44,6 +52,9 @@ function EpisodePages() {
   // 開いている間に Undo や他の人の操作でエピソードが消えることがある
   if (!episode) return <EpisodeNotFound projectId={projectId} />
   const pages = episode.pages
+  const registeredTemplate = templateOptions(project).find(
+    (o) => o.registered && o.value === template,
+  )
 
   return (
     <YStack gap={8}>
@@ -79,21 +90,24 @@ function EpisodePages() {
         className={common.toolbar}
         onSubmit={(e) => {
           e.preventDefault()
-          apply('ページを追加', (p) => addPagePatch(p, template, episode.id).patch)
+          apply(
+            'ページを追加',
+            (p) => addPagePatch(p, resolveTemplate(p, template), episode.id).patch,
+          )
         }}
       >
-        <Select
-          label="テンプレート"
-          inline
-          value={template}
-          onChange={(e) => setTemplate(e.currentTarget.value as PageTemplate)}
-        >
-          {PAGE_TEMPLATES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </Select>
+        <TemplateSelect project={project} value={template} onChange={setTemplate} />
+        {registeredTemplate && (
+          <Button
+            size="small"
+            variant="ghost"
+            onClick={() =>
+              setRemovingTemplate({ id: registeredTemplate.value, name: registeredTemplate.label })
+            }
+          >
+            テンプレートを削除
+          </Button>
+        )}
         <Button type="submit" variant="primary">
           ページを追加
         </Button>
@@ -194,6 +208,18 @@ function EpisodePages() {
           )
         })}
       </ol>
+      {removingTemplate && (
+        <ConfirmDialog
+          title="テンプレートを削除"
+          message={`テンプレート「${removingTemplate.name}」を削除しますか？このテンプレートから足したページは残ります`}
+          confirmLabel="削除"
+          onConfirm={() => {
+            apply('テンプレートを削除', (p) => removeLayoutTemplatePatch(p, removingTemplate.id))
+            setRemovingTemplate(undefined)
+          }}
+          onCancel={() => setRemovingTemplate(undefined)}
+        />
+      )}
       {removingPage && (
         <ConfirmDialog
           title="ページを削除"
