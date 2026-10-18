@@ -193,7 +193,7 @@ const PanelView = memo(function PanelView({
           />
         </Suspense>
       )}
-      <PanelNumber order={panel.order} outline={outline} />
+      <PanelNumber order={panel.order} outline={outline} locked={panel.locked === true} />
       {/* 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く */}
       {byOrder(panel.bubbles.filter((b) => !b.overflow)).map((bubble) => (
         <BubbleView
@@ -377,8 +377,16 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
   )
 }
 
-/** 右上の丸の番号。出力のコマ番号とは別の、作業用の印 */
-function PanelNumber({ order, outline }: { order: number; outline: readonly PagePoint[] }) {
+/** 右上の丸の番号。出力のコマ番号とは別の、作業用の印。位置がロックされていれば下に鍵を添える */
+function PanelNumber({
+  order,
+  outline,
+  locked,
+}: {
+  order: number
+  outline: readonly PagePoint[]
+  locked: boolean
+}) {
   const r = NUMBER_RADIUS
   const { x: cx, y: cy } = cornerAnchor(outline, 'ne', -(r + 1), r + 1)
   return (
@@ -396,6 +404,35 @@ function PanelNumber({ order, outline }: { order: number; outline: readonly Page
       >
         {order}
       </text>
+      {locked && <LockMark x={cx} y={cy + r + 0.6} size={r * 1.2} />}
+    </g>
+  )
+}
+
+/** 位置がロックされた要素の番号の下に出す、出力に出ない鍵の印。(x, y) は上辺の中央 */
+function LockMark({ x, y, size }: { x: number; y: number; size: number }) {
+  const w = size * 0.8
+  const bodyH = size * 0.55
+  const bodyY = y + size - bodyH
+  const shackle = w * 0.3
+  return (
+    // biome-ignore lint/a11y/noInteractiveElementToNoninteractiveRole: biome が <g> を対話要素と誤判定する。鍵の印は操作できず、名前だけを伝える
+    <g role="img" aria-label={m.editor_canvas_locked()} data-locked="">
+      <title>{m.editor_canvas_locked()}</title>
+      <path
+        d={`M ${x - shackle} ${bodyY} V ${y + shackle} A ${shackle} ${shackle} 0 0 1 ${x + shackle} ${y + shackle} V ${bodyY}`}
+        fill="none"
+        style={{ stroke: GUIDE }}
+        strokeWidth={size * 0.14}
+      />
+      <rect
+        x={x - w / 2}
+        y={bodyY}
+        width={w}
+        height={bodyH}
+        rx={size * 0.08}
+        style={{ fill: GUIDE }}
+      />
     </g>
   )
 }
@@ -588,6 +625,7 @@ const BubbleView = memo(function BubbleView({
       >
         {bubble.order}
       </text>
+      {bubble.locked && <LockMark x={g.cx + g.rx} y={g.cy - g.ry + 0.6} size={2.2} />}
       {illegible && <IllegibleAlert x={g.cx - g.rx} y={g.cy - g.ry} truncated={layout.truncated} />}
     </g>
   )

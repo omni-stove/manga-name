@@ -25,5 +25,6 @@
   "editor_canvas_panel_generate": "生成",
   "editor_canvas_panel_generate_aria": "このコマを生成",
   "editor_canvas_bubble_text_truncated": "セリフがフキダシに収まりません。フキダシを広げるかセリフを短くしてください",
-  "editor_canvas_bubble_text_too_small": "セリフの文字が小さすぎて読めません。フキダシを広げるかセリフを短くしてください"
+  "editor_canvas_bubble_text_too_small": "セリフの文字が小さすぎて読めません。フキダシを広げるかセリフを短くしてください",
+  "editor_canvas_locked": "位置をロック中"
 }
