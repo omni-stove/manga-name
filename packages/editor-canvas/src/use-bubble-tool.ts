@@ -1,4 +1,4 @@
-import type { Bubble, ID, Page, Patch } from '@manga/schema'
+import { type Bubble, hasTail, type ID, type Page, type Patch } from '@manga/schema'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -64,13 +64,16 @@ type Gesture =
     }
   | { kind: 'tail'; pointerId: number; start: Bubble; client: Pos; dragging: boolean }
 
-/** 選択中のフキダシのハンドル（ページ座標、mm）。しっぽが無ければ下に未設定の先端を置く */
+/**
+ * 選択中のフキダシのハンドル（ページ座標、mm）。しっぽが無ければ下に未設定の先端を置き、
+ * しっぽの付かない形なら tail は null
+ */
 export function bubbleHandles(
   bubble: Bubble,
   panel: Box,
 ): {
   corners: { handle: BubbleHandle; x: number; y: number }[]
-  tail: PagePoint & { set: boolean }
+  tail: (PagePoint & { set: boolean }) | null
 } {
   const g = bubbleGeometry(bubble, panel)
   return {
@@ -80,7 +83,11 @@ export function bubbleHandles(
       { handle: 'se', x: g.cx + g.rx, y: g.cy + g.ry },
       { handle: 'sw', x: g.cx - g.rx, y: g.cy + g.ry },
     ],
-    tail: g.tail ? { ...g.tail, set: true } : { x: g.cx, y: g.cy + g.ry * 1.5, set: false },
+    tail: !hasTail(bubble.shape)
+      ? null
+      : g.tail
+        ? { ...g.tail, set: true }
+        : { x: g.cx, y: g.cy + g.ry * 1.5, set: false },
   }
 }
 
@@ -152,7 +159,7 @@ export function useBubbleTool(opts: Options) {
       if (selected) {
         const { corners, tail } = bubbleHandles(selected.bubble, selected.panel)
         // しっぽの先端は本体の隅と重なりうるので先に見る
-        if (near(at, tail)) {
+        if (tail && near(at, tail)) {
           take(e, {
             kind: 'tail',
             pointerId: e.pointerId,

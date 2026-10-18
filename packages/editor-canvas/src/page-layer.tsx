@@ -1,5 +1,8 @@
 import {
+  BUBBLE_DASH,
   type Bubble,
+  bubbleTextBox,
+  clipTextBox,
   cornerAnchor,
   currentArt,
   type ID,
@@ -11,7 +14,7 @@ import {
 } from '@manga/schema'
 import { memo, Suspense, use, useState } from 'react'
 import { type AssetState, loadAsset } from './asset'
-import { type Box, bodyPath, bubbleGeometry, tailPath, textBox } from './bubble-shape'
+import { type Box, bubbleGeometry, bubblePaths } from './bubble-shape'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
 import { COLUMN_PITCH, layoutVertical } from './vertical-text'
@@ -21,6 +24,14 @@ export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
 export const GUIDE = 'var(--guide)'
 const NOTE_COLOR = 'var(--note)'
 const NUMBER_RADIUS = 3.2
+/**
+ * これより小さいセリフは読めないとして警告する（mm）。印刷で読める下限とされる 7pt（約 2.47mm）。
+ * 割り付けの下限 2mm まで縮めるのは、警告を出しつつ配置は崩さないため
+ */
+const LEGIBLE_FONT = 2.47
+const ALERT_RADIUS = 2.4
+/** フキダシの輪郭の太さ（画面の px） */
+const BUBBLE_STROKE = 2
 
 interface PageLayerProps {
   page: Page
@@ -454,7 +465,8 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
 
 /**
  * フキダシ。太線で輪郭を描いてから同じ形を白で塗り重ね、本体としっぽの継ぎ目の線を消す。
- * 外側に残る線は太線の半分になる。clipId を渡すと、輪郭と文字をその clipPath で切る
+ * 外側に残る線は太線の半分になる。枠なしは何も描かない代わりに、選択していなくても薄い破線で範囲を示す。
+ * clipId を渡すと、輪郭と文字をその clipPath で切る
  */
 const BubbleView = memo(function BubbleView({
   bubble,
@@ -471,33 +483,42 @@ const BubbleView = memo(function BubbleView({
   selected: boolean
   clipId?: string
 }) {
-  const g = bubbleGeometry(bubble, panelBox({ rect: panelRect }, width, height))
-  const body = bodyPath(bubble.shape, g)
-  const tail = tailPath(bubble.shape, g)
-  const box = textBox(bubble.shape, g)
+  const panel = panelBox({ rect: panelRect }, width, height)
+  const g = bubbleGeometry(bubble, panel)
+  const paths = bubblePaths(bubble.shape, g)
+  const box = clipId
+    ? clipTextBox(bubbleTextBox(bubble.shape, g), panel)
+    : bubbleTextBox(bubble.shape, g)
   const layout = layoutVertical(bubble.text, box)
   const pitch = layout.fontSize * COLUMN_PITCH
   const blockWidth =
     layout.columns.length === 0 ? 0 : (layout.columns.length - 1) * pitch + layout.fontSize
   const right = box.x + box.w / 2 + blockWidth / 2 - layout.fontSize / 2
-  const shapes = tail === null ? [body] : [tail, body]
+  const shapes = paths.tail === null ? [paths.body] : [paths.tail, paths.body]
+  const illegible =
+    layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
     <g className="ec-bubble" data-bubble-id={bubble.id} data-shape={bubble.shape}>
       <g clipPath={clipId && `url(#${clipId})`}>
-        {shapes.map((d) => (
-          <path
-            key={`stroke-${d}`}
-            d={d}
-            fill="#fff"
-            stroke="#000"
-            strokeWidth={2}
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
-        {shapes.map((d) => (
-          <path key={`fill-${d}`} d={d} fill="#fff" />
-        ))}
+        {paths.line !== 'none' &&
+          shapes.map((d) => (
+            <path
+              key={`stroke-${d}`}
+              d={d}
+              fill="#fff"
+              stroke="#000"
+              strokeWidth={BUBBLE_STROKE}
+              strokeDasharray={
+                paths.line === 'dashed'
+                  ? BUBBLE_DASH.map((n) => n * BUBBLE_STROKE).join(' ')
+                  : undefined
+              }
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        {paths.fill && shapes.map((d) => <path key={`fill-${d}`} d={d} fill="#fff" />)}
+        {paths.ink !== null && <path d={paths.ink} fill="#000" />}
         {layout.columns.length > 0 && (
           <text
             writingMode="vertical-rl"
@@ -516,15 +537,28 @@ const BubbleView = memo(function BubbleView({
           </text>
         )}
       </g>
-      {selected && (
+      {selected ? (
         <path
-          d={body}
+          d={paths.body}
           fill="none"
           style={{ stroke: GUIDE }}
           strokeWidth={2}
           strokeDasharray="4 2"
           vectorEffect="non-scaling-stroke"
         />
+      ) : (
+        !paths.fill && (
+          <path
+            d={paths.body}
+            fill="none"
+            style={{ stroke: GUIDE }}
+            strokeWidth={1}
+            strokeDasharray="2 2"
+            strokeOpacity={0.5}
+            vectorEffect="non-scaling-stroke"
+            data-bubble-guide
+          />
+        )
       )}
       <text
         x={g.cx + g.rx}
@@ -537,6 +571,34 @@ const BubbleView = memo(function BubbleView({
       >
         {bubble.order}
       </text>
+      {illegible && <IllegibleAlert x={g.cx - g.rx} y={g.cy - g.ry} truncated={layout.truncated} />}
     </g>
   )
 })
+
+/** 文字が小さすぎるか収まらないフキダシの左上に出す、出力に出ない警告の印 */
+function IllegibleAlert({ x, y, truncated }: { x: number; y: number; truncated: boolean }) {
+  const message = truncated
+    ? 'セリフがフキダシに収まりません。フキダシを広げるかセリフを短くしてください'
+    : 'セリフの文字が小さすぎて読めません。フキダシを広げるかセリフを短くしてください'
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: SVG の <g> に <img> は使えず、role="img" で名前を伝える
+    // biome-ignore lint/a11y/noInteractiveElementToNoninteractiveRole: biome が <g> を対話要素と誤判定する。警告の印は操作できず、名前だけを伝える
+    <g role="img" aria-label={message} data-bubble-alert={truncated ? 'truncated' : 'small'}>
+      <title>{message}</title>
+      <circle cx={x} cy={y} r={ALERT_RADIUS} style={{ fill: 'var(--alert)' }} />
+      <text
+        x={x}
+        y={y}
+        style={{ fill: 'var(--on-alert)' }}
+        fontFamily={FONT_FAMILY}
+        fontSize={ALERT_RADIUS * 1.4}
+        fontWeight="bold"
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        !
+      </text>
+    </g>
+  )
+}

@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { type Bubble, fixtures, type Page, type Panel, type Stroke } from '@manga/schema'
+import {
+  type Bubble,
+  BubbleSchema,
+  fixtures,
+  type Page,
+  type Panel,
+  type Stroke,
+} from '@manga/schema'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, test } from 'vitest'
@@ -15,7 +22,7 @@ const ROWS = 6
 const COLUMNS = 5
 const BUBBLES = 20
 const MOVES = 120
-const SHAPES = ['normal', 'shout', 'thought', 'narration'] as const
+const SHAPES = BubbleSchema.shape.shape.options
 
 const project = fixtures.samplePage01
 const { w: pageW, h: pageH } = project.settings.pageSize
