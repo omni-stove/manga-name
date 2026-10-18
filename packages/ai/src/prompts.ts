@@ -198,7 +198,7 @@ function planPages(req: PagePlanRequest): LlmPrompt {
     '- cast: the ids of the listed characters who appear on the page. Empty when none appears.',
     '- lines: every line of dialogue, inner monologue and narration that falls on the page, in reading order, copied verbatim without the speaker name and brackets.',
     '  - speakerId: the id of the listed character who says it. Omit it for narration or when the speaker is not listed.',
-    '  - shape: normal for speech, shout for shouting, thought for inner monologue, narration for narration and captions.',
+    '  - shape: normal for speech, shout for shouting, thought for inner monologue, whisper for whispering, tremble for a shaky or frightened voice, electronic for a voice through a phone, TV, radio or machine, urchin for a flustered or startled inner voice, none for a murmur written straight on the art, narration for narration and captions.',
     '- Every line of the script goes on exactly one page. Never drop, merge, shorten or paraphrase a line.',
     '- Give the key scenes more pages and keep transitions short. Put a reveal at the top of a page, not at the bottom.',
     'JSON Schema:',

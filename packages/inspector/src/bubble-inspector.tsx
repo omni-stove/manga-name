@@ -10,7 +10,12 @@ export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[]
   { value: 'normal', label: '普通' },
   { value: 'shout', label: '叫び' },
   { value: 'thought', label: '思考' },
+  { value: 'whisper', label: '小声' },
+  { value: 'tremble', label: '震え' },
+  { value: 'electronic', label: '電子音' },
+  { value: 'urchin', label: 'ウニフラ' },
   { value: 'narration', label: 'ナレーション' },
+  { value: 'none', label: '枠なし' },
 ]
 
 const isOrder = (n: number) => BubbleSchema.shape.order.safeParse(n).success

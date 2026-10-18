@@ -1,6 +1,13 @@
-import { currentArt, type Page, type Panel, panelOutline } from '@manga/schema'
+import {
+  bubbleTextBox,
+  clipTextBox,
+  currentArt,
+  type Page,
+  type Panel,
+  panelOutline,
+} from '@manga/schema'
 import { getBackend, loadFonts, type Surface } from './backend'
-import { bubbleGeometry, clipTextBox, drawBubble, textBox } from './bubble'
+import { bubbleGeometry, drawBubble } from './bubble'
 import { type PxRect, pagePixelSize, pointToPx, rectToPx } from './geometry'
 import {
   drawCover,
@@ -70,7 +77,9 @@ export async function drawPage(
       if ((bubble.overflow === true) !== overflow) continue
       const g = bubbleGeometry(bubble, rect)
       drawBubble(c, bubble.shape, g, pageSize.w * BUBBLE_LINE_WIDTH)
-      const box = overflow ? textBox(bubble.shape, g) : clipTextBox(textBox(bubble.shape, g), rect)
+      const box = overflow
+        ? bubbleTextBox(bubble.shape, g)
+        : clipTextBox(bubbleTextBox(bubble.shape, g), rect)
       const { lines, fontPx } = layoutBubbleText(bubble.text, box, pageSize.w * MIN_FONT)
       drawVerticalText(c, lines, fontPx, box)
     }

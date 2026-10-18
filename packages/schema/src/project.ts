@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 5 as const
+export const SCHEMA_VERSION = 6 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -50,7 +50,17 @@ export const BubbleSchema = z.object({
   order,
   speakerId: IdSchema.optional(),
   text: z.string(),
-  shape: z.enum(['normal', 'shout', 'thought', 'narration']),
+  shape: z.enum([
+    'normal',
+    'shout',
+    'thought',
+    'whisper',
+    'tremble',
+    'electronic',
+    'urchin',
+    'narration',
+    'none',
+  ]),
   pos: PointSchema,
   size: SizeSchema,
   tail: PointSchema.optional(),

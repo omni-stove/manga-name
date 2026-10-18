@@ -1,4 +1,11 @@
-import { type Bubble, containsPoint, type Page, type Panel, panelOutline } from '@manga/schema'
+import {
+  type Bubble,
+  containsPoint,
+  isBoxShape,
+  type Page,
+  type Panel,
+  panelOutline,
+} from '@manga/schema'
 import { type Box, bubbleGeometry } from './bubble-shape'
 import type { Selection } from './types'
 
@@ -37,9 +44,7 @@ export function inBubble(bubble: Bubble, panel: Box, p: PagePoint): boolean {
   if (g.rx <= 0 || g.ry <= 0) return false
   const dx = (p.x - g.cx) / g.rx
   const dy = (p.y - g.cy) / g.ry
-  return bubble.shape === 'narration'
-    ? Math.abs(dx) <= 1 && Math.abs(dy) <= 1
-    : dx * dx + dy * dy <= 1
+  return isBoxShape(bubble.shape) ? Math.abs(dx) <= 1 && Math.abs(dy) <= 1 : dx * dx + dy * dy <= 1
 }
 
 /**

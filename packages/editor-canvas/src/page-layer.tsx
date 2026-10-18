@@ -1,5 +1,8 @@
 import {
+  BUBBLE_DASH,
   type Bubble,
+  bubbleTextBox,
+  clipTextBox,
   cornerAnchor,
   currentArt,
   type ID,
@@ -11,7 +14,7 @@ import {
 } from '@manga/schema'
 import { memo, Suspense, use, useState } from 'react'
 import { type AssetState, loadAsset } from './asset'
-import { type Box, bodyPath, bubbleGeometry, clipTextBox, tailPath, textBox } from './bubble-shape'
+import { type Box, bubbleGeometry, bubblePaths } from './bubble-shape'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
 import { COLUMN_PITCH, layoutVertical } from './vertical-text'
@@ -27,6 +30,8 @@ const NUMBER_RADIUS = 3.2
  */
 const LEGIBLE_FONT = 2.47
 const ALERT_RADIUS = 2.4
+/** フキダシの輪郭の太さ（画面の px） */
+const BUBBLE_STROKE = 2
 
 interface PageLayerProps {
   page: Page
@@ -460,7 +465,8 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
 
 /**
  * フキダシ。太線で輪郭を描いてから同じ形を白で塗り重ね、本体としっぽの継ぎ目の線を消す。
- * 外側に残る線は太線の半分になる。clipId を渡すと、輪郭と文字をその clipPath で切る
+ * 外側に残る線は太線の半分になる。枠なしは何も描かない代わりに、選択していなくても薄い破線で範囲を示す。
+ * clipId を渡すと、輪郭と文字をその clipPath で切る
  */
 const BubbleView = memo(function BubbleView({
   bubble,
@@ -479,34 +485,40 @@ const BubbleView = memo(function BubbleView({
 }) {
   const panel = panelBox({ rect: panelRect }, width, height)
   const g = bubbleGeometry(bubble, panel)
-  const body = bodyPath(bubble.shape, g)
-  const tail = tailPath(bubble.shape, g)
-  const box = clipId ? clipTextBox(textBox(bubble.shape, g), panel) : textBox(bubble.shape, g)
+  const paths = bubblePaths(bubble.shape, g)
+  const box = clipId
+    ? clipTextBox(bubbleTextBox(bubble.shape, g), panel)
+    : bubbleTextBox(bubble.shape, g)
   const layout = layoutVertical(bubble.text, box)
   const pitch = layout.fontSize * COLUMN_PITCH
   const blockWidth =
     layout.columns.length === 0 ? 0 : (layout.columns.length - 1) * pitch + layout.fontSize
   const right = box.x + box.w / 2 + blockWidth / 2 - layout.fontSize / 2
-  const shapes = tail === null ? [body] : [tail, body]
+  const shapes = paths.tail === null ? [paths.body] : [paths.tail, paths.body]
   const illegible =
     layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
     <g className="ec-bubble" data-bubble-id={bubble.id} data-shape={bubble.shape}>
       <g clipPath={clipId && `url(#${clipId})`}>
-        {shapes.map((d) => (
-          <path
-            key={`stroke-${d}`}
-            d={d}
-            fill="#fff"
-            stroke="#000"
-            strokeWidth={2}
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
-        {shapes.map((d) => (
-          <path key={`fill-${d}`} d={d} fill="#fff" />
-        ))}
+        {paths.line !== 'none' &&
+          shapes.map((d) => (
+            <path
+              key={`stroke-${d}`}
+              d={d}
+              fill="#fff"
+              stroke="#000"
+              strokeWidth={BUBBLE_STROKE}
+              strokeDasharray={
+                paths.line === 'dashed'
+                  ? BUBBLE_DASH.map((n) => n * BUBBLE_STROKE).join(' ')
+                  : undefined
+              }
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        {paths.fill && shapes.map((d) => <path key={`fill-${d}`} d={d} fill="#fff" />)}
+        {paths.ink !== null && <path d={paths.ink} fill="#000" />}
         {layout.columns.length > 0 && (
           <text
             writingMode="vertical-rl"
@@ -525,15 +537,28 @@ const BubbleView = memo(function BubbleView({
           </text>
         )}
       </g>
-      {selected && (
+      {selected ? (
         <path
-          d={body}
+          d={paths.body}
           fill="none"
           style={{ stroke: GUIDE }}
           strokeWidth={2}
           strokeDasharray="4 2"
           vectorEffect="non-scaling-stroke"
         />
+      ) : (
+        !paths.fill && (
+          <path
+            d={paths.body}
+            fill="none"
+            style={{ stroke: GUIDE }}
+            strokeWidth={1}
+            strokeDasharray="2 2"
+            strokeOpacity={0.5}
+            vectorEffect="non-scaling-stroke"
+            data-bubble-guide
+          />
+        )
       )}
       <text
         x={g.cx + g.rx}

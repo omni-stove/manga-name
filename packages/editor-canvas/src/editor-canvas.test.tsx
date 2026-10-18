@@ -1305,9 +1305,25 @@ describe('bubble tool', () => {
     ])
   })
 
+  // bb_1 はナレーションでしっぽが付かないので、普通のフキダシにして試す
+  const asNormal = (id: string): Page => ({
+    ...samplePage,
+    panels: samplePage.panels.map((p) => ({
+      ...p,
+      bubbles: p.bubbles.map((b) => (b.id === id ? { ...b, shape: 'normal' as const } : b)),
+    })),
+  })
+
+  test('a narration bubble has no tail handle', async () => {
+    const svg = await render({ tool: 'bubble', selection: { kind: 'bubble', id: 'bb_1' } })
+    expect(svg.querySelector('[data-layer="bubble-tool"]')).not.toBeNull()
+    expect(svg.querySelector('[data-tail-handle]')).toBeNull()
+  })
+
   test('dragging the unset tail handle adds a tail', async () => {
     const onChange = vi.fn()
     const svg = await render({
+      page: asNormal('bb_1'),
       tool: 'bubble',
       onChange,
       selection: { kind: 'bubble', id: 'bb_1' },
