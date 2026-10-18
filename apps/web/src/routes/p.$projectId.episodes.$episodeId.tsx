@@ -210,7 +210,7 @@ function EpisodePages() {
   )
 }
 
-/** 話の名前の見出し。「名前を変更」で入力欄に替わり、保存すると Undo で戻せる変更として反映する */
+/** 話の名前の見出し。「名前を変更」で入力欄に替わり、保存すると反映する */
 function EpisodeTitle({
   episode,
   apply,

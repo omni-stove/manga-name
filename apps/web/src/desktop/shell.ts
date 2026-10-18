@@ -35,7 +35,7 @@ const separator = predefined('Separator')
 /**
  * Desktop のアプリメニュー（ファイル、編集、表示）を張り、ファイルを開く・保存するダイアログと最近開いたファイルをつなぐ。
  * 開くは `.manga.json` をライブラリに読み込んで開き、保存は開いているプロジェクトを JSON でそのファイルに書く。
- * 編集の Undo / Redo は開いているプロジェクトの store に送る。
+ * 編集の Undo / Redo はページの編集画面のときだけ、そのプロジェクトの store に送る。
  * ウィンドウの位置と大きさは Rust 側の window-state プラグインが戻す
  */
 export async function startDesktopShell({ router, library }: DesktopShellOptions): Promise<void> {
@@ -59,7 +59,9 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
       document.execCommand(name)
       return
     }
-    const id = currentProjectId()
+    // Undo はページの編集画面だけのもの。他の画面では削除を確認ダイアログで確かめる
+    const page = router.state.matches.find((m) => m.routeId === '/p/$projectId_/pages/$pageId')
+    const id = (page?.params as { projectId?: ID } | undefined)?.projectId
     const store = id ? await library.open(id) : undefined
     if (name === 'undo') store?.undo()
     else store?.redo()
@@ -252,6 +254,7 @@ if (import.meta.vitest) {
     dialogPath = null as string | null,
     libraryProjects = [] as Project[],
     currentId = undefined as ID | undefined,
+    onPage = false,
   } = {}) => {
     const store = createFakeStoreIpc({ recentFiles: recent })
     const written = new Map<string, string>()
@@ -298,7 +301,15 @@ if (import.meta.vitest) {
       import: vi.fn(async (p: Project) => ({ ...p, id: 'imported' })),
     }
     const router = {
-      state: { matches: [{ params: {} }, { params: { projectId: currentId } }] },
+      state: {
+        matches: [
+          { routeId: '__root__', params: {} },
+          {
+            routeId: onPage ? '/p/$projectId_/pages/$pageId' : '/p/$projectId',
+            params: { projectId: currentId },
+          },
+        ],
+      },
       navigate: vi.fn(async () => {}),
     }
     await startDesktopShell({
@@ -444,8 +455,12 @@ if (import.meta.vitest) {
       expect(shell.dialogs).toEqual([])
     })
 
-    test('undo and redo go to the open project, or to the focused text field', async () => {
-      const shell = await setup({ libraryProjects: [fileProject], currentId: fileProject.id })
+    test('undo and redo go to the project of the open page, or to the focused text field', async () => {
+      const shell = await setup({
+        libraryProjects: [fileProject],
+        currentId: fileProject.id,
+        onPage: true,
+      })
       const store = shell.stores.get(fileProject.id)
       shell.click('編集', '取り消す')
       await vi.waitFor(() => expect(store?.undo).toHaveBeenCalledOnce())
@@ -459,6 +474,13 @@ if (import.meta.vitest) {
       shell.click('編集', '取り消す')
       await vi.waitFor(() => expect(shell.execCommand).toHaveBeenCalledWith('undo'))
       expect(store?.undo).toHaveBeenCalledOnce()
+    })
+
+    test('undo does nothing outside the page editor', async () => {
+      const shell = await setup({ libraryProjects: [fileProject], currentId: fileProject.id })
+      shell.click('編集', '取り消す')
+      await vi.waitFor(() => expect(shell.library.open).not.toHaveBeenCalled())
+      expect(shell.stores.get(fileProject.id)?.undo).not.toHaveBeenCalled()
     })
 
     test('clearing the history empties the recent files', async () => {

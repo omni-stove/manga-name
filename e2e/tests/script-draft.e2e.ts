@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
-import { FIXTURE_PROJECT, importProject, waitSaved } from './app'
+import { FIXTURE_PROJECT, importProject } from './app'
 
 const SCRIPT = ['結晶の森。E が奥へ歩いていく。', 'E「……ここか」', 'E、足元を見る。'].join('\n')
 
@@ -19,7 +19,7 @@ async function plan(page: Page) {
   await expect(page.locator('[data-plan-page]')).toHaveCount(2)
 }
 
-test('ページ割りで流れと登場キャラとセリフを確かめて直し、セリフをフキダシにしたページで追加し、Undo で丸ごと戻す', async ({
+test('ページ割りで流れと登場キャラとセリフを確かめて直し、セリフをフキダシにしたページで追加する', async ({
   page,
 }) => {
   await importProject(page, FIXTURE_PROJECT)
@@ -49,10 +49,4 @@ test('ページ割りで流れと登場キャラとセリフを確かめて直�
   await expect(page.locator('[data-page-cast]').nth(2)).toHaveText('登場: E')
   // 下書きのテンプレート（既定は 3 段）でコマを割る。フィクスチャの 1 ページ目もコマ 6
   await expect(page.getByText('コマ 6 / 生成')).toHaveCount(3)
-  await waitSaved(page)
-
-  await page.getByRole('button', { name: 'Undo', exact: true }).click()
-  await expect(pageLinks(page)).toHaveCount(1)
-  await page.getByRole('button', { name: 'Redo', exact: true }).click()
-  await expect(pageLinks(page)).toHaveCount(3)
 })

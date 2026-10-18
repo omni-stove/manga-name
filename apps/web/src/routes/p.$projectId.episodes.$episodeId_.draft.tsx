@@ -46,8 +46,8 @@ type Phase =
  * 「脚本から下書き」のページ。脚本、ページ数、トーンから `llmProvider.planPages` でページ割り
  * （ページごとの流れ、登場キャラ、セリフ）を作り、全ページを並べて直せる形で見せる。脚本のセリフで
  * どのページにも入っていないものは一覧で知らせる。確かめた割り振りはテンプレートのページにし、
- * セリフはコマのフキダシにして、エピソードの末尾に `source: 'ai'` の 1 回の applyPatch で足すので、
- * Undo 1 回で丸ごと戻る。ページを離れると進行中の要求を abort し、後から届いた応答は捨てる
+ * セリフはコマのフキダシにして、エピソードの末尾に `source: 'ai'` の 1 回の applyPatch で足す。
+ * ページを離れると進行中の要求を abort し、後から届いた応答は捨てる
  */
 function ScriptDraft() {
   const { projectId, episodeId } = Route.useParams()
