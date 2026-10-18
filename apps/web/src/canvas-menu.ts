@@ -1,7 +1,7 @@
 import type { Selection, Tool } from '@manga/editor-canvas'
 import { m } from '@manga/i18n'
 import { BUBBLE_SHAPES, FOCUS_KINDS } from '@manga/inspector'
-import type { Bubble, ID, Page, Patch } from '@manga/schema'
+import type { Bubble, Page, Patch } from '@manga/schema'
 import type { ContextMenuItem, SegmentedOption } from '@manga/ui'
 import { findBubble, findFocus, findPanel } from './inspector-ops'
 
@@ -12,11 +12,9 @@ export interface ElementMenuContext {
   page: Page
   /** 出してよいツール。キーの表記もここから引く */
   tools: readonly SegmentedOption<Tool>[]
-  generating: Set<ID>
   /** `target` の要素 root の Patch を当てる */
   edit(label: string, target: Target, patch: Patch): void
   remove(target: Target): void
-  generate(panelId: ID): void
   setTool(tool: Tool): void
   /** フキダシの形を選ぶメニューに切り替える */
   openShapes(): void
@@ -91,13 +89,6 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
     const found = findPanel(ctx.page, target.id)
     if (!found) return []
     return [
-      {
-        label: ctx.generating.has(target.id)
-          ? m.web_common_generating()
-          : m.web_canvas_menu_generate(),
-        disabled: ctx.generating.has(target.id),
-        onSelect: () => ctx.generate(target.id),
-      },
       ...toolItem('bubble', m.web_canvas_menu_place_bubble()),
       ...toolItem('focus', m.web_canvas_menu_place_focus()),
       'separator',
@@ -178,10 +169,8 @@ if (import.meta.vitest) {
       { value: 'select', label: '選択', shortcut: 'v' },
       { value: 'bubble', label: 'フキダシ', shortcut: 'b' },
     ],
-    generating: new Set(),
     edit: vi.fn(),
     remove: vi.fn(),
-    generate: vi.fn(),
     setTool: vi.fn(),
     openShapes: vi.fn(),
     ...overrides,
@@ -200,7 +189,7 @@ if (import.meta.vitest) {
   })
 
   describe('elementMenuItems', () => {
-    test('a panel offers generating, the tools it may switch to, reading order and removal', () => {
+    test('a panel offers the tools it may switch to, reading order and removal', () => {
       const panel = page.panels.find((p) => p.order === 1)
       if (!panel) throw new Error('fixture に読み順 1 のコマがない')
       const ctx = contextOf()
@@ -215,15 +204,6 @@ if (import.meta.vitest) {
       ])
       item(items, '削除').onSelect()
       expect(ctx.remove).toHaveBeenCalledWith({ kind: 'panel', id: panel.id })
-    })
-
-    test('a panel being generated cannot be generated again', () => {
-      const id = page.panels[0]?.id as ID
-      const items = elementMenuItems(
-        { kind: 'panel', id },
-        contextOf({ generating: new Set([id]) }),
-      )
-      expect(item(items, '生成中…').disabled).toBe(true)
     })
 
     test('a bubble names its shape and opens the shape menu', () => {
