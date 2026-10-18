@@ -24,7 +24,7 @@ import { findPage } from './project-ops'
 import { cropReference } from './reference-image'
 import { errorMessage } from './route-error'
 import { needsSignIn } from './sign-in'
-import type { ProjectStore } from './store/project-store'
+import type { ProjectStore } from './store/project-store-types'
 import { toasts } from './toasts'
 
 interface GeneratingState {

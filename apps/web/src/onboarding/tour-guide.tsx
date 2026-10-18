@@ -1,17 +1,21 @@
 import { m } from '@manga/i18n'
 import type { ID } from '@manga/schema'
-import { useParams, useRouterState } from '@tanstack/react-router'
+import {
+  type RegisteredRouter,
+  type RouteIds,
+  useParams,
+  useRouterState,
+} from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { useStore } from 'zustand'
 import type { EditorArea } from '../page-editor'
-import type { FileRoutesById } from '../routeTree.gen'
 import { useOpenedProject } from '../settings-dialog'
 import { Spotlight } from '../spotlight'
-import type { WebProjectStore } from '../store/project-store'
+import type { WebProjectStore } from '../store/project-store-types'
 import { useProject } from '../use-project'
 import { stepIndex, TOUR_STEPS, type TourStep, tour } from './tour'
 
-type RouteId = keyof FileRoutesById
+type RouteId = RouteIds<RegisteredRouter['routeTree']>
 
 interface Guide {
   /** 吹き出しを向ける要素のセレクタ */

@@ -1,6 +1,6 @@
 import { createEmptyProject, fixtures, type Patch, type Project } from '@manga/schema'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import type { ProjectStoreOptions, WebProjectStore } from './project-store'
+import type { ProjectStoreOptions, WebProjectStore } from './project-store-types'
 
 type ProjectStoreFactory = (initial: Project, options: ProjectStoreOptions) => WebProjectStore
 

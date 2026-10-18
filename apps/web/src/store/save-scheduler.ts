@@ -1,6 +1,6 @@
 import type { Project } from '@manga/schema'
 import type { StoreApi } from 'zustand/vanilla'
-import type { ProjectStoreState } from './project-store'
+import type { ProjectStoreState } from './project-store-types'
 
 interface SaveScheduler {
   /** 変更があったことを伝える。最後の呼び出しから `debounceMs` 後に保存する */

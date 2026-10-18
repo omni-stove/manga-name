@@ -1,7 +1,7 @@
 import { m } from '@manga/i18n'
 import type { Patch } from '@manga/schema'
 import type { ProjectRole } from '../sharing'
-import type { WebProjectStore } from './project-store'
+import type { WebProjectStore } from './project-store-types'
 
 const SCRIBBLES_PATH = /^\/episodes\/\d+\/pages\/\d+\/scribbles(\/|$)/
 

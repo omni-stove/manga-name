@@ -7,7 +7,7 @@ import {
   type Panel,
   panelOutline,
 } from '@manga/schema'
-import { getBackend, loadFonts, type Surface } from './backend'
+import { getBackend, loadFonts } from './backend'
 import { bubbleGeometry, drawBubble } from './bubble'
 import { type PxRect, pagePixelSize, pointToPx, rectToPx } from './geometry'
 import {
@@ -19,7 +19,7 @@ import {
   withClip,
 } from './panel'
 import { drawVerticalText, layoutBubbleText } from './text'
-import type { RenderContext, RenderOptions } from './types'
+import type { RenderContext, RenderOptions, Surface } from './types'
 
 /** ページ幅に対する比率 */
 const FRAME_WIDTH = 0.003

@@ -1,6 +1,5 @@
 import { type Project, parseProject } from '@manga/schema'
 import * as Y from 'yjs'
-import type { Env } from './env'
 
 /** owner は projects.owner_id、それ以外は project_members.role */
 export type ProjectRole = 'owner' | 'editor' | 'commenter' | 'viewer'
@@ -27,18 +26,6 @@ export async function projectRole(
     .bind(projectId, userId)
     .first<{ role: ProjectRole | null }>()
   return row?.role ?? null
-}
-
-/**
- * user のメールアドレス。Better Auth のユーザーに無ければ null。
- * development では X-Debug-User がメールアドレスの形ならそれを使う。開発時のユーザーは auth_users に居ないため
- */
-export async function userEmail(env: Env, userId: string): Promise<string | null> {
-  const row = await env.DB.prepare('SELECT email FROM auth_users WHERE id = ?1')
-    .bind(userId)
-    .first<{ email: string }>()
-  if (row) return row.email
-  return env.ENVIRONMENT === 'development' && userId.includes('@') ? userId : null
 }
 
 /** 比較用に、全ページの scribbles と updatedAt を除いた JSON */

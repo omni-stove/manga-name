@@ -1,5 +1,5 @@
 import { createFakeSyncServer } from './fake-sync-server'
-import type { TabSyncReply, TabSyncRequest } from './tab-sync'
+import type { TabSyncReply, TabSyncRequest } from './tab-sync-protocol'
 
 // lib が DOM なので self は Window の型になる。SharedWorker として使う分だけ型を付ける
 const scope = self as unknown as { onconnect: ((e: MessageEvent) => void) | null }
