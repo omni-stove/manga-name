@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { ID, Page, Stroke } from '@manga/schema'
 import { memo, useCallback, useId, useLayoutEffect, useRef } from 'react'
 import { bodyPath, bubbleGeometry } from './bubble-shape'
@@ -240,7 +241,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         selection.handlers.onKeyDown(e)
       }}
     >
-      <title>ページ</title>
+      <title>{m.editor_canvas_page_title()}</title>
       <style>{STYLE}</style>
       <PageLayer
         page={page}

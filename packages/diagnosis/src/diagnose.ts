@@ -79,7 +79,7 @@ const judge = (
   distance: number,
   { strong, weak }: Counts,
   config: DiagnosisConfig,
-): Pick<FocusDiagnosis, 'status' | 'reason'> => {
+): { status: 'ok'; reason?: string } | { status: 'weak' | 'miss'; reason: string } => {
   const off = distance.toFixed(2)
   if (distance <= config.pathBand + EPSILON) {
     return config.requireStrongForOk && strong === 0

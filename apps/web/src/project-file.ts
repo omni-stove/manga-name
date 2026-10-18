@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { type Project, parseProject } from '@manga/schema'
 
 /** プロジェクトを JSON テキストにする。アセットは ref のまま書き、中身は含めない */
@@ -6,7 +7,14 @@ export function exportProjectJson(project: Project): string {
 }
 
 /** ダイアログでプロジェクトの JSON を選ばせる絞り込み。拡張子は最後の `.json` しか指定できない */
-export const PROJECT_FILE_FILTERS = [{ name: 'マンガネーム', extensions: ['json'] }]
+export const PROJECT_FILE_FILTERS = [
+  {
+    get name() {
+      return m.web_project_file_filter_name()
+    },
+    extensions: ['json'],
+  },
+]
 
 /** 書き出しのファイル名。ファイル名に使えない文字は `_` にする */
 export function exportFileName(project: Project): string {
@@ -27,7 +35,7 @@ function parseJson(text: string): unknown {
   try {
     return JSON.parse(text)
   } catch (error) {
-    throw new Error('JSON として読めません', { cause: error })
+    throw new Error(m.web_project_file_invalid_json(), { cause: error })
   }
 }
 

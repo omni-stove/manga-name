@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { Button, FileDrop, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -35,29 +36,34 @@ function NewProject() {
 
   return (
     <YStack as="section" gap={16}>
-      <Typography variant="title">新規プロジェクト</Typography>
+      <Typography variant="title">{m.web_new_project_title()}</Typography>
       <form
         className={styles.create}
         onSubmit={(e) => {
           e.preventDefault()
           const title = String(new FormData(e.currentTarget).get('title') ?? '').trim()
           void run(async () => {
-            const project = await library.create(title || '無題')
+            const project = await library.create(title || m.web_common_untitled())
             await navigate({ to: '/p/$projectId', params: { projectId: project.id } })
           })
         }}
       >
         <XStack align="stretch">
-          <Input name="title" placeholder="タイトル" label="タイトル" hideLabel />
+          <Input
+            name="title"
+            placeholder={m.web_common_title()}
+            label={m.web_common_title()}
+            hideLabel
+          />
           <Button type="submit" variant="primary" disabled={busy}>
-            作成
+            {m.web_new_project_create()}
           </Button>
         </XStack>
       </form>
       <FileDrop
-        label="プロジェクト JSON を読み込む"
+        label={m.web_new_project_import()}
         accept="application/json,.json"
-        prompt="書き出した JSON をここにドロップ"
+        prompt={m.web_new_project_import_prompt()}
         disabled={busy}
         onPick={(file) => void importFile(file)}
       />

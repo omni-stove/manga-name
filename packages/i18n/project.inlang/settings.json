@@ -4,6 +4,14 @@
   "locales": ["ja"],
   "modules": ["./node_modules/@inlang/plugin-message-format/dist/index.js"],
   "plugin.inlang.messageFormat": {
-    "pathPattern": "./messages/{locale}.json"
+    "pathPattern": [
+      "./messages/api/{locale}.json",
+      "./messages/web/{locale}.json",
+      "./messages/ui/{locale}.json",
+      "./messages/inspector/{locale}.json",
+      "./messages/editor-canvas/{locale}.json",
+      "./messages/diagnosis/{locale}.json",
+      "./messages/storage/{locale}.json"
+    ]
   }
 }

@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { ApiError } from '@manga/schema'
 import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { type ErrorComponentProps, Link, useRouter } from '@tanstack/react-router'
@@ -8,11 +9,11 @@ export function RouteError({ error }: ErrorComponentProps) {
   const router = useRouter()
   return (
     <YStack as="section" gap={16} align="start" role="alert">
-      <Typography variant="title">読み込めませんでした</Typography>
+      <Typography variant="title">{m.web_route_error_title()}</Typography>
       <Typography tone="alert">{errorMessage(error)}</Typography>
       <XStack as="p" wrap>
-        <Button onClick={() => void router.invalidate()}>再試行</Button>
-        <Link to="/">プロジェクト一覧へ</Link>
+        <Button onClick={() => void router.invalidate()}>{m.web_common_retry()}</Button>
+        <Link to="/">{m.web_back_to_project_list()}</Link>
       </XStack>
     </YStack>
   )

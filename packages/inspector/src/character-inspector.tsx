@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { Button, Typography } from '@manga/ui'
 import { Suspense, use } from 'react'
 import { assetUrl } from './asset-url'
@@ -17,7 +18,7 @@ function DefaultReference() {
       className={styles.reference}
       viewBox="0 0 60 80"
       role="img"
-      aria-label="既定の画像"
+      aria-label={m.inspector_character_default_reference()}
       data-default-reference
     >
       <circle cx="30" cy="18" r="9" />
@@ -31,7 +32,7 @@ function Reference({ url, alt }: { url: Promise<string | null>; alt: string }) {
   if (resolved === null)
     return (
       <Typography as="span" tone="muted">
-        読み込めません
+        {m.inspector_load_failed()}
       </Typography>
     )
   return <img className={styles.reference} src={resolved} alt={alt} />
@@ -49,52 +50,57 @@ export function CharacterInspector({
   return (
     <div className={section.section} data-inspector="character">
       <Typography variant="subheading" className={section.title}>
-        {character.name || 'キャラクター'}
+        {character.name || m.inspector_character_untitled()}
       </Typography>
       <TextField
-        label="名前"
+        label={m.inspector_character_name()}
         value={character.name}
         required
         onCommit={(v) => v !== character.name && onChange(replace('/name', v))}
       />
       <TextField
-        label="略称"
+        label={m.inspector_character_short_name()}
         value={character.shortName}
         required
         onCommit={(v) => v !== character.shortName && onChange(replace('/shortName', v))}
       />
       <TextField
-        label="外見"
+        label={m.inspector_character_appearance()}
         value={character.appearance ?? ''}
         rows={4}
         delayMs={DEBOUNCE_MS}
-        placeholder="生成プロンプトに入る"
+        placeholder={m.inspector_character_appearance_placeholder()}
         onCommit={(v) => onChange(optionalString('/appearance', character.appearance, v))}
       />
-      <Group label="参照画像">
+      <Group label={m.inspector_character_reference()}>
         {ref === undefined ? (
           <DefaultReference />
         ) : (
           <Suspense
             fallback={
               <Typography as="span" tone="muted">
-                読み込み中…
+                {m.inspector_loading()}
               </Typography>
             }
           >
-            <Reference url={assetUrl(resolveAsset, ref)} alt={`${character.name} の参照画像`} />
+            <Reference
+              url={assetUrl(resolveAsset, ref)}
+              alt={m.inspector_character_reference_alt({ name: character.name })}
+            />
           </Suspense>
         )}
         <Button size="small" disabled={generating} onClick={onPickReference}>
-          {ref === undefined ? '画像を選ぶ' : '差し替え'}
+          {ref === undefined ? m.inspector_character_reference_pick() : m.inspector_replace()}
         </Button>
         <Button
           size="small"
           disabled={generating || !character.appearance}
-          title={character.appearance ? undefined : '外見を入れると生成できます'}
+          title={
+            character.appearance ? undefined : m.inspector_character_generate_needs_appearance()
+          }
           onClick={onGenerateReference}
         >
-          {generating ? '生成中…' : '外見から生成'}
+          {generating ? m.inspector_generating() : m.inspector_character_generate_reference()}
         </Button>
         {ref !== undefined && (
           <Button
@@ -103,12 +109,12 @@ export function CharacterInspector({
             disabled={generating}
             onClick={() => onChange([{ op: 'remove', path: '/referenceRef' }])}
           >
-            外す
+            {m.inspector_character_reference_remove()}
           </Button>
         )}
       </Group>
       <TextField
-        label="メモ"
+        label={m.inspector_note()}
         value={character.note ?? ''}
         rows={3}
         delayMs={DEBOUNCE_MS}

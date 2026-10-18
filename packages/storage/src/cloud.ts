@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import {
   type ID,
   type ISODate,
@@ -187,7 +188,7 @@ function browserConnectivity(): Connectivity {
 }
 
 /** 競合したクラウド版を別名で残すときのタイトル */
-export const conflictCopyTitle = (title: string) => `${title}（クラウド版）`
+export const conflictCopyTitle = (title: string) => m.storage_conflict_copy_title({ title })
 
 /** POST は trim 後 1〜200 文字のタイトルだけを受け付ける。本文は直後の PUT で上書きされるので、初期値だけ収める */
 const postTitle = (title: string) => title.trim().slice(0, 200) || '無題'

@@ -1,4 +1,5 @@
 import type { InviteApp, MemberRoutes } from '@manga/api/rpc'
+import { m } from '@manga/i18n'
 import { type ID, readApiError } from '@manga/schema'
 import { hc } from 'hono/client'
 
@@ -6,11 +7,20 @@ import { hc } from 'hono/client'
 export type ProjectRole = 'owner' | 'editor' | 'commenter' | 'viewer'
 export type MemberRole = Exclude<ProjectRole, 'owner'>
 
-export const ROLE_LABELS: Record<ProjectRole, string> = {
-  owner: 'オーナー',
-  editor: '編集者',
-  commenter: '手描きメモのみ',
-  viewer: '閲覧のみ',
+// getter にしているのは、読むたびにそのときのロケールの文言を返すため
+export const ROLE_LABELS: Readonly<Record<ProjectRole, string>> = {
+  get owner() {
+    return m.web_role_owner()
+  },
+  get editor() {
+    return m.web_role_editor()
+  },
+  get commenter() {
+    return m.web_role_commenter()
+  },
+  get viewer() {
+    return m.web_role_viewer()
+  },
 }
 
 interface Member {
@@ -112,7 +122,7 @@ export function createSharingClient(opts: SharingClientOptions): SharingClient {
   /** クラウドの id。クラウドに無ければ throw */
   const requireCloudId = async (localId: ID) => {
     const cloudId = baseUrl === '' ? null : await opts.cloudId(localId)
-    if (cloudId === null) throw new Error('このプロジェクトはまだクラウドにありません')
+    if (cloudId === null) throw new Error(m.web_sharing_not_in_cloud())
     return cloudId
   }
 
@@ -180,8 +190,8 @@ export function createSharingClient(opts: SharingClientOptions): SharingClient {
     },
     async acceptInvite(token) {
       const res = await invites[':token'].accept.$post({ param: { token: param(token) } })
-      if (res.status === 403) throw new Error('この招待は別のメールアドレス宛てです')
-      if (res.status === 404) throw new Error('招待が見つからないか、期限が切れています')
+      if (res.status === 403) throw new Error(m.web_sharing_invite_email_mismatch())
+      if (res.status === 404) throw new Error(m.web_sharing_invite_not_found())
       await expectOk(res, 'POST accept invite')
       const { projectId, role } = await res.json()
       // 招待で開くプロジェクトはクラウドの id のまま一覧に並ぶので、ローカルの id もクラウドの id になる

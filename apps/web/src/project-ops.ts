@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import {
   type Character,
   createLayoutTemplate,
@@ -42,21 +43,27 @@ export function pagePatch(project: Project, pageId: ID, patch: Patch): Patch {
   return patch.map((op) => ({ ...op, path: `${prefix}${op.path}` }))
 }
 
-type ArtStatus = '未生成' | '一部' | '全部'
+type ArtStatus = 'none' | 'partial' | 'all'
 
-/** ページ内のコマのうち、現在の絵が選ばれているものの割合で 3 段階に分ける。コマが無いページは未生成 */
+/** ページ内のコマのうち、現在の絵が選ばれているものの割合で 3 段階に分ける。コマが無いページは none */
 export function artStatus(page: Page): ArtStatus {
   const done = page.panels.filter((panel) => panel.artId !== undefined).length
-  if (done === 0) return '未生成'
-  if (done === page.panels.length) return '全部'
-  return '一部'
+  if (done === 0) return 'none'
+  if (done === page.panels.length) return 'all'
+  return 'partial'
 }
 
-const PAGE_TEMPLATES: readonly { value: PageTemplate; label: string }[] = [
-  { value: '2rows', label: '2 段' },
-  { value: '3rows', label: '3 段' },
-  { value: '4rows', label: '4 段' },
-  { value: 'blank', label: '白紙' },
+export const ART_STATUS_LABELS: Record<ArtStatus, () => string> = {
+  none: () => m.web_art_status_none(),
+  partial: () => m.web_art_status_partial(),
+  all: () => m.web_art_status_all(),
+}
+
+const PAGE_TEMPLATES: readonly { value: PageTemplate; label: () => string }[] = [
+  { value: '2rows', label: () => m.web_page_template_2rows() },
+  { value: '3rows', label: () => m.web_page_template_3rows() },
+  { value: '4rows', label: () => m.web_page_template_4rows() },
+  { value: 'blank', label: () => m.web_page_template_blank() },
 ]
 
 /**
@@ -67,7 +74,7 @@ export function templateOptions(
   project: Pick<Project, 'layoutTemplates'>,
 ): { value: string; label: string; registered: boolean }[] {
   return [
-    ...PAGE_TEMPLATES.map((t) => ({ ...t, registered: false })),
+    ...PAGE_TEMPLATES.map((t) => ({ value: t.value, label: t.label(), registered: false })),
     ...(project.layoutTemplates ?? []).map((t) => ({
       value: t.id,
       label: t.name,
@@ -84,7 +91,7 @@ export function resolveTemplate(
   const builtIn = PAGE_TEMPLATES.find((t) => t.value === value)
   if (builtIn) return builtIn.value
   const registered = project.layoutTemplates?.find((t) => t.id === value)
-  if (!registered) throw new Error('テンプレートが見つかりません。選び直してください')
+  if (!registered) throw new Error(m.web_template_not_found())
   return registered
 }
 
@@ -96,8 +103,8 @@ export function addLayoutTemplatePatch(
 ): { patch: Patch; template: LayoutTemplate } {
   const found = findPage(project, pageId)
   if (!found) throw new Error(`page ${pageId} is not in project ${project.id}`)
-  if (found.page.panels.length === 0) throw new Error('コマが無いページは登録できません')
-  if (!name.trim()) throw new Error('名前を入れてください')
+  if (found.page.panels.length === 0) throw new Error(m.web_template_no_panels())
+  if (!name.trim()) throw new Error(m.web_name_required())
   const template = createLayoutTemplate(found.page, name)
   // 登録が無いプロジェクトは layoutTemplates を持たないので、配列ごと足す
   const patch: Patch = project.layoutTemplates
@@ -121,7 +128,7 @@ export function removeLayoutTemplatePatch(project: Project, templateId: ID): Pat
 
 const newEpisode = (project: Project, pages: Page[] = []): Episode => ({
   id: newId(),
-  title: `第${project.episodes.length + 1}話`,
+  title: m.web_episode_default_title({ number: project.episodes.length + 1 }),
   pages,
 })
 
@@ -134,9 +141,9 @@ export function addEpisodePatch(project: Project): { patch: Patch; episode: Epis
 /** 前後の空白を落として話の名前を置き換える。空の名前は throw し、変わらなければ空の patch */
 export function renameEpisodePatch(project: Project, episodeId: ID, title: string): Patch {
   const index = project.episodes.findIndex((e) => e.id === episodeId)
-  if (index < 0) throw new Error(`エピソードが見つかりません: ${episodeId}`)
+  if (index < 0) throw new Error(m.web_episode_not_found_id({ id: episodeId }))
   const next = title.trim()
-  if (!next) throw new Error('名前を入れてください')
+  if (!next) throw new Error(m.web_name_required())
   if (next === project.episodes[index]?.title) return []
   return [{ op: 'replace', path: `/episodes/${index}/title`, value: next }]
 }
@@ -174,7 +181,7 @@ export function appendPagesPatch(project: Project, pages: Page[], episodeId?: ID
     episodeId === undefined
       ? project.episodes.length - 1
       : project.episodes.findIndex((e) => e.id === episodeId)
-  if (index < 0) throw new Error(`エピソードが見つかりません: ${episodeId}`)
+  if (index < 0) throw new Error(m.web_episode_not_found_id({ id: String(episodeId) }))
   return pages.map((page) => ({
     op: 'add' as const,
     path: `/episodes/${index}/pages/-`,
@@ -219,8 +226,8 @@ function normalize(fields: CharacterFields): CharacterFields {
 }
 
 function validate(fields: CharacterFields): void {
-  if (!fields.name) throw new Error('名前を入れてください')
-  if (!fields.shortName) throw new Error('略称を入れてください')
+  if (!fields.name) throw new Error(m.web_name_required())
+  if (!fields.shortName) throw new Error(m.web_short_name_required())
 }
 
 export function addCharacterPatch(fields: CharacterFields): { patch: Patch; character: Character } {
@@ -252,9 +259,9 @@ export function removeCharacterPatch(project: Project, id: ID): Patch {
   const index = project.characters.findIndex((c) => c.id === id)
   if (index < 0) return []
   const usage = characterUsage(project, id)
-  if (usage > 0) throw new Error(`${usage} コマで使われているため削除できません`)
+  if (usage > 0) throw new Error(m.web_character_used_in_panels({ count: usage }))
   const pages = pageCastUsage(project, id)
-  if (pages > 0) throw new Error(`${pages} ページの登場キャラに入っているため削除できません`)
+  if (pages > 0) throw new Error(m.web_character_used_in_cast({ count: pages }))
   return [{ op: 'remove', path: `/characters/${index}` }]
 }
 
@@ -285,8 +292,8 @@ if (import.meta.vitest) {
 
   test('artStatus', () => {
     const page = firstPage()
-    expect(artStatus(page)).toBe('未生成')
-    expect(artStatus({ ...page, panels: [] })).toBe('未生成')
+    expect(artStatus(page)).toBe('none')
+    expect(artStatus({ ...page, panels: [] })).toBe('none')
     const [first, ...rest] = page.panels
     if (!first) throw new Error('fixture に panel がない')
     const art = {
@@ -298,13 +305,13 @@ if (import.meta.vitest) {
     }
     expect(
       artStatus({ ...page, panels: [{ ...first, arts: [art], artId: art.id }, ...rest] }),
-    ).toBe('一部')
+    ).toBe('partial')
     expect(
       artStatus({
         ...page,
         panels: page.panels.map((p) => ({ ...p, arts: [art], artId: art.id })),
       }),
-    ).toBe('全部')
+    ).toBe('all')
   })
 
   describe('pages', () => {

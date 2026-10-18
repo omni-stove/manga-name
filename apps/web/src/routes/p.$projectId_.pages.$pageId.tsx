@@ -7,6 +7,7 @@ import {
   type Selection,
   type Tool,
 } from '@manga/editor-canvas'
+import { m } from '@manga/i18n'
 import {
   addCastPatch,
   BubbleInspector,
@@ -101,26 +102,24 @@ export const Route = createFileRoute('/p/$projectId_/pages/$pageId')({
 })
 
 // 数字キーはペンと焦点の種別に使うので、ツールは英字にする
-const TOOLS: readonly SegmentedOption<Tool>[] = [
-  { value: 'select', label: '選択', shortcut: 'v' },
-  { value: 'panel', label: 'コマ', shortcut: 'p' },
-  { value: 'bubble', label: 'フキダシ', shortcut: 'b' },
-  { value: 'focus', label: '焦点', shortcut: 'f' },
-  { value: 'vector', label: 'ベクトル', shortcut: 'a' },
-  { value: 'scribble', label: '手描き', shortcut: 'd' },
+const toolOptions = (): readonly SegmentedOption<Tool>[] => [
+  { value: 'select', label: m.web_editor_tool_select(), shortcut: 'v' },
+  { value: 'panel', label: m.web_editor_tool_panel(), shortcut: 'p' },
+  { value: 'bubble', label: m.web_editor_tool_bubble(), shortcut: 'b' },
+  { value: 'focus', label: m.web_editor_tool_focus(), shortcut: 'f' },
+  { value: 'vector', label: m.web_editor_tool_vector(), shortcut: 'a' },
+  { value: 'scribble', label: m.web_editor_tool_scribble(), shortcut: 'd' },
 ]
 
-const SCRIBBLE_TOOLS: readonly SegmentedOption<ScribbleTool>[] = [
-  { value: 'ink', label: '黒', shortcut: '1' },
-  { value: 'red', label: '赤', shortcut: '2' },
-  { value: 'blue', label: '青', shortcut: '3' },
-  { value: 'eraser', label: '消しゴム', shortcut: '4' },
+const scribbleToolOptions = (): readonly SegmentedOption<ScribbleTool>[] => [
+  { value: 'ink', label: m.web_editor_pen_ink(), shortcut: '1' },
+  { value: 'red', label: m.web_editor_pen_red(), shortcut: '2' },
+  { value: 'blue', label: m.web_editor_pen_blue(), shortcut: '3' },
+  { value: 'eraser', label: m.web_editor_pen_eraser(), shortcut: '4' },
 ]
 
-const FOCUS_KIND_OPTIONS: readonly SegmentedOption<FocusKind>[] = FOCUS_KINDS.map((k, i) => ({
-  ...k,
-  shortcut: String(i + 1),
-}))
+const focusKindOptions = (): readonly SegmentedOption<FocusKind>[] =>
+  FOCUS_KINDS.map((k, i) => ({ value: k.value, label: k.label, shortcut: String(i + 1) }))
 
 const PREV_PAGE_KEY = '['
 const NEXT_PAGE_KEY = ']'
@@ -140,13 +139,15 @@ function shortcutsOf<T extends string>(
 // そのため診断レイヤー、読み順と焦点の集計、診断の問題、AI に相談を出さない。生成プロンプトのヒントは残す
 const GAZE_EVALUATION = false
 
-const LAYERS: readonly { key: keyof Layers; label: string }[] = [
-  { key: 'reference', label: '参考' },
-  { key: 'art', label: '絵' },
-  { key: 'scribble', label: '手描き' },
-  { key: 'hints', label: 'ヒント' },
-  { key: 'frames', label: '枠線' },
-  ...(GAZE_EVALUATION ? [{ key: 'diagnosis' as const, label: '診断' }] : []),
+const layerOptions = (): readonly { key: keyof Layers; label: string }[] => [
+  { key: 'reference', label: m.web_editor_layer_reference() },
+  { key: 'art', label: m.web_editor_layer_art() },
+  { key: 'scribble', label: m.web_editor_layer_scribble() },
+  { key: 'hints', label: m.web_editor_layer_hints() },
+  { key: 'frames', label: m.web_editor_layer_frames() },
+  ...(GAZE_EVALUATION
+    ? [{ key: 'diagnosis' as const, label: m.web_editor_layer_diagnosis() }]
+    : []),
 ]
 
 const ALL_LAYERS: Layers = {
@@ -214,8 +215,10 @@ function Editor() {
   const canEdit = role === 'owner' || role === 'editor'
   // commenter は手描きメモだけ書けるので、選択と手描き以外のツールを出さない
   const tools = canEdit
-    ? TOOLS
-    : TOOLS.filter((t) => t.value === 'select' || (role === 'commenter' && t.value === 'scribble'))
+    ? toolOptions()
+    : toolOptions().filter(
+        (t) => t.value === 'select' || (role === 'commenter' && t.value === 'scribble'),
+      )
   const [tool, setTool] = useState<Tool>('select')
   const [scribbleTool, setScribbleTool] = useState<ScribbleTool>('ink')
   const [focusKind, setFocusKind] = useState<FocusKind>('face')
@@ -229,17 +232,18 @@ function Editor() {
   const canRedo = useStore(store.state, (s) => s.canRedo)
   useUndoShortcuts(store)
   const navigate = useNavigate()
+  const scribbleTools = scribbleToolOptions()
   const importReference = (file: Blob) => {
     toReferenceImage(file)
       .then((blob) => library.putAsset(projectId, blob, `reference-${pageId}`))
       .then(
         (ref) =>
-          apply('参考画像を読み込み', (p) => {
+          apply(m.web_editor_history_import_reference(), (p) => {
             const current = findPage(p, pageId)
-            if (!current) throw new Error('ページがもうありません')
+            if (!current) throw new Error(m.web_common_page_gone())
             return pagePatch(p, pageId, referencePatch(current.page, ref))
           }),
-        (err) => toasts.push(`参考画像を読み込めません: ${errorMessage(err)}`),
+        (err) => toasts.push(m.web_editor_reference_import_failed({ reason: errorMessage(err) })),
       )
   }
   useReferencePaste(importReference)
@@ -273,8 +277,8 @@ function Editor() {
     void navigate({ to: '/p/$projectId/pages/$pageId', params: { projectId, pageId: id } })
   useKeyShortcuts({
     ...shortcutsOf(tools, setTool),
-    ...(tool === 'scribble' ? shortcutsOf(SCRIBBLE_TOOLS, setScribbleTool) : {}),
-    ...(tool === 'focus' ? shortcutsOf(FOCUS_KIND_OPTIONS, setFocusKind) : {}),
+    ...(tool === 'scribble' ? shortcutsOf(scribbleTools, setScribbleTool) : {}),
+    ...(tool === 'focus' ? shortcutsOf(focusKindOptions(), setFocusKind) : {}),
     [PREV_PAGE_KEY]: () => prevPage && openPage(prevPage.id),
     [NEXT_PAGE_KEY]: () => nextPage && openPage(nextPage.id),
   })
@@ -323,7 +327,7 @@ function Editor() {
         { name: ext.toUpperCase(), extensions: [ext] },
       ])
     } catch (e) {
-      toasts.push(`書き出しに失敗しました: ${errorMessage(e)}`)
+      toasts.push(m.web_page_export_failed({ reason: errorMessage(e) }))
     } finally {
       setExporting('closed')
     }
@@ -334,22 +338,22 @@ function Editor() {
       new Blob([exportProjectJson(project)], { type: 'application/json' }),
       projectFileName(project),
       PROJECT_FILE_FILTERS,
-    ).catch((e: unknown) => toasts.push(`書き出せません: ${errorMessage(e)}`))
+    ).catch((e: unknown) => toasts.push(m.web_project_export_failed({ reason: errorMessage(e) })))
   }
   return (
     <YStack as="section" gap={0} className={styles.editor}>
       <XStack as="header" gap={20} rowGap={12} wrap className={styles.toolbar}>
         <Typography as="span" variant="label" tone="muted">
-          {project.title || '無題'}
+          {project.title || m.web_common_untitled()}
         </Typography>
         <Link to="/p/$projectId/episodes/$episodeId" params={{ projectId, episodeId: episode.id }}>
           {episode.title}
         </Link>
-        <XStack as="span" gap={2} role="group" aria-label="ページの移動">
+        <XStack as="span" gap={2} role="group" aria-label={m.web_editor_page_navigation()}>
           <IconButton
             size="small"
-            label="前のページ"
-            title={`前のページ（${PREV_PAGE_KEY}）`}
+            label={m.web_editor_prev_page()}
+            title={m.web_editor_prev_page_title({ key: PREV_PAGE_KEY })}
             aria-keyshortcuts={PREV_PAGE_KEY}
             disabled={!prevPage}
             onClick={() => prevPage && openPage(prevPage.id)}
@@ -359,7 +363,7 @@ function Editor() {
             </Icon>
           </IconButton>
           <Select
-            label="ページ"
+            label={m.web_editor_page()}
             hideLabel
             value={pageId}
             className={styles.pageSelect}
@@ -367,14 +371,14 @@ function Editor() {
           >
             {episode.pages.map((p, i) => (
               <option key={p.id} value={p.id}>
-                {i + 1} / {episode.pages.length} ページ
+                {m.web_editor_page_option({ index: i + 1, total: episode.pages.length })}
               </option>
             ))}
           </Select>
           <IconButton
             size="small"
-            label="次のページ"
-            title={`次のページ（${NEXT_PAGE_KEY}）`}
+            label={m.web_editor_next_page()}
+            title={m.web_editor_next_page_title({ key: NEXT_PAGE_KEY })}
             aria-keyshortcuts={NEXT_PAGE_KEY}
             disabled={!nextPage}
             onClick={() => nextPage && openPage(nextPage.id)}
@@ -392,32 +396,32 @@ function Editor() {
         )}
         <HistoryButtons store={store} />
         <SegmentedControl
-          label="ツール"
+          label={m.web_editor_tools()}
           value={tool}
           options={tools}
           onChange={(t) => setTool(t)}
         />
         {tool === 'scribble' && (
           <SegmentedControl
-            label="ペン"
+            label={m.web_editor_pen()}
             value={scribbleTool}
-            options={SCRIBBLE_TOOLS}
+            options={scribbleTools}
             onChange={(t) => setScribbleTool(t)}
           />
         )}
         {tool === 'focus' && (
           <SegmentedControl
-            label="焦点の種別"
+            label={m.web_editor_focus_kind()}
             value={focusKind}
-            options={FOCUS_KIND_OPTIONS}
+            options={focusKindOptions()}
             onChange={(k) => setFocusKind(k)}
           />
         )}
-        <XStack role="group" aria-label="レイヤー">
+        <XStack role="group" aria-label={m.web_editor_layers()}>
           <Typography as="span" variant="label" tone="muted" aria-hidden>
-            レイヤー
+            {m.web_editor_layers()}
           </Typography>
-          {LAYERS.map((l) => (
+          {layerOptions().map((l) => (
             <Checkbox
               key={l.key}
               label={l.label}
@@ -430,19 +434,23 @@ function Editor() {
           <SaveStatusIndicator store={store} />
           {typeof exporting === 'object' ? (
             <XStack as="span" className={styles.exportProgress} role="status">
-              書き出し中… {exporting.done} / {exporting.total}
-              <progress aria-label="書き出しの進捗" value={exporting.done} max={exporting.total} />
+              {m.web_editor_exporting({ done: exporting.done, total: exporting.total })}
+              <progress
+                aria-label={m.web_editor_export_progress()}
+                value={exporting.done}
+                max={exporting.total}
+              />
             </XStack>
           ) : (
             <Button size="small" variant="primary" onClick={() => setExporting('dialog')}>
-              書き出し
+              {m.web_editor_export()}
             </Button>
           )}
         </XStack>
       </XStack>
       {menu && (
         <ContextMenu
-          label="ページのメニュー"
+          label={m.web_editor_page_menu()}
           x={menu.x}
           y={menu.y}
           onClose={() => setMenu(null)}
@@ -460,12 +468,12 @@ function Editor() {
               onSelect: () => store.redo(),
             },
             'separator',
-            { label: '全体を表示', onSelect: menu.fit },
+            { label: m.web_editor_menu_fit(), onSelect: menu.fit },
             ...(canEdit
               ? [
-                  { label: '参考画像を読み込む…', onSelect: referencePicker.open },
+                  { label: m.web_editor_menu_import_reference(), onSelect: referencePicker.open },
                   {
-                    label: 'コマ割りをテンプレートに登録…',
+                    label: m.web_editor_menu_register_layout(),
                     disabled: page.panels.length === 0,
                     onSelect: () => setRegisteringLayout(true),
                   },
@@ -473,13 +481,13 @@ function Editor() {
               : []),
             'separator',
             {
-              label: '前のページ',
+              label: m.web_editor_prev_page(),
               shortcut: PREV_PAGE_KEY,
               disabled: !prevPage,
               onSelect: () => prevPage && openPage(prevPage.id),
             },
             {
-              label: '次のページ',
+              label: m.web_editor_next_page(),
               shortcut: NEXT_PAGE_KEY,
               disabled: !nextPage,
               onSelect: () => nextPage && openPage(nextPage.id),
@@ -513,7 +521,7 @@ function Editor() {
         <div
           className={styles.canvas}
           role="application"
-          aria-label="キャンバス"
+          aria-label={m.web_editor_canvas()}
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes('Files')) e.preventDefault()
           }}
@@ -536,7 +544,9 @@ function Editor() {
             focusKind={focusKind}
             layers={layers}
             generating={generating}
-            onChange={(patch) => apply('キャンバスの編集', (p) => pagePatch(p, pageId, patch))}
+            onChange={(patch) =>
+              apply(m.web_editor_history_edit_canvas(), (p) => pagePatch(p, pageId, patch))
+            }
             onSelect={setSelection}
             onGenerate={generate}
             resolveAsset={resolveAsset}
@@ -544,7 +554,7 @@ function Editor() {
           />
         </div>
         <Sidebar
-          title="インスペクタ"
+          title={m.web_editor_inspector()}
           side="right"
           expanded={inspectorExpanded}
           onExpandedChange={setInspectorExpanded}
@@ -552,7 +562,7 @@ function Editor() {
         >
           <div className={styles.inspector}>
             <details open>
-              <summary>要素（{page.panels.length}）</summary>
+              <summary>{m.web_editor_elements({ count: page.panels.length })}</summary>
               <ElementOutline
                 page={page}
                 selection={selection}
@@ -575,14 +585,16 @@ function Editor() {
                 resolveAsset={resolveAsset}
               />
               <details open={selection === null}>
-                <summary>ページ</summary>
+                <summary>{m.web_editor_page()}</summary>
                 <PageInspector
                   page={page}
                   diagnosis={GAZE_EVALUATION ? (diagnosis ?? undefined) : undefined}
                   generating={
                     pageBatch.running || page.panels.some((panel) => generating.has(panel.id))
                   }
-                  onChange={(patch) => apply('ページを編集', (p) => pagePatch(p, pageId, patch))}
+                  onChange={(patch) =>
+                    apply(m.web_editor_history_edit_page(), (p) => pagePatch(p, pageId, patch))
+                  }
                   onGenerateAll={pageBatch.start}
                   onPickReference={referencePicker.open}
                 />
@@ -594,13 +606,15 @@ function Editor() {
                 characters={project.characters}
                 projectId={projectId}
                 onChange={(patch) =>
-                  apply('ページの登場キャラを変更', (p) => pagePatch(p, pageId, patch))
+                  apply(m.web_editor_history_change_page_cast(), (p) => pagePatch(p, pageId, patch))
                 }
               />
             </fieldset>
             {GAZE_EVALUATION && diagnosis && (
               <details open data-section="issues">
-                <summary>診断の問題（{diagnosis.issues.length}）</summary>
+                <summary>
+                  {m.web_editor_diagnosis_issues({ count: diagnosis.issues.length })}
+                </summary>
                 <IssueList
                   issues={diagnosis.issues}
                   onFocus={(issue) => {
@@ -651,7 +665,8 @@ function ElementOutline({
   })
   const badges = (by: Peer[]) =>
     by.map((peer) => <PeerBadge key={peer.clientId} name={peer.name} color={peer.color} />)
-  if (page.panels.length === 0) return <Typography tone="muted">コマがありません</Typography>
+  if (page.panels.length === 0)
+    return <Typography tone="muted">{m.web_editor_no_panels()}</Typography>
   return (
     <ul className={styles.outline}>
       {[...page.panels]
@@ -666,7 +681,7 @@ function ElementOutline({
                 {...peerProps(by)}
                 onClick={() => onSelect({ kind: 'panel', id: panel.id })}
               >
-                コマ {panel.order}
+                {m.web_editor_outline_panel({ order: panel.order })}
                 {panel.camera && ` [${panel.camera}]`}
               </button>
               {badges(by)}
@@ -685,7 +700,10 @@ function ElementOutline({
                             {...peerProps(byBubble)}
                             onClick={() => onSelect({ kind: 'bubble', id: bubble.id })}
                           >
-                            フキダシ {bubble.order} {bubble.text || '（空）'}
+                            {m.web_editor_outline_bubble({
+                              order: bubble.order,
+                              text: bubble.text || m.web_editor_outline_bubble_empty(),
+                            })}
                           </button>
                           {badges(byBubble)}
                         </li>
@@ -727,15 +745,11 @@ function SelectionInspector({
   resolveAsset(ref: string): Promise<string>
 }) {
   if (selection === null) {
-    return (
-      <Typography tone="muted">
-        キャンバスでコマ、フキダシ、焦点、ベクトルを選ぶと、ここで編集できます
-      </Typography>
-    )
+    return <Typography tone="muted">{m.web_editor_selection_hint()}</Typography>
   }
   if (selection.kind === 'panel') {
     const found = findPanel(page, selection.id)
-    if (!found) return <Typography tone="muted">選んだコマはもうありません</Typography>
+    if (!found) return <Typography tone="muted">{m.web_editor_panel_gone()}</Typography>
     return (
       <PanelInspector
         key={selection.id}
@@ -743,14 +757,20 @@ function SelectionInspector({
         characters={characters}
         diagnosis={diagnosis?.panels.find((d) => d.panelId === selection.id)}
         generating={generating.has(selection.id)}
-        onChange={(patch) => apply('コマを編集', (p) => panelPatch(p, pageId, selection.id, patch))}
+        onChange={(patch) =>
+          apply(m.web_editor_history_edit_panel(), (p) =>
+            panelPatch(p, pageId, selection.id, patch),
+          )
+        }
         onGenerate={(instruction) => generate(selection.id, instruction)}
         useReference={referenceToggle.uses(selection.id)}
         onUseReferenceChange={(use) => referenceToggle.set(selection.id, use)}
         useHint={hintToggle.uses(selection.id)}
         onUseHintChange={(use) => hintToggle.set(selection.id, use)}
         onRemoveArt={(artId) =>
-          apply('絵を削除', (p) => removeArtPatch(p, pageId, selection.id, artId))
+          apply(m.web_editor_history_remove_art(), (p) =>
+            removeArtPatch(p, pageId, selection.id, artId),
+          )
         }
         resolveAsset={resolveAsset}
       />
@@ -758,21 +778,23 @@ function SelectionInspector({
   }
   if (selection.kind === 'bubble') {
     const found = findBubble(page, selection.id)
-    if (!found) return <Typography tone="muted">選んだフキダシはもうありません</Typography>
+    if (!found) return <Typography tone="muted">{m.web_editor_bubble_gone()}</Typography>
     return (
       <BubbleInspector
         key={selection.id}
         bubble={found.bubble}
         characters={characters}
         onChange={(patch) =>
-          apply('フキダシを編集', (p) => bubblePatch(p, pageId, selection.id, patch))
+          apply(m.web_editor_history_edit_bubble(), (p) =>
+            bubblePatch(p, pageId, selection.id, patch),
+          )
         }
       />
     )
   }
   if (selection.kind === 'focus') {
     const found = findFocus(page, selection.id)
-    if (!found) return <Typography tone="muted">選んだ焦点はもうありません</Typography>
+    if (!found) return <Typography tone="muted">{m.web_editor_focus_gone()}</Typography>
     return (
       <FocusInspector
         key={selection.id}
@@ -785,25 +807,36 @@ function SelectionInspector({
                 ?.focus.find((f) => f.focusPointId === selection.id)
             : undefined
         }
-        onChange={(patch) => apply('焦点を編集', (p) => focusPatch(p, pageId, selection.id, patch))}
+        onChange={(patch) =>
+          apply(m.web_editor_history_edit_focus(), (p) =>
+            focusPatch(p, pageId, selection.id, patch),
+          )
+        }
       />
     )
   }
   const found = findVector(page, selection.id)
-  if (!found) return <Typography tone="muted">選んだベクトルはもうありません</Typography>
+  if (!found) return <Typography tone="muted">{m.web_editor_vector_gone()}</Typography>
   return (
     <VectorInspector
       key={selection.id}
       vector={found.vector}
       targets={[
-        ...found.panel.focusPoints.map((f) => ({ value: f.id, label: `焦点 ${f.label || f.id}` })),
+        ...found.panel.focusPoints.map((f) => ({
+          value: f.id,
+          label: m.web_editor_vector_target_focus({ label: f.label || f.id }),
+        })),
         ...found.panel.bubbles.map((b) => ({
           value: b.id,
-          label: `フキダシ ${b.order} ${b.text.split('\n')[0] ?? ''}`.trim(),
+          label: m
+            .web_editor_vector_target_bubble({ order: b.order, text: b.text.split('\n')[0] ?? '' })
+            .trim(),
         })),
       ]}
       onChange={(patch) =>
-        apply('ベクトルを編集', (p) => vectorPatch(p, pageId, selection.id, patch))
+        apply(m.web_editor_history_edit_vector(), (p) =>
+          vectorPatch(p, pageId, selection.id, patch),
+        )
       }
     />
   )
@@ -857,22 +890,24 @@ function PageCast({
   const candidates = characters.filter((c) => !ids.includes(c.id))
   return (
     <details data-section="page-cast">
-      <summary>このページの登場キャラ（{cast.length}）</summary>
+      <summary>{m.web_page_cast_title({ count: cast.length })}</summary>
       {cast.length === 0 ? (
-        <Typography tone="muted">ページかコマのインスペクタで登場キャラを追加できます</Typography>
+        <Typography tone="muted">{m.web_page_cast_empty()}</Typography>
       ) : (
         <YStack as="ul" gap={2} className={styles.pageCast}>
           {cast.map((c) => (
             <XStack as="li" key={c.id} gap={6} data-cast-id={c.id}>
               <b>{c.name}</b>
               <Typography as="small" variant="caption" tone="muted">
-                {panelIds.filter((id) => id === c.id).length} コマ
-                {c.referenceRef === undefined && '・参照画像なし'}
+                {m.web_page_cast_panel_count({
+                  count: panelIds.filter((id) => id === c.id).length,
+                })}
+                {c.referenceRef === undefined && m.web_page_cast_no_reference()}
               </Typography>
               {page.cast?.includes(c.id) && (
                 <IconButton
                   size="small"
-                  label={`${c.name} をページの登場キャラから外す`}
+                  label={m.web_page_cast_remove({ name: c.name })}
                   onClick={() => onChange(removeCastPatch(page.cast, c.id))}
                 >
                   ×
@@ -884,14 +919,14 @@ function PageCast({
       )}
       {candidates.length > 0 && (
         <Select
-          label="ページの登場キャラを追加"
+          label={m.web_page_cast_add()}
           hideLabel
           value=""
           onChange={(e) => {
             if (e.target.value) onChange(addCastPatch(page.cast, e.target.value))
           }}
         >
-          <option value="">キャラを追加…</option>
+          <option value="">{m.web_page_cast_add_option()}</option>
           {candidates.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -901,9 +936,9 @@ function PageCast({
       )}
       <Typography tone="muted">
         <Link to="/p/$projectId/characters" params={{ projectId }}>
-          キャラクター一覧
+          {m.web_page_cast_character_list()}
         </Link>
-        で設定と参照画像を編集できます
+        {m.web_page_cast_edit_hint()}
       </Typography>
     </details>
   )
@@ -913,16 +948,16 @@ function PageNotFound() {
   const { projectId, pageId } = useParams({ strict: false })
   return (
     <YStack as="section" gap={16} align="start">
-      <Typography variant="title">ページが見つかりません</Typography>
+      <Typography variant="title">{m.web_page_not_found()}</Typography>
       <Typography>
         {projectId} / {pageId}
       </Typography>
       {projectId ? (
         <Link to="/p/$projectId" params={{ projectId }}>
-          エピソード一覧へ
+          {m.web_page_not_found_to_episodes()}
         </Link>
       ) : (
-        <Link to="/">プロジェクト一覧へ</Link>
+        <Link to="/">{m.web_page_not_found_to_projects()}</Link>
       )}
     </YStack>
   )

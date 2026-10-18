@@ -1,4 +1,5 @@
 import { SignInRequiredError } from '@manga/ai'
+import { m } from '@manga/i18n'
 import { Button, type ButtonProps, Typography, XStack } from '@manga/ui'
 import { errorMessage } from './route-error'
 import { signInOrNotify } from './toasts'
@@ -15,7 +16,7 @@ export function SignInButton({
   const { signIn } = useAuth()
   return (
     <Button {...props} onClick={() => signInOrNotify(() => signIn({ inviteToken }))}>
-      ログイン
+      {m.web_sign_in()}
     </Button>
   )
 }
@@ -37,7 +38,7 @@ export function FailureAlert({
   return (
     <XStack wrap role="alert">
       <Typography as="span" tone="alert">
-        {failure}: {errorMessage(error)}
+        {m.web_failure_alert({ failure, reason: errorMessage(error) })}
       </Typography>
       {signInButton && needsSignIn(error) && <SignInButton size="small" variant="primary" />}
     </XStack>

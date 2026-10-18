@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import {
   createCloudStorage,
   createIndexedDbYDocStore,
@@ -15,6 +16,7 @@ import { createPanelGeneration } from './generate-panel'
 import { createImageProvider, readApiBaseUrl } from './image-provider'
 import { createLlmProvider } from './llm-provider'
 import { createProjectLibrary } from './project-library'
+import { errorMessage } from './route-error'
 import { createAppRouter } from './router'
 import { createSharingClient } from './sharing'
 import { createTabSync } from './store/tab-sync'
@@ -50,7 +52,13 @@ const local = createStorage(defaultStorageKind(platform))
 const cloud =
   baseUrl === ''
     ? null
-    : createCloudStorage({ baseUrl, local, getToken: auth.getToken, fetch: auth.fetch })
+    : createCloudStorage({
+        baseUrl,
+        local,
+        getToken: auth.getToken,
+        fetch: auth.fetch,
+        onError: (e) => toasts.push(m.web_cloud_save_failed({ reason: errorMessage(e) })),
+      })
 const storage = cloud ?? local
 const sharing = createSharingClient({
   baseUrl,
@@ -64,7 +72,7 @@ const library = createProjectLibrary(storage, {
     collaboration: {
       syncUrl: async (id: string) => `tab-sync:${id}`,
       ydocs: createIndexedDbYDocStore(),
-      userName: 'タブ',
+      userName: m.web_collab_tab_user(),
       createSocket: createTabSync(),
     },
   }),
@@ -93,7 +101,7 @@ auth.subscribe(() => {
 if (platform === 'desktop') {
   import('./desktop/shell')
     .then(({ startDesktopShell }) => startDesktopShell({ router, library }))
-    .catch((e: unknown) => toasts.push(`メニューを作れません: ${String(e)}`))
+    .catch((e: unknown) => toasts.push(m.web_menu_build_failed({ reason: errorMessage(e) })))
 }
 
 // debounce 待ちの変更をタブを閉じる・隠す時点で書く。pagehide だけでは書き込みが終わる前にページが破棄されうる

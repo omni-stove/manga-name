@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { Button, IconButton } from './button'
 import styles from './toast-list.module.css'
 
@@ -34,7 +35,7 @@ export function ToastList({
               {toast.action.label}
             </Button>
           )}
-          <IconButton label="閉じる" size="small" onClick={() => onDismiss(toast.id)}>
+          <IconButton label={m.ui_toast_dismiss()} size="small" onClick={() => onDismiss(toast.id)}>
             ×
           </IconButton>
         </li>

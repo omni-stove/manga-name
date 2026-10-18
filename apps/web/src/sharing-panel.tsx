@@ -1,3 +1,4 @@
+import { getLocale, m } from '@manga/i18n'
 import type { ID } from '@manga/schema'
 import { Button, Input, Select, Typography, XStack, YStack } from '@manga/ui'
 import { Suspense, startTransition, use, useState } from 'react'
@@ -30,7 +31,7 @@ export function SharingPanel({ projectId, sharing }: { projectId: ID; sharing: S
     return next
   }
   return (
-    <Suspense fallback={<Typography tone="muted">参加者を読み込み中…</Typography>}>
+    <Suspense fallback={<Typography tone="muted">{m.web_sharing_loading_members()}</Typography>}>
       <MembersView members={members} reload={reload} projectId={projectId} sharing={sharing} />
     </Suspense>
   )
@@ -66,17 +67,13 @@ function MembersView({
   }
 
   if (members === null) {
-    return (
-      <Typography tone="muted">
-        ログインしてクラウドに保存されると、ほかの人を招待できます。
-      </Typography>
-    )
+    return <Typography tone="muted">{m.web_sharing_sign_in_to_invite()}</Typography>
   }
   const isOwner = members.role === 'owner'
 
   return (
     <YStack gap={12} className={styles.panel}>
-      <Typography>あなたのロール: {ROLE_LABELS[members.role]}</Typography>
+      <Typography>{m.web_sharing_your_role({ role: ROLE_LABELS[members.role] })}</Typography>
       {isOwner && (
         <form
           className={styles.invite}
@@ -93,29 +90,29 @@ function MembersView({
             })
           }}
         >
-          <Input label="メールアドレス" name="email" type="email" required />
-          <Select label="ロール" name="role" defaultValue="editor">
+          <Input label={m.web_sharing_email()} name="email" type="email" required />
+          <Select label={m.web_sharing_role()} name="role" defaultValue="editor">
             <RoleOptions />
           </Select>
           <Button type="submit" variant="primary" disabled={busy}>
-            招待リンクを作る
+            {m.web_sharing_create_invite_link()}
           </Button>
         </form>
       )}
       {link && (
         <XStack as="p" wrap className={styles.link}>
           <Input
-            label="招待リンク"
+            label={m.web_sharing_invite_link()}
             hideLabel
             readOnly
             value={link}
             onFocus={(e) => e.target.select()}
           />
           <Button size="small" onClick={() => void navigator.clipboard.writeText(link)}>
-            コピー
+            {m.web_common_copy()}
           </Button>
           <Typography as="small" variant="caption" tone="muted">
-            このリンクを招待先に渡してください。招待したメールアドレスでログインした人だけが参加できます。
+            {m.web_sharing_invite_link_hint()}
           </Typography>
         </XStack>
       )}
@@ -124,21 +121,21 @@ function MembersView({
           {error}
         </Typography>
       )}
-      <Typography variant="subheading">参加者</Typography>
+      <Typography variant="subheading">{m.web_sharing_members()}</Typography>
       <YStack as="ul" className={styles.list}>
-        {members.members.map((m) => (
-          <XStack as="li" wrap key={m.userId}>
-            <span title={m.userId}>{m.name ?? m.email ?? m.userId}</span>
-            {isOwner && m.role !== 'owner' ? (
+        {members.members.map((member) => (
+          <XStack as="li" wrap key={member.userId}>
+            <span title={member.userId}>{member.name ?? member.email ?? member.userId}</span>
+            {isOwner && member.role !== 'owner' ? (
               <>
                 <Select
-                  label={`${m.email ?? m.userId} のロール`}
+                  label={m.web_sharing_member_role({ member: member.email ?? member.userId })}
                   hideLabel
-                  value={m.role}
+                  value={member.role}
                   disabled={busy}
                   onChange={(e) =>
                     void run(() =>
-                      sharing.setRole(projectId, m.userId, e.target.value as MemberRole),
+                      sharing.setRole(projectId, member.userId, e.target.value as MemberRole),
                     )
                   }
                 >
@@ -148,26 +145,29 @@ function MembersView({
                   size="small"
                   variant="ghost"
                   disabled={busy}
-                  onClick={() => void run(() => sharing.removeMember(projectId, m.userId))}
+                  onClick={() => void run(() => sharing.removeMember(projectId, member.userId))}
                 >
-                  外す
+                  {m.web_sharing_remove_member()}
                 </Button>
               </>
             ) : (
-              <small>{ROLE_LABELS[m.role]}</small>
+              <small>{ROLE_LABELS[member.role]}</small>
             )}
           </XStack>
         ))}
       </YStack>
       {isOwner && members.invites.length > 0 && (
         <>
-          <Typography variant="subheading">未使用の招待</Typography>
+          <Typography variant="subheading">{m.web_sharing_pending_invites()}</Typography>
           <YStack as="ul" className={styles.list}>
             {members.invites.map((invite) => (
               <XStack as="li" wrap key={invite.id}>
                 <span>{invite.email}</span>
                 <small>
-                  {ROLE_LABELS[invite.role]}・{new Date(invite.expiresAt).toLocaleDateString()} まで
+                  {m.web_sharing_pending_invite_detail({
+                    role: ROLE_LABELS[invite.role],
+                    date: new Date(invite.expiresAt).toLocaleDateString(getLocale()),
+                  })}
                 </small>
                 <Button
                   size="small"
@@ -175,7 +175,7 @@ function MembersView({
                   disabled={busy}
                   onClick={() => void run(() => sharing.revokeInvite(projectId, invite.id))}
                 >
-                  取り消す
+                  {m.web_sharing_revoke_invite()}
                 </Button>
               </XStack>
             ))}

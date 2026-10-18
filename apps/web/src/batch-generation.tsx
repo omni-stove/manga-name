@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { ID } from '@manga/schema'
 import { Button, Checkbox, XStack } from '@manga/ui'
 import { useState } from 'react'
@@ -34,14 +35,14 @@ export function BatchOptions({ batch }: { batch: ReturnType<typeof useBatchGener
   return (
     <XStack as="span" wrap>
       <Checkbox
-        label="生成済みも含める"
+        label={m.web_batch_include_generated()}
         checked={batch.includeGenerated}
         disabled={batch.running}
         onChange={(e) => batch.setIncludeGenerated(e.currentTarget.checked)}
       />
       {batch.running && (
         <Button size="small" onClick={batch.cancel}>
-          キャンセル
+          {m.web_common_cancel()}
         </Button>
       )}
     </XStack>

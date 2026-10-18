@@ -373,6 +373,9 @@ importers:
 
   packages/editor-canvas:
     dependencies:
+      '@manga/i18n':
+        specifier: workspace:*
+        version: link:../i18n
       '@manga/schema':
         specifier: workspace:*
         version: link:../schema
@@ -428,6 +431,9 @@ importers:
 
   packages/inspector:
     dependencies:
+      '@manga/i18n':
+        specifier: workspace:*
+        version: link:../i18n
       '@manga/schema':
         specifier: workspace:*
         version: link:../schema
@@ -503,6 +509,9 @@ importers:
 
   packages/storage:
     dependencies:
+      '@manga/i18n':
+        specifier: workspace:*
+        version: link:../i18n
       '@manga/schema':
         specifier: workspace:*
         version: link:../schema
@@ -527,6 +536,10 @@ importers:
         version: 5.0.4(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(@vitest/browser-playwright@5.0.4)(@vitest/coverage-istanbul@5.0.4)(@vitest/coverage-v8@5.0.4)(@vitest/ui@5.0.4)(jsdom@27.4.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(msw@2.15.0(@types/node@26.6.5)(typescript@7.0.2))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/ui:
+    dependencies:
+      '@manga/i18n':
+        specifier: workspace:*
+        version: link:../i18n
     devDependencies:
       '@storybook/addon-vitest':
         specifier: ^10.6.2

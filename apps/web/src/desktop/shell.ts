@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { ID, Project } from '@manga/schema'
 import { Menu, type MenuItemOptions, type PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
 import { open, save } from '@tauri-apps/plugin-dialog'
@@ -42,8 +43,8 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
   const isMac = navigator.userAgent.includes('Mac')
   let recent = await loadRecentFiles()
 
-  const run = (failure: string, task: () => Promise<void>) => () => {
-    task().catch((e: unknown) => toasts.push(`${failure}: ${errorMessage(e)}`))
+  const run = (failure: (reason: string) => string, task: () => Promise<void>) => () => {
+    task().catch((e: unknown) => toasts.push(failure(errorMessage(e))))
   }
 
   const currentProjectId = (): ID | undefined => {
@@ -60,7 +61,9 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
       return
     }
     // Undo はページの編集画面だけのもの。他の画面では削除を確認ダイアログで確かめる
-    const page = router.state.matches.find((m) => m.routeId === '/p/$projectId_/pages/$pageId')
+    const page = router.state.matches.find(
+      (match) => match.routeId === '/p/$projectId_/pages/$pageId',
+    )
     const id = (page?.params as { projectId?: ID } | undefined)?.projectId
     const store = id ? await library.open(id) : undefined
     if (name === 'undo') store?.undo()
@@ -119,20 +122,26 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
   }
 
   const recentItems = (): MenuEntry[] => {
-    if (recent.length === 0) return [{ text: 'なし', enabled: false }]
+    if (recent.length === 0) return [{ text: m.web_menu_recent_none(), enabled: false }]
     return [
       ...recent.map((f) => ({
         text: recentLabel(f.path),
-        action: run('開けません', () => openPath(f.path)),
+        action: run(
+          (reason) => m.web_menu_open_failed({ reason }),
+          () => openPath(f.path),
+        ),
       })),
       separator,
       {
-        text: '履歴を消す',
-        action: run('履歴を消せません', async () => {
-          recent = []
-          await saveRecentFiles(recent)
-          await rebuildMenu()
-        }),
+        text: m.web_menu_clear_recent(),
+        action: run(
+          (reason) => m.web_menu_clear_recent_failed({ reason }),
+          async () => {
+            recent = []
+            await saveRecentFiles(recent)
+            await rebuildMenu()
+          },
+        ),
       },
     ]
   }
@@ -167,37 +176,47 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
             ]
           : []),
         {
-          text: 'ファイル',
+          text: m.web_menu_file(),
           items: [
-            { text: '開く…', accelerator: 'CmdOrCtrl+O', action: run('開けません', openDialog) },
-            { text: '最近開いたファイル', items: recentItems() },
+            {
+              text: m.web_menu_open(),
+              accelerator: 'CmdOrCtrl+O',
+              action: run((reason) => m.web_menu_open_failed({ reason }), openDialog),
+            },
+            { text: m.web_menu_recent(), items: recentItems() },
             separator,
             {
-              text: '保存',
+              text: m.web_common_save(),
               accelerator: 'CmdOrCtrl+S',
-              action: run('保存できません', saveCurrent),
+              action: run((reason) => m.web_menu_save_failed({ reason }), saveCurrent),
             },
             {
-              text: '名前を付けて保存…',
+              text: m.web_menu_save_as(),
               accelerator: 'CmdOrCtrl+Shift+S',
-              action: run('保存できません', saveAs),
+              action: run((reason) => m.web_menu_save_failed({ reason }), saveAs),
             },
             separator,
             isMac ? predefined('CloseWindow') : predefined('Quit'),
           ],
         },
         {
-          text: '編集',
+          text: m.web_menu_edit(),
           items: [
             {
-              text: '取り消す',
+              text: m.web_menu_undo(),
               accelerator: 'CmdOrCtrl+Z',
-              action: run('取り消せません', () => command('undo')),
+              action: run(
+                (reason) => m.web_menu_undo_failed({ reason }),
+                () => command('undo'),
+              ),
             },
             {
-              text: 'やり直す',
+              text: m.web_menu_redo(),
               accelerator: isMac ? 'CmdOrCtrl+Shift+Z' : 'CmdOrCtrl+Y',
-              action: run('やり直せません', () => command('redo')),
+              action: run(
+                (reason) => m.web_menu_redo_failed({ reason }),
+                () => command('redo'),
+              ),
             },
             separator,
             predefined('Cut'),
@@ -207,10 +226,10 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
           ],
         },
         {
-          text: '表示',
+          text: m.web_menu_view(),
           items: [
-            { text: 'プロジェクト一覧', action: () => void router.navigate({ to: '/' }) },
-            { text: 'アプリ設定', accelerator: 'CmdOrCtrl+,', action: openSettings },
+            { text: m.web_project_list(), action: () => void router.navigate({ to: '/' }) },
+            { text: m.web_app_settings(), accelerator: 'CmdOrCtrl+,', action: openSettings },
             ...(isMac ? [separator, predefined('Fullscreen'), predefined('Minimize')] : []),
           ],
         },

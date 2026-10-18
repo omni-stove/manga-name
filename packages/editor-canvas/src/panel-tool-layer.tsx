@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Panel } from '@manga/schema'
 import { panelBox, panelPolygon, polygonPoints } from './hit-test'
 import { FONT_FAMILY, GUIDE } from './page-layer'
@@ -102,10 +103,10 @@ export function PanelToolLayer({
   // 押下中に文字が変わっても後ろのボタンが動かないよう、幅は長い方の文字に合わせる。
   // 1 行に収まらなければ上の行へ折り返す
   const buttons = [
-    { labels: ['左右に分割'] },
-    { labels: ['上下に分割'] },
-    { labels: ['線で分割', '線を引いて分割'] },
-    { labels: ['結合', '結合先を選ぶ'] },
+    { labels: [m.editor_canvas_panel_split_vertical()] },
+    { labels: [m.editor_canvas_panel_split_horizontal()] },
+    { labels: [m.editor_canvas_panel_cut(), m.editor_canvas_panel_cutting()] },
+    { labels: [m.editor_canvas_panel_merge(), m.editor_canvas_panel_merging()] },
   ].reduce<Slot[]>((acc, { labels }) => {
     const w = buttonWidth(labels)
     const prev = acc.at(-1)
@@ -144,28 +145,34 @@ export function PanelToolLayer({
       ))}
       <ToolButton
         {...vertical}
-        label="左右に分割"
+        label={m.editor_canvas_panel_split_vertical()}
+        ariaLabel={m.editor_canvas_panel_split_vertical_aria()}
         data={{ 'data-split': 'vertical' }}
         onClick={() => onSplit('vertical')}
       />
       <ToolButton
         {...horizontal}
-        label="上下に分割"
+        label={m.editor_canvas_panel_split_horizontal()}
+        ariaLabel={m.editor_canvas_panel_split_horizontal_aria()}
         data={{ 'data-split': 'horizontal' }}
         onClick={() => onSplit('horizontal')}
       />
       <ToolButton
         {...cut}
-        label={cutting ? '線を引いて分割' : '線で分割'}
-        ariaLabel={cutting ? '線で分割するのをやめる' : 'コマを線で分割'}
+        label={cutting ? m.editor_canvas_panel_cutting() : m.editor_canvas_panel_cut()}
+        ariaLabel={
+          cutting ? m.editor_canvas_panel_cutting_aria() : m.editor_canvas_panel_cut_aria()
+        }
         pressed={cutting}
         data={{ 'data-cut': '' }}
         onClick={onToggleCut}
       />
       <ToolButton
         {...merge}
-        label={merging ? '結合先を選ぶ' : '結合'}
-        ariaLabel={merging ? '結合するのをやめる' : 'コマを別のコマと結合'}
+        label={merging ? m.editor_canvas_panel_merging() : m.editor_canvas_panel_merge()}
+        ariaLabel={
+          merging ? m.editor_canvas_panel_merging_aria() : m.editor_canvas_panel_merge_aria()
+        }
         pressed={merging}
         data={{ 'data-merge': '' }}
         onClick={onToggleMerge}
@@ -195,8 +202,7 @@ function ToolButton({
   w: number
   y: number
   label: string
-  /** 省略時は「コマを{label}」 */
-  ariaLabel?: string
+  ariaLabel: string
   /** トグルボタンの押下状態。省略時は普通のボタン */
   pressed?: boolean
   data: Record<`data-${string}`, string>
@@ -207,7 +213,7 @@ function ToolButton({
     <g
       role="button"
       tabIndex={0}
-      aria-label={ariaLabel ?? `コマを${label}`}
+      aria-label={ariaLabel}
       aria-pressed={pressed}
       {...data}
       style={{ cursor: 'pointer' }}

@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { type Episode, pageCharacterIds } from '@manga/schema'
 import { Button, ConfirmDialog, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
@@ -9,6 +10,7 @@ import common from '../common.module.css'
 import { TemplateSelect, useTemplateChoice } from '../layout-templates'
 import { PageThumbnail } from '../page-thumbnail'
 import {
+  ART_STATUS_LABELS,
   addPagePatch,
   artStatus,
   movePagePatch,
@@ -62,11 +64,11 @@ function EpisodePages() {
     <YStack gap={8}>
       <XStack wrap gap={12}>
         <Link to="/p/$projectId" params={{ projectId }}>
-          エピソード一覧
+          {m.web_episode_list()}
         </Link>
         <EpisodeTitle episode={episode} apply={apply} />
         <Button size="small" variant="ghost" onClick={() => setRemovingEpisode(true)}>
-          エピソードを削除
+          {m.web_episode_remove()}
         </Button>
       </XStack>
       {removingEpisode && (
@@ -74,7 +76,7 @@ function EpisodePages() {
           episode={episode}
           onConfirm={() => {
             setRemovingEpisode(false)
-            if (apply('エピソードを削除', (p) => removeEpisodePatch(p, episode.id)))
+            if (apply(m.web_episode_remove(), (p) => removeEpisodePatch(p, episode.id)))
               void navigate({ to: '/p/$projectId', params: { projectId } })
           }}
           onCancel={() => setRemovingEpisode(false)}
@@ -93,7 +95,7 @@ function EpisodePages() {
         onSubmit={(e) => {
           e.preventDefault()
           apply(
-            'ページを追加',
+            m.web_episode_add_page(),
             (p) => addPagePatch(p, resolveTemplate(p, template), episode.id).patch,
           )
         }}
@@ -107,11 +109,11 @@ function EpisodePages() {
               setRemovingTemplate({ id: registeredTemplate.value, name: registeredTemplate.label })
             }
           >
-            テンプレートを削除
+            {m.web_episode_remove_template()}
           </Button>
         )}
         <Button type="submit" variant="primary">
-          ページを追加
+          {m.web_episode_add_page()}
         </Button>
         <Button
           onClick={() =>
@@ -121,11 +123,11 @@ function EpisodePages() {
             })
           }
         >
-          脚本から下書き
+          {m.web_draft_title()}
         </Button>
       </XStack>
       <EpisodeBatch episode={episode} projectId={projectId} store={store} />
-      {pages.length === 0 && <Typography tone="muted">ページがありません。</Typography>}
+      {pages.length === 0 && <Typography tone="muted">{m.web_episode_no_pages()}</Typography>}
       <ol className={`${common.cards} ${styles.pages}`}>
         {pages.map((page, index) => {
           const status = artStatus(page)
@@ -146,7 +148,7 @@ function EpisodePages() {
                     pageSize={project.settings.pageSize}
                     resolveAsset={resolveAsset}
                   />
-                  <strong>{index + 1} ページ</strong>
+                  <strong>{m.web_episode_page_number({ number: index + 1 })}</strong>
                 </YStack>
               </Link>
               {editing.length > 0 && (
@@ -156,7 +158,7 @@ function EpisodePages() {
                   gap={4}
                   align="stretch"
                   className={collabStyles.peers}
-                  aria-label="編集中の人"
+                  aria-label={m.web_episode_editing_peers()}
                 >
                   {editing.map((peer) => (
                     <PeerBadge key={peer.clientId} name={peer.name} color={peer.color} />
@@ -164,9 +166,9 @@ function EpisodePages() {
                 </XStack>
               )}
               <Typography as="small" variant="caption" tone="muted">
-                コマ {page.panels.length} / 生成{' '}
+                {m.web_episode_page_summary({ panels: page.panels.length })}{' '}
                 <span className={styles.status} data-status={status}>
-                  {status}
+                  {ART_STATUS_LABELS[status]()}
                 </span>
               </Typography>
               {page.note !== undefined && (
@@ -176,25 +178,29 @@ function EpisodePages() {
               )}
               {cast.length > 0 && (
                 <Typography as="small" variant="caption" tone="muted" data-page-cast>
-                  登場: {cast.join('、')}
+                  {m.web_episode_page_cast({ cast: cast.join('、') })}
                 </Typography>
               )}
               <XStack as="span" wrap gap={6} className={common.cardActions}>
                 <Button
                   size="small"
                   variant="ghost"
-                  aria-label="前へ"
+                  aria-label={m.web_episode_move_earlier()}
                   disabled={index === 0}
-                  onClick={() => apply('ページを移動', (p) => movePagePatch(p, page.id, -1))}
+                  onClick={() =>
+                    apply(m.web_episode_move_page(), (p) => movePagePatch(p, page.id, -1))
+                  }
                 >
                   ←
                 </Button>
                 <Button
                   size="small"
                   variant="ghost"
-                  aria-label="後ろへ"
+                  aria-label={m.web_episode_move_later()}
                   disabled={index === pages.length - 1}
-                  onClick={() => apply('ページを移動', (p) => movePagePatch(p, page.id, 1))}
+                  onClick={() =>
+                    apply(m.web_episode_move_page(), (p) => movePagePatch(p, page.id, 1))
+                  }
                 >
                   →
                 </Button>
@@ -203,7 +209,7 @@ function EpisodePages() {
                   variant="ghost"
                   onClick={() => setRemovingPage({ id: page.id, number: index + 1 })}
                 >
-                  削除
+                  {m.web_common_delete()}
                 </Button>
               </XStack>
             </YStack>
@@ -212,11 +218,13 @@ function EpisodePages() {
       </ol>
       {removingTemplate && (
         <ConfirmDialog
-          title="テンプレートを削除"
-          message={`テンプレート「${removingTemplate.name}」を削除しますか？このテンプレートから足したページは残ります`}
-          confirmLabel="削除"
+          title={m.web_episode_remove_template()}
+          message={m.web_episode_remove_template_confirm({ name: removingTemplate.name })}
+          confirmLabel={m.web_common_delete()}
           onConfirm={() => {
-            apply('テンプレートを削除', (p) => removeLayoutTemplatePatch(p, removingTemplate.id))
+            apply(m.web_episode_remove_template(), (p) =>
+              removeLayoutTemplatePatch(p, removingTemplate.id),
+            )
             setRemovingTemplate(undefined)
           }}
           onCancel={() => setRemovingTemplate(undefined)}
@@ -224,11 +232,11 @@ function EpisodePages() {
       )}
       {removingPage && (
         <ConfirmDialog
-          title="ページを削除"
-          message={`${removingPage.number} ページを削除しますか？`}
-          confirmLabel="削除"
+          title={m.web_episode_remove_page()}
+          message={m.web_episode_remove_page_confirm({ number: removingPage.number })}
+          confirmLabel={m.web_common_delete()}
           onConfirm={() => {
-            apply('ページを削除', (p) => removePagePatch(p, removingPage.id))
+            apply(m.web_episode_remove_page(), (p) => removePagePatch(p, removingPage.id))
             setRemovingPage(undefined)
           }}
           onCancel={() => setRemovingPage(undefined)}
@@ -260,7 +268,7 @@ function EpisodeTitle({
             setEditing(true)
           }}
         >
-          名前を変更
+          {m.web_episode_rename()}
         </Button>
       </>
     )
@@ -272,7 +280,7 @@ function EpisodeTitle({
       gap={8}
       onSubmit={(e) => {
         e.preventDefault()
-        if (apply('話の名前を変更', (p) => renameEpisodePatch(p, episode.id, title)))
+        if (apply(m.web_episode_rename_history(), (p) => renameEpisodePatch(p, episode.id, title)))
           setEditing(false)
       }}
       onKeyDown={(e) => {
@@ -280,7 +288,7 @@ function EpisodeTitle({
       }}
     >
       <Input
-        label="話の名前"
+        label={m.web_episode_name_label()}
         hideLabel
         required
         value={title}
@@ -289,10 +297,10 @@ function EpisodeTitle({
         autoFocus
       />
       <Button type="submit" size="small" variant="primary">
-        保存
+        {m.web_common_save()}
       </Button>
       <Button size="small" variant="ghost" onClick={() => setEditing(false)}>
-        キャンセル
+        {m.web_common_cancel()}
       </Button>
     </XStack>
   )
@@ -301,9 +309,9 @@ function EpisodeTitle({
 function EpisodeNotFound({ projectId }: { projectId: string }) {
   return (
     <YStack as="section" gap={16} align="start">
-      <Typography variant="title">エピソードが見つかりません</Typography>
+      <Typography variant="title">{m.web_episode_not_found()}</Typography>
       <Link to="/p/$projectId" params={{ projectId }}>
-        エピソード一覧へ
+        {m.web_episode_back_to_list()}
       </Link>
     </YStack>
   )
@@ -330,7 +338,7 @@ function EpisodeBatch({
   return (
     <XStack wrap gap={12} className={common.toolbar}>
       <Button disabled={batch.running || episode.pages.length === 0} onClick={batch.start}>
-        {batch.running ? '生成中…' : '全部生成'}
+        {batch.running ? m.web_common_generating() : m.web_episode_generate_all()}
       </Button>
       <BatchOptions batch={batch} />
     </XStack>

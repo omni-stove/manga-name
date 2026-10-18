@@ -19,6 +19,10 @@ const gridName = (pos: Point): string => {
 
 type HintFocus = { phrase: string; large: boolean }
 
+/** 焦点の句を「と」でつなぐ。空なら空文字 */
+const and = (phrases: readonly string[]): string =>
+  phrases.reduce((a, b) => (a === '' ? b : `${a} と ${b}`), '')
+
 /**
  * Panel の生成ヒントを 1 文で返す（04 の 10 節）。生成プロンプトにそのまま連結する前提で、改行を含まない。
  * weight 0.5 以上の焦点は「<位置>の <label> を大きく捉え」として先に置き、残りを t の昇順で
@@ -35,29 +39,36 @@ export function panelHint(panel: Panel, diagnosis: PanelDiagnosis): string {
     .flatMap((f) => {
       const source = sources.get(f.focusPointId)
       if (!source) return []
+      // 合成焦点の label は表示用に locale で変わるので、プロンプトには固定の語を使う。
       // label 由来の改行がプロンプトの行を割らないよう空白に寄せる
-      const label = source.label.replace(/\s+/g, ' ').trim()
+      const label = (source.kind === 'bubble' ? 'フキダシ' : source.label)
+        .replace(/\s+/g, ' ')
+        .trim()
       return [
-        { phrase: `${gridName(source.pos)}の ${label}`, large: source.weight >= LARGE_WEIGHT },
+        {
+          phrase: `${gridName(source.pos)}の ${label}`,
+          large: source.weight >= LARGE_WEIGHT,
+        },
       ]
     })
 
-  const large = foci.filter((f) => f.large).map((f) => f.phrase)
+  const large = and(foci.filter((f) => f.large).map((f) => f.phrase))
   const flow = foci.filter((f) => !f.large).map((f) => f.phrase)
-  if (large.length === 0 && flow.length === 0) return ''
-
-  const anchor = large.join(' と ')
   const first = flow[0]
   const last = flow.at(-1)
-  if (!first || !last) return `視線は${anchor} に大きく集まる`
+  if (!first || !last) return large === '' ? '' : `視線は${large} に大きく集まる`
 
-  const via = flow.slice(1, -1)
-  const path =
-    flow.length === 1
-      ? `${first} `
-      : `${first} から${via.length > 0 ? `${via.join(' と ')} を経て` : ''}${last} `
-  const ending = flow.length === 1 && large.length === 0 ? 'に集まる' : 'へ流れる'
-  return `視線は${large.length > 0 ? `${anchor} を大きく捉え、` : ''}${path}${ending}`
+  const via = and(flow.slice(1, -1))
+  if (large === '') {
+    if (flow.length === 1) return `視線は${first} に集まる`
+    return via === ''
+      ? `視線は${first} から${last} へ流れる`
+      : `視線は${first} から${via} を経て${last} へ流れる`
+  }
+  if (flow.length === 1) return `視線は${large} を大きく捉え、${first} へ流れる`
+  return via === ''
+    ? `視線は${large} を大きく捉え、${first} から${last} へ流れる`
+    : `視線は${large} を大きく捉え、${first} から${via} を経て${last} へ流れる`
 }
 
 if (import.meta.vitest) {

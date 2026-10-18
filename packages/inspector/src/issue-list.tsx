@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Issue } from '@manga/schema'
 import { Typography, XStack, YStack } from '@manga/ui'
 import styles from './issue-list.module.css'
@@ -5,10 +6,10 @@ import type { IssueListProps } from './types'
 
 const SEVERITY_RANK: Record<Issue['severity'], number> = { error: 0, warning: 1, info: 2 }
 
-const SEVERITY_LABELS: Record<Issue['severity'], string> = {
-  error: 'エラー',
-  warning: '警告',
-  info: '情報',
+const SEVERITY_LABELS: Record<Issue['severity'], () => string> = {
+  error: m.inspector_issue_severity_error,
+  warning: m.inspector_issue_severity_warning,
+  info: m.inspector_issue_severity_info,
 }
 
 /** severity の重い順。同じ重さなら診断が出した順を保つ */
@@ -20,7 +21,7 @@ export function IssueList({ issues, onFocus }: IssueListProps) {
   if (issues.length === 0) {
     return (
       <Typography tone="muted" data-issue-list="empty">
-        問題はありません
+        {m.inspector_issue_list_empty()}
       </Typography>
     )
   }
@@ -38,7 +39,7 @@ export function IssueList({ issues, onFocus }: IssueListProps) {
             disabled={issue.panelId === undefined && issue.focusPointId === undefined}
             onClick={() => onFocus(issue)}
           >
-            <span className={styles.severity}>{SEVERITY_LABELS[issue.severity]}</span>
+            <span className={styles.severity}>{SEVERITY_LABELS[issue.severity]()}</span>
             <span>{issue.message}</span>
           </XStack>
         </li>

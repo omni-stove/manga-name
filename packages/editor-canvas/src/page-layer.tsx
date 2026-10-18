@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import {
   BUBBLE_DASH,
   type Bubble,
@@ -355,7 +356,9 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
           overflowWrap: 'anywhere',
         }}
       >
-        {error && <div style={{ color: 'var(--alert)' }}>画像を読み込めません</div>}
+        {error && (
+          <div style={{ color: 'var(--alert)' }}>{m.editor_canvas_panel_image_load_failed()}</div>
+        )}
         {panel.camera && <div>[{panel.camera}]</div>}
         {panel.note && <div>{panel.note}</div>}
       </div>
@@ -392,7 +395,7 @@ function GeneratingOverlay({ rect, points }: { rect: Box; points: string }) {
   const cy = rect.y + rect.h / 2
   const r = Math.min(12, Math.max(3, Math.min(rect.w, rect.h) * 0.12))
   return (
-    <g data-spinner="" aria-label="生成中">
+    <g data-spinner="" aria-label={m.editor_canvas_panel_generating()}>
       <polygon points={points} fill="#fff" opacity={0.6} />
       <circle
         cx={cx}
@@ -437,7 +440,7 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
       className="ec-generate"
       role="button"
       tabIndex={0}
-      aria-label="このコマを生成"
+      aria-label={m.editor_canvas_panel_generate_aria()}
       style={{ cursor: 'pointer' }}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onClick}
@@ -457,7 +460,7 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
         textAnchor="middle"
         dominantBaseline="central"
       >
-        生成
+        {m.editor_canvas_panel_generate()}
       </text>
     </g>
   )
@@ -579,8 +582,8 @@ const BubbleView = memo(function BubbleView({
 /** 文字が小さすぎるか収まらないフキダシの左上に出す、出力に出ない警告の印 */
 function IllegibleAlert({ x, y, truncated }: { x: number; y: number; truncated: boolean }) {
   const message = truncated
-    ? 'セリフがフキダシに収まりません。フキダシを広げるかセリフを短くしてください'
-    : 'セリフの文字が小さすぎて読めません。フキダシを広げるかセリフを短くしてください'
+    ? m.editor_canvas_bubble_text_truncated()
+    : m.editor_canvas_bubble_text_too_small()
   return (
     // biome-ignore lint/a11y/useSemanticElements: SVG の <g> に <img> は使えず、role="img" で名前を伝える
     // biome-ignore lint/a11y/noInteractiveElementToNoninteractiveRole: biome が <g> を対話要素と誤判定する。警告の印は操作できず、名前だけを伝える

@@ -11,6 +11,7 @@
     "test": "vitest run --config ../../vitest.config.ts"
   },
   "dependencies": {
+    "@manga/i18n": "workspace:*",
     "@manga/schema": "workspace:*",
     "@tauri-apps/plugin-fs": "^2.4.2",
     "idb": "^8.0.3"

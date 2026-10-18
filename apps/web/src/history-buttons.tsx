@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { IconButton, XStack } from '@manga/ui'
 import type { ReactNode } from 'react'
 import { useStore } from 'zustand'
@@ -12,11 +13,11 @@ export const MOD =
 export function HistoryButtons({ store }: { store: WebProjectStore }) {
   const { canUndo, canRedo } = useStore(store.state)
   return (
-    <XStack as="span" gap={2} role="group" aria-label="履歴">
+    <XStack as="span" gap={2} role="group" aria-label={m.web_history_group()}>
       <IconButton
         size="small"
-        label="Undo"
-        title={`Undo（${MOD}Z）`}
+        label={m.web_history_undo()}
+        title={m.web_history_undo_title({ shortcut: `${MOD}Z` })}
         aria-keyshortcuts="Meta+Z Control+Z"
         disabled={!canUndo}
         onClick={() => store.undo()}
@@ -28,8 +29,8 @@ export function HistoryButtons({ store }: { store: WebProjectStore }) {
       </IconButton>
       <IconButton
         size="small"
-        label="Redo"
-        title={`Redo（${MOD}Shift+Z）`}
+        label={m.web_history_redo()}
+        title={m.web_history_redo_title({ shortcut: `${MOD}Shift+Z` })}
         aria-keyshortcuts="Meta+Shift+Z Control+Shift+Z Control+Y"
         disabled={!canRedo}
         onClick={() => store.redo()}
