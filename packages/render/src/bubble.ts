@@ -42,6 +42,18 @@ export function textBox(shape: Shape, g: Geometry): PxRect {
   return { x: g.cx - w / 2, y: g.cy - h / 2, w, h }
 }
 
+/**
+ * セリフの箱を、フキダシを切るコマの矩形 clip の内側に寄せる。見切れたフキダシでも
+ * 見えている部分にセリフを置き、狭くなった分は割り付けが文字を小さくする。重ならなければ box をそのまま返す
+ */
+export function clipTextBox(box: PxRect, clip: PxRect): PxRect {
+  const x = Math.max(box.x, clip.x)
+  const y = Math.max(box.y, clip.y)
+  const w = Math.min(box.x + box.w, clip.x + clip.w) - x
+  const h = Math.min(box.y + box.h, clip.y + clip.h) - y
+  return w > 0 && h > 0 ? { x, y, w, h } : box
+}
+
 function pointAt(g: Geometry, angle: number, scale: number): { x: number; y: number } {
   return { x: g.cx + g.rx * scale * Math.cos(angle), y: g.cy + g.ry * scale * Math.sin(angle) }
 }
@@ -260,6 +272,13 @@ if (import.meta.vitest) {
     for (const shape of ['normal', 'shout', 'thought'] as const) {
       expect(textBox(shape, body)).toEqual({ x: 58, y: 70, w: 84, h: 60 })
     }
+  })
+
+  test('clipTextBox keeps the visible part of the box, and the whole box when none is visible', () => {
+    const box = { x: 58, y: 70, w: 84, h: 60 }
+    expect(clipTextBox(box, { x: 100, y: 0, w: 200, h: 200 })).toEqual({ x: 100, y: 70, w: 42, h: 60 })
+    expect(clipTextBox(box, { x: 0, y: 0, w: 200, h: 200 })).toEqual(box)
+    expect(clipTextBox(box, { x: 150, y: 0, w: 50, h: 200 })).toEqual(box)
   })
 
   describe('drawBubble', () => {
