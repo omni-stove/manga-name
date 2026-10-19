@@ -442,7 +442,10 @@ export function PageEditor({
       )
     const saveToFile = async () =>
       saveFile(
-        await render(episode.pages.slice(from - 1, to).map((p) => p.id), onProgress),
+        await render(
+          episode.pages.slice(from - 1, to).map((p) => p.id),
+          onProgress,
+        ),
         exportFileName(project.title, numbers, ext),
         [{ name: ext.toUpperCase(), extensions: [ext] }],
       )
