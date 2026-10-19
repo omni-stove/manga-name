@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn, screen, userEvent } from 'storybook/test'
 import { ConfirmDialog } from './confirm-dialog'
@@ -38,7 +39,7 @@ export const ConfirmCallsOnConfirm: Story = {
 
 export const CancelCallsOnCancel: Story = {
   play: async ({ args }) => {
-    await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+    await userEvent.click(screen.getByRole('button', { name: m.cancel() }))
     await expect(args.onCancel).toHaveBeenCalledOnce()
     await expect(args.onConfirm).not.toHaveBeenCalled()
   },

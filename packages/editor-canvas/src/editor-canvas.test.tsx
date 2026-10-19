@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+
+import { m } from '@manga/i18n'
 import {
   fixtures,
   INNER_FRAME,
@@ -135,7 +137,7 @@ describe('drawing the fixture', () => {
     const svg = await render({ page: withBubble3({ text: 'あ'.repeat(200) }) })
     const alert = must(svg.querySelector('[data-bubble-id="bb_3"] [data-bubble-alert]'))
     expect(alert.getAttribute('role')).toBe('img')
-    expect(alert.getAttribute('aria-label')).toContain('フキダシ')
+    expect(alert.getAttribute('aria-label')).toBe(m.editor_canvas_bubble_text_truncated())
   })
 
   test('dialogue of a bubble cut by the panel edge sits in the visible part', async () => {
@@ -199,7 +201,7 @@ describe('art', () => {
     expect(svg.querySelectorAll('image')).toHaveLength(5)
     const panel = must(svg.querySelector('[data-panel-id="pn_3"]'))
     expect(panel.querySelector('[data-art-error]')).not.toBeNull()
-    expect(panel.textContent).toContain('画像を読み込めません')
+    expect(panel.textContent).toContain(m.editor_canvas_panel_image_load_failed())
   })
 
   test('layers.art = false hides art without resolving it', async () => {

@@ -50,13 +50,13 @@ if (import.meta.vitest) {
 
   test('a code becomes its message, with params filled in', () => {
     expect(apiErrorMessage(new ApiError(404, { code: 'not_found' }, 'GET'))).toBe(
-      '見つかりません。削除されたか、参加していない可能性があります',
+      m.api_error_not_found(),
     )
     expect(
       apiErrorMessage(
         new ApiError(413, { code: 'project_too_large', params: { maxBytes: 5 * 1024 * 1024 } }, ''),
       ),
-    ).toBe('プロジェクトが 5MB を超えたため、クラウドに保存できません')
+    ).toBe(m.api_error_project_too_large({ max: '5MB' }))
     expect(
       apiErrorMessage(
         new ApiError(
@@ -68,6 +68,6 @@ if (import.meta.vitest) {
           '',
         ),
       ),
-    ).toMatch(/^今月の生成回数の上限（100 回）に達しました。2026\/11\/1 から/)
+    ).toBe(m.api_error_generation_limit_reached({ limit: 100, resetsAt: '2026/11/1' }))
   })
 }

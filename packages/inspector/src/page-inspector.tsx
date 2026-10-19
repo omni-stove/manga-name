@@ -2,6 +2,7 @@ import { m } from '@manga/i18n'
 import type { Page } from '@manga/schema'
 import { Button, Checkbox, Field, RemoveButton, Typography, XStack } from '@manga/ui'
 import { DEBOUNCE_MS, option, SelectField, TextField } from './fields'
+import { SEVERITY_LABELS } from './issue-list'
 import styles from './page-inspector.module.css'
 import { optionalString, replace } from './patch'
 import section from './section.module.css'
@@ -103,7 +104,9 @@ export function PageInspector({
         <dl className={styles.diagnosis}>
           <dt>{m.inspector_reading_order()}</dt>
           <dd data-ok={diagnosis.readingOrderOk}>
-            {diagnosis.readingOrderOk ? 'OK' : m.inspector_page_reading_order_mismatch()}
+            {diagnosis.readingOrderOk
+              ? m.inspector_page_reading_order_ok()
+              : m.inspector_page_reading_order_mismatch()}
           </dd>
           <dt>{m.focus_point()}</dt>
           <dd>{m.inspector_page_focus_summary(diagnosis.summary)}</dd>
@@ -118,7 +121,7 @@ export function PageInspector({
                       className={styles.issue}
                       data-severity={issue.severity}
                     >
-                      [{issue.severity}] {issue.message}
+                      [{SEVERITY_LABELS[issue.severity]()}] {issue.message}
                     </li>
                   ))}
                 </ul>

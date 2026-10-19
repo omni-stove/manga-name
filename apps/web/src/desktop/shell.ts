@@ -14,6 +14,7 @@ import { errorMessage } from '../route-error'
 import type { createAppRouter } from '../router'
 import { toasts } from '../toasts'
 import { isEditable } from '../use-undo-shortcuts'
+import { startFileDrop } from './file-drop'
 import {
   loadRecentFiles,
   pushRecent,
@@ -36,6 +37,7 @@ const separator = predefined('Separator')
 /**
  * Desktop のアプリメニュー（ファイル、編集、表示）を張り、ファイルを開く・保存するダイアログと最近開いたファイルをつなぐ。
  * 開くは `.manga.json` をライブラリに読み込んで開き、保存は開いているプロジェクトを JSON でそのファイルに書く。
+ * ウィンドウに落とした `.manga.json` も開くと同じく開く（startFileDrop）。
  * 編集の Undo / Redo はページの編集画面のときだけ、そのプロジェクトの store に送る。
  * ウィンドウの位置と大きさは Rust 側の window-state プラグインが戻す
  */
@@ -239,6 +241,7 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
   }
 
   await rebuildMenu()
+  await startFileDrop(openPath)
 }
 
 if (import.meta.vitest) {
@@ -279,9 +282,15 @@ if (import.meta.vitest) {
     const written = new Map<string, string>()
     let menu: SentItem[] = []
     const dialogs: { cmd: string; options: unknown }[] = []
-    installFakeTauri(vi.stubGlobal, (cmd, args, options) => {
+    const listeners = new Map<string, number>()
+    const tauri = installFakeTauri(vi.stubGlobal, (cmd, args, options) => {
       if (cmd.startsWith('plugin:store|')) return store.handle(cmd, args)
       switch (cmd) {
+        case 'plugin:event|listen': {
+          const { event, handler } = args as { event: string; handler: number }
+          listeners.set(event, handler)
+          return handler
+        }
         case 'plugin:menu|new':
           menu = (args as { options: { items: SentItem[] } }).options.items
           return [1, 'menu']
@@ -343,6 +352,12 @@ if (import.meta.vitest) {
       return rest.length === 0 ? found : find(rest, found.items)
     }
     const click = (...path: string[]) => find(path).handler?.onmessage('id')
+    const drop = (...paths: string[]) =>
+      tauri.callback(listeners.get('tauri://drag-drop') ?? -1)?.({
+        event: 'tauri://drag-drop',
+        id: 1,
+        payload: { paths, position: { x: 0, y: 0 } },
+      })
     return {
       store,
       written,
@@ -353,6 +368,7 @@ if (import.meta.vitest) {
       execCommand,
       find,
       click,
+      drop,
       menuTexts: () => menu.map((i) => i.text),
     }
   }
@@ -362,17 +378,24 @@ if (import.meta.vitest) {
   describe('startDesktopShell', () => {
     test('sets the File, Edit and View menus, with no recent files yet', async () => {
       const shell = await setup()
-      expect(shell.menuTexts()).toEqual(['ファイル', '編集', '表示'])
-      expect(shell.find(['ファイル', '最近開いたファイル']).items).toEqual([
-        { text: 'なし', enabled: false },
+      expect(shell.menuTexts()).toEqual([m.web_menu_file(), m.web_menu_edit(), m.web_menu_view()])
+      expect(shell.find([m.web_menu_file(), m.web_menu_recent()]).items).toEqual([
+        { text: m.web_menu_recent_none(), enabled: false },
       ])
-      expect(shell.find(['編集', 'やり直す']).accelerator).toBe('CmdOrCtrl+Y')
+      expect(shell.find([m.web_menu_edit(), m.web_menu_redo()]).accelerator).toBe('CmdOrCtrl+Y')
     })
 
     test('on a Mac it adds the app menu and uses Shift+Cmd+Z to redo', async () => {
       const shell = await setup({ userAgent: 'Macintosh; Intel Mac OS X' })
-      expect(shell.menuTexts()).toEqual(['Manga Name', 'ファイル', '編集', '表示'])
-      expect(shell.find(['編集', 'やり直す']).accelerator).toBe('CmdOrCtrl+Shift+Z')
+      expect(shell.menuTexts()).toEqual([
+        'Manga Name',
+        m.web_menu_file(),
+        m.web_menu_edit(),
+        m.web_menu_view(),
+      ])
+      expect(shell.find([m.web_menu_edit(), m.web_menu_redo()]).accelerator).toBe(
+        'CmdOrCtrl+Shift+Z',
+      )
     })
 
     test('opening a new file imports it, remembers it and opens the project', async () => {
@@ -380,7 +403,7 @@ if (import.meta.vitest) {
         dialogPath: '/w/a.manga.json',
         files: { '/w/a.manga.json': exportProjectJson(fileProject) },
       })
-      shell.click('ファイル', '開く…')
+      shell.click(m.web_menu_file(), m.web_menu_open())
       await vi.waitFor(() => expect(shell.router.navigate).toHaveBeenCalled())
       expect(shell.library.import).toHaveBeenCalledExactlyOnceWith(fileProject)
       expect(shell.router.navigate).toHaveBeenCalledWith({
@@ -390,7 +413,7 @@ if (import.meta.vitest) {
       expect(shell.store.values.get('recentFiles')).toEqual([
         { path: '/w/a.manga.json', projectId: 'imported' },
       ])
-      expect(shell.find(['ファイル', '最近開いたファイル', 'a.manga.json'])).toBeDefined()
+      expect(shell.find([m.web_menu_file(), m.web_menu_recent(), 'a.manga.json'])).toBeDefined()
     })
 
     test('a file whose project is already in the library is not imported again', async () => {
@@ -399,7 +422,7 @@ if (import.meta.vitest) {
         files: { '/w/a.manga.json': exportProjectJson(fileProject) },
         libraryProjects: [fileProject],
       })
-      shell.click('ファイル', '開く…')
+      shell.click(m.web_menu_file(), m.web_menu_open())
       await vi.waitFor(() => expect(shell.router.navigate).toHaveBeenCalled())
       expect(shell.library.import).not.toHaveBeenCalled()
       expect(shell.router.navigate).toHaveBeenCalledWith({
@@ -413,7 +436,7 @@ if (import.meta.vitest) {
         recent: [{ path: '/w/a.manga.json', projectId: fileProject.id }],
         libraryProjects: [fileProject],
       })
-      shell.click('ファイル', '最近開いたファイル', 'a.manga.json')
+      shell.click(m.web_menu_file(), m.web_menu_recent(), 'a.manga.json')
       await vi.waitFor(() => expect(shell.router.navigate).toHaveBeenCalled())
       expect(shell.library.list).not.toHaveBeenCalled()
     })
@@ -423,10 +446,27 @@ if (import.meta.vitest) {
         dialogPath: '/w/broken.json',
         files: { '/w/broken.json': '{' },
       })
-      shell.click('ファイル', '開く…')
+      shell.click(m.web_menu_file(), m.web_menu_open())
       await vi.waitFor(() => expect(toasts.state.getState().toasts).toHaveLength(1))
-      expect(toasts.state.getState().toasts[0]?.message).toBe('開けません: JSON として読めません')
+      expect(toasts.state.getState().toasts[0]?.message).toBe(
+        m.web_menu_open_failed({ reason: m.web_project_file_invalid_json() }),
+      )
       expect(shell.router.navigate).not.toHaveBeenCalled()
+    })
+
+    test('a project file dropped on the window is imported, remembered and opened', async () => {
+      const shell = await setup({ files: { '/w/a.manga.json': exportProjectJson(fileProject) } })
+      shell.drop('/w/a.manga.json')
+      await vi.waitFor(() => expect(shell.router.navigate).toHaveBeenCalled())
+      expect(shell.library.import).toHaveBeenCalledExactlyOnceWith(fileProject)
+      expect(shell.router.navigate).toHaveBeenCalledWith({
+        to: '/p/$projectId',
+        params: { projectId: 'imported' },
+      })
+      expect(shell.store.values.get('recentFiles')).toEqual([
+        { path: '/w/a.manga.json', projectId: 'imported' },
+      ])
+      expect(shell.dialogs).toEqual([])
     })
 
     test('save writes the open project to the file it came from', async () => {
@@ -435,7 +475,7 @@ if (import.meta.vitest) {
         libraryProjects: [fileProject],
         currentId: fileProject.id,
       })
-      shell.click('ファイル', '保存')
+      shell.click(m.web_menu_file(), m.save())
       await vi.waitFor(() => expect(shell.written.size).toBe(1))
       expect(shell.written.get('/w/a.manga.json')).toBe(exportProjectJson(fileProject))
       expect(shell.dialogs).toEqual([])
@@ -443,7 +483,7 @@ if (import.meta.vitest) {
 
     test('save without a file asks where to save, and a closed dialog writes nothing', async () => {
       const shell = await setup({ libraryProjects: [fileProject], currentId: fileProject.id })
-      shell.click('ファイル', '保存')
+      shell.click(m.web_menu_file(), m.save())
       await vi.waitFor(() => expect(shell.dialogs).toHaveLength(1))
       expect(shell.dialogs[0]).toEqual({
         cmd: 'plugin:dialog|save',
@@ -458,7 +498,7 @@ if (import.meta.vitest) {
         libraryProjects: [fileProject],
         currentId: fileProject.id,
       })
-      shell.click('ファイル', '名前を付けて保存…')
+      shell.click(m.web_menu_file(), m.web_menu_save_as())
       await vi.waitFor(() =>
         expect(shell.store.values.get('recentFiles')).toEqual([
           { path: '/w/b.manga.json', projectId: fileProject.id },
@@ -469,7 +509,7 @@ if (import.meta.vitest) {
 
     test('save does nothing outside a project', async () => {
       const shell = await setup({ dialogPath: '/w/b.manga.json' })
-      shell.click('ファイル', '名前を付けて保存…')
+      shell.click(m.web_menu_file(), m.web_menu_save_as())
       await vi.waitFor(() => expect(shell.library.open).not.toHaveBeenCalled())
       expect(shell.dialogs).toEqual([])
     })
@@ -481,42 +521,42 @@ if (import.meta.vitest) {
         onPage: true,
       })
       const store = shell.stores.get(fileProject.id)
-      shell.click('編集', '取り消す')
+      shell.click(m.web_menu_edit(), m.web_menu_undo())
       await vi.waitFor(() => expect(store?.undo).toHaveBeenCalledOnce())
-      shell.click('編集', 'やり直す')
+      shell.click(m.web_menu_edit(), m.web_menu_redo())
       await vi.waitFor(() => expect(store?.redo).toHaveBeenCalledOnce())
 
       vi.stubGlobal('document', {
         activeElement: new FakeElement('INPUT'),
         execCommand: shell.execCommand,
       })
-      shell.click('編集', '取り消す')
+      shell.click(m.web_menu_edit(), m.web_menu_undo())
       await vi.waitFor(() => expect(shell.execCommand).toHaveBeenCalledWith('undo'))
       expect(store?.undo).toHaveBeenCalledOnce()
     })
 
     test('undo does nothing outside the page editor', async () => {
       const shell = await setup({ libraryProjects: [fileProject], currentId: fileProject.id })
-      shell.click('編集', '取り消す')
+      shell.click(m.web_menu_edit(), m.web_menu_undo())
       await vi.waitFor(() => expect(shell.library.open).not.toHaveBeenCalled())
       expect(shell.stores.get(fileProject.id)?.undo).not.toHaveBeenCalled()
     })
 
     test('clearing the history empties the recent files', async () => {
       const shell = await setup({ recent: [{ path: '/w/a.manga.json', projectId: 'p' }] })
-      shell.click('ファイル', '最近開いたファイル', '履歴を消す')
+      shell.click(m.web_menu_file(), m.web_menu_recent(), m.web_menu_clear_recent())
       await vi.waitFor(() => expect(shell.store.values.get('recentFiles')).toEqual([]))
       await vi.waitFor(() =>
-        expect(shell.find(['ファイル', '最近開いたファイル']).items).toEqual([
-          { text: 'なし', enabled: false },
+        expect(shell.find([m.web_menu_file(), m.web_menu_recent()]).items).toEqual([
+          { text: m.web_menu_recent_none(), enabled: false },
         ]),
       )
     })
 
     test('the View menu navigates to the project list and opens the settings over the current screen', async () => {
       const shell = await setup()
-      shell.click('表示', 'プロジェクト一覧')
-      shell.click('表示', 'アプリ設定')
+      shell.click(m.web_menu_view(), m.web_project_list())
+      shell.click(m.web_menu_view(), m.web_app_settings())
       const [[list], [settings]] = shell.router.navigate.mock.calls as unknown as [
         [unknown],
         [{ search(prev: object): object }],

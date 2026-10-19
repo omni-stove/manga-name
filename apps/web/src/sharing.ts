@@ -352,7 +352,7 @@ if (import.meta.vitest) {
     test('changes to a project that is not in the cloud throw before calling the API', async () => {
       const { client, fetch } = setup(() => json({}))
       await expect(client.invite('other', 'b@example.com', 'viewer')).rejects.toThrow(
-        'まだクラウドにありません',
+        m.web_sharing_not_in_cloud(),
       )
       await expect(client.removeMember('other', 'u1')).rejects.toThrow()
       expect(fetch).not.toHaveBeenCalled()
@@ -402,9 +402,13 @@ if (import.meta.vitest) {
 
     test('acceptInvite explains a wrong account and an expired invite', async () => {
       const wrong = setup(() => json({}, 403))
-      await expect(wrong.client.acceptInvite('t')).rejects.toThrow('別のメールアドレス')
+      await expect(wrong.client.acceptInvite('t')).rejects.toThrow(
+        m.web_sharing_invite_email_mismatch(),
+      )
       const expired = setup(() => json({}, 404))
-      await expect(expired.client.acceptInvite('t')).rejects.toThrow('期限が切れています')
+      await expect(expired.client.acceptInvite('t')).rejects.toThrow(
+        m.web_sharing_invite_not_found(),
+      )
       const failing = setup(() => new Response('oops', { status: 500, statusText: 'Server Error' }))
       await expect(failing.client.acceptInvite('t')).rejects.toThrow('POST accept invite: 500 oops')
     })

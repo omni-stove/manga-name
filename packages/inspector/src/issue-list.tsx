@@ -6,7 +6,7 @@ import type { IssueListProps } from './types'
 
 const SEVERITY_RANK: Record<Issue['severity'], number> = { error: 0, warning: 1, info: 2 }
 
-const SEVERITY_LABELS: Record<Issue['severity'], () => string> = {
+export const SEVERITY_LABELS: Record<Issue['severity'], () => string> = {
   error: m.issue_severity_error,
   warning: m.issue_severity_warning,
   info: m.issue_severity_info,

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { m } from '@manga/i18n'
 import { fixtures, type Page, type PageDiagnosis, type Panel, type Patch } from '@manga/schema'
 import { act, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -6,6 +7,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { BubbleInspector } from './bubble-inspector'
 import { CharacterInspector } from './character-inspector'
 import { FocusInspector } from './focus-inspector'
+import { IssueList } from './issue-list'
 import { PageInspector } from './page-inspector'
 import { PageScriptInspector } from './page-script-inspector'
 import { PanelInspector } from './panel-inspector'
@@ -104,11 +106,13 @@ describe('PanelInspector', () => {
       />,
     )
     const item = must(container.querySelector(`[data-cast-id="${focused}"]`))
-    expect(item.textContent).toContain('焦点')
+    expect(item.textContent).toContain(m.focus_point())
     expect(item.querySelector('button')).toBeNull()
 
     const select = must(
-      container.querySelector<HTMLSelectElement>('select[aria-label="登場キャラを追加"]'),
+      container.querySelector<HTMLSelectElement>(
+        `select[aria-label="${m.inspector_panel_cast_add()}"]`,
+      ),
     )
     await act(async () => {
       select.value = extra.id
@@ -175,7 +179,7 @@ describe('PanelInspector', () => {
     }
     const removeOf = (container: HTMLElement, id: string) =>
       [...container.querySelectorAll(`[data-art-id="${id}"] button`)].find(
-        (b) => b.getAttribute('aria-label') === '削除',
+        (b) => b.getAttribute('aria-label') === m.remove(),
       ) as HTMLButtonElement | undefined
 
     const { container, root } = await render(<PanelInspector {...props} />)
@@ -199,14 +203,14 @@ describe('PanelInspector', () => {
         resolveAsset={resolveAsset}
       />,
     )
-    await act(async () => setValue(inputLabelled(container, '指示メモ'), 'メモ'))
+    await act(async () => setValue(inputLabelled(container, m.panel_note()), 'メモ'))
     expect(onChange).not.toHaveBeenCalled()
     await act(async () => vi.advanceTimersByTime(299))
     expect(onChange).not.toHaveBeenCalled()
     await act(async () => vi.advanceTimersByTime(1))
     expect(onChange).toHaveBeenCalledWith([{ op: 'add', path: '/note', value: 'メモ' }])
 
-    const order = inputLabelled(container, '読み順')
+    const order = inputLabelled(container, m.inspector_reading_order())
     await act(async () => setValue(order, '0'))
     expect(order.getAttribute('aria-invalid')).toBe('true')
     expect(onChange).toHaveBeenCalledTimes(1)
@@ -230,13 +234,15 @@ describe('PanelInspector', () => {
       />,
     )
     const buttons = [...container.querySelectorAll('button')]
-    const generate = must(buttons.find((b) => b.textContent === '生成'))
-    const regenerate = must(buttons.find((b) => b.textContent === '修正して再生成'))
+    const generate = must(buttons.find((b) => b.textContent === m.generate()))
+    const regenerate = must(buttons.find((b) => b.textContent === m.inspector_panel_regenerate()))
     expect(regenerate.disabled).toBe(true)
     await act(async () => generate.click())
     expect(onGenerate).toHaveBeenCalledWith()
 
-    await act(async () => setValue(inputLabelled(container, '修正指示'), ' もっと暗く '))
+    await act(async () =>
+      setValue(inputLabelled(container, m.inspector_panel_instruction()), ' もっと暗く '),
+    )
     expect(regenerate.disabled).toBe(false)
     await act(async () => regenerate.click())
     expect(onGenerate).toHaveBeenLastCalledWith('もっと暗く')
@@ -267,7 +273,7 @@ describe('PanelInspector', () => {
     expect(shown.querySelector('input, textarea')).toBeNull()
     const checkbox = must(
       [...container.querySelectorAll('label')]
-        .find((el) => el.textContent === 'ヒントを使う')
+        .find((el) => el.textContent === m.inspector_panel_use_hint())
         ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
     )
     expect(checkbox.checked).toBe(true)
@@ -293,8 +299,8 @@ describe('PanelInspector', () => {
         resolveAsset={resolveAsset}
       />,
     )
-    expect(container.textContent).toContain('フキダシはありません')
-    expect(container.textContent).toContain('まだ生成していません')
+    expect(container.textContent).toContain(m.inspector_panel_bubbles_empty())
+    expect(container.textContent).toContain(m.inspector_panel_history_empty())
   })
 })
 
@@ -317,7 +323,7 @@ describe('BubbleInspector', () => {
     })
     expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/speakerId' }])
 
-    await act(async () => setValue(inputLabelled(container, 'セリフ'), '新しいセリフ'))
+    await act(async () => setValue(inputLabelled(container, m.bubble_text()), '新しいセリフ'))
     await act(async () => vi.advanceTimersByTime(300))
     expect(onChange).toHaveBeenLastCalledWith([
       { op: 'replace', path: '/text', value: '新しいセリフ' },
@@ -332,7 +338,7 @@ describe('BubbleInspector', () => {
     const { container, root } = await render(<BubbleInspector {...props} />)
     const checkbox = must(
       [...container.querySelectorAll('label')]
-        .find((el) => el.textContent === '枠からはみ出す')
+        .find((el) => el.textContent === m.bubble_overflow())
         ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
     )
     expect(checkbox.checked).toBe(false)
@@ -360,15 +366,30 @@ describe('CharacterInspector', () => {
         resolveAsset={resolveAsset}
       />,
     )
-    const name = inputLabelled(container, '名前')
+    const name = inputLabelled(container, m.character_name())
     await act(async () => setValue(name, ' '))
     expect(name.getAttribute('aria-invalid')).toBe('true')
     expect(onChange).not.toHaveBeenCalled()
     await act(async () => setValue(name, 'エル'))
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/name', value: 'エル' }])
 
-    await act(async () => setValue(inputLabelled(container, '略称'), 'L'))
+    await act(async () => setValue(inputLabelled(container, m.character_short_name()), 'L'))
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/shortName', value: 'L' }])
+  })
+
+  test('titles an unnamed character with the untitled label', async () => {
+    const { container } = await render(
+      <CharacterInspector
+        character={{ ...character, name: '' }}
+        onChange={() => {}}
+        onPickReference={() => {}}
+        onGenerateReference={() => {}}
+        resolveAsset={resolveAsset}
+      />,
+    )
+    expect(must(container.querySelector('[data-inspector="character"]')).textContent).toContain(
+      m.inspector_character_untitled(),
+    )
   })
 
   test('appearance and note are debounced, and clearing appearance removes it', async () => {
@@ -383,13 +404,13 @@ describe('CharacterInspector', () => {
         resolveAsset={resolveAsset}
       />,
     )
-    await act(async () => setValue(inputLabelled(container, '外見'), ''))
+    await act(async () => setValue(inputLabelled(container, m.character_appearance()), ''))
     await act(async () => vi.advanceTimersByTime(299))
     expect(onChange).not.toHaveBeenCalled()
     await act(async () => vi.advanceTimersByTime(1))
     expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/appearance' }])
 
-    await act(async () => setValue(inputLabelled(container, 'メモ'), '口数が少ない'))
+    await act(async () => setValue(inputLabelled(container, m.character_note()), '口数が少ない'))
     await act(async () => vi.advanceTimersByTime(300))
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/note', value: '口数が少ない' }])
   })
@@ -406,12 +427,18 @@ describe('CharacterInspector', () => {
         resolveAsset={resolveAsset}
       />,
     )
-    const group = must(container.querySelector('[role="group"][aria-label="参照画像"]'))
-    expect(group.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('既定の画像')
+    const group = must(
+      container.querySelector(`[role="group"][aria-label="${m.character_reference()}"]`),
+    )
+    expect(group.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe(
+      m.inspector_character_default_reference(),
+    )
     expect(group.querySelector('img')).toBeNull()
-    await act(async () => buttonNamed(container, '画像を選ぶ').click())
+    await act(async () => buttonNamed(container, m.inspector_character_reference_pick()).click())
     expect(onPickReference).toHaveBeenCalledTimes(1)
-    await act(async () => buttonNamed(container, '外見から生成').click())
+    await act(async () =>
+      buttonNamed(container, m.inspector_character_generate_reference()).click(),
+    )
     expect(onGenerateReference).toHaveBeenCalledTimes(1)
   })
 
@@ -427,8 +454,8 @@ describe('CharacterInspector', () => {
         resolveAsset={resolveAsset}
       />,
     )
-    expect(button(bare.container, '外見から生成').disabled).toBe(true)
-    expect(button(bare.container, '画像を選ぶ').disabled).toBe(false)
+    expect(button(bare.container, m.inspector_character_generate_reference()).disabled).toBe(true)
+    expect(button(bare.container, m.inspector_character_reference_pick()).disabled).toBe(false)
 
     const busy = await render(
       <CharacterInspector
@@ -440,8 +467,8 @@ describe('CharacterInspector', () => {
         resolveAsset={resolveAsset}
       />,
     )
-    expect(button(busy.container, '生成中…').disabled).toBe(true)
-    expect(button(busy.container, '画像を選ぶ').disabled).toBe(true)
+    expect(button(busy.container, m.generating()).disabled).toBe(true)
+    expect(button(busy.container, m.inspector_character_reference_pick()).disabled).toBe(true)
   })
 
   test('a reference image is shown resolved, and 外す removes referenceRef', async () => {
@@ -460,9 +487,11 @@ describe('CharacterInspector', () => {
     expect(resolve).toHaveBeenCalledWith('blob:ref_e')
     const img = must(container.querySelector('img'))
     expect(img.getAttribute('src')).toBe('url:blob:ref_e')
-    expect(img.getAttribute('alt')).toBe(`${character.name} の参照画像`)
-    expect(buttonNamed(container, '差し替え')).toBeTruthy()
-    await act(async () => buttonNamed(container, '外す').click())
+    expect(img.getAttribute('alt')).toBe(
+      m.inspector_character_reference_alt({ name: character.name }),
+    )
+    expect(buttonNamed(container, m.inspector_replace())).toBeTruthy()
+    await act(async () => buttonNamed(container, m.detach()).click())
     expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/referenceRef' }])
   })
 
@@ -478,7 +507,7 @@ describe('CharacterInspector', () => {
     )
     await act(async () => {})
     expect(container.querySelector('img')).toBeNull()
-    expect(container.textContent).toContain('読み込めません')
+    expect(container.textContent).toContain(m.inspector_load_failed())
   })
 })
 
@@ -490,10 +519,10 @@ describe('FocusInspector', () => {
     const { container } = await render(
       <FocusInspector focus={focus} characters={project.characters} onChange={onChange} />,
     )
-    await choose(selectLabelled(container, '種別'), 'sfx')
+    await choose(selectLabelled(container, m.focus_point_kind()), 'sfx')
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/kind', value: 'sfx' }])
 
-    await act(async () => setValue(inputLabelled(container, 'ラベル'), 'E'))
+    await act(async () => setValue(inputLabelled(container, m.focus_point_label()), 'E'))
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/label', value: 'E' }])
 
     const weight = must(container.querySelector<HTMLInputElement>('input[type="range"]'))
@@ -502,7 +531,7 @@ describe('FocusInspector', () => {
     await act(async () => setValue(weight, '0.75'))
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/weight', value: 0.75 }])
 
-    const character = selectLabelled(container, 'キャラクター')
+    const character = selectLabelled(container, m.character())
     expect(character.value).toBe(focus.characterId)
     await choose(character, '')
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/characterId' }])
@@ -514,7 +543,7 @@ describe('FocusInspector', () => {
     const { container } = await render(
       <FocusInspector focus={plain} characters={project.characters} onChange={onChange} />,
     )
-    const select = selectLabelled(container, 'キャラクター')
+    const select = selectLabelled(container, m.character())
     expect(select.value).toBe('')
     await choose(select, 'chr_e')
     expect(onChange).toHaveBeenCalledWith([{ op: 'add', path: '/characterId', value: 'chr_e' }])
@@ -539,13 +568,64 @@ describe('FocusInspector', () => {
     await act(async () => root.render(<FocusInspector {...props} diagnosis={diagnosis} />))
     const dl = must(container.querySelector('dl'))
     expect(dl.getAttribute('data-diagnosis-status')).toBe('weak')
+    expect(must(dl.querySelector('[data-status]')).textContent).toBe(m.focus_status_weak())
     expect(dl.textContent).toContain('0.46')
-    expect(dl.textContent).toContain('強 1 / 弱 2')
+    expect(dl.textContent).toContain(m.inspector_focus_vector_counts({ strong: 1, weak: 2 }))
     expect(dl.textContent).toContain('誘導線が弱い')
 
     const { reason: _, ...withoutReason } = diagnosis
     await act(async () => root.render(<FocusInspector {...props} diagnosis={withoutReason} />))
-    expect(must(container.querySelector('dl')).textContent).not.toContain('理由')
+    expect(must(container.querySelector('dl')).textContent).not.toContain(
+      m.inspector_focus_reason(),
+    )
+
+    for (const [status, label] of [
+      ['ok', m.focus_status_ok()],
+      ['miss', m.focus_status_miss()],
+    ] as const) {
+      await act(async () =>
+        root.render(<FocusInspector {...props} diagnosis={{ ...withoutReason, status }} />),
+      )
+      expect(must(container.querySelector('[data-status]')).textContent).toBe(label)
+    }
+  })
+})
+
+describe('IssueList', () => {
+  test('says so when there are no issues', async () => {
+    const { container } = await render(<IssueList issues={[]} onFocus={() => {}} />)
+    expect(must(container.querySelector('[data-issue-list]')).textContent).toBe(
+      m.inspector_issue_list_empty(),
+    )
+  })
+
+  test('sorts by severity, and only an issue that points at an element can be pressed', async () => {
+    const onFocus = vi.fn()
+    const pointing = {
+      severity: 'warning' as const,
+      code: 'FOCUS_WEAK' as const,
+      panelId: 'pn_2',
+      message: '焦点が弱い',
+    }
+    const { container } = await render(
+      <IssueList
+        issues={[
+          { severity: 'info', code: 'READING_ORDER', message: '補足' },
+          pointing,
+          { severity: 'error', code: 'READING_ORDER', message: '読み順が逆' },
+        ]}
+        onFocus={onFocus}
+      />,
+    )
+    const buttons = [...container.querySelectorAll('button')]
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      `${m.issue_severity_error()}読み順が逆`,
+      `${m.issue_severity_warning()}焦点が弱い`,
+      `${m.issue_severity_info()}補足`,
+    ])
+    expect(buttons.map((b) => b.disabled)).toEqual([true, false, true])
+    await act(async () => must(buttons[1]).click())
+    expect(onFocus).toHaveBeenCalledWith(pointing)
   })
 })
 
@@ -558,12 +638,12 @@ describe('VectorInspector', () => {
     const { container } = await render(
       <VectorInspector vector={vector} targets={targets} onChange={onChange} />,
     )
-    await choose(selectLabelled(container, '種別'), 'speed')
+    await choose(selectLabelled(container, m.vector_kind()), 'speed')
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/kind', value: 'speed' }])
-    await choose(selectLabelled(container, '強さ'), 'weak')
+    await choose(selectLabelled(container, m.vector_strength()), 'weak')
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/strength', value: 'weak' }])
 
-    const target = selectLabelled(container, '指す焦点')
+    const target = selectLabelled(container, m.vector_target_focus())
     expect([...target.options].map((o) => o.value)).toEqual(['', ...targets.map((t) => t.value)])
     await choose(target, '')
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/targetFocusId' }])
@@ -577,7 +657,7 @@ describe('VectorInspector', () => {
         onChange={() => {}}
       />,
     )
-    const target = selectLabelled(container, '指す焦点')
+    const target = selectLabelled(container, m.vector_target_focus())
     expect(target.value).toBe('fp_gone')
     expect([...target.options].at(-1)?.textContent).toBe('fp_gone')
   })
@@ -590,7 +670,9 @@ describe('PageScriptInspector', () => {
     vi.useFakeTimers()
     const onChange = vi.fn<(patch: Patch) => void>()
     const { container } = await render(<PageScriptInspector page={page} onChange={onChange} />)
-    await act(async () => setValue(inputLabelled(container, 'このページの脚本'), 'E「……ここか」'))
+    await act(async () =>
+      setValue(inputLabelled(container, m.inspector_page_script()), 'E「……ここか」'),
+    )
     expect(onChange).not.toHaveBeenCalled()
     await act(async () => vi.advanceTimersByTime(300))
     expect(onChange).toHaveBeenLastCalledWith([
@@ -600,7 +682,9 @@ describe('PageScriptInspector', () => {
     const scripted = await render(
       <PageScriptInspector page={{ ...page, script: 's' }} onChange={onChange} />,
     )
-    await act(async () => setValue(inputLabelled(scripted.container, 'このページの脚本'), ''))
+    await act(async () =>
+      setValue(inputLabelled(scripted.container, m.inspector_page_script()), ''),
+    )
     await act(async () => vi.advanceTimersByTime(300))
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/script' }])
   })
@@ -609,7 +693,7 @@ describe('PageScriptInspector', () => {
     const { container } = await render(
       <PageScriptInspector page={page} editable={false} onChange={() => {}} />,
     )
-    expect(inputLabelled(container, 'このページの脚本').matches(':disabled')).toBe(true)
+    expect(inputLabelled(container, m.inspector_page_script()).matches(':disabled')).toBe(true)
   })
 })
 
@@ -631,10 +715,10 @@ describe('PageInspector', () => {
         onPickReference={() => {}}
       />,
     )
-    await choose(selectLabelled(container, '見開き'), 'left')
+    await choose(selectLabelled(container, m.page_side()), 'left')
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/side', value: 'left' }])
 
-    await act(async () => setValue(inputLabelled(container, 'メモ'), '見開きの導入'))
+    await act(async () => setValue(inputLabelled(container, m.page_note()), '見開きの導入'))
     expect(onChange).toHaveBeenCalledTimes(1)
     await act(async () => vi.advanceTimersByTime(300))
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/note', value: '見開きの導入' }])
@@ -654,10 +738,10 @@ describe('PageInspector', () => {
     expect(container.querySelector('input[type="checkbox"]')).toBeNull()
     expect(
       [...container.querySelectorAll('button')].some(
-        (b) => b.getAttribute('aria-label') === '削除',
+        (b) => b.getAttribute('aria-label') === m.remove(),
       ),
     ).toBe(false)
-    await act(async () => buttonNamed(container, '読み込む').click())
+    await act(async () => buttonNamed(container, m.inspector_page_reference_load()).click())
     expect(onPickReference).toHaveBeenCalledTimes(1)
   })
 
@@ -687,9 +771,9 @@ describe('PageInspector', () => {
       { op: 'replace', path: '/reference/visible', value: false },
     ])
 
-    await act(async () => buttonNamed(container, '差し替え').click())
+    await act(async () => buttonNamed(container, m.inspector_replace()).click())
     expect(onPickReference).toHaveBeenCalledTimes(1)
-    await act(async () => buttonNamed(container, '削除').click())
+    await act(async () => buttonNamed(container, m.remove()).click())
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/reference' }])
   })
 
@@ -702,18 +786,18 @@ describe('PageInspector', () => {
       onPickReference: () => {},
     }
     const { container, root } = await render(<PageInspector {...props} />)
-    expect(container.textContent).toContain(`コマ ${page.panels.length}`)
-    await act(async () => buttonNamed(container, 'このページを全部生成').click())
+    expect(container.textContent).toContain(m.inspector_panel_title({ order: page.panels.length }))
+    await act(async () => buttonNamed(container, m.inspector_page_generate_all()).click())
     expect(onGenerateAll).toHaveBeenCalledTimes(1)
 
     await act(async () => root.render(<PageInspector {...props} generating />))
-    expect(buttonNamed(container, '生成中…').disabled).toBe(true)
+    expect(buttonNamed(container, m.generating()).disabled).toBe(true)
 
     await act(async () => root.render(<PageInspector {...props} page={{ ...page, panels: [] }} />))
-    expect(buttonNamed(container, 'このページを全部生成').disabled).toBe(true)
+    expect(buttonNamed(container, m.inspector_page_generate_all()).disabled).toBe(true)
 
     await act(async () => root.render(<PageInspector {...props} onGenerateAll={undefined} />))
-    expect(buttonNamed(container, 'このページを全部生成').disabled).toBe(true)
+    expect(buttonNamed(container, m.inspector_page_generate_all()).disabled).toBe(true)
   })
 
   test('editable = false disables everything but generate all', async () => {
@@ -731,7 +815,7 @@ describe('PageInspector', () => {
     ]
       .filter((el) => !el.matches(':disabled'))
       .map((el) => el.textContent)
-    expect(enabled).toEqual(['このページを全部生成'])
+    expect(enabled).toEqual([m.inspector_page_generate_all()])
   })
 
   test('shows the page diagnosis summary and issues', async () => {
@@ -757,13 +841,43 @@ describe('PageInspector', () => {
       />,
     )
     const dl = must(container.querySelector('dl'))
-    expect(must(dl.querySelector('[data-ok]')).textContent).toBe('配置と食い違い')
-    expect(dl.textContent).toContain('5 件: ok 3 / weak 1 / miss 1')
+    expect(must(dl.querySelector('[data-ok]')).textContent).toBe(
+      m.inspector_page_reading_order_mismatch(),
+    )
+    expect(dl.textContent).toContain(
+      m.inspector_page_focus_summary({ total: 5, ok: 3, weak: 1, miss: 1 }),
+    )
     const issues = [...dl.querySelectorAll('li')]
     expect(issues.map((li) => li.getAttribute('data-severity'))).toEqual(['error', 'warning'])
     expect(issues.map((li) => li.textContent)).toEqual([
-      '[error] 読み順が逆',
-      '[warning] 焦点が弱い',
+      `[${m.issue_severity_error()}] 読み順が逆`,
+      `[${m.issue_severity_warning()}] 焦点が弱い`,
     ])
+  })
+
+  test('labels a matching reading order as ok and an info issue by its severity', async () => {
+    const diagnosis: PageDiagnosis = {
+      pageId: page.id,
+      readingOrderOk: true,
+      inferredOrder: [],
+      panels: [],
+      bubbleChain: [],
+      summary: { total: 0, ok: 0, weak: 0, miss: 0 },
+      issues: [{ severity: 'info', code: 'READING_ORDER', message: '補足' }],
+    }
+    const { container } = await render(
+      <PageInspector
+        page={page}
+        diagnosis={diagnosis}
+        onChange={() => {}}
+        onGenerateAll={() => {}}
+        onPickReference={() => {}}
+      />,
+    )
+    const dl = must(container.querySelector('dl'))
+    expect(must(dl.querySelector('[data-ok]')).textContent).toBe(
+      m.inspector_page_reading_order_ok(),
+    )
+    expect(must(dl.querySelector('li')).textContent).toBe(`[${m.issue_severity_info()}] 補足`)
   })
 })

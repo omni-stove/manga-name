@@ -11,7 +11,9 @@ import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createAuthClient, takeSignInError } from './auth'
+import { openSignInInBrowser } from './desktop/browser'
 import { createDesktopTokenStore } from './desktop/desktop-store'
+import { notifyBatchDone } from './desktop/notify'
 import { createPanelGeneration } from './generate-panel'
 import { createImageProvider, readApiBaseUrl } from './image-provider'
 import { createLlmProvider } from './llm-provider'
@@ -43,7 +45,10 @@ const platform = detectPlatform()
 const baseUrl = readApiBaseUrl()
 const auth = createAuthClient({
   baseUrl,
-  tokenStore: platform === 'desktop' ? createDesktopTokenStore() : undefined,
+  ...(platform === 'desktop' && {
+    tokenStore: createDesktopTokenStore(),
+    openExternal: openSignInInBrowser,
+  }),
 })
 void auth.restore()
 
@@ -79,7 +84,11 @@ const library = createProjectLibrary(storage, {
 })
 const imageProvider = createImageProvider({ baseUrl, getToken: auth.getToken })
 const llmProvider = createLlmProvider({ baseUrl, getToken: auth.getToken })
-const generation = createPanelGeneration({ library, imageProvider })
+const generation = createPanelGeneration({
+  library,
+  imageProvider,
+  ...(platform === 'desktop' && { onBatchDone: notifyBatchDone }),
+})
 const router = createAppRouter({
   library,
   imageProvider,
@@ -102,6 +111,9 @@ if (platform === 'desktop') {
   import('./desktop/shell')
     .then(({ startDesktopShell }) => startDesktopShell({ router, library }))
     .catch((e: unknown) => toasts.push(m.web_menu_build_failed({ reason: errorMessage(e) })))
+  import('./desktop/deep-link')
+    .then(({ startDeepLinks }) => startDeepLinks({ router, auth }))
+    .catch((e: unknown) => toasts.push(m.web_desktop_start_failed({ reason: errorMessage(e) })))
 }
 
 // debounce 待ちの変更をタブを閉じる・隠す時点で書く。pagehide だけでは書き込みが終わる前にページが破棄されうる

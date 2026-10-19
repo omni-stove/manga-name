@@ -74,7 +74,7 @@ export function findVector(
 
 const pagePrefix = (project: Project, pageId: ID) => {
   const found = findPage(project, pageId)
-  if (!found) throw new Error(`page ${pageId} is not in project ${project.id}`)
+  if (!found) throw new Error(m.web_common_page_gone())
   return { page: found.page, prefix: `/episodes/${found.episodeIndex}/pages/${found.pageIndex}` }
 }
 
@@ -82,7 +82,7 @@ const pagePrefix = (project: Project, pageId: ID) => {
 export function panelPatch(project: Project, pageId: ID, panelId: ID, patch: Patch): Patch {
   const { page, prefix } = pagePrefix(project, pageId)
   const found = findPanel(page, panelId)
-  if (!found) throw new Error(`panel ${panelId} is not in page ${pageId}`)
+  if (!found) throw new Error(m.web_editor_panel_gone())
   const base = `${prefix}/panels`
   return [
     ...prefixed(`${base}/${found.panelIndex}`, patch),
@@ -94,7 +94,7 @@ export function panelPatch(project: Project, pageId: ID, panelId: ID, patch: Pat
 export function bubblePatch(project: Project, pageId: ID, bubbleId: ID, patch: Patch): Patch {
   const { page, prefix } = pagePrefix(project, pageId)
   const found = findBubble(page, bubbleId)
-  if (!found) throw new Error(`bubble ${bubbleId} is not in page ${pageId}`)
+  if (!found) throw new Error(m.web_editor_bubble_gone())
   const base = `${prefix}/panels/${found.panelIndex}/bubbles`
   return [
     ...prefixed(`${base}/${found.bubbleIndex}`, patch),
@@ -106,7 +106,7 @@ export function bubblePatch(project: Project, pageId: ID, bubbleId: ID, patch: P
 export function focusPatch(project: Project, pageId: ID, focusId: ID, patch: Patch): Patch {
   const { page, prefix } = pagePrefix(project, pageId)
   const found = findFocus(page, focusId)
-  if (!found) throw new Error(`focus ${focusId} is not in page ${pageId}`)
+  if (!found) throw new Error(m.web_editor_focus_gone())
   return prefixed(`${prefix}/panels/${found.panelIndex}/focusPoints/${found.focusIndex}`, patch)
 }
 
@@ -114,7 +114,7 @@ export function focusPatch(project: Project, pageId: ID, focusId: ID, patch: Pat
 export function vectorPatch(project: Project, pageId: ID, vectorId: ID, patch: Patch): Patch {
   const { page, prefix } = pagePrefix(project, pageId)
   const found = findVector(page, vectorId)
-  if (!found) throw new Error(`vector ${vectorId} is not in page ${pageId}`)
+  if (!found) throw new Error(m.web_editor_vector_gone())
   return prefixed(`${prefix}/panels/${found.panelIndex}/vectors/${found.vectorIndex}`, patch)
 }
 
@@ -125,10 +125,10 @@ export function vectorPatch(project: Project, pageId: ID, vectorId: ID, patch: P
 export function removeArtPatch(project: Project, pageId: ID, panelId: ID, artId: ID): Patch {
   const { page } = pagePrefix(project, pageId)
   const found = findPanel(page, panelId)
-  if (!found) throw new Error(`panel ${panelId} is not in page ${pageId}`)
+  if (!found) throw new Error(m.web_editor_panel_gone())
   const { panel } = found
   const index = panel.arts.findIndex((a) => a.id === artId)
-  if (index < 0) throw new Error(`art ${artId} is not in panel ${panelId}`)
+  if (index < 0) throw new Error(m.web_editor_art_gone())
   if (panel.artId === artId) throw new Error(m.web_inspector_cannot_remove_current_art())
   return panelPatch(project, pageId, panelId, [
     ...panel.arts.flatMap((a, i) =>
@@ -141,7 +141,7 @@ export function removeArtPatch(project: Project, pageId: ID, panelId: ID, artId:
 /** Character root の Patch を Project root に。無いキャラクターなら throw */
 export function characterPatch(project: Project, characterId: ID, patch: Patch): Patch {
   const index = project.characters.findIndex((c) => c.id === characterId)
-  if (index < 0) throw new Error(`character ${characterId} is not in project ${project.id}`)
+  if (index < 0) throw new Error(m.web_character_gone())
   return prefixed(`/characters/${index}`, patch)
 }
 
@@ -202,8 +202,8 @@ if (import.meta.vitest) {
     })
 
     test('throws for an unknown page or panel', () => {
-      expect(() => panelPatch(sample, 'nope', panelOf(0).id, [])).toThrow('page')
-      expect(() => panelPatch(sample, pageId, 'nope', [])).toThrow('panel')
+      expect(() => panelPatch(sample, 'nope', panelOf(0).id, [])).toThrow(m.web_common_page_gone())
+      expect(() => panelPatch(sample, pageId, 'nope', [])).toThrow(m.web_editor_panel_gone())
     })
   })
 
@@ -220,7 +220,7 @@ if (import.meta.vitest) {
       const store = storeOf()
       store.applyPatch(patch)
       expect(store.get().episodes[0]?.pages[0]?.panels[0]?.bubbles[0]?.text).toBe('t')
-      expect(() => bubblePatch(sample, pageId, 'nope', [])).toThrow('bubble')
+      expect(() => bubblePatch(sample, pageId, 'nope', [])).toThrow(m.web_editor_bubble_gone())
     })
 
     test('replace /order swaps with the bubble that holds that order', () => {
@@ -289,9 +289,15 @@ if (import.meta.vitest) {
 
     test('refuses the adopted art and unknown ids', () => {
       const store = withArts()
-      expect(() => removeArtPatch(store.get(), pageId, panelOf(0).id, 'a3')).toThrow('採用中')
-      expect(() => removeArtPatch(store.get(), pageId, panelOf(0).id, 'nope')).toThrow('art')
-      expect(() => removeArtPatch(store.get(), pageId, 'nope', 'a1')).toThrow('panel')
+      expect(() => removeArtPatch(store.get(), pageId, panelOf(0).id, 'a3')).toThrow(
+        m.web_inspector_cannot_remove_current_art(),
+      )
+      expect(() => removeArtPatch(store.get(), pageId, panelOf(0).id, 'nope')).toThrow(
+        m.web_editor_art_gone(),
+      )
+      expect(() => removeArtPatch(store.get(), pageId, 'nope', 'a1')).toThrow(
+        m.web_editor_panel_gone(),
+      )
     })
   })
 
@@ -301,6 +307,6 @@ if (import.meta.vitest) {
     expect(characterPatch(sample, character.id, [{ op: 'remove', path: '/appearance' }])).toEqual([
       { op: 'remove', path: '/characters/0/appearance' },
     ])
-    expect(() => characterPatch(sample, 'nope', [])).toThrow('character')
+    expect(() => characterPatch(sample, 'nope', [])).toThrow(m.web_character_gone())
   })
 }

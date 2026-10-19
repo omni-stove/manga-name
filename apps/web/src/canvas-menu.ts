@@ -215,15 +215,17 @@ if (import.meta.vitest) {
       if (!panel) throw new Error('fixture に読み順 1 のコマがない')
       const ctx = contextOf()
       const items = elementMenuItems({ kind: 'panel', id: panel.id }, ctx)
-      expect(item(items, 'フキダシを置く').shortcut).toBe('b')
+      expect(item(items, m.web_canvas_menu_place_bubble()).shortcut).toBe('b')
       // focus ツールを出してよい一覧に無いので出さない
-      expect(() => item(items, '焦点を置く')).toThrow()
-      expect(item(items, '読み順を前へ').disabled).toBe(true)
-      item(items, '読み順を後へ').onSelect()
-      expect(ctx.edit).toHaveBeenCalledWith('読み順を後へ', { kind: 'panel', id: panel.id }, [
-        { op: 'replace', path: '/order', value: 2 },
-      ])
-      item(items, '削除').onSelect()
+      expect(() => item(items, m.web_canvas_menu_place_focus())).toThrow()
+      expect(item(items, m.web_canvas_menu_panel_earlier()).disabled).toBe(true)
+      item(items, m.web_canvas_menu_panel_later()).onSelect()
+      expect(ctx.edit).toHaveBeenCalledWith(
+        m.web_canvas_menu_panel_later(),
+        { kind: 'panel', id: panel.id },
+        [{ op: 'replace', path: '/order', value: 2 }],
+      )
+      item(items, m.remove()).onSelect()
       expect(ctx.remove).toHaveBeenCalledWith({ kind: 'panel', id: panel.id })
     })
 
@@ -232,17 +234,22 @@ if (import.meta.vitest) {
       const items = elementMenuItems({ kind: 'bubble', id: 'bb_3' }, ctx)
       const shape = items[0]
       if (shape === 'separator' || !shape) throw new Error('先頭が形の項目でない')
-      expect(shape.label).toMatch(/^形（.+）…$/)
+      expect(shape.label).toBe(m.web_canvas_menu_bubble_shape({ shape: m.bubble_shape_normal() }))
       shape.onSelect()
       expect(ctx.openShapes).toHaveBeenCalled()
     })
 
     test('locking toggles the locked flag of the element', () => {
       const ctx = contextOf()
-      item(elementMenuItems({ kind: 'bubble', id: 'bb_3' }, ctx), '位置をロック').onSelect()
-      expect(ctx.edit).toHaveBeenCalledWith('位置をロック', { kind: 'bubble', id: 'bb_3' }, [
-        { op: 'add', path: '/locked', value: true },
-      ])
+      item(
+        elementMenuItems({ kind: 'bubble', id: 'bb_3' }, ctx),
+        m.web_canvas_menu_lock(),
+      ).onSelect()
+      expect(ctx.edit).toHaveBeenCalledWith(
+        m.web_canvas_menu_history_lock(),
+        { kind: 'bubble', id: 'bb_3' },
+        [{ op: 'add', path: '/locked', value: true }],
+      )
 
       const locked = {
         ...page,
@@ -254,12 +261,12 @@ if (import.meta.vitest) {
       const lockedCtx = contextOf({ page: locked })
       const lockItem = item(
         elementMenuItems({ kind: 'bubble', id: 'bb_3' }, lockedCtx),
-        '位置をロック',
+        m.web_canvas_menu_lock(),
       )
       expect(lockItem.checked).toBe(true)
       lockItem.onSelect()
       expect(lockedCtx.edit).toHaveBeenCalledWith(
-        '位置のロックを解除',
+        m.web_canvas_menu_history_unlock(),
         { kind: 'bubble', id: 'bb_3' },
         [{ op: 'remove', path: '/locked' }],
       )
@@ -273,12 +280,14 @@ if (import.meta.vitest) {
   test('shapeMenuItems checks the current shape and changes only to another', () => {
     const edit = vi.fn()
     const items = shapeMenuItems({ id: 'bb_3', shape: 'normal' }, { edit })
-    expect(items.filter((i) => i.checked).map((i) => i.label)).toEqual(['普通'])
-    item(items, '普通').onSelect()
+    expect(items.filter((i) => i.checked).map((i) => i.label)).toEqual([m.bubble_shape_normal()])
+    item(items, m.bubble_shape_normal()).onSelect()
     expect(edit).not.toHaveBeenCalled()
-    item(items, '叫び').onSelect()
-    expect(edit).toHaveBeenCalledWith('フキダシの形を変更', { kind: 'bubble', id: 'bb_3' }, [
-      { op: 'replace', path: '/shape', value: 'shout' },
-    ])
+    item(items, m.bubble_shape_shout()).onSelect()
+    expect(edit).toHaveBeenCalledWith(
+      m.web_canvas_menu_history_change_bubble_shape(),
+      { kind: 'bubble', id: 'bb_3' },
+      [{ op: 'replace', path: '/shape', value: 'shout' }],
+    )
   })
 }

@@ -1,10 +1,29 @@
 import { type Page, type Patch, PointSchema, VectorSchema } from '@manga/schema'
 
 /**
- * critique の提案 Patch の検査結果。`ok` なら `patch` はページを根にしたパスに直したもの。
- * `ok: false` の `reason` は利用者にそのまま見せる文言
+ * critique の提案 Patch を適用できない理由。`path` はページを根にしたパス。
+ * 利用者に見せる文言は、このパッケージを使う画面が `code` から作る
  */
-export type CritiquePatchCheck = { ok: true; patch: Patch } | { ok: false; reason: string }
+export type CritiquePatchRejection =
+  | { code: 'rect' | 'empty' | 'vector_add_only' }
+  | {
+      code:
+        | 'replace_only'
+        | 'missing_item'
+        | 'locked'
+        | 'not_point'
+        | 'missing_panel'
+        | 'index_out_of_range'
+        | 'not_vector'
+      path: string
+    }
+  | { code: 'vector_id_taken' | 'vector_endpoint'; id: string }
+  | { code: 'not_allowed'; op: string; path: string }
+
+/** critique の提案 Patch の検査結果。`ok` なら `patch` はページを根にしたパスに直したもの */
+export type CritiquePatchCheck =
+  | { ok: true; patch: Patch }
+  | { ok: false; rejection: CritiquePatchRejection }
 
 /** Project を根にしたパスの、ページまでの接頭辞。LLM がプロジェクト根で返しても受け付ける */
 const PAGE_PREFIX = /^\/episodes\/\d+\/pages\/\d+(?=\/)/
@@ -12,8 +31,6 @@ const POS_PATH = /^\/panels\/(\d+)\/(focusPoints|bubbles)\/(\d+)\/pos$/
 const VECTOR_PATH = /^\/panels\/(\d+)\/vectors\/(-|\d+)$/
 /** コマそのもの、コマの配列、矩形に届くパス。critique で AI に触らせないもの */
 const PANEL_RECT_PATH = /^\/panels(\/(-|\d+)(\/rect(\/.*)?)?)?$/
-
-const REJECT_RECT = 'コマの矩形（rect）を変える提案なので適用できません'
 
 /**
  * 提案 Patch のパスをページを根にする。`/episodes/<n>/pages/<n>` で始まるパスはその接頭辞を外す。
@@ -30,45 +47,48 @@ export function pageRootedPatch(patch: Patch): Patch {
  * 空の Patch も適用するものが無いので拒否する
  */
 export function checkCritiquePatch(page: Page, patch: Patch): CritiquePatchCheck {
-  if (patch.length === 0) return { ok: false, reason: '変更を含まない提案です' }
+  if (patch.length === 0) return { ok: false, rejection: { code: 'empty' } }
   const vectorIds = new Set(page.panels.flatMap((p) => p.vectors.map((v) => v.id)))
   const rooted = pageRootedPatch(patch)
   for (const op of rooted) {
-    const reason = checkOperation(page, op, vectorIds)
-    if (reason !== undefined) return { ok: false, reason }
+    const rejection = checkOperation(page, op, vectorIds)
+    if (rejection !== undefined) return { ok: false, rejection }
   }
   return { ok: true, patch: rooted }
 }
 
-function checkOperation(page: Page, op: Patch[number], vectorIds: Set<string>): string | undefined {
-  if (PANEL_RECT_PATH.test(op.path)) return REJECT_RECT
+function checkOperation(
+  page: Page,
+  op: Patch[number],
+  vectorIds: Set<string>,
+): CritiquePatchRejection | undefined {
+  const { path } = op
+  if (PANEL_RECT_PATH.test(path)) return { code: 'rect' }
 
-  const pos = POS_PATH.exec(op.path)
+  const pos = POS_PATH.exec(path)
   if (pos) {
-    if (op.op !== 'replace') return `${op.path} は replace でしか変えられません`
+    if (op.op !== 'replace') return { code: 'replace_only', path }
     const panel = page.panels[Number(pos[1])]
     const items = pos[2] === 'focusPoints' ? panel?.focusPoints : panel?.bubbles
     const item = items?.[Number(pos[3])]
-    if (!item) return `${op.path} の要素がページにありません`
-    if (item.locked) return `${op.path} は位置をロックした要素なので動かせません`
-    if (!PointSchema.safeParse(op.value).success) {
-      return `${op.path} の値が 0〜1 の座標ではありません`
-    }
+    if (!item) return { code: 'missing_item', path }
+    if (item.locked) return { code: 'locked', path }
+    if (!PointSchema.safeParse(op.value).success) return { code: 'not_point', path }
     return undefined
   }
 
-  const vector = VECTOR_PATH.exec(op.path)
+  const vector = VECTOR_PATH.exec(path)
   if (vector) {
-    if (op.op !== 'add') return 'ベクトルは追加しかできません'
+    if (op.op !== 'add') return { code: 'vector_add_only' }
     const panel = page.panels[Number(vector[1])]
-    if (!panel) return `${op.path} のコマがページにありません`
+    if (!panel) return { code: 'missing_panel', path }
     if (vector[2] !== '-' && Number(vector[2]) > panel.vectors.length) {
-      return `${op.path} の添字が範囲外です`
+      return { code: 'index_out_of_range', path }
     }
     const parsed = VectorSchema.safeParse(op.value)
-    if (!parsed.success) return `${op.path} の値がベクトルの形をしていません`
+    if (!parsed.success) return { code: 'not_vector', path }
     const value = parsed.data
-    if (vectorIds.has(value.id)) return `ベクトルの id ${value.id} がもう使われています`
+    if (vectorIds.has(value.id)) return { code: 'vector_id_taken', id: value.id }
     vectorIds.add(value.id)
     const anchors = new Set([
       ...panel.focusPoints.map((f) => f.id),
@@ -76,13 +96,13 @@ function checkOperation(page: Page, op: Patch[number], vectorIds: Set<string>): 
     ])
     for (const id of [value.sourceFocusId, value.targetFocusId]) {
       if (id !== undefined && !anchors.has(id)) {
-        return `ベクトルの端 ${id} が同じコマの焦点かフキダシではありません`
+        return { code: 'vector_endpoint', id }
       }
     }
     return undefined
   }
 
-  return `${op.op} ${op.path} は AI の提案で変えられない箇所です`
+  return { code: 'not_allowed', op: op.op, path }
 }
 
 if (import.meta.vitest) {
@@ -129,7 +149,8 @@ if (import.meta.vitest) {
       { op: 'replace', path: '/panels/0/bubbles/0/pos', value: { x: 0.9, y: 0.2 } },
     ])
     expect(checked.ok).toBe(false)
-    if (!checked.ok) expect(checked.reason).toContain('ロック')
+    if (!checked.ok)
+      expect(checked.rejection).toEqual({ code: 'locked', path: '/panels/0/bubbles/0/pos' })
   })
 
   describe('rejects patches that touch the panel rect', () => {
@@ -141,7 +162,7 @@ if (import.meta.vitest) {
       { op: 'add', path: '/panels/-', value: {} },
       { op: 'replace', path: '/panels', value: [] },
     ] as const)('%j', (op) => {
-      expect(checkCritiquePatch(page, [op])).toEqual({ ok: false, reason: REJECT_RECT })
+      expect(checkCritiquePatch(page, [op])).toEqual({ ok: false, rejection: { code: 'rect' } })
     })
 
     test('even when the other operations are allowed', () => {
@@ -149,37 +170,43 @@ if (import.meta.vitest) {
         { op: 'replace', path: '/panels/0/focusPoints/0/pos', value: { x: 0.5, y: 0.5 } },
         { op: 'replace', path: '/panels/0/rect/x', value: 0.1 },
       ])
-      expect(checked).toEqual({ ok: false, reason: REJECT_RECT })
+      expect(checked).toEqual({ ok: false, rejection: { code: 'rect' } })
     })
   })
 
   test.each([
-    [[], '変更を含まない'],
-    [[{ op: 'remove', path: '/panels/0/focusPoints/0/pos' }], 'replace でしか'],
-    [[{ op: 'replace', path: '/panels/0/focusPoints/9/pos', value: { x: 0, y: 0 } }], '要素'],
-    [[{ op: 'replace', path: '/panels/0/bubbles/0/pos', value: { x: 2, y: 0 } }], '0〜1'],
-    [[{ op: 'replace', path: '/panels/0/bubbles/0/text', value: 'x' }], '変えられない'],
-    [[{ op: 'replace', path: '/panels/0/focusPoints/0/weight', value: 1 }], '変えられない'],
-    [[{ op: 'remove', path: '/panels/0/vectors/0' }], '追加しか'],
-    [[{ op: 'add', path: '/panels/9/vectors/-', value: vector }], 'コマがページにありません'],
-    [[{ op: 'add', path: '/panels/4/vectors/5', value: vector }], '範囲外'],
-    [[{ op: 'add', path: '/panels/4/vectors/-', value: { id: 'v' } }], 'ベクトルの形'],
-    [[{ op: 'add', path: '/panels/4/vectors/-', value: { ...vector, id: 'vc_1_a' } }], '使われて'],
+    [[], 'empty'],
+    [[{ op: 'remove', path: '/panels/0/focusPoints/0/pos' }], 'replace_only'],
+    [
+      [{ op: 'replace', path: '/panels/0/focusPoints/9/pos', value: { x: 0, y: 0 } }],
+      'missing_item',
+    ],
+    [[{ op: 'replace', path: '/panels/0/bubbles/0/pos', value: { x: 2, y: 0 } }], 'not_point'],
+    [[{ op: 'replace', path: '/panels/0/bubbles/0/text', value: 'x' }], 'not_allowed'],
+    [[{ op: 'replace', path: '/panels/0/focusPoints/0/weight', value: 1 }], 'not_allowed'],
+    [[{ op: 'remove', path: '/panels/0/vectors/0' }], 'vector_add_only'],
+    [[{ op: 'add', path: '/panels/9/vectors/-', value: vector }], 'missing_panel'],
+    [[{ op: 'add', path: '/panels/4/vectors/5', value: vector }], 'index_out_of_range'],
+    [[{ op: 'add', path: '/panels/4/vectors/-', value: { id: 'v' } }], 'not_vector'],
+    [
+      [{ op: 'add', path: '/panels/4/vectors/-', value: { ...vector, id: 'vc_1_a' } }],
+      'vector_id_taken',
+    ],
     [
       [
         { op: 'add', path: '/panels/4/vectors/-', value: vector },
         { op: 'add', path: '/panels/4/vectors/-', value: vector },
       ],
-      '使われて',
+      'vector_id_taken',
     ],
     [
       [{ op: 'add', path: '/panels/4/vectors/-', value: { ...vector, targetFocusId: 'fp_1_e' } }],
-      '同じコマ',
+      'vector_endpoint',
     ],
-    [[{ op: 'replace', path: '/title', value: 't' }], '変えられない'],
-  ] as [Patch, string][])('rejects %j', (patch, reason) => {
+    [[{ op: 'replace', path: '/title', value: 't' }], 'not_allowed'],
+  ] as [Patch, CritiquePatchRejection['code']][])('rejects %j', (patch, code) => {
     const checked = checkCritiquePatch(page, patch)
     expect(checked.ok).toBe(false)
-    if (!checked.ok) expect(checked.reason).toContain(reason)
+    if (!checked.ok) expect(checked.rejection.code).toBe(code)
   })
 }

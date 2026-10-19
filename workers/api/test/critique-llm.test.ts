@@ -89,7 +89,7 @@ test.runIf(apiKey)(
     for (const suggestion of critique.suggestions) {
       const checked = checkCritiquePatch(current, suggestion.patch)
       if (checked.ok) current = applyPagePatch(current, checked.patch)
-      else rejected.push(`${suggestion.message}: ${checked.reason}`)
+      else rejected.push(`${suggestion.message}: ${JSON.stringify(checked.rejection)}`)
     }
 
     const after = diagnosePage(current, settings)

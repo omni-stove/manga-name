@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
 import {
   FIXTURE_PROJECT,
@@ -12,24 +13,28 @@ test('3 ページを PDF に書き出し、見開きでは右綴じの奇数ペ�
   page,
 }) => {
   await importProject(page, FIXTURE_PROJECT)
-  const addPage = page.getByRole('button', { name: 'ページを追加' })
+  const addPage = page.getByRole('button', { name: m.web_episode_add_page() })
   await addPage.click()
-  await expect(page.getByRole('link', { name: '2 ページ' })).toBeVisible()
+  await expect(
+    page.getByRole('link', { name: m.web_episode_page_number({ number: 2 }) }),
+  ).toBeVisible()
   await addPage.click()
   await openPage(page, 3)
 
   // 3 ページ目だけ絵を入れ、見開きの左右を画像の明るさで見分ける
-  const generateAll = page.getByRole('button', { name: 'このページを全部生成' })
+  const generateAll = page.getByRole('button', { name: m.inspector_page_generate_all() })
   await generateAll.click()
   await expect(generateAll).toBeEnabled()
   const panels = await page.locator('[data-panel-id]').count()
   await expect(page.locator('[data-panel-id] image')).toHaveCount(panels)
 
   let dialog = await openExportDialog(page)
-  await dialog.getByLabel('形式').selectOption('pdf')
-  await dialog.getByLabel('範囲').selectOption('all')
-  await dialog.getByLabel('見開きでまとめる').check()
-  await expect(dialog.getByRole('status')).toContainText('未生成のコマ')
+  await dialog.getByLabel(m.web_export_format()).selectOption('pdf')
+  await dialog.getByLabel(m.web_export_range()).selectOption('all')
+  await dialog.getByLabel(m.web_export_spread()).check()
+  await expect(dialog.getByRole('status')).toHaveText(
+    new RegExp(m.web_export_missing_arts({ count: '\\d+' })),
+  )
   const spread = await readPdfSheets(await submitExport(page, dialog))
 
   // 1 ページ目は相方の無い見開きで、2 と 3 ページ目が 1 枚の見開き。どちらの紙面も 2 ページ分の幅
@@ -47,11 +52,11 @@ test('3 ページを PDF に書き出し、見開きでは右綴じの奇数ペ�
   expect(left?.brightness ?? 255).toBeLessThan(right?.brightness ?? 0)
 
   dialog = await openExportDialog(page)
-  await dialog.getByLabel('形式').selectOption('pdf')
-  await dialog.getByLabel('範囲').selectOption('custom')
-  await dialog.getByLabel('開始ページ').fill('2')
-  await dialog.getByLabel('終了ページ').fill('3')
-  await dialog.getByLabel('指示メモ').selectOption('sheet')
+  await dialog.getByLabel(m.web_export_format()).selectOption('pdf')
+  await dialog.getByLabel(m.web_export_range()).selectOption('custom')
+  await dialog.getByLabel(m.web_export_from_page()).fill('2')
+  await dialog.getByLabel(m.web_export_to_page()).fill('3')
+  await dialog.getByLabel(m.panel_note()).selectOption('sheet')
   const withNotes = await readPdfSheets(await submitExport(page, dialog))
 
   // 2 ページ分の紙面と、それぞれの後ろの指示メモページ

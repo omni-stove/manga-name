@@ -71,5 +71,8 @@
   "layout_template_name": "テンプレート名",
   "issue_severity_error": "エラー",
   "issue_severity_warning": "警告",
-  "issue_severity_info": "情報"
+  "issue_severity_info": "情報",
+  "focus_status_ok": "良好",
+  "focus_status_weak": "弱い",
+  "focus_status_miss": "外れ"
 }

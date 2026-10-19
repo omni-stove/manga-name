@@ -12,9 +12,16 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 # plugins の設定を埋め込む generate_context! の展開先が serde_json を参照する
 serde_json = "1"
+tauri-plugin-deep-link = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
 tauri-plugin-persisted-scope = "2"
 tauri-plugin-store = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+# 2 つ目の起動に来た deep link を、開いているアプリの deep-link プラグインへ渡す
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }

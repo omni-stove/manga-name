@@ -11,7 +11,7 @@ const REFERENCE_MAX_SIDE = 2048
 const CHARACTER_MAX_SIDE = 1024
 const CHARACTER_JPEG_QUALITY = 0.85
 
-type ReferenceFormat = 'png' | 'jpeg' | 'pdf'
+type ReferenceFormat = 'png' | 'jpeg' | 'webp' | 'pdf'
 
 /** 描ける画像。`draw` は (0, 0) から width × height に引き伸ばして描く */
 interface Raster {
@@ -41,10 +41,12 @@ export interface ReferenceCodec {
  * `blob.type` には頼らない。対応外は null
  */
 async function sniffFormat(blob: Blob): Promise<ReferenceFormat | null> {
-  const head = new Uint8Array(await blob.slice(0, 8).arrayBuffer())
-  const starts = (bytes: number[]) => bytes.every((b, i) => head[i] === b)
+  const head = new Uint8Array(await blob.slice(0, 12).arrayBuffer())
+  const starts = (bytes: number[], offset = 0) => bytes.every((b, i) => head[offset + i] === b)
   if (starts([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'png'
   if (starts([0xff, 0xd8, 0xff])) return 'jpeg'
+  // RIFF コンテナの 8 バイト目からが形式名
+  if (starts([0x52, 0x49, 0x46, 0x46]) && starts([0x57, 0x45, 0x42, 0x50], 8)) return 'webp'
   if (starts([0x25, 0x50, 0x44, 0x46, 0x2d])) return 'pdf'
   return null
 }
@@ -76,8 +78,8 @@ async function decodeReference(
 }
 
 /**
- * PNG / JPEG / PDF を保存用の画像にする。PDF は 1 ページ目を PNG に、長辺が
- * REFERENCE_MAX_SIDE を超える画像は縮めて同じ形式にする。収まっている PNG / JPEG はそのまま返す。
+ * PNG / JPEG / WebP / PDF を保存用の画像にする。PDF は 1 ページ目を PNG に、長辺が
+ * REFERENCE_MAX_SIDE を超える画像は縮めて同じ形式（WebP は PNG）にする。収まっている PNG / JPEG / WebP はそのまま返す。
  * 対応外の形式は throw する
  */
 export async function toReferenceImage(
@@ -87,10 +89,11 @@ export async function toReferenceImage(
   const { format, raster } = await decodeReference(blob, codec, REFERENCE_MAX_SIDE)
   try {
     const size = fitLongSide(raster.width, raster.height)
-    const type = format === 'jpeg' ? 'image/jpeg' : 'image/png'
     if (format !== 'pdf' && size.width === raster.width && size.height === raster.height) {
-      return new Blob([blob], { type })
+      return new Blob([blob], { type: `image/${format}` })
     }
+    // macOS の WebView（WebKit）の canvas は WebP に書き出せないので、縮めた WebP は PNG にする
+    const type = format === 'jpeg' ? 'image/jpeg' : 'image/png'
     return await codec.encode(raster, size.width, size.height, type, 0.92)
   } finally {
     raster.close?.()
@@ -98,7 +101,7 @@ export async function toReferenceImage(
 }
 
 /**
- * PNG / JPEG / PDF をキャラの参照画像として保存する JPEG にする。長辺を CHARACTER_MAX_SIDE 以下に縮め、
+ * PNG / JPEG / WebP / PDF をキャラの参照画像として保存する JPEG にする。長辺を CHARACTER_MAX_SIDE 以下に縮め、
  * 透過は白で埋める。収まっている JPEG はそのまま返す。対応外の形式は throw する
  */
 export async function toCharacterImage(
@@ -267,6 +270,7 @@ if (import.meta.vitest) {
   const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
   const JPEG = [0xff, 0xd8, 0xff, 0xe0]
   const PDF = [...'%PDF-1.7'].map((c) => c.charCodeAt(0))
+  const WEBP = [...'RIFF\0\0\0\0WEBP'].map((c) => c.charCodeAt(0))
 
   /** 先頭が magic で、全体が size バイトの Blob */
   const fileOf = (magic: number[], size = 64, type = '') => {
@@ -327,6 +331,25 @@ if (import.meta.vitest) {
       expect(out.type).toBe('image/png')
     })
 
+    test('a WebP within the limit is stored as is, and a large one is shrunk to a PNG', async () => {
+      const small = fakeCodec({ width: 800, height: 600 })
+      const webp = fileOf(WEBP)
+      const out = await toReferenceImage(webp, small.codec)
+      expect(out.type).toBe('image/webp')
+      expect(out.size).toBe(webp.size)
+      expect(small.calls.encode).toEqual([])
+
+      const large = fakeCodec({ width: 4096, height: 3072 })
+      expect((await toReferenceImage(webp, large.codec)).type).toBe('image/png')
+      expect(large.calls.encode).toEqual([[2048, 1536, 'image/png', 0.92]])
+    })
+
+    test('a RIFF file that is not a WebP is refused', async () => {
+      const { codec } = fakeCodec({ width: 10, height: 10 })
+      const wav = fileOf([...'RIFF\0\0\0\0WAVE'].map((c) => c.charCodeAt(0)))
+      await expect(toReferenceImage(wav, codec)).rejects.toThrow('PNG、JPEG、WebP、PDF')
+    })
+
     test('a 10MB image is shrunk to the long side 2048', async () => {
       const { codec, calls } = fakeCodec({ width: 8000, height: 6000 })
       await toReferenceImage(fileOf(PNG, 10 * 1024 * 1024), codec)
@@ -340,7 +363,7 @@ if (import.meta.vitest) {
         64,
         'image/gif',
       )
-      await expect(toReferenceImage(gif, codec)).rejects.toThrow('PNG、JPEG、PDF')
+      await expect(toReferenceImage(gif, codec)).rejects.toThrow('PNG、JPEG、WebP、PDF')
     })
   })
 

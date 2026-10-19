@@ -13,11 +13,11 @@
   "inspector_focus_status": "判定",
   "inspector_focus_reason": "理由",
   "inspector_vector_nearest_focus": "（最も近い焦点）",
-  "inspector_page_reference_empty": "なし。PNG、JPEG、PDF。キャンバスへのドロップと貼り付けでも読み込めます",
+  "inspector_page_reference_empty": "なし。PNG、JPEG、WebP、PDF。キャンバスへのドロップと貼り付けでも読み込めます",
   "inspector_page_reference_load": "読み込む",
   "inspector_page_generate_all": "このページを全部生成",
   "inspector_page_reading_order_mismatch": "配置と食い違い",
-  "inspector_page_focus_summary": "{total} 件: ok {ok} / weak {weak} / miss {miss}",
+  "inspector_page_focus_summary": "{total} 件: 良好 {ok} / 弱い {weak} / 外れ {miss}",
   "inspector_page_issues": "指摘",
   "inspector_character_default_reference": "既定の画像",
   "inspector_character_untitled": "キャラクター",
@@ -52,5 +52,6 @@
   "inspector_panel_cast_add_placeholder": "キャラを追加…",
   "inspector_panel_art_alt": "生成した絵",
   "inspector_panel_art_current": "採用中",
-  "inspector_panel_art_prompt": "プロンプト"
+  "inspector_panel_art_prompt": "プロンプト",
+  "inspector_page_reading_order_ok": "配置どおり"
 }

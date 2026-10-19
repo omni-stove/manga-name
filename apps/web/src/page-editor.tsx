@@ -68,6 +68,7 @@ import { CollaborationBar, PeerBadge, peerColor, usePeers } from './collaboratio
 import { previewPage } from './critique'
 import { CritiquePanel } from './critique-panel'
 import { chooseExportFolder, loadExportFolder, writePageFiles } from './desktop/export-folder'
+import { receiveDroppedReference } from './dropped-reference'
 import { ExportDialog, type ExportSettings } from './export-dialog'
 import { exportFileName, pageExporter } from './export-page'
 import { collectExportJob } from './export-page-job'
@@ -357,6 +358,7 @@ export function PageEditor({
       )
   }
   useReferencePaste(importReference, can('canvas'))
+  useDroppedReference(importReference, can('canvas'))
   const referencePicker = useFilePicker(REFERENCE_ACCEPT, importReference)
   const pageBatch = useBatchGeneration({
     generation,
@@ -1169,6 +1171,15 @@ function useReferencePaste(onFile: (file: File) => void, enabled: boolean) {
     if (!enabled) return
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
+  }, [enabled])
+}
+
+/** Desktop でウィンドウに落とした画像や PDF を onFile に渡す。`enabled` が false の間は受けない */
+function useDroppedReference(onFile: (file: File) => void, enabled: boolean) {
+  const onDrop = useEffectEvent(onFile)
+  useEffect(() => {
+    if (!enabled) return
+    return receiveDroppedReference((file) => onDrop(file))
   }, [enabled])
 }
 

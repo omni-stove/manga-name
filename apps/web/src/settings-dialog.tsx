@@ -195,7 +195,15 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
             />
           </XStack>
         </FieldGroup>
-        <Input label="dpi" name="dpi" type="number" min="1" step="1" required defaultValue={dpi} />
+        <Input
+          label={m.web_dpi()}
+          name="dpi"
+          type="number"
+          min="1"
+          step="1"
+          required
+          defaultValue={dpi}
+        />
         <Button type="submit" variant="primary" disabled={role !== 'owner' && role !== 'editor'}>
           {m.save()}
         </Button>

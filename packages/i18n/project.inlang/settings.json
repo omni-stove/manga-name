@@ -11,6 +11,7 @@
       "./messages/inspector/{locale}.json",
       "./messages/editor-canvas/{locale}.json",
       "./messages/storage/{locale}.json",
+      "./messages/diagnosis/{locale}.json",
       "./messages/schema/{locale}.json",
       "./messages/common/{locale}.json"
     ]
