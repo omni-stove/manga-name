@@ -12,7 +12,7 @@ export function RouteError({ error }: ErrorComponentProps) {
       <Typography variant="title">{m.web_route_error_title()}</Typography>
       <Typography tone="alert">{errorMessage(error)}</Typography>
       <XStack as="p" wrap>
-        <Button onClick={() => void router.invalidate()}>{m.web_common_retry()}</Button>
+        <Button onClick={() => void router.invalidate()}>{m.retry()}</Button>
         <Link to="/">{m.web_back_to_project_list()}</Link>
       </XStack>
     </YStack>

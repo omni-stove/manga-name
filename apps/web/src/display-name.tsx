@@ -94,11 +94,11 @@ export function DisplayNameForm({ name }: { name: string }) {
       <XStack wrap align="end">
         {input}
         <Button type="submit" size="small" disabled={busy}>
-          {m.web_common_save()}
+          {m.save()}
         </Button>
         {saved && (
           <Typography as="span" tone="muted" role="status">
-            {m.web_common_saved()}
+            {m.saved()}
           </Typography>
         )}
       </XStack>

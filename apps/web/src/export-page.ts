@@ -81,7 +81,7 @@ export const pageExporter = createPageExporter()
  * ファイル名に使えない文字は `_` にする
  */
 export function exportFileName(title: string, numbers: readonly number[], ext: string): string {
-  const safe = (title || m.web_common_untitled()).replace(/[\\/:*?"<>|]/g, '_')
+  const safe = (title || m.untitled()).replace(/[\\/:*?"<>|]/g, '_')
   const pad = (n: number) => String(n).padStart(2, '0')
   const first = numbers[0] ?? 1
   const last = numbers.at(-1) ?? first

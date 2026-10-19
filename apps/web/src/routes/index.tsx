@@ -79,9 +79,9 @@ function ProjectList() {
         <ConfirmDialog
           title={m.web_projects_remove_title()}
           message={m.web_projects_remove_message({
-            title: removing.title || m.web_common_untitled(),
+            title: removing.title || m.untitled(),
           })}
-          confirmLabel={m.web_common_delete()}
+          confirmLabel={m.remove()}
           irreversible
           onConfirm={() => {
             setRemoving(undefined)
@@ -102,7 +102,7 @@ function ProjectCard({ project, busy, onRemove }: CardProps & { project: Project
     <YStack as="li" gap={6} className={common.card}>
       <Link to="/p/$projectId" params={{ projectId: project.id }} className={common.cardLink}>
         <YStack gap={4}>
-          <strong>{project.title || m.web_common_untitled()}</strong>
+          <strong>{project.title || m.untitled()}</strong>
           <Typography as="small" variant="caption" tone="muted">
             {m.web_projects_updated_at({
               date: new Date(project.updatedAt).toLocaleString(getLocale()),
@@ -113,7 +113,7 @@ function ProjectCard({ project, busy, onRemove }: CardProps & { project: Project
       <XStack as="span" wrap gap={6} className={common.cardActions}>
         <RemoveButton
           size="small"
-          label={m.web_common_delete()}
+          label={m.remove()}
           disabled={busy}
           onClick={() => onRemove(project)}
         />

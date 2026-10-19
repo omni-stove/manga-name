@@ -324,7 +324,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         selection.handlers.onKeyDown(e)
       }}
     >
-      <title>{m.editor_canvas_page_title()}</title>
+      <title>{m.page()}</title>
       <style>{STYLE}</style>
       <PageLayer
         page={page}

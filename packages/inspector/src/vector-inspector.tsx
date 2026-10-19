@@ -7,14 +7,14 @@ import section from './section.module.css'
 import type { VectorInspectorProps } from './types'
 
 const KINDS: readonly { value: Vector['kind']; label: string }[] = [
-  option('gaze', m.inspector_vector_kind_gaze),
-  option('motion', m.inspector_vector_kind_motion),
-  option('speed', m.inspector_vector_kind_speed),
+  option('gaze', m.vector_kind_gaze),
+  option('motion', m.vector_kind_motion),
+  option('speed', m.vector_kind_speed),
 ]
 
 const STRENGTHS: readonly { value: Vector['strength']; label: string }[] = [
-  option('strong', m.inspector_vector_strength_strong),
-  option('weak', m.inspector_vector_strength_weak),
+  option('strong', m.vector_strength_strong),
+  option('weak', m.vector_strength_weak),
 ]
 
 export function VectorInspector({ vector, targets, onChange }: VectorInspectorProps) {
@@ -26,22 +26,22 @@ export function VectorInspector({ vector, targets, onChange }: VectorInspectorPr
   return (
     <div className={section.section} data-inspector="vector">
       <Typography variant="subheading" className={section.title}>
-        {m.inspector_vector_title()}
+        {m.vector()}
       </Typography>
       <SelectField
-        label={m.inspector_kind()}
+        label={m.vector_kind()}
         value={vector.kind}
         options={KINDS}
         onCommit={(v) => v !== vector.kind && onChange(replace('/kind', v))}
       />
       <SelectField
-        label={m.inspector_vector_strength()}
+        label={m.vector_strength()}
         value={vector.strength}
         options={STRENGTHS}
         onCommit={(v) => v !== vector.strength && onChange(replace('/strength', v))}
       />
       <SelectField
-        label={m.inspector_vector_target()}
+        label={m.vector_target_focus()}
         value={vector.targetFocusId ?? ''}
         options={options}
         onCommit={(v) => onChange(optionalString('/targetFocusId', vector.targetFocusId, v))}

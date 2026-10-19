@@ -8,9 +8,9 @@ import section from './section.module.css'
 import type { FocusInspectorProps } from './types'
 
 export const FOCUS_KINDS: readonly { value: FocusKind; label: string }[] = [
-  option('face', m.inspector_focus_kind_face),
-  option('keyObject', m.inspector_focus_kind_key_object),
-  option('sfx', m.inspector_focus_kind_sfx),
+  option('face', m.focus_point_kind_face),
+  option('keyObject', m.focus_point_kind_key_object),
+  option('sfx', m.focus_point_kind_sfx),
 ]
 
 export function FocusInspector({ focus, characters, diagnosis, onChange }: FocusInspectorProps) {
@@ -20,17 +20,17 @@ export function FocusInspector({ focus, characters, diagnosis, onChange }: Focus
         {m.inspector_focus_title({ label: focus.label })}
       </Typography>
       <SelectField
-        label={m.inspector_kind()}
+        label={m.focus_point_kind()}
         value={focus.kind}
         options={FOCUS_KINDS}
         onCommit={(v) => v !== focus.kind && onChange(replace('/kind', v))}
       />
       <TextField
-        label={m.inspector_focus_label()}
+        label={m.focus_point_label()}
         value={focus.label}
         onCommit={(v) => v !== focus.label && onChange(replace('/label', v))}
       />
-      <Field label={m.inspector_focus_weight()} hint={focus.weight.toFixed(2)}>
+      <Field label={m.focus_point_weight()} hint={focus.weight.toFixed(2)}>
         {(described) => (
           <input
             type="range"
@@ -45,10 +45,10 @@ export function FocusInspector({ focus, characters, diagnosis, onChange }: Focus
         )}
       </Field>
       <SelectField
-        label={m.inspector_focus_character()}
+        label={m.character()}
         value={focus.characterId ?? ''}
         options={[
-          { value: '', label: m.inspector_none() },
+          { value: '', label: m.none() },
           ...characters.map((c) => ({ value: c.id, label: c.name })),
         ]}
         onCommit={(v) => onChange(optionalString('/characterId', focus.characterId, v))}

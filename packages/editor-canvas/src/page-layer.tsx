@@ -508,7 +508,7 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
         textAnchor="middle"
         dominantBaseline="central"
       >
-        {m.editor_canvas_panel_generate()}
+        {m.generate()}
       </text>
     </g>
   )

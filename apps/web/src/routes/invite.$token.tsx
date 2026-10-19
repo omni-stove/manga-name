@@ -53,7 +53,7 @@ function AcceptInvite() {
       <YStack as="section" gap={16} align="start">
         <Typography variant="title">{m.web_invite_title()}</Typography>
         <Typography>{m.web_invite_not_found()}</Typography>
-        <Link to="/">{m.web_invite_back_to_projects()}</Link>
+        <Link to="/">{m.web_back_to_project_list()}</Link>
       </YStack>
     )
   }
@@ -64,7 +64,7 @@ function AcceptInvite() {
   return (
     <YStack as="section" gap={16} align="start">
       <Typography variant="title">
-        {m.web_invite_project_title({ title: invite.projectTitle || m.web_common_untitled() })}
+        {m.web_invite_project_title({ title: invite.projectTitle || m.untitled() })}
       </Typography>
       <Typography>
         {invited === null

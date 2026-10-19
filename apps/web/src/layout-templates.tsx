@@ -32,7 +32,7 @@ export function TemplateSelect({
   const registered = options.filter((o) => o.registered)
   return (
     <Select
-      label={m.web_layout_template()}
+      label={m.layout_template()}
       inline
       value={value}
       onChange={(e) => onChange(e.currentTarget.value)}
@@ -87,7 +87,7 @@ export function LayoutTemplateDialog({
       actions={
         <>
           <Button type="button" onClick={onClose}>
-            {m.web_common_cancel()}
+            {m.cancel()}
           </Button>
           <Button type="submit" variant="primary" disabled={!name.trim()}>
             {m.web_layout_template_register()}
@@ -96,7 +96,7 @@ export function LayoutTemplateDialog({
       }
     >
       <Input
-        label={m.web_layout_template_name()}
+        label={m.layout_template_name()}
         required
         autoFocus
         value={name}

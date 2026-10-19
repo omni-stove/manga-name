@@ -280,7 +280,7 @@ function Result({
                   {m.web_critique_regenerate()}
                 </Button>
                 <Button size="small" variant="ghost" onClick={() => onDismiss(panelId)}>
-                  {m.web_common_close()}
+                  {m.close()}
                 </Button>
               </XStack>
             )

@@ -42,7 +42,7 @@ export function BatchOptions({ batch }: { batch: ReturnType<typeof useBatchGener
       />
       {batch.running && (
         <Button size="small" onClick={batch.cancel}>
-          {m.web_common_cancel()}
+          {m.cancel()}
         </Button>
       )}
     </XStack>

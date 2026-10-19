@@ -14,10 +14,10 @@ export const Route = createFileRoute('/p/$projectId/characters_/new')({ componen
 const projectRoute = getRouteApi('/p/$projectId')
 
 const FIELDS = [
-  { name: 'name', label: () => m.web_character_field_name(), required: true },
-  { name: 'shortName', label: () => m.web_character_field_short_name(), required: true },
+  { name: 'name', label: () => m.character_name(), required: true },
+  { name: 'shortName', label: () => m.character_short_name(), required: true },
   { name: 'appearance', label: () => m.web_character_field_appearance(), required: false },
-  { name: 'note', label: () => m.web_character_field_note(), required: false },
+  { name: 'note', label: () => m.character_note(), required: false },
 ] as const
 
 /**
@@ -122,7 +122,7 @@ function NewCharacter() {
             />
           ))}
           <FileDrop
-            label={m.web_character_reference()}
+            label={m.character_reference()}
             name="reference"
             accept={REFERENCE_ACCEPT}
             hint={m.web_character_reference_hint()}
@@ -137,13 +137,13 @@ function NewCharacter() {
         <XStack wrap gap={8}>
           <Button type="submit" size="small" variant="primary" disabled={busy !== undefined}>
             {busy === 'generating'
-              ? m.web_common_generating()
+              ? m.generating()
               : busy === 'adding'
                 ? m.web_character_adding()
-                : m.web_common_add()}
+                : m.add()}
           </Button>
           <Button size="small" onClick={() => void backToList()}>
-            {m.web_common_cancel()}
+            {m.cancel()}
           </Button>
         </XStack>
       </form>

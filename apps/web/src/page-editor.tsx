@@ -118,18 +118,18 @@ import { useUndoShortcuts } from './use-undo-shortcuts'
 // 数字キーはペンと焦点の種別に使うので、ツールは英字にする
 const toolOptions = (): readonly SegmentedOption<Tool>[] => [
   { value: 'select', label: m.web_editor_tool_select(), shortcut: 'v' },
-  { value: 'panel', label: m.web_editor_tool_panel(), shortcut: 'p' },
-  { value: 'bubble', label: m.web_editor_tool_bubble(), shortcut: 'b' },
-  { value: 'focus', label: m.web_editor_tool_focus(), shortcut: 'f' },
-  { value: 'vector', label: m.web_editor_tool_vector(), shortcut: 'a' },
-  { value: 'scribble', label: m.web_editor_tool_scribble(), shortcut: 'd' },
-  { value: 'sketch', label: m.web_editor_tool_sketch(), shortcut: 'n' },
+  { value: 'panel', label: m.panel(), shortcut: 'p' },
+  { value: 'bubble', label: m.bubble(), shortcut: 'b' },
+  { value: 'focus', label: m.focus_point(), shortcut: 'f' },
+  { value: 'vector', label: m.vector(), shortcut: 'a' },
+  { value: 'scribble', label: m.page_scribbles(), shortcut: 'd' },
+  { value: 'sketch', label: m.page_sketch(), shortcut: 'n' },
 ]
 
 const scribbleToolOptions = (): readonly SegmentedOption<ScribbleTool>[] => [
-  { value: 'ink', label: m.web_editor_pen_ink(), shortcut: '1' },
-  { value: 'red', label: m.web_editor_pen_red(), shortcut: '2' },
-  { value: 'blue', label: m.web_editor_pen_blue(), shortcut: '3' },
+  { value: 'ink', label: m.stroke_color_ink(), shortcut: '1' },
+  { value: 'red', label: m.stroke_color_red(), shortcut: '2' },
+  { value: 'blue', label: m.stroke_color_blue(), shortcut: '3' },
   { value: 'eraser', label: m.web_editor_pen_eraser(), shortcut: '4' },
 ]
 
@@ -162,8 +162,8 @@ const GAZE_EVALUATION = false
 const layerOptions = (): readonly { key: keyof Layers; label: string }[] => [
   { key: 'reference', label: m.web_editor_layer_reference() },
   { key: 'art', label: m.web_editor_layer_art() },
-  { key: 'scribble', label: m.web_editor_layer_scribble() },
-  { key: 'sketch', label: m.web_editor_layer_sketch() },
+  { key: 'scribble', label: m.page_scribbles() },
+  { key: 'sketch', label: m.page_sketch() },
   { key: 'hints', label: m.web_editor_layer_hints() },
   { key: 'frames', label: m.web_editor_layer_frames() },
   ...(GAZE_EVALUATION
@@ -533,7 +533,7 @@ export function PageEditor({
     <YStack as="section" gap={0} className={styles.editor}>
       <XStack as="header" gap={20} rowGap={12} wrap className={styles.toolbar}>
         <Typography as="span" variant="label" tone="muted">
-          {project.title || m.web_common_untitled()}
+          {project.title || m.untitled()}
         </Typography>
         <Area open={can('navigation')}>
           <Link
@@ -556,7 +556,7 @@ export function PageEditor({
               </Icon>
             </IconButton>
             <Select
-              label={m.web_editor_page()}
+              label={m.page()}
               hideLabel
               value={pageId}
               className={styles.pageSelect}
@@ -709,7 +709,7 @@ export function PageEditor({
       )}
       <div className={styles.body}>
         <Sidebar
-          title={m.web_editor_script()}
+          title={m.page_script()}
           side="left"
           expanded={scriptExpanded}
           onExpandedChange={setScriptExpanded}
@@ -814,7 +814,7 @@ export function PageEditor({
                 />
               </Area>
               <details open={selection === null || guidingGenerate}>
-                <summary>{m.web_editor_page()}</summary>
+                <summary>{m.page()}</summary>
                 <PageInspector
                   key={pageId}
                   page={page}
@@ -901,11 +901,7 @@ function ElementActions({
         checked={isLocked(page, target)}
         onChange={(e) => setLocked(actions, target, e.target.checked)}
       />
-      <RemoveButton
-        size="small"
-        label={m.web_common_delete()}
-        onClick={() => actions.remove(target)}
-      />
+      <RemoveButton size="small" label={m.remove()} onClick={() => actions.remove(target)} />
     </XStack>
   )
 }
@@ -968,7 +964,7 @@ function ElementOutline({
                           >
                             {m.web_editor_outline_bubble({
                               order: bubble.order,
-                              text: bubble.text || m.web_editor_outline_bubble_empty(),
+                              text: bubble.text || m.empty(),
                             })}
                           </button>
                           {badges(byBubble)}
@@ -1201,7 +1197,7 @@ function PageCast({
       )}
       <Typography tone="muted">
         <Link to="/p/$projectId/characters" params={{ projectId }}>
-          {m.web_page_cast_character_list()}
+          {m.web_characters_title()}
         </Link>
         {m.web_page_cast_edit_hint()}
       </Typography>
@@ -1213,16 +1209,16 @@ export function PageNotFound() {
   const { projectId, pageId } = useParams({ strict: false })
   return (
     <YStack as="section" gap={16} align="start">
-      <Typography variant="title">{m.web_page_not_found()}</Typography>
+      <Typography variant="title">{m.web_not_found_page()}</Typography>
       <Typography>
         {projectId} / {pageId}
       </Typography>
       {projectId ? (
         <Link to="/p/$projectId" params={{ projectId }}>
-          {m.web_page_not_found_to_episodes()}
+          {m.web_episode_back_to_list()}
         </Link>
       ) : (
-        <Link to="/">{m.web_page_not_found_to_projects()}</Link>
+        <Link to="/">{m.web_back_to_project_list()}</Link>
       )}
     </YStack>
   )

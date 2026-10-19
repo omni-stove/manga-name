@@ -54,7 +54,7 @@ export function SettingsDialog() {
       search: ({ settings: _, ...rest }) => rest,
       replace: true,
     })
-  const actions = <Button onClick={close}>{m.web_common_close()}</Button>
+  const actions = <Button onClick={close}>{m.close()}</Button>
   if (settings === 'app')
     return (
       <Dialog key={settings} title={m.web_app_settings()} onClose={close} actions={actions}>
@@ -111,7 +111,7 @@ function AppSettings() {
         </XStack>
         {user && (
           <>
-            <dt>{m.web_settings_display_name()}</dt>
+            <dt>{m.web_display_name_label()}</dt>
             <dd>
               <DisplayNameForm key={user.id} name={user.name} />
             </dd>
@@ -165,15 +165,15 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
           })
         }}
       >
-        <Input label={m.web_common_title()} name="title" defaultValue={project.title} />
-        <Select label={m.web_settings_direction()} name="direction" defaultValue={direction}>
-          <option value="rtl">{m.web_settings_direction_rtl()}</option>
-          <option value="ltr">{m.web_settings_direction_ltr()}</option>
+        <Input label={m.project_title()} name="title" defaultValue={project.title} />
+        <Select label={m.project_settings_direction()} name="direction" defaultValue={direction}>
+          <option value="rtl">{m.project_settings_direction_rtl()}</option>
+          <option value="ltr">{m.project_settings_direction_ltr()}</option>
         </Select>
-        <FieldGroup label={m.web_settings_page_size()}>
+        <FieldGroup label={m.project_settings_page_size()}>
           <XStack className={styles.size}>
             <Input
-              label={m.web_settings_width()}
+              label={m.project_settings_page_size_w()}
               hideLabel
               name="w"
               type="number"
@@ -184,7 +184,7 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
             />
             ×
             <Input
-              label={m.web_settings_height()}
+              label={m.project_settings_page_size_h()}
               hideLabel
               name="h"
               type="number"
@@ -197,7 +197,7 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
         </FieldGroup>
         <Input label="dpi" name="dpi" type="number" min="1" step="1" required defaultValue={dpi} />
         <Button type="submit" variant="primary" disabled={role !== 'owner' && role !== 'editor'}>
-          {m.web_common_save()}
+          {m.save()}
         </Button>
       </form>
       {error && (

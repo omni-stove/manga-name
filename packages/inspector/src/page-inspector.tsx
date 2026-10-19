@@ -8,9 +8,9 @@ import section from './section.module.css'
 import type { PageInspectorProps } from './types'
 
 const SIDES: readonly { value: Page['side']; label: string }[] = [
-  option('right', m.inspector_page_side_right),
-  option('left', m.inspector_page_side_left),
-  option('single', m.inspector_page_side_single),
+  option('right', m.page_side_right),
+  option('left', m.page_side_left),
+  option('single', m.page_side_single),
 ]
 
 export function PageInspector({
@@ -26,31 +26,31 @@ export function PageInspector({
   return (
     <div className={section.section} data-inspector="page">
       <Typography variant="subheading" className={section.title}>
-        {m.inspector_page_title()}
+        {m.page()}
       </Typography>
       <fieldset disabled={!editable} className={section.fields}>
         <SelectField
-          label={m.inspector_page_side()}
+          label={m.page_side()}
           value={page.side}
           options={SIDES}
           onCommit={(v) => onChange(replace('/side', v))}
         />
         <TextField
-          label={m.inspector_note()}
+          label={m.page_note()}
           value={page.note ?? ''}
           rows={4}
           delayMs={DEBOUNCE_MS}
           onCommit={(v) => onChange(optionalString('/note', page.note, v))}
         />
         <Typography variant="label" tone="muted" className={section.heading}>
-          {m.inspector_page_reference()}
+          {m.page_reference()}
         </Typography>
         {reference === undefined ? (
           <Typography tone="muted">{m.inspector_page_reference_empty()}</Typography>
         ) : (
           <>
             <Field
-              label={m.inspector_page_reference_opacity()}
+              label={m.reference_image_opacity()}
               hint={`${Math.round(reference.opacity * 100)}%`}
             >
               {(described) => (
@@ -67,7 +67,7 @@ export function PageInspector({
               )}
             </Field>
             <Checkbox
-              label={m.inspector_page_reference_visible()}
+              label={m.reference_image_visible()}
               checked={reference.visible}
               onChange={(e) => onChange(replace('/reference/visible', e.target.checked))}
             />
@@ -80,7 +80,7 @@ export function PageInspector({
           {reference !== undefined && (
             <RemoveButton
               size="small"
-              label={m.inspector_remove()}
+              label={m.remove()}
               onClick={() => onChange([{ op: 'remove', path: '/reference' }])}
             />
           )}
@@ -93,7 +93,7 @@ export function PageInspector({
           disabled={generating || page.panels.length === 0 || !onGenerateAll}
           onClick={onGenerateAll}
         >
-          {generating ? m.inspector_generating() : m.inspector_page_generate_all()}
+          {generating ? m.generating() : m.inspector_page_generate_all()}
         </Button>
         <Typography as="span" tone="muted">
           {m.inspector_panel_title({ order: page.panels.length })}
@@ -105,7 +105,7 @@ export function PageInspector({
           <dd data-ok={diagnosis.readingOrderOk}>
             {diagnosis.readingOrderOk ? 'OK' : m.inspector_page_reading_order_mismatch()}
           </dd>
-          <dt>{m.inspector_focus()}</dt>
+          <dt>{m.focus_point()}</dt>
           <dd>{m.inspector_page_focus_summary(diagnosis.summary)}</dd>
           {diagnosis.issues.length > 0 && (
             <>

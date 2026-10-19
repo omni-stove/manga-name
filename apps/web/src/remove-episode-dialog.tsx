@@ -14,12 +14,12 @@ export function RemoveEpisodeDialog({
 }) {
   return (
     <ConfirmDialog
-      title={m.web_episodes_remove()}
+      title={m.web_episode_remove()}
       message={m.web_episodes_remove_message({
         title: episode.title,
         count: episode.pages.length,
       })}
-      confirmLabel={m.web_common_delete()}
+      confirmLabel={m.remove()}
       onConfirm={onConfirm}
       onCancel={onCancel}
     />

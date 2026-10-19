@@ -31,7 +31,7 @@ export function ConfirmDialog({
       onSubmit={onConfirm}
       actions={
         <>
-          <Button onClick={onCancel}>{m.ui_confirm_dialog_cancel()}</Button>
+          <Button onClick={onCancel}>{m.cancel()}</Button>
           <Button type="submit" variant={irreversible ? 'danger' : 'primary'} autoFocus>
             {confirmLabel}
           </Button>

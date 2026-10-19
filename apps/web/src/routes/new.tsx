@@ -44,19 +44,14 @@ function NewProject() {
           e.preventDefault()
           const title = String(new FormData(e.currentTarget).get('title') ?? '').trim()
           void run(async () => {
-            const project = await library.create(title || m.web_common_untitled())
+            const project = await library.create(title || m.untitled())
             tour.created(project.id)
             await navigate({ to: '/p/$projectId', params: { projectId: project.id } })
           })
         }}
       >
         <XStack align="stretch">
-          <Input
-            name="title"
-            placeholder={m.web_common_title()}
-            label={m.web_common_title()}
-            hideLabel
-          />
+          <Input name="title" placeholder={m.project_title()} label={m.project_title()} hideLabel />
           <Button type="submit" variant="primary" disabled={busy}>
             {m.web_new_project_create()}
           </Button>

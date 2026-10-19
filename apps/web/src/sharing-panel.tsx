@@ -109,7 +109,7 @@ function MembersView({
             onFocus={(e) => e.target.select()}
           />
           <Button size="small" onClick={() => void navigator.clipboard.writeText(link.url)}>
-            {m.web_common_copy()}
+            {m.copy()}
           </Button>
           <Typography as="small" variant="caption" tone="muted">
             {link.open ? m.web_sharing_open_invite_link_hint() : m.web_sharing_invite_link_hint()}
@@ -147,7 +147,7 @@ function MembersView({
                   disabled={busy}
                   onClick={() => void run(() => sharing.removeMember(projectId, member.userId))}
                 >
-                  {m.web_sharing_remove_member()}
+                  {m.detach()}
                 </Button>
               </>
             ) : (

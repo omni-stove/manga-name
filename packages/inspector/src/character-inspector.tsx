@@ -53,33 +53,33 @@ export function CharacterInspector({
         {character.name || m.inspector_character_untitled()}
       </Typography>
       <TextField
-        label={m.inspector_character_name()}
+        label={m.character_name()}
         value={character.name}
         required
         onCommit={(v) => v !== character.name && onChange(replace('/name', v))}
       />
       <TextField
-        label={m.inspector_character_short_name()}
+        label={m.character_short_name()}
         value={character.shortName}
         required
         onCommit={(v) => v !== character.shortName && onChange(replace('/shortName', v))}
       />
       <TextField
-        label={m.inspector_character_appearance()}
+        label={m.character_appearance()}
         value={character.appearance ?? ''}
         rows={4}
         delayMs={DEBOUNCE_MS}
         placeholder={m.inspector_character_appearance_placeholder()}
         onCommit={(v) => onChange(optionalString('/appearance', character.appearance, v))}
       />
-      <Group label={m.inspector_character_reference()}>
+      <Group label={m.character_reference()}>
         {ref === undefined ? (
           <DefaultReference />
         ) : (
           <Suspense
             fallback={
               <Typography as="span" tone="muted">
-                {m.inspector_loading()}
+                {m.loading()}
               </Typography>
             }
           >
@@ -100,7 +100,7 @@ export function CharacterInspector({
           }
           onClick={onGenerateReference}
         >
-          {generating ? m.inspector_generating() : m.inspector_character_generate_reference()}
+          {generating ? m.generating() : m.inspector_character_generate_reference()}
         </Button>
         {ref !== undefined && (
           <Button
@@ -109,12 +109,12 @@ export function CharacterInspector({
             disabled={generating}
             onClick={() => onChange([{ op: 'remove', path: '/referenceRef' }])}
           >
-            {m.inspector_character_reference_remove()}
+            {m.detach()}
           </Button>
         )}
       </Group>
       <TextField
-        label={m.inspector_note()}
+        label={m.character_note()}
         value={character.note ?? ''}
         rows={3}
         delayMs={DEBOUNCE_MS}

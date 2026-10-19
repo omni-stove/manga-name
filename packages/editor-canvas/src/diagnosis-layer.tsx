@@ -204,7 +204,7 @@ function focusAnchors(
     for (const b of panel.bubbles) {
       anchors.set(b.id, {
         ...toPagePoint(panel, width, height, b.pos),
-        label: m.editor_canvas_diagnosis_bubble_label(),
+        label: m.bubble(),
       })
     }
   }
