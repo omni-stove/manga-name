@@ -1,1 +1,0 @@
-This is the map of the whole repo: each package's README, then each file's exports. For an overview, explain package by package what each one does and how apps/web wires them, then ask which part to go into. For a question, pick the packages and files it touches and run `.agents/skills/spec/scripts/collect.sh <path>...` with them.
