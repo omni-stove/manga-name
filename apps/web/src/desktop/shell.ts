@@ -21,6 +21,7 @@ import {
   recentLabel,
   saveRecentFiles,
 } from './recent-files'
+import { openScriptWindow } from './windows'
 
 export interface DesktopShellOptions {
   router: ReturnType<typeof createAppRouter>
@@ -37,6 +38,7 @@ const separator = predefined('Separator')
  * Desktop のアプリメニュー（ファイル、編集、表示）を張り、ファイルを開く・保存するダイアログと最近開いたファイルをつなぐ。
  * 開くは `.manga.json` をライブラリに読み込んで開き、保存は開いているプロジェクトを JSON でそのファイルに書く。
  * 編集の Undo / Redo はページの編集画面のときだけ、そのプロジェクトの store に送る。
+ * 表示の「脚本を別ウィンドウで開く」は、開いているエピソード（ページの編集画面ならそのページを含むエピソード）の脚本の画面を別のウィンドウで開く。
  * ウィンドウの位置と大きさは Rust 側の window-state プラグインが戻す
  */
 export async function startDesktopShell({ router, library }: DesktopShellOptions): Promise<void> {
@@ -146,6 +148,31 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
     ]
   }
 
+  // ページの編集画面からはそのページを含むエピソードの脚本を開き、横に並べて書ける
+  const currentEpisodeId = async (): Promise<ID | undefined> => {
+    for (const match of router.state.matches) {
+      const { episodeId, pageId } = match.params as { episodeId?: ID; pageId?: ID }
+      if (episodeId) return episodeId
+      if (!pageId) continue
+      const project = await currentProject()
+      return project?.episodes.find((e) => e.pages.some((p) => p.id === pageId))?.id
+    }
+  }
+
+  const openScript = async () => {
+    const projectId = currentProjectId()
+    const episodeId = await currentEpisodeId()
+    if (!projectId || !episodeId) {
+      toasts.push(m.web_menu_script_window_no_episode())
+      return
+    }
+    const { href } = router.buildLocation({
+      to: '/p/$projectId/episodes/$episodeId/draft',
+      params: { projectId, episodeId },
+    })
+    await openScriptWindow({ episodeId, url: href, title: m.web_draft_title() })
+  }
+
   const openSettings = () =>
     void router.navigate({
       to: '.',
@@ -230,6 +257,11 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
           items: [
             { text: m.web_project_list(), action: () => void router.navigate({ to: '/' }) },
             { text: m.web_app_settings(), accelerator: 'CmdOrCtrl+,', action: openSettings },
+            separator,
+            {
+              text: m.web_menu_script_window(),
+              action: run((reason) => m.web_menu_script_window_failed({ reason }), openScript),
+            },
             ...(isMac ? [separator, predefined('Fullscreen'), predefined('Minimize')] : []),
           ],
         },
@@ -274,14 +306,27 @@ if (import.meta.vitest) {
     libraryProjects = [] as Project[],
     currentId = undefined as ID | undefined,
     onPage = false,
+    pageId = 'page' as ID,
   } = {}) => {
     const store = createFakeStoreIpc({ recentFiles: recent })
     const written = new Map<string, string>()
     let menu: SentItem[] = []
     const dialogs: { cmd: string; options: unknown }[] = []
+    const createdWindows: unknown[] = []
     installFakeTauri(vi.stubGlobal, (cmd, args, options) => {
       if (cmd.startsWith('plugin:store|')) return store.handle(cmd, args)
       switch (cmd) {
+        case 'plugin:window|get_all_windows':
+        case 'plugin:webview|get_all_webviews':
+          return []
+        case 'plugin:webview|create_webview_window':
+          createdWindows.push((args as { options: unknown }).options)
+          return null
+        case 'plugin:event|listen':
+          return 1
+        case 'plugin:event|emit':
+        case 'plugin:event|unlisten':
+          return null
         case 'plugin:menu|new':
           menu = (args as { options: { items: SentItem[] } }).options.items
           return [1, 'menu']
@@ -325,11 +370,14 @@ if (import.meta.vitest) {
           { routeId: '__root__', params: {} },
           {
             routeId: onPage ? '/p/$projectId_/pages/$pageId' : '/p/$projectId',
-            params: { projectId: currentId },
+            params: { projectId: currentId, ...(onPage && { pageId }) },
           },
         ],
       },
       navigate: vi.fn(async () => {}),
+      buildLocation: ({ params }: { params: { projectId: ID; episodeId: ID } }) => ({
+        href: `/p/${params.projectId}/episodes/${params.episodeId}/draft`,
+      }),
     }
     await startDesktopShell({
       router: router as unknown as DesktopShellOptions['router'],
@@ -347,6 +395,7 @@ if (import.meta.vitest) {
       store,
       written,
       dialogs,
+      createdWindows,
       library,
       router,
       stores,
@@ -524,6 +573,27 @@ if (import.meta.vitest) {
       expect(list).toEqual({ to: '/' })
       expect(settings).toMatchObject({ to: '.', replace: true })
       expect(settings.search({ q: 1 })).toEqual({ q: 1, settings: 'app' })
+    })
+
+    test('from the page editor the View menu opens the script of the episode of that page in a new window', async () => {
+      const project = {
+        ...fileProject,
+        episodes: [{ id: 'ep', pages: [{ id: 'page' }] }],
+      } as unknown as Project
+      const shell = await setup({ libraryProjects: [project], currentId: project.id, onPage: true })
+      shell.click('表示', '脚本を別ウィンドウで開く')
+      await vi.waitFor(() => expect(shell.createdWindows).toHaveLength(1))
+      expect(shell.createdWindows[0]).toMatchObject({
+        label: 'script-ep',
+        url: `/p/${project.id}/episodes/ep/draft`,
+      })
+    })
+
+    test('the script window needs an open episode', async () => {
+      const shell = await setup({ libraryProjects: [fileProject], currentId: fileProject.id })
+      shell.click('表示', '脚本を別ウィンドウで開く')
+      await vi.waitFor(() => expect(toasts.state.getState().toasts).toHaveLength(1))
+      expect(shell.createdWindows).toEqual([])
     })
   })
 }
