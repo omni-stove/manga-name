@@ -26,13 +26,11 @@ export function nameRequest(
   }
 }
 
-/** 直している途中のネームのコマを、前後の空白を落とし、空のカメラとセリフを捨てた形にする */
-function normalizeNamePanel({ camera, ...panel }: NamePanel): NamePanel {
-  const trimmedCamera = camera?.trim() ?? ''
+/** 直している途中のネームのコマを、前後の空白を落とし、空のセリフを捨てた形にする */
+function normalizeNamePanel(panel: NamePanel): NamePanel {
   return {
     ...panel,
     note: panel.note.trim(),
-    ...(trimmedCamera !== '' && { camera: trimmedCamera }),
     lines: panel.lines.flatMap((line) => {
       const text = line.text.trim()
       return text === '' ? [] : [{ ...line, text }]
@@ -165,12 +163,11 @@ if (import.meta.vitest) {
     })
   })
 
-  test('layoutRequest trims the name and drops empty cameras and lines', () => {
+  test('layoutRequest trims the name and drops empty lines', () => {
     expect(
       layoutRequest([
         {
           note: ' 森 ',
-          camera: ' ',
           lines: [
             { text: ' a ', shape: 'normal' },
             { text: '', shape: 'normal' },

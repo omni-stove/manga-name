@@ -112,7 +112,6 @@ const LayoutSuggestionRequestSchema = z.object({
     .array(
       NamePanelSchema.extend({
         note: z.string().min(1).max(MAX_NAME_TEXT_LENGTH),
-        camera: z.string().min(1).max(MAX_NAME_TEXT_LENGTH).optional(),
         lines: z
           .array(
             NamePanelSchema.shape.lines.element.extend({

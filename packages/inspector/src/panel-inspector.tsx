@@ -2,6 +2,8 @@
 import { getLocale, m } from '@manga/i18n'
 import {
   type Bubble,
+  type Camera,
+  CameraSchema,
   type Character,
   currentArt,
   type ID,
@@ -22,21 +24,17 @@ import {
   XStack,
   YStack,
 } from '@manga/ui'
-import { Suspense, use, useId, useState } from 'react'
+import { Suspense, use, useState } from 'react'
 import { assetUrl } from './asset-url'
-import { DEBOUNCE_MS, NumberField, TextField } from './fields'
+import { DEBOUNCE_MS, NumberField, option, SelectField, TextField } from './fields'
 import styles from './panel-inspector.module.css'
 import { addCastPatch, optionalString, removeCastPatch, replace, swapOrder } from './patch'
 import section from './section.module.css'
 import type { PanelInspectorProps } from './types'
 
-const CAMERA_SUGGESTIONS = [
-  m.inspector_panel_camera_long,
-  m.inspector_panel_camera_middle,
-  m.inspector_panel_camera_bust,
-  m.inspector_panel_camera_close_up,
-  m.inspector_panel_camera_low_angle,
-  m.inspector_panel_camera_high_angle,
+const CAMERAS: readonly { value: Camera | ''; label: string }[] = [
+  option('', m.none),
+  ...CameraSchema.options.map((camera) => option(camera, m[`panel_camera_${camera}` as const])),
 ]
 
 const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
@@ -68,7 +66,6 @@ export function PanelInspector({
   onRemoveArt,
   resolveAsset,
 }: PanelInspectorProps) {
-  const cameraListId = useId()
   const [instruction, setInstruction] = useState('')
   const current = currentArt(panel)
   const bubbles = byOrder(panel.bubbles)
@@ -90,18 +87,12 @@ export function PanelInspector({
         commitOnBlur
         onCommit={(n) => onChange(replace('/order', n))}
       />
-      <TextField
+      <SelectField
         label={m.panel_camera()}
         value={panel.camera ?? ''}
-        list={cameraListId}
-        placeholder={m.inspector_panel_camera_placeholder()}
+        options={CAMERAS}
         onCommit={(v) => onChange(optionalString('/camera', panel.camera, v))}
       />
-      <datalist id={cameraListId}>
-        {CAMERA_SUGGESTIONS.map((camera) => (
-          <option key={camera()} value={camera()} />
-        ))}
-      </datalist>
       <TextField
         label={m.panel_note()}
         value={panel.note ?? ''}

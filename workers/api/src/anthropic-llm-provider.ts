@@ -1,7 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { transformJSONSchema } from '@anthropic-ai/sdk/lib/transform-json-schema'
 import { type LlmPrompt, type LlmProvider, prompts } from '@manga/ai'
-import type { JsonSchema } from '@manga/schema'
 import { z } from 'zod'
 
 const ANTHROPIC_LLM_MODEL = 'claude-haiku-5-5'
@@ -28,11 +27,7 @@ export function createAnthropicLlmProvider(opts: AnthropicLlmProviderOptions): L
   // SDK の再試行は切る。呼び出し側の再試行と重なると、1 要求で何度も課金されるため
   const client = new Anthropic({ apiKey: opts.apiKey, maxRetries: 0 })
 
-  async function generate(
-    { system, user }: LlmPrompt<unknown>,
-    schema: JsonSchema,
-    maxTokens: number,
-  ) {
+  async function generate({ system, user, schema }: LlmPrompt<unknown>, maxTokens: number) {
     // 非 streaming では SDK が max_tokens 64,000 の要求を 10 分を超える恐れで断るので、streaming で受ける
     const message = await client.messages
       .stream({
@@ -64,27 +59,19 @@ export function createAnthropicLlmProvider(opts: AnthropicLlmProviderOptions): L
   return {
     planPages: async (req) => {
       const prompt = prompts.planPages(req)
-      // 構造化出力は根を object に限るので、配列を { elements } で包ませて受け取る
-      const schema: JsonSchema = {
-        type: 'object',
-        additionalProperties: false,
-        required: ['elements'],
-        properties: { elements: prompt.schema },
-      }
-      const reply = await generate(prompt, schema, MAX_PLAN_OUTPUT_TOKENS)
-      return check(prompt.output, (reply as { elements?: unknown } | null)?.elements)
+      return check(prompt.output, await generate(prompt, MAX_PLAN_OUTPUT_TOKENS))
     },
     transcribeName: async (req) => {
       const prompt = prompts.transcribeName(req)
-      return check(prompt.output, await generate(prompt, prompt.schema, MAX_NAME_OUTPUT_TOKENS))
+      return check(prompt.output, await generate(prompt, MAX_NAME_OUTPUT_TOKENS))
     },
     suggestLayout: async (req) => {
       const prompt = prompts.suggestLayout(req)
-      return check(prompt.output, await generate(prompt, prompt.schema, MAX_LAYOUT_OUTPUT_TOKENS))
+      return check(prompt.output, await generate(prompt, MAX_LAYOUT_OUTPUT_TOKENS))
     },
     critique: async (req) => {
       const prompt = prompts.critique(req)
-      return check(prompt.output, await generate(prompt, prompt.schema, MAX_CRITIQUE_OUTPUT_TOKENS))
+      return check(prompt.output, await generate(prompt, MAX_CRITIQUE_OUTPUT_TOKENS))
     },
   }
 }

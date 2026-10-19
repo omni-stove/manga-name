@@ -1,6 +1,13 @@
 import { z } from 'zod'
 import { PatchSchema } from './patch'
-import { BubbleSchema, CharacterSchema, IdSchema, PageSchema, ProjectBaseSchema } from './project'
+import {
+  BubbleSchema,
+  CameraSchema,
+  CharacterSchema,
+  IdSchema,
+  PageSchema,
+  ProjectBaseSchema,
+} from './project'
 
 const blob = z.instanceof(Blob)
 
@@ -61,6 +68,9 @@ export const PagePlanSchema = z.object({
 /** ページ割りの応答。読む順のページごとの割り振り */
 export const PagePlanResponseSchema = z.array(PagePlanSchema).min(1)
 
+/** LLM に返させるページ割り。構造化出力は根を object に限るので、ページの配列を `pages` で包む */
+export const PagePlanReplySchema = z.object({ pages: PagePlanResponseSchema })
+
 /** ネームの書き起こしで 1 ページに置けるコマの数の上限 */
 export const MAX_NAME_PANELS = 12
 
@@ -68,8 +78,8 @@ export const MAX_NAME_PANELS = 12
 export const NamePanelSchema = z.object({
   /** このコマで描くもの。Panel.note になる */
   note: z.string().min(1),
-  /** 画面の切り取り方（ロング、バストアップなど）。Panel.camera になる */
-  camera: z.string().min(1).optional(),
+  /** Panel.camera になる */
+  camera: CameraSchema.optional(),
   /** このコマのセリフ。読む順。Bubble になる */
   lines: z.array(PlanLineSchema),
 })
@@ -79,11 +89,10 @@ export const NameDraftResponseSchema = z.object({
   panels: z.array(NamePanelSchema).min(1).max(MAX_NAME_PANELS),
 })
 
-/** 直している途中のネーム。描くもの、カメラ、セリフは入力の途中で空になるので、空も通す */
+/** 直している途中のネーム。描くものとセリフは入力の途中で空になるので、空も通す */
 export const NameDraftSchema = z.array(
   NamePanelSchema.extend({
     note: z.string(),
-    camera: z.string().optional(),
     lines: z.array(PlanLineSchema.extend({ text: z.string() })),
   }),
 )
@@ -158,7 +167,7 @@ if (import.meta.vitest) {
     ]
     for (const res of invalid) expect(NameDraftResponseSchema.safeParse(res).success).toBe(false)
     expect(
-      NameDraftSchema.parse([{ note: '', camera: '', lines: [{ text: '', shape: 'normal' }] }]),
+      NameDraftSchema.parse([{ note: '', lines: [{ text: '', shape: 'normal' }] }]),
     ).toHaveLength(1)
   })
 

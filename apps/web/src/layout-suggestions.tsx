@@ -1,6 +1,7 @@
 import type { LayoutSuggestionResponse, LlmProvider } from '@manga/ai'
 import { m } from '@manga/i18n'
 import {
+  CameraSchema,
   type Character,
   type ID,
   type LayoutOption,
@@ -14,7 +15,7 @@ import {
   Button,
   ConfirmDialog,
   IconButton,
-  Input,
+  Select,
   TextArea,
   Typography,
   XStack,
@@ -302,10 +303,10 @@ function NameEditor({
   disabled: boolean
   onChange(next: NamePanel[]): void
 }) {
-  const editPanel = (index: number, next: Partial<NamePanel>) =>
-    onChange(panels.map((p, i) => (i === index ? { ...p, ...next } : p)))
+  const editPanel = (index: number, next: (p: NamePanel) => NamePanel) =>
+    onChange(panels.map((p, i) => (i === index ? next(p) : p)))
   const editLines = (index: number, next: (lines: PlanLine[]) => PlanLine[]) =>
-    editPanel(index, { lines: next(panels[index]?.lines ?? []) })
+    editPanel(index, (p) => ({ ...p, lines: next(p.lines) }))
 
   return (
     <YStack gap={6} as="fieldset" className={styles.fieldset} disabled={disabled}>
@@ -331,13 +332,25 @@ function NameEditor({
               label={m.panel_note()}
               rows={2}
               value={panel.note}
-              onChange={(e) => editPanel(index, { note: e.target.value })}
+              onChange={(e) => editPanel(index, (p) => ({ ...p, note: e.target.value }))}
             />
-            <Input
+            <Select
               label={m.panel_camera()}
               value={panel.camera ?? ''}
-              onChange={(e) => editPanel(index, { camera: e.target.value })}
-            />
+              onChange={(e) => {
+                const camera = CameraSchema.safeParse(e.currentTarget.value)
+                editPanel(index, ({ camera: _, ...rest }) =>
+                  camera.success ? { ...rest, camera: camera.data } : rest,
+                )
+              }}
+            >
+              <option value="">{m.none()}</option>
+              {CameraSchema.options.map((camera) => (
+                <option key={camera} value={camera}>
+                  {m[`panel_camera_${camera}`]()}
+                </option>
+              ))}
+            </Select>
             {panel.lines.length === 0 && (
               <Typography variant="caption" tone="muted">
                 {m.web_draft_no_lines()}
