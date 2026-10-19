@@ -2,6 +2,11 @@
   margin-bottom: var(--space-16);
 }
 
+/* 列の行の高さを本文の大きさで取ると、戻るリンクのある画面だけツールバーが高くなり下の内容がずれる */
+.backLink {
+  font-size: var(--text-s);
+}
+
 /* 戻るリンクの無い一覧の画面で、空の列が gap を取らないようにする */
 .backLink:empty {
   display: none;
