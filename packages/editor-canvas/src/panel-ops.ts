@@ -209,6 +209,22 @@ export function orderOps(before: readonly Panel[], after: readonly Panel[], skip
   return patch
 }
 
+/** order の抜けを詰めて 1 から振り直す replace。並び順は変えない。base は配列の JSON Pointer */
+export function compactOrderOps(base: string, items: readonly { order: number }[]): Patch {
+  const rank = new Map(
+    items
+      .map((item, i) => ({ order: item.order, i }))
+      .sort((a, b) => a.order - b.order || a.i - b.i)
+      .map(({ i }, k) => [i, k + 1]),
+  )
+  return items.flatMap((item, i) => {
+    const order = rank.get(i)
+    return order === undefined || order === item.order
+      ? []
+      : [{ op: 'replace' as const, path: `${base}/${i}/order`, value: order }]
+  })
+}
+
 /** コマ内座標の点を、コマ from からコマ to のコマ内座標へ移す。to の外は 0..1 に収める */
 function movePoint(p: Point, from: Rect, to: Rect): Point {
   return {
