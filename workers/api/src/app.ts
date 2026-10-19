@@ -9,11 +9,8 @@ import {
 } from '@manga/ai'
 import {
   CharacterArtRequestSchema,
-  CritiqueResponseSchema,
-  LayoutSuggestionResponseSchema,
   PageArtRequestSchema,
   PageDiagnosisSchema,
-  PagePlanResponseSchema,
   PageSchema,
   PanelArtRequestSchema,
   type PlanLine,
@@ -332,19 +329,14 @@ export function createApp(options: AppOptions = {}) {
     const characterIds = new Set(req.project.characters.map((ch) => ch.id))
 
     const { value, attempts } = await retryUntilValid('plan-pages', async () => {
-      // 戻り型を信用せず検証し直すのは、実プロバイダの応答が LLM の出力をそのまま詰めたものだから
-      const result = PagePlanResponseSchema.safeParse(await provider.planPages(req))
-      if (!result.success) {
-        console.error('plan-pages: invalid page plan', z.prettifyError(result.error))
-        return undefined
-      }
-      if (result.data.length > MAX_PAGE_COUNT) {
-        console.error(`plan-pages: ${result.data.length} pages exceed ${MAX_PAGE_COUNT}`)
+      const plan = await provider.planPages(req)
+      if (plan.length > MAX_PAGE_COUNT) {
+        console.error(`plan-pages: ${plan.length} pages exceed ${MAX_PAGE_COUNT}`)
         return undefined
       }
       // 指定とのページ数のずれと居ないキャラは作り直させない。ページ数が多いとモデルは再試行してもずれがちで、
       // ずれは Web が警告して利用者に直させる。居ないキャラは登場キャラと話し手がスキーマを通らなくなるので落とす
-      return result.data.map((p) => ({
+      return plan.map((p) => ({
         ...p,
         cast: p.cast.filter((id, i) => p.cast.indexOf(id) === i && characterIds.has(id)),
         lines: dropUnknownSpeakers(p.lines, characterIds),
@@ -367,14 +359,9 @@ export function createApp(options: AppOptions = {}) {
     const characterIds = new Set(req.project.characters.map((ch) => ch.id))
 
     const { value, attempts } = await retryUntilValid('suggest-layout', async () => {
-      // plan-pages と同じく、実プロバイダの応答は LLM の出力そのままなので検証し直す
-      const result = LayoutSuggestionResponseSchema.safeParse(await provider.suggestLayout(req))
-      if (!result.success) {
-        console.error('suggest-layout: invalid layout suggestion', z.prettifyError(result.error))
-        return undefined
-      }
+      const suggestion = await provider.suggestLayout(req)
       return {
-        options: result.data.options.map((option) => ({
+        options: suggestion.options.map((option) => ({
           ...option,
           rows: option.rows.map((row) => ({
             ...row,
@@ -411,13 +398,7 @@ export function createApp(options: AppOptions = {}) {
       const usageId = await reserve(c, 'critique')
       const provider = createLlm(c.env)
 
-      const { value, attempts } = await retryUntilValid('critique', async () => {
-        // plan-pages と同じく、実プロバイダの応答は LLM の出力そのままなので検証し直す
-        const result = CritiqueResponseSchema.safeParse(await provider.critique(req))
-        if (result.success) return result.data
-        console.error('critique: invalid critique', z.prettifyError(result.error))
-        return undefined
-      })
+      const { value, attempts } = await retryUntilValid('critique', () => provider.critique(req))
       await settleUsage(c.env.DB, usageId, attempts)
 
       if (value === undefined) {

@@ -128,9 +128,10 @@ describe('POST /v1/ai/plan-pages', () => {
     expect((await usageRows()).results[0]?.cost_units).toBe(2)
   })
 
-  test('502 after the retry still returns an invalid plan', async () => {
-    const empty = async () => []
-    const { provider, calls } = scripted([empty, empty])
+  test('502 when the plan is over the page limit on the retry too', async () => {
+    const page = aiFixtures.pagePlan[0] as PagePlanResponse[number]
+    const tooMany = async () => Array.from({ length: 65 }, () => page)
+    const { provider, calls } = scripted([tooMany, tooMany])
     expect((await post(createApp({ llmProvider: () => provider }))).status).toBe(502)
     expect(calls).toHaveLength(2)
   })

@@ -105,8 +105,11 @@ describe('POST /v1/ai/suggest-layout', () => {
   })
 
   test('retries an invalid suggestion, then 502 when the retry is invalid too', async () => {
-    const empty = async () => ({ options: [] })
-    const { provider, calls } = scripted([empty, empty])
+    // スキーマを通らない応答。LlmProvider は返さずに throw する
+    const invalid = async (): Promise<LayoutSuggestionResponse> => {
+      throw new Error('invalid llm output')
+    }
+    const { provider, calls } = scripted([invalid, invalid])
     expect((await post(createApp({ llmProvider: () => provider }))).status).toBe(502)
     expect(calls).toHaveLength(2)
     expect((await usageRows()).results[0]?.cost_units).toBe(2)

@@ -57,6 +57,7 @@ export interface ImageProvider {
   generateCharacterArt(req: CharacterArtRequest): Promise<PanelArtResponse>
 }
 
+/** 各メソッドは応答のスキーマを通った値を返し、通らない応答は throw する */
 export interface LlmProvider {
   /** 脚本をページに割り振り、ページごとの流れ、登場キャラ、セリフを返す。コマ割りはしない */
   planPages(req: PagePlanRequest): Promise<PagePlanResponse>
