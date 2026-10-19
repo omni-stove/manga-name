@@ -18,11 +18,14 @@ interface DialogProps {
   className?: string
 }
 
+function outside(r: DOMRect, x: number, y: number) {
+  return x < r.left || x > r.right || y < r.top || y > r.bottom
+}
+
 /** pointer が dialog の枠の外、つまり ::backdrop の上にあるか */
 function onBackdrop(e: MouseEvent<HTMLDialogElement>) {
   if (e.target !== e.currentTarget) return false
-  const r = e.currentTarget.getBoundingClientRect()
-  return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom
+  return outside(e.currentTarget.getBoundingClientRect(), e.clientX, e.clientY)
 }
 
 /** モーダル。開いている間だけマウントし、マウントで showModal する。背景のクリックで閉じる */
@@ -53,6 +56,7 @@ export function Dialog({
     </>
   )
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: 背景のクリックは ::backdrop 向けの操作で、キーボードでは Esc の close が同じ役を担う
     <dialog
       ref={ref}
       className={cx(styles.dialog, className)}
@@ -81,4 +85,17 @@ export function Dialog({
       )}
     </dialog>
   )
+}
+
+if (import.meta.vitest) {
+  const { expect, test } = import.meta.vitest
+
+  test('outside is true only beyond the rect on any side', () => {
+    const r = { left: 10, right: 20, top: 10, bottom: 20 } as DOMRect
+    expect(outside(r, 15, 15)).toBe(false)
+    expect(outside(r, 5, 15)).toBe(true)
+    expect(outside(r, 25, 15)).toBe(true)
+    expect(outside(r, 15, 5)).toBe(true)
+    expect(outside(r, 15, 25)).toBe(true)
+  })
 }

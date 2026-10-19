@@ -53,7 +53,11 @@ export const BackdropClickCallsOnClose: Story = {
   play: async ({ args }) => {
     const dialog = screen.getByRole<HTMLDialogElement>('dialog', { name: 'ページを追加' })
     // 背景のクリックは dialog 自身に届くので、枠の外の座標で押す
-    await userEvent.pointer({ keys: '[MouseLeft]', target: dialog, coords: { clientX: 1, clientY: 1 } })
+    await userEvent.pointer({
+      keys: '[MouseLeft]',
+      target: dialog,
+      coords: { clientX: 1, clientY: 1 },
+    })
     await waitFor(() => expect(args.onClose).toHaveBeenCalledOnce())
   },
 }
