@@ -2,6 +2,11 @@
   margin-bottom: var(--space-16);
 }
 
+/* 戻るリンクの無い一覧の画面で、空の列が gap を取らないようにする */
+.backLink:empty {
+  display: none;
+}
+
 .actions {
   margin-left: auto;
 }
