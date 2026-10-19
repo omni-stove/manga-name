@@ -530,9 +530,16 @@ export function PageEditor({
   const menuTarget = canEdit && menu?.target && hasElement(page, menu.target) ? menu.target : null
   const menuContext = {
     page,
+    settings: project.settings,
     tools,
     edit: (label: string, target: NonNullable<Selection>, patch: Patch) =>
       apply(label, (p) => elementPatch(p, pageId, target, patch)),
+    editPage: (label: string, build: (page: Page) => Patch) =>
+      apply(label, (p) => {
+        const current = findPage(p, pageId)
+        if (!current) throw new Error(m.web_common_page_gone())
+        return pagePatch(p, pageId, build(current.page))
+      }),
     remove: (target: NonNullable<Selection>) => {
       const removed = apply(m.web_editor_history_remove_element(), (p) => {
         const current = findPage(p, pageId)
