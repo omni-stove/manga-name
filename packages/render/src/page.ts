@@ -6,6 +6,7 @@ import {
   INNER_FRAME,
   type Page,
   type Panel,
+  paintOrder,
   panelOutline,
 } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
@@ -17,7 +18,7 @@ import {
   drawNotesMargin,
   drawPanelNumber,
   drawPlaceholder,
-  fillBlack,
+  fillOutline,
   withClip,
 } from './panel'
 import { drawVerticalText, layoutBubbleText } from './text'
@@ -73,7 +74,7 @@ export async function drawPage(
   c.fillRect(0, 0, surface.width, surface.height)
 
   const innerRect = rectToPx(INNER_FRAME, pageRect)
-  const panels = byOrder(page.panels)
+  const panels = paintOrder(page.panels)
   const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx)))
   const drawBubbles = (panel: Panel, overflow: boolean) => {
     const rect = rectToPx(panel.rect, pageRect)
@@ -94,7 +95,9 @@ export async function drawPage(
     const rect = rectToPx(panel.rect, pageRect)
     const outline = panelOutline(panel).map((p) => pointToPx(p, pageRect))
     const image = arts[i]
-    if (panel.fill === 'black') fillBlack(c, outline)
+    // 枠ありのコマは、下に敷いた枠なしのコマの絵を隠すよう白い地を持つ
+    if (panel.fill === 'black') fillOutline(c, outline, '#000')
+    else if (panel.frame !== 'none') fillOutline(c, outline, '#fff')
     if (image) drawCover(c, image, rect, outline)
     else if (panel.fill === undefined) {
       drawPlaceholder(c, panel, rect, outline, pageSize.w * NOTE_FONT)
@@ -104,7 +107,7 @@ export async function drawPage(
     }
     // 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く
     withClip(c, outline, () => drawBubbles(panel, false))
-    drawFrame(c, outline, pageSize.w * FRAME_WIDTH)
+    if (panel.frame !== 'none') drawFrame(c, outline, pageSize.w * FRAME_WIDTH)
   })
 
   // はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く
@@ -112,7 +115,7 @@ export async function drawPage(
 
   if (margin > 0) {
     const area: PxRect = { x: marginOnLeft ? 0 : pageSize.w, y: 0, w: margin, h: pageSize.h }
-    drawNotesMargin(c, panels, area, pageSize.w * MARGIN_FONT)
+    drawNotesMargin(c, byOrder(page.panels), area, pageSize.w * MARGIN_FONT)
   }
 
   return surface
@@ -301,6 +304,41 @@ if (import.meta.vitest) {
       px({ x: cx, y: (rect.y + rect.h * 0.35) * pageH + i }),
     )
     expect(column.some(([r]) => (r ?? 0) > 200)).toBe(true)
+  })
+
+  test('枠なしのコマは枠線を引かず、order に関わらず枠ありのコマの下に敷く', async () => {
+    const [pn1, pn2, ...rest] = emptyPage.panels as [Panel, Panel, ...Panel[]]
+    const background: Panel = {
+      ...pn1,
+      id: 'pn_bg',
+      order: 99,
+      rect: { x: 0, y: 0, w: 1, h: 1 },
+      fill: 'black',
+      frame: 'none',
+      bubbles: [],
+    }
+    const draw = async (panels: Panel[]) => {
+      const png = await renderPage({ ...emptyPage, panels }, noAssets, {
+        width: SNAPSHOT_WIDTH,
+        notes: 'none',
+        panelNumbers: false,
+      })
+      const { width, data } = await pixels(png)
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      return (x: number, y: number) =>
+        data[(Math.round(y * pageH) * width + Math.round(x * width)) * 4]
+    }
+    // pn1 の下辺の中央。枠ありなら枠線が乗る
+    const edge = { x: pn1.rect.x + pn1.rect.w / 2, y: pn1.rect.y + pn1.rect.h }
+    expect(await draw([pn1, pn2, ...rest]).then((at) => at(edge.x, edge.y))).toBeLessThan(128)
+    const borderless = await draw([{ ...pn1, frame: 'none' }, pn2, ...rest])
+    expect(borderless(edge.x, edge.y)).toBe(255)
+
+    const laid = await draw([background, pn1, pn2, ...rest])
+    // pn_2 と pn_3 の隙間
+    expect(laid(0.49, 0.4)).toBe(0)
+    const inside = { x: pn2.rect.x + pn2.rect.w * 0.9, y: pn2.rect.y + pn2.rect.h * 0.9 }
+    expect(laid(inside.x, inside.y)).toBe(255)
   })
 
   test('同じ入力で 2 回描くとバイト一致する', async () => {
