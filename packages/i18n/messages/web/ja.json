@@ -366,7 +366,6 @@
   "web_episode_page_side_right": "右ページ",
   "web_episode_spread": "見開き",
   "web_episode_spread_unavailable": "次のページは見開きの始まる側ではありません",
-  "web_episode_spread_builtin_only": "見開きには組み込みのテンプレートしか使えません",
   "web_episode_spread_breaks": "見開きがノドで割れるため、この操作はできません",
   "web_episode_starts_right": "右ページから始める",
   "web_episode_starts_right_history": "始まりの左右を変更",
