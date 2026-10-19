@@ -77,7 +77,7 @@ const emptyPanel = (order: number, rect: Panel['rect']): Panel => ({
 
 /**
  * テンプレートからページを作る。登録したコマ割り（LayoutTemplate）なら、その枠と order のまま空のコマを置き、
- * direction は見ない。組み込みのテンプレートなら、createRowPanels で内枠を同じ高さの行数ぶんの段に割り、
+ * direction は見ない。組み込みのテンプレートなら、createRowPanels で内枠を四方へ少し広げた範囲（PANEL_AREA）を同じ高さの行数ぶんの段に割り、
  * 各段を同じ幅の 2 列に割る
  */
 export function createPage(
