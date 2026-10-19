@@ -41,7 +41,7 @@ export function parseElement(text: string): ClipboardElement | null {
   const e = element as Record<string, unknown>
   const panelId = typeof e.panelId === 'string' ? e.panelId : undefined
   const spread = e.spread === true
-  const parsed = (): CopiedElement | null => {
+  const parsed = ((): CopiedElement | null => {
     if (e.kind === 'panel') {
       const panel = PanelSchema.safeParse(e.panel)
       return panel.success ? { kind: 'panel', panel: panel.data, spread } : null
