@@ -9,6 +9,11 @@
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
 }
 
+/* 見開きは 2 ページ分の紙なので、サムネイルを片ページと同じ高さに保つよう 2 列を使う */
+.pages > [data-spread] {
+  grid-column: span 2;
+}
+
 .status[data-status="all"] {
   color: var(--text);
   font-weight: var(--weight-bold);

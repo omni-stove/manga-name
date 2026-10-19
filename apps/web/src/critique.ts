@@ -15,6 +15,7 @@ import {
   type PageDiagnosis,
   type Patch,
   type Point,
+  pageSizeOf,
   type Size,
 } from '@manga/schema'
 import { applyPatches, produce } from 'immer'
@@ -175,7 +176,7 @@ export function applySuggestion(store: ProjectStore, pageId: ID, suggestion: Sug
   const project = store.get()
   const page = findPage(project, pageId)?.page
   if (!page) throw new Error(m.web_common_page_gone())
-  const state = suggestionState(page, suggestion, project.settings.pageSize)
+  const state = suggestionState(page, suggestion, pageSizeOf(page, project.settings.pageSize))
   if (state.kind === 'rejected') throw new Error(state.reason)
   if (state.kind === 'applied') throw new Error(m.web_critique_already_applied())
   store.applyPatch(pagePatch(project, pageId, state.patch), {

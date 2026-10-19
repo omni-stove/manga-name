@@ -171,7 +171,7 @@ if (import.meta.vitest) {
         },
         characters: [],
       },
-      page: { id: 'pg', side: 'single', panels: [], scribbles: [] },
+      page: { id: 'pg', panels: [], scribbles: [] },
       panelId: 'pn',
     }
     expect(PanelArtRequestSchema.safeParse({ ...base, layoutPng: new Blob() }).success).toBe(true)
@@ -188,7 +188,7 @@ if (import.meta.vitest) {
         },
         characters: [],
       },
-      page: { id: 'pg', side: 'single', panels: [], scribbles: [] },
+      page: { id: 'pg', panels: [], scribbles: [] },
       layoutPng: new Blob(),
     }
     expect(PageArtRequestSchema.parse({ ...base, hints: { pn: 'h' } }).hints).toEqual({ pn: 'h' })

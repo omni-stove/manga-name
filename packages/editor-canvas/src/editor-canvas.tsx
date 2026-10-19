@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { m } from '@manga/i18n'
-import type { Bubble, ID, Page, Panel, Patch, Stroke } from '@manga/schema'
+import {
+  type Bubble,
+  type ID,
+  type Page,
+  type Panel,
+  type Patch,
+  pageSizeOf,
+  type Stroke,
+} from '@manga/schema'
 import {
   memo,
   type PointerEvent as ReactPointerEvent,
@@ -52,7 +60,7 @@ const SKETCH_COLOR = '#64748b'
 const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
 
 /**
- * 1 ページを SVG で描くキャンバス。ユーザー単位はページの mm（`settings.pageSize`）で、
+ * 1 ページを SVG で描くキャンバス。ユーザー単位は紙面の mm（`settings.pageSize`、見開きなら幅が 2 倍）で、
  * ズームとパンは viewBox で表す。ページの外側は作業台の色（`--surface-desk`）。
  * クリックで選択、ホバーで強調、Delete で削除、矢印キーで 0.01 刻みの移動。
  * `select` ツールでは選択中のコマかフキダシをドラッグで動かす。
@@ -79,7 +87,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  */
 export function EditorCanvas(props: EditorCanvasProps) {
   const { page, settings, layers } = props
-  const { w: pageW, h: pageH } = settings.pageSize
+  const { w: pageW, h: pageH } = pageSizeOf(page, settings.pageSize)
   const svgRef = useRef<SVGSVGElement>(null)
   const idPrefix = `ec${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   const viewport = useViewport(svgRef, pageW, pageH)
@@ -341,7 +349,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         idPrefix={idPrefix}
         onGenerate={props.onGenerate ? generate : undefined}
       />
-      {layers.frames && <FrameLayer width={pageW} height={pageH} />}
+      {layers.frames && <FrameLayer page={page} width={pageW} height={pageH} />}
       {layers.sketch && (
         <g data-layer="sketch" pointerEvents="none">
           <Scribbles
@@ -2556,7 +2564,7 @@ if (import.meta.vitest) {
         })
       }
     }
-    return { id: 'pg_perf', side: 'single', panels, scribbles: [] }
+    return { id: 'pg_perf', panels, scribbles: [] }
   }
 
   /** act 込みで 1 イベントを処理しきるまでの ms */

@@ -1,5 +1,5 @@
 import { m } from '@manga/i18n'
-import type { ID, Page, Project } from '@manga/schema'
+import { type ID, type Page, type PageSlot, type Project, pageSlots } from '@manga/schema'
 import {
   concatTransformationMatrix,
   drawObject,
@@ -32,15 +32,10 @@ const SHEET_PAD = 0.08
 // 増やすと、描画済みの 300dpi のサーフェス、getImageData の RGBA 複製、RGB バッファ、deflate 済みの XObject を抱えるメモリだけが増える
 const RENDER_AHEAD = 3
 
-interface Numbered {
-  page: Page
-  /** エピソード内のページ番号。1 始まり */
-  number: number
-}
-
 /**
  * エピソードのページを renderPage と同じ描画で画像にして PDF に束ねる。
- * pages で範囲を絞り、spread なら見開き 1 枚にする（rtl は奇数ページが左、ltr は右）。
+ * pages で範囲を絞り、spread なら向かい合う 2 ページを 1 枚にする。左右はノンブル（pageSlots）で決まる。
+ * 見開きのページは spread なら 1 枚、そうでなければ左右の 2 枚に切り分け、読む順に並べる。
  * notes: 'sheet' なら各紙面の後ろに指示メモの一覧ページを足す。
  */
 export async function exportPdf(
@@ -51,9 +46,7 @@ export async function exportPdf(
   const episode = project.episodes.find((e) => e.id === episodeId)
   if (!episode) throw new Error(`episode ${episodeId} is not in the project`)
   const wanted = opts.pages === 'all' ? undefined : new Set(opts.pages)
-  const targets: Numbered[] = episode.pages
-    .map((page, i) => ({ page, number: i + 1 }))
-    .filter(({ page }) => !wanted || wanted.has(page.id))
+  const targets = pageSlots(episode).filter(({ page }) => !wanted || wanted.has(page.id))
 
   const ctx: RenderContext = {
     settings: project.settings,
@@ -70,8 +63,8 @@ export async function exportPdf(
 
   const doc = await PDFDocument.create()
 
-  const renders = new Map<Numbered, Promise<{ page: Embedded; notes: Embedded[] }>>()
-  const render = (t: Numbered) => {
+  const renders = new Map<PageSlot, Promise<{ page: Embedded; notes: Embedded[] }>>()
+  const render = (t: PageSlot) => {
     const index = targets.indexOf(t)
     for (const ahead of targets.slice(index, index + RENDER_AHEAD + 1)) {
       if (renders.has(ahead)) continue
@@ -90,27 +83,27 @@ export async function exportPdf(
     return renders.get(t) as Promise<{ page: Embedded; notes: Embedded[] }>
   }
 
+  const layout = {
+    direction: project.settings.direction,
+    pageHeight,
+    pagePx: pagePixelSize(project.settings, opts.width),
+  }
   let done = 0
-  for (const group of groupSheets(targets, opts.spread)) {
-    const images: { image: Embedded; leftHalf: boolean }[] = []
+  for (const group of groupSheets(targets, opts.spread, layout.direction)) {
+    const images: Placed[] = []
     const notes: Embedded[] = []
     for (const t of group) {
       const rendered = await render(t)
       renders.delete(t)
       notes.push(...rendered.notes)
-      const image = rendered.page
-      images.push({ image, leftHalf: onLeftHalf(t.number, project.settings.direction) })
+      images.push({ image: rendered.page, side: t.side })
       opts.onProgress?.(++done, targets.length)
     }
-    // notes: 'margin' の余白で画像が pageSize より横に長くなるので、幅は画像から決める
-    const halfWidth = Math.max(
-      ...images.map(({ image }) => (image.width / image.height) * pageHeight),
-    )
-    const sheet = doc.addPage([opts.spread ? halfWidth * 2 : halfWidth, pageHeight])
-    for (const { image, leftHalf } of images) {
-      const w = (image.width / image.height) * pageHeight
-      const x = !opts.spread ? 0 : leftHalf ? halfWidth - w : halfWidth
-      drawEmbedded(sheet, image, { x, y: 0, width: w, height: pageHeight })
+    for (const sheet of layoutSheets(images, opts.spread, layout)) {
+      const pdfPage = doc.addPage([sheet.width, pageHeight])
+      for (const { image, x, width } of sheet.draws) {
+        drawEmbedded(pdfPage, image, { x, y: 0, width, height: pageHeight })
+      }
     }
     for (const image of notes) {
       drawEmbedded(doc.addPage([pageWidth, pageHeight]), image, {
@@ -173,22 +166,82 @@ function drawEmbedded(
   )
 }
 
-/** 紙面ごとのページ。見開きでは偶数ページとその次の奇数ページを組にし（1 ページ目は単独）、相方が範囲外なら片側だけ */
-function groupSheets(targets: Numbered[], spread: boolean): Numbered[][] {
+/**
+ * 紙面ごとのページ。spread なら、見開きの始まる側（右綴じは右、左綴じは左）の片ページと次のノンブルの片ページを組にし、
+ * 相方が範囲外なら片側だけ。見開きのページはそれだけで 1 枚
+ */
+function groupSheets(
+  targets: PageSlot[],
+  spread: boolean,
+  direction: Project['settings']['direction'],
+): PageSlot[][] {
   if (!spread) return targets.map((t) => [t])
-  const groups: Numbered[][] = []
+  const first = direction === 'rtl' ? 'right' : 'left'
+  const groups: PageSlot[][] = []
   for (const t of targets) {
     const last = groups.at(-1)
     const partner = last?.length === 1 && last[0] ? last[0] : undefined
-    if (partner && partner.number % 2 === 0 && partner.number + 1 === t.number) last?.push(t)
-    else groups.push([t])
+    if (partner?.side === first && t.side !== 'spread' && partner.number + 1 === t.number) {
+      last?.push(t)
+    } else groups.push([t])
   }
   return groups
 }
 
-/** 見開きで左半分に来るか。右綴じ（rtl）は奇数ページが左、左綴じは偶数ページが左 */
-function onLeftHalf(number: number, direction: Project['settings']['direction']): boolean {
-  return (number % 2 === 1) === (direction === 'rtl')
+interface Placed {
+  image: Embedded
+  side: PageSlot['side']
+}
+
+/** PDF の 1 枚。draws の x と width は pt で、紙面の外にはみ出た分は切れる */
+interface SheetLayout {
+  width: number
+  draws: { image: Embedded; x: number; width: number }[]
+}
+
+/**
+ * 1 組の画像を PDF の紙面に並べる。spread では片ページを左右に寄せ、見開きのページは 1 枚のまま置く。
+ * spread でなければ見開きのページを左右に切る。切る位置は 1 ページの幅（pagePx）から決め、
+ * notes: 'margin' の余白は外側（右綴じは右、左綴じは左）のページに付ける
+ */
+function layoutSheets(
+  images: Placed[],
+  spread: boolean,
+  layout: {
+    direction: Project['settings']['direction']
+    pageHeight: number
+    pagePx: { w: number; h: number }
+  },
+): SheetLayout[] {
+  // notes: 'margin' の余白で画像が pageSize より横に長くなるので、幅は画像から決める
+  const widthOf = (image: Embedded) => (image.width / image.height) * layout.pageHeight
+  if (!spread) {
+    return images.flatMap(({ image, side }): SheetLayout[] => {
+      const width = widthOf(image)
+      if (side !== 'spread') return [{ width, draws: [{ image, x: 0, width }] }]
+      const page = (layout.pagePx.w / layout.pagePx.h) * layout.pageHeight
+      const margin = width - page * 2
+      const split = layout.direction === 'ltr' ? margin + page : page
+      const left = { width: split, draws: [{ image, x: 0, width }] }
+      const right = { width: width - split, draws: [{ image, x: -split, width }] }
+      return layout.direction === 'rtl' ? [right, left] : [left, right]
+    })
+  }
+  const [only] = images
+  if (only?.side === 'spread') {
+    const width = widthOf(only.image)
+    return [{ width, draws: [{ image: only.image, x: 0, width }] }]
+  }
+  const halfWidth = Math.max(...images.map(({ image }) => widthOf(image)))
+  return [
+    {
+      width: halfWidth * 2,
+      draws: images.map(({ image, side }) => {
+        const width = widthOf(image)
+        return { image, x: side === 'left' ? halfWidth - width : halfWidth, width }
+      }),
+    },
+  ]
 }
 
 /**
@@ -351,17 +404,37 @@ if (import.meta.vitest) {
     expect(progress).toEqual([2, 2])
   })
 
-  test('見開きは偶数ページと次の奇数ページを組にし、相方が範囲外なら片側だけ', () => {
-    const n = (...numbers: number[]) => numbers.map((number) => ({ page: template, number }))
-    const numbers = (groups: Numbered[][]) => groups.map((g) => g.map((t) => t.number))
-    expect(numbers(groupSheets(n(1, 2, 3, 4, 5), true))).toEqual([[1], [2, 3], [4, 5]])
-    expect(numbers(groupSheets(n(2, 3, 5, 6), true))).toEqual([[2, 3], [5], [6]])
-    expect(numbers(groupSheets(n(1, 2), false))).toEqual([[1], [2]])
+  test('spread は見開きの始まる側の片ページと次の片ページを組にし、相方が範囲外なら片側だけ', () => {
+    const slots = (pages: Page[], startsRight?: true) =>
+      pageSlots({ pages, ...(startsRight && { startsRight }) })
+    const numbers = (groups: PageSlot[][]) => groups.map((g) => g.map((t) => t.number))
+    const pages = (n: number) => Array.from({ length: n }, (_, i) => ({ ...template, id: `p${i}` }))
+    expect(numbers(groupSheets(slots(pages(5)), true, 'rtl'))).toEqual([[1], [2, 3], [4, 5]])
+    expect(numbers(groupSheets(slots(pages(5)), true, 'ltr'))).toEqual([[1, 2], [3, 4], [5]])
+    expect(numbers(groupSheets(slots(pages(3), true), true, 'rtl'))).toEqual([[1, 2], [3]])
+    const partial = slots(pages(6)).filter((t) => [2, 3, 5, 6].includes(t.number))
+    expect(numbers(groupSheets(partial, true, 'rtl'))).toEqual([[2, 3], [5], [6]])
+    expect(numbers(groupSheets(slots(pages(2)), false, 'rtl'))).toEqual([[1], [2]])
+    const withSpread = slots([template, { ...template, id: 'sp', spread: true }, template])
+    expect(numbers(groupSheets(withSpread, true, 'rtl'))).toEqual([[1], [2], [4]])
   })
 
-  test('右綴じは奇数ページが左、左綴じは奇数ページが右', () => {
-    expect([1, 2].map((p) => onLeftHalf(p, 'rtl'))).toEqual([true, false])
-    expect([1, 2].map((p) => onLeftHalf(p, 'ltr'))).toEqual([false, true])
+  test('見開きのページは spread なら 1 枚、そうでなければ読む順に左右の 2 枚にする', () => {
+    const image = { ref: {} as PDFRef, width: 400, height: 100 }
+    const layout = { pageHeight: 100, pagePx: { w: 200, h: 100 } }
+    const placed = [{ image, side: 'spread' as const }]
+    expect(layoutSheets(placed, true, { ...layout, direction: 'rtl' })).toEqual([
+      { width: 400, draws: [{ image, x: 0, width: 400 }] },
+    ])
+    expect(layoutSheets(placed, false, { ...layout, direction: 'rtl' })).toEqual([
+      { width: 200, draws: [{ image, x: -200, width: 400 }] },
+      { width: 200, draws: [{ image, x: 0, width: 400 }] },
+    ])
+    // 余白は左綴じでは左に付くので、左のページが余白の分だけ広い
+    const margined = [{ image: { ...image, width: 460 }, side: 'spread' as const }]
+    const [left, right] = layoutSheets(margined, false, { ...layout, direction: 'ltr' })
+    expect(left?.width).toBeCloseTo(260)
+    expect(right?.width).toBeCloseTo(200)
   })
 
   test('spread: true は見開きを倍幅の 1 枚にする', async () => {
@@ -375,6 +448,23 @@ if (import.meta.vitest) {
       PT_PER_MM
     expect(pdf.getPage(0).getWidth()).toBeCloseTo(single * 2, 0)
     expect(pdf.getPage(1).getWidth()).toBeCloseTo(single * 2, 0)
+  })
+
+  test('見開きのページは spread でなければ 2 枚に切り、spread なら倍幅の 1 枚にする', async () => {
+    const project = projectOf(2)
+    const pages = project.episodes[0]?.pages ?? []
+    const spread = {
+      ...project,
+      episodes: [
+        { ...episode, pages: [pages[0] as Page, { ...(pages[1] as Page), spread: true as const }] },
+      ],
+    }
+    const split = await reload(await exportPdf(spread, episode.id, opts()))
+    expect(split.getPageCount()).toBe(3)
+    expect(split.getPage(1).getWidth()).toBeCloseTo(split.getPage(0).getWidth(), 0)
+    const joined = await reload(await exportPdf(spread, episode.id, opts({ spread: true })))
+    expect(joined.getPageCount()).toBe(2)
+    expect(joined.getPage(1).getWidth()).toBeCloseTo(split.getPage(0).getWidth() * 2, 0)
   })
 
   test("notes: 'sheet' は各ページの後ろに指示メモページを足す", async () => {

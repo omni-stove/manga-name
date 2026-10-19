@@ -40,17 +40,18 @@ export function parseElement(text: string): ClipboardElement | null {
   if (typeof element !== 'object' || element === null) return null
   const e = element as Record<string, unknown>
   const panelId = typeof e.panelId === 'string' ? e.panelId : undefined
+  const spread = e.spread === true
   const parsed = ((): CopiedElement | null => {
     if (e.kind === 'panel') {
       const panel = PanelSchema.safeParse(e.panel)
-      return panel.success ? { kind: 'panel', panel: panel.data } : null
+      return panel.success ? { kind: 'panel', panel: panel.data, spread } : null
     }
     if (panelId === undefined) return null
     if (e.kind === 'bubble') {
       const bubble = BubbleSchema.safeParse(e.bubble)
       const panelRect = RectSchema.safeParse(e.panelRect)
       return bubble.success && panelRect.success
-        ? { kind: 'bubble', bubble: bubble.data, panelId, panelRect: panelRect.data }
+        ? { kind: 'bubble', bubble: bubble.data, panelId, panelRect: panelRect.data, spread }
         : null
     }
     if (e.kind === 'focus') {
@@ -123,10 +124,16 @@ if (import.meta.vitest) {
 
   test('parseElement reads back what serializeElement wrote', () => {
     const clips: ClipboardElement[] = [
-      { projectId: 'p', element: { kind: 'panel', panel } },
+      { projectId: 'p', element: { kind: 'panel', panel, spread: false } },
       {
         projectId: 'p',
-        element: { kind: 'bubble', bubble, panelId: panel.id, panelRect: panel.rect },
+        element: {
+          kind: 'bubble',
+          bubble,
+          panelId: panel.id,
+          panelRect: panel.rect,
+          spread: true,
+        },
       },
     ]
     for (const clip of clips) expect(parseElement(serializeElement(clip))).toEqual(clip)

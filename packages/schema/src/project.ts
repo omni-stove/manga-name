@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 13 as const
+export const SCHEMA_VERSION = 14 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -199,7 +199,11 @@ export const PanelSchema = PanelBaseSchema.superRefine((panel, ctx) => {
 
 const PageBaseSchema = z.object({
   id: IdSchema,
-  side: z.enum(['left', 'right', 'single']),
+  /**
+   * 見開きのページ。正規化座標は 2 ページ分（幅 2 倍）の紙面に対してとり、ノンブルは 2 つ使う。
+   * 左右のページに分けないのは、ノドをまたぐコマを 1 つのコマのまま持つため
+   */
+  spread: z.literal(true).optional(),
   panels: z.array(PanelSchema),
   reference: ReferenceImageSchema.optional(),
   scribbles: z.array(StrokeSchema),
@@ -229,6 +233,8 @@ export const LayoutTemplateSchema = LayoutTemplateBaseSchema.superRefine((templa
 export const EpisodeSchema = z.object({
   id: IdSchema,
   title: z.string(),
+  /** 1 ページ目を右ページにする。既定は左ページ。掲載誌の台割で決まるので話ごとに持つ */
+  startsRight: z.literal(true).optional(),
   pages: z.array(PageSchema),
 })
 

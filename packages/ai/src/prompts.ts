@@ -429,7 +429,6 @@ if (import.meta.vitest) {
   test('pageArt leaves out the cast line and the colon for a bare page', () => {
     const bare: Page = {
       id: 'pg',
-      side: 'single',
       scribbles: [],
       panels: [
         {

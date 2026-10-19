@@ -4,6 +4,7 @@ import {
   type Page,
   type Panel,
   type ProjectSettings,
+  pageSizeOf,
   paintOrder,
   panelOutline,
 } from '@manga/schema'
@@ -104,7 +105,7 @@ const outlinePoints = (panel: Panel, w: number, h: number) =>
     .map((p) => `${p.x * w},${p.y * h}`)
     .join(' ')
 
-/** ページのコマ割りを判型の縦横比で描く。絵が選ばれたコマは、`resolveAsset` で読めればその絵を、読めなければ塗りを描く */
+/** ページのコマ割りを紙面（見開きなら 2 ページ分）の縦横比で描く。絵が選ばれたコマは、`resolveAsset` で読めればその絵を、読めなければ塗りを描く */
 export function PageThumbnail({
   page,
   pageSize,
@@ -114,7 +115,7 @@ export function PageThumbnail({
   pageSize: ProjectSettings['pageSize']
   resolveAsset?: ResolveAsset
 }) {
-  const { w, h } = pageSize
+  const { w, h } = pageSizeOf(page, pageSize)
   return (
     <svg
       className={styles.thumbnail}

@@ -7,7 +7,7 @@ import {
 } from '@manga/editor-canvas'
 import { m } from '@manga/i18n'
 import { BUBBLE_SHAPES, FOCUS_KINDS } from '@manga/inspector'
-import type { Bubble, Page, Patch, ProjectSettings } from '@manga/schema'
+import { type Bubble, type Page, type Patch, type ProjectSettings, pageSizeOf } from '@manga/schema'
 import type { ContextMenuItem, SegmentedOption } from '@manga/ui'
 import { findBubble, findFocus, findPanel, findVector } from './inspector-ops'
 
@@ -117,7 +117,7 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
       const build = (page: Page) =>
         fitBubblesPatch(
           splitPanelPatch(page, target.id, axis, ctx.settings.direction),
-          ctx.settings.pageSize,
+          pageSizeOf(page, ctx.settings.pageSize),
         )
       return {
         label,
