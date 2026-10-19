@@ -31,12 +31,18 @@ run = "biome check --write ."
 description = "Biome format only"
 run = "biome format --write ."
 
+[i18n]
+description = "Compile packages/i18n messages into src/paraglide"
+run = "pnpm --filter @manga/i18n compile"
+
 [typecheck]
 description = "tsc --noEmit across all packages"
+depends = ["i18n"]
 run = "pnpm typecheck"
 
 [test]
 description = "Vitest across all packages"
+depends = ["i18n"]
 run = "pnpm test"
 
 [coverage]
@@ -62,12 +68,14 @@ run = "pnpm test:watch"
 [check]
 description = "lint + typecheck + test in parallel; prints output only for the ones that fail"
 quiet = true
+# typecheck と test がそれぞれ i18n を作り直すと、同じディレクトリを同時に消し合い、knip も消えかけのファイルを読んで落ちるので、先に一度だけ作って子は --skip-deps で走らせる
+depends = ["i18n"]
 run = '''
 set -u
 dir=$(mktemp -d)
 trap 'rm -rf "$dir"' EXIT
 for t in lint typecheck test; do
-  ( code=0; mise run --quiet "$t" >"$dir/$t.log" 2>&1 || code=$?; echo "$code" >"$dir/$t.code" ) &
+  ( code=0; mise run --quiet --skip-deps "$t" >"$dir/$t.log" 2>&1 || code=$?; echo "$code" >"$dir/$t.code" ) &
 done
 wait
 status=0
