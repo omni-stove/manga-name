@@ -115,7 +115,7 @@ export async function drawPage(
 
   if (margin > 0) {
     const area: PxRect = { x: marginOnLeft ? 0 : pageSize.w, y: 0, w: margin, h: pageSize.h }
-    drawNotesMargin(c, panels, area, pageSize.w * MARGIN_FONT)
+    drawNotesMargin(c, byOrder(page.panels), area, pageSize.w * MARGIN_FONT)
   }
 
   return surface
