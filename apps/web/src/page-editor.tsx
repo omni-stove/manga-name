@@ -112,7 +112,7 @@ import {
   exportFileName as projectFileName,
 } from './project-file'
 import type { Collaboration, ProjectLibrary } from './project-library'
-import { findPage, pagePatch } from './project-ops'
+import { addPagePatch, findPage, pagePatch } from './project-ops'
 import { firstFile, referencePatch, toReferenceImage } from './reference-image'
 import { errorMessage } from './route-error'
 import { saveFile } from './save-file'
@@ -400,6 +400,18 @@ export function PageEditor({
   const nextPage = found ? episodePages?.[found.pageIndex + 1] : undefined
   const openPage = (id: ID) =>
     void navigate({ to: '/p/$projectId/pages/$pageId', params: { projectId, pageId: id } })
+  /** 開いているページの話の末尾に 3 段のページを足して開く */
+  const addPage = () => {
+    const episodeId = found && project.episodes[found.episodeIndex]?.id
+    if (!episodeId) return
+    let added: ID | undefined
+    const applied = apply(m.web_episode_add_page(), (p) => {
+      const { patch, page } = addPagePatch(p, '3rows', episodeId)
+      added = page.id
+      return patch
+    })
+    if (applied && added) openPage(added)
+  }
   useKeyShortcuts({
     ...(can('tools') ? shortcutsOf(tools, setTool) : {}),
     ...(tool === 'scribble' ? shortcutsOf(scribbleTools, setScribbleTool) : {}),
@@ -709,6 +721,13 @@ export function PageEditor({
                 <path d="m9 6 6 6-6 6" />
               </Icon>
             </IconButton>
+            {canEdit && (
+              <IconButton size="small" label={m.web_episode_add_page()} onClick={addPage}>
+                <Icon>
+                  <path d="M12 5v14M5 12h14" />
+                </Icon>
+              </IconButton>
+            )}
           </XStack>
         </Area>
         <CollaborationBar collab={collab} project={project} />
