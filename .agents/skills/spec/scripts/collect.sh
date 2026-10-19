@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # usage: collect.sh [path]...   (no path: the map of the whole repo)
 set -euo pipefail
-. "$(dirname -- "$0")/../../../refs/prompt.sh"
+dir="$(dirname -- "$0")"
 
-node "$(dirname -- "$0")/extract.ts" "$@"
-if [ "$#" -eq 0 ]; then prompt map >&2; else prompt detail >&2; fi
+node "$dir/extract.ts" "$@"
+if [ "$#" -eq 0 ]; then cat "$dir/../prompts/map.txt" >&2; else cat "$dir/../prompts/detail.txt" >&2; fi
