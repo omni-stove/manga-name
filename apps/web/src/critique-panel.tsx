@@ -14,7 +14,7 @@ import {
 import styles from './critique-panel.module.css'
 import { errorMessage } from './route-error'
 import { FailureAlert } from './sign-in'
-import type { ProjectStore } from './store/project-store'
+import type { ProjectStore } from './store/project-store-types'
 
 /** 相談した時点の診断の件数。適用後の診断と比べて減ったかを見せる */
 interface Counts {

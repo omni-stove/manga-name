@@ -4,7 +4,7 @@ import { Button, Checkbox, XStack } from '@manga/ui'
 import { useState } from 'react'
 import { useStore } from 'zustand'
 import { batchRunning, type PanelGeneration } from './generate-panel'
-import type { ProjectStore } from './store/project-store'
+import type { ProjectStore } from './store/project-store-types'
 
 interface BatchScope {
   generation: PanelGeneration

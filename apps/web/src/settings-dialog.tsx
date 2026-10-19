@@ -20,7 +20,7 @@ import { settingsPatch } from './project-ops'
 import styles from './project-settings.module.css'
 import { SharingPanel } from './sharing-panel'
 import { SignInButton } from './sign-in'
-import type { WebProjectStore } from './store/project-store'
+import type { WebProjectStore } from './store/project-store-types'
 import { useAuth } from './use-auth'
 import { useApplyPatch, useProject } from './use-project'
 

@@ -1,6 +1,6 @@
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
-import { MEMBER_ROLES, type ProjectRole, projectRole, userEmail } from './access'
+import { MEMBER_ROLES, type ProjectRole, projectRole } from './access'
 import { ApiException } from './api-error'
 import { jsonBody } from './body'
 import type { Env } from './env'
@@ -17,6 +17,18 @@ const InviteSchema = z.object({
 })
 
 const RoleSchema = z.object({ role: z.enum(MEMBER_ROLES) })
+
+/**
+ * user のメールアドレス。Better Auth のユーザーに無ければ null。
+ * development では X-Debug-User がメールアドレスの形ならそれを使う。開発時のユーザーは auth_users に居ないため
+ */
+async function userEmail(env: Env, userId: string): Promise<string | null> {
+  const row = await env.DB.prepare('SELECT email FROM auth_users WHERE id = ?1')
+    .bind(userId)
+    .first<{ email: string }>()
+  if (row) return row.email
+  return env.ENVIRONMENT === 'development' && userId.includes('@') ? userId : null
+}
 
 type MemberRole = (typeof MEMBER_ROLES)[number]
 

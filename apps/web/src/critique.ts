@@ -19,7 +19,7 @@ import {
 import { applyPatches, produce } from 'immer'
 import { findPage, pagePatch } from './project-ops'
 import { toImmerPatch } from './store/json-patch'
-import type { ProjectStore } from './store/project-store'
+import type { ProjectStore } from './store/project-store-types'
 
 export type Suggestion = CritiqueResponse['suggestions'][number]
 
