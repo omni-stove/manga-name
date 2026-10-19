@@ -15,6 +15,8 @@ import type { View } from './view'
 /** weight 1 の焦点の描画半径（mm） */
 const FOCUS_RADIUS = 10
 const DEFAULT_WEIGHT = 0.5
+// weight 0 の焦点は円が描かれず点だけになり、ドラッグで作った大きさが見えない
+const MIN_WEIGHT = 0.1
 /** 焦点とベクトルを掴める距離。viewBox の幅に対する比率なので、ズームしても画面上の距離が変わらない */
 const HIT_RATIO = 0.012
 
@@ -22,6 +24,10 @@ const HIT_RATIO = 0.012
 export const hintTolerance = (view: View) => view.w * HIT_RATIO
 
 export const focusRadius = (weight: number) => FOCUS_RADIUS * weight
+
+/** 描画半径 radius（mm）になる weight。MIN_WEIGHT 以上 1 以下に収める */
+export const focusWeight = (radius: number) =>
+  Math.round(Math.min(1, Math.max(MIN_WEIGHT, radius / FOCUS_RADIUS)) * 100) / 100
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 // 割り算で 0.30000000000000004 のような値を残さない
@@ -135,12 +141,16 @@ function anchorAt(
   return [...panel.bubbles].sort((a, b) => b.order - a.order).find((b) => inBubble(b, box, p))?.id
 }
 
-/** コマ内座標の点 pos に kind の焦点を置く Patch と、その ID。コマが無ければ null */
+/**
+ * コマ内座標の点 pos に kind の焦点を置く Patch と、その ID。weight を省くと DEFAULT_WEIGHT。
+ * コマが無ければ null
+ */
 export function createFocusPatch(
   page: Page,
   panelId: ID,
   pos: Point,
   kind: FocusKind,
+  weight = DEFAULT_WEIGHT,
 ): { patch: Patch; id: ID } | null {
   const i = page.panels.findIndex((p) => p.id === panelId)
   if (i < 0) return null
@@ -149,7 +159,7 @@ export function createFocusPatch(
     kind,
     label: '',
     pos: { x: round(clamp01(pos.x)), y: round(clamp01(pos.y)) },
-    weight: DEFAULT_WEIGHT,
+    weight,
   }
   return { patch: [{ op: 'add', path: `/panels/${i}/focusPoints/-`, value: focus }], id: focus.id }
 }
@@ -311,6 +321,13 @@ if (import.meta.vitest) {
       },
     ])
     expect(createFocusPatch(page, 'missing', { x: 0, y: 0 }, 'face')).toBeNull()
+  })
+
+  test('focusWeight turns a radius into a weight between the minimum and 1', () => {
+    expect(focusWeight(4)).toBe(0.4)
+    expect(focusWeight(0.2)).toBe(0.1)
+    expect(focusWeight(30)).toBe(1)
+    expect(focusRadius(focusWeight(6.5))).toBeCloseTo(6.5)
   })
 
   test('shiftLinked moves only the ends linked to the focus, and keeps the others as is', () => {

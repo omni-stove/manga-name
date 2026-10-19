@@ -1801,16 +1801,41 @@ if (import.meta.vitest) {
       })
     })
 
-    test('focusKind defaults to face, and a drag from an empty spot places nothing', async () => {
+    test('focusKind defaults to face', async () => {
       const onChange = vi.fn()
       const svg = await render({ tool: 'focus', onChange })
       layout(svg)
-      drag(svg, inPanel('pn_5', 0.2, 0.3), inPanel('pn_5', 0.4, 0.3))
-      expect(onChange).not.toHaveBeenCalled()
       click(svg, inPanel('pn_5', 0.2, 0.3))
       expect(patchOf(onChange)).toEqual([
         expect.objectContaining({ value: expect.objectContaining({ kind: 'face' }) }),
       ])
+    })
+
+    test('a drag from an empty spot draws a draft, then places a focus as large as the drag', async () => {
+      const onChange = vi.fn()
+      const onSelect = vi.fn()
+      const svg = await render({ tool: 'focus', focusKind: 'sfx', onChange, onSelect })
+      layout(svg)
+      const from = inPanel('pn_5', 0.2, 0.3)
+      // 画面は 1mm を 2px で描くので、半径 6mm
+      const to = { x: from.x + 12, y: from.y }
+      drag(svg, from, to, { release: false })
+      expect(svg.querySelector('[data-hints-panel-id="pn_5"] [data-draft="focus"]')).not.toBeNull()
+      expect(onChange).not.toHaveBeenCalled()
+      fire(svg, pointer('pointerup', { id: 1, ...to }))
+      expect(svg.querySelector('[data-draft="focus"]')).toBeNull()
+      const patch = patchOf(onChange)
+      expect(patch).toEqual([
+        expect.objectContaining({
+          value: expect.objectContaining({ kind: 'sfx', pos: { x: 0.2, y: 0.3 } }),
+        }),
+      ])
+      const { weight } = (patch[0] as { value: { weight: number } }).value
+      expect(focusRadius(weight)).toBeCloseTo(6, 0)
+      expect(onSelect).toHaveBeenCalledWith({
+        kind: 'focus',
+        id: (patch[0] as { value: { id: string } }).value.id,
+      })
     })
 
     test('dragging a focus selects it, draws it moved, and moves its linked vectors in one patch', async () => {
@@ -1968,13 +1993,37 @@ if (import.meta.vitest) {
       })
     })
 
-    test('a drag from an empty spot and a click outside the page create nothing', async () => {
+    test('a click outside the page creates nothing', async () => {
       const onChange = vi.fn()
       const svg = await render({ tool: 'bubble', onChange })
       layout(svg)
-      drag(svg, inPanel('pn_5', 0.2, 0.5), inPanel('pn_5', 0.6, 0.5))
       click(svg, { x: -10, y: -10 })
       expect(onChange).not.toHaveBeenCalled()
+    })
+
+    test('a drag from an empty spot draws a draft, then creates a bubble spanning the drag', async () => {
+      const onChange = vi.fn()
+      const onSelect = vi.fn()
+      const svg = await render({ tool: 'bubble', onChange, onSelect })
+      layout(svg)
+      const to = inPanel('pn_5', 0.2, 0.4)
+      drag(svg, inPanel('pn_5', 0.6, 0.6), to, { release: false })
+      expect(svg.querySelector('[data-layer="bubble-tool"][data-draft]')).not.toBeNull()
+      expect(onChange).not.toHaveBeenCalled()
+      fire(svg, pointer('pointerup', { id: 1, ...to }))
+      expect(svg.querySelector('[data-layer="bubble-tool"][data-draft]')).toBeNull()
+      const patch = patchOf(onChange)
+      expect(patch).toEqual([
+        {
+          op: 'add',
+          path: '/panels/4/bubbles/0',
+          value: expect.objectContaining({ pos: { x: 0.4, y: 0.5 }, size: { w: 0.4, h: 0.2 } }),
+        },
+      ])
+      expect(onSelect).toHaveBeenCalledWith({
+        kind: 'bubble',
+        id: (patch[0] as { value: { id: string } }).value.id,
+      })
     })
 
     test('dragging a bubble draws a draft, then moves it with its tail and selects it', async () => {

@@ -33,7 +33,7 @@ interface HintsLayerProps {
 /**
  * 焦点とベクトルを描く。焦点は種別で色分けした円で、半径は weight に比例し、中心に点、右下にラベルを置く。
  * ベクトルは緑の矢印で、strong は太く weak は細い。ドラッグ中の焦点は `draft` の位置に描き、
- * 繋がったベクトルの端も一緒に動かす。作成中のベクトルは破線で描く。当たり判定は hint-ops で行うので
+ * 繋がったベクトルの端も一緒に動かす。ドラッグで大きさを決めている焦点はその大きさで、作成中のベクトルは破線で描く。当たり判定は hint-ops で行うので
  * ポインタイベントは受けない
  */
 export const HintsLayer = memo(function HintsLayer(props: HintsLayerProps) {
@@ -68,6 +68,22 @@ export const HintsLayer = memo(function HintsLayer(props: HintsLayerProps) {
                 label={labels}
               />
             ))}
+            {draft?.kind === 'place' && draft.panelId === panel.id && (
+              <g data-draft="focus">
+                <FocusView
+                  focus={{
+                    id: 'draft',
+                    kind: draft.focusKind,
+                    label: '',
+                    pos: draft.pos,
+                    weight: draft.weight,
+                  }}
+                  center={toPage(draft.pos)}
+                  selected={false}
+                  label={false}
+                />
+              </g>
+            )}
             {draft?.kind === 'vector' && draft.panelId === panel.id && (
               <Arrow
                 from={toPage(draft.from)}
