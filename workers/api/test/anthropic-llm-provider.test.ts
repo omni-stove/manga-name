@@ -110,15 +110,30 @@ describe('createAnthropicLlmProvider', () => {
     expect(body.output_config.format.schema).toMatchObject({ required: schema.required })
   })
 
-  test('suggestLayout sends its prompts and the object schema', async () => {
-    const reply = aiFixtures.layoutSuggestion
+  test('transcribeName sends its prompts and the object schema', async () => {
+    const reply = aiFixtures.nameDraft
     fetchMock.mockResolvedValueOnce(message(JSON.stringify(reply)))
     const provider = createAnthropicLlmProvider({ apiKey: 'test-key' })
-    expect(await provider.suggestLayout(planRequest)).toEqual(reply)
+    expect(await provider.transcribeName(planRequest)).toEqual(reply)
 
-    const { system, user, schema } = prompts.suggestLayout(planRequest)
+    const { system, user, schema } = prompts.transcribeName(planRequest)
     const body = sentBody()
     expect(body.max_tokens).toBe(8_000)
+    expect(body.system).toBe(system)
+    expect(body.messages[0]?.content).toBe(user)
+    expect(body.output_config.format.schema).toMatchObject({ required: schema.required })
+  })
+
+  test('suggestLayout sends its prompts and the object schema', async () => {
+    const reply = aiFixtures.layoutSuggestion
+    const layoutRequest = { panels: aiFixtures.nameDraft.panels }
+    fetchMock.mockResolvedValueOnce(message(JSON.stringify(reply)))
+    const provider = createAnthropicLlmProvider({ apiKey: 'test-key' })
+    expect(await provider.suggestLayout(layoutRequest)).toEqual(reply)
+
+    const { system, user, schema } = prompts.suggestLayout(layoutRequest)
+    const body = sentBody()
+    expect(body.max_tokens).toBe(4_000)
     expect(body.system).toBe(system)
     expect(body.messages[0]?.content).toBe(user)
     expect(body.output_config.format.schema).toMatchObject({ required: schema.required })

@@ -71,16 +71,36 @@ export const PagePlanResponseSchema = z.array(PagePlanSchema).min(1)
 /** LLM に返させるページ割り。構造化出力は根を object に限るので、ページの配列を `pages` で包む */
 export const PagePlanReplySchema = z.object({ pages: PagePlanResponseSchema })
 
-/** コマ割りの提案の 1 コマ。Panel になる */
-export const SuggestedPanelSchema = z.object({
-  /** 行の中での幅の比。行のコマの width の和で割って幅にする */
-  width: z.number().positive(),
+/** ネームの書き起こしで 1 ページに置けるコマの数の上限 */
+export const MAX_NAME_PANELS = 12
+
+/** ネームの書き起こしの 1 コマ。コマ割りの提案で枠を得て Panel になる */
+export const NamePanelSchema = z.object({
   /** このコマで描くもの。Panel.note になる */
   note: z.string().min(1),
   /** Panel.camera になる */
   camera: CameraSchema.optional(),
   /** このコマのセリフ。読む順。Bubble になる */
   lines: z.array(PlanLineSchema),
+})
+
+/** ネームの書き起こしの応答。1 ページの脚本を読む順のコマに割ったもの */
+export const NameDraftResponseSchema = z.object({
+  panels: z.array(NamePanelSchema).min(1).max(MAX_NAME_PANELS),
+})
+
+/** 直している途中のネーム。描くものとセリフは入力の途中で空になるので、空も通す */
+export const NameDraftSchema = z.array(
+  NamePanelSchema.extend({
+    note: z.string(),
+    lines: z.array(PlanLineSchema.extend({ text: z.string() })),
+  }),
+)
+
+/** コマ割りの提案の 1 コマ。ネームの同じ位置のコマに枠を与える */
+export const SuggestedPanelSchema = z.object({
+  /** 行の中での幅の比。行のコマの width の和で割って幅にする */
+  width: z.number().positive(),
 })
 
 /** コマ割りの提案の 1 段。コマは読む順 */
@@ -90,7 +110,7 @@ export const SuggestedRowSchema = z.object({
   panels: z.array(SuggestedPanelSchema).min(1).max(4),
 })
 
-/** ページのコマ割りの案 1 つ。段は上から */
+/** ページのコマ割りの案 1 つ。段は上から、全段のコマを読む順に並べるとネームのコマと 1 対 1 に対応する */
 export const LayoutOptionSchema = z.object({
   /** 案の狙い */
   summary: z.string().min(1),
@@ -113,6 +133,8 @@ export type CharacterArtRequest = z.infer<typeof CharacterArtRequestSchema>
 export type PlanLine = z.infer<typeof PlanLineSchema>
 export type PagePlan = z.infer<typeof PagePlanSchema>
 export type PagePlanResponse = z.infer<typeof PagePlanResponseSchema>
+export type NamePanel = z.infer<typeof NamePanelSchema>
+export type NameDraftResponse = z.infer<typeof NameDraftResponseSchema>
 export type SuggestedPanel = z.infer<typeof SuggestedPanelSchema>
 export type SuggestedRow = z.infer<typeof SuggestedRowSchema>
 export type LayoutOption = z.infer<typeof LayoutOptionSchema>
@@ -134,8 +156,23 @@ if (import.meta.vitest) {
     ).toBe(false)
   })
 
+  test('NameDraftResponseSchema needs 1 to MAX_NAME_PANELS panels with a non-empty note', () => {
+    const panel = { note: 'n', lines: [{ text: 't', shape: 'normal' }] }
+    expect(NameDraftResponseSchema.parse({ panels: [panel] }).panels).toHaveLength(1)
+    const invalid = [
+      { panels: [] },
+      { panels: Array.from({ length: MAX_NAME_PANELS + 1 }, () => panel) },
+      { panels: [{ ...panel, note: '' }] },
+      { panels: [{ ...panel, camera: '' }] },
+    ]
+    for (const res of invalid) expect(NameDraftResponseSchema.safeParse(res).success).toBe(false)
+    expect(
+      NameDraftSchema.parse([{ note: '', lines: [{ text: '', shape: 'normal' }] }]),
+    ).toHaveLength(1)
+  })
+
   test('LayoutSuggestionResponseSchema needs positive ratios and 1 to 3 options of 1 to 6 rows', () => {
-    const panel = { width: 1, note: 'n', lines: [] }
+    const panel = { width: 1 }
     const option = { summary: 's', rows: [{ height: 1, panels: [panel] }] }
     expect(LayoutSuggestionResponseSchema.parse({ options: [option] }).options).toHaveLength(1)
     const invalid = [

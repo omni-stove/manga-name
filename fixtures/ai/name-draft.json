@@ -1,0 +1,15 @@
+{
+  "panels": [
+    {
+      "note": "結晶の森の全景。小さな E が奥へ歩いていく。",
+      "camera": "long",
+      "lines": [{ "speakerId": "chr_e", "text": "……ここか", "shape": "normal" }]
+    },
+    { "note": "E が足を止めて下を見る。", "camera": "bust", "lines": [] },
+    {
+      "note": "E の足元で何かが光る。",
+      "camera": "close_up",
+      "lines": [{ "text": "その足元に、光るものがあった。", "shape": "narration" }]
+    }
+  ]
+}

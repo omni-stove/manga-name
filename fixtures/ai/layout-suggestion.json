@@ -3,61 +3,16 @@
     {
       "summary": "森の広さを大きな 1 コマで見せてから、足元の発見へ寄せていく。",
       "rows": [
-        {
-          "height": 2,
-          "panels": [
-            {
-              "width": 1,
-              "note": "結晶の森の全景。小さな E が奥へ歩いていく。",
-              "camera": "long",
-              "lines": [{ "speakerId": "chr_e", "text": "……ここか", "shape": "normal" }]
-            }
-          ]
-        },
-        {
-          "height": 1,
-          "panels": [
-            { "width": 1, "note": "E が足を止めて下を見る。", "camera": "bust", "lines": [] },
-            {
-              "width": 1,
-              "note": "E の足元で何かが光る。",
-              "camera": "close_up",
-              "lines": [{ "text": "その足元に、光るものがあった。", "shape": "narration" }]
-            }
-          ]
-        }
+        { "height": 2, "panels": [{ "width": 1 }] },
+        { "height": 1, "panels": [{ "width": 1 }, { "width": 1 }] }
       ]
     },
     {
       "summary": "歩く E を 3 段で追い、最後の足元の光を引きにする。",
       "rows": [
-        {
-          "height": 1,
-          "panels": [
-            {
-              "width": 2,
-              "note": "結晶の森を E が奥へ歩いていく。",
-              "camera": "long",
-              "lines": [{ "speakerId": "chr_e", "text": "……ここか", "shape": "normal" }]
-            },
-            { "width": 1, "note": "E の横顔。", "lines": [] }
-          ]
-        },
-        {
-          "height": 1,
-          "panels": [{ "width": 1, "note": "E が足元を見る。", "camera": "high_angle", "lines": [] }]
-        },
-        {
-          "height": 1,
-          "panels": [
-            {
-              "width": 1,
-              "note": "E の足元で光るもの。",
-              "camera": "close_up",
-              "lines": [{ "text": "その足元に、光るものがあった。", "shape": "narration" }]
-            }
-          ]
-        }
+        { "height": 1, "panels": [{ "width": 1 }] },
+        { "height": 1, "panels": [{ "width": 1 }] },
+        { "height": 1.5, "panels": [{ "width": 1 }] }
       ]
     }
   ]

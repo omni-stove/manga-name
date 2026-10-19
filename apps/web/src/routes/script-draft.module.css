@@ -90,22 +90,6 @@
   align-items: center;
 }
 
-.lineFields {
-  flex: 1;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-.lineSelect {
-  flex: none;
-  width: auto;
-}
-
-.lineText {
-  flex: 1;
-  min-width: 10rem;
-}
-
 .addLine {
   align-self: start;
 }

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { LayoutSuggestionResponseSchema, PagePlanReplySchema } from './ai'
+import { LayoutSuggestionResponseSchema, NameDraftResponseSchema, PagePlanReplySchema } from './ai'
 import { ProjectSchema } from './project'
 
 /** LLM の構造化出力に渡す JSON Schema。手書きの JSON Schema も同じ型で渡せる */
@@ -14,6 +14,10 @@ export const projectJsonSchema = () => z.toJSONSchema(ProjectSchema, { io: 'inpu
 /** LLM に返させるページ割り（PagePlanReplySchema）の JSON Schema */
 export const pagePlanJsonSchema = (): JsonSchema =>
   z.toJSONSchema(PagePlanReplySchema, { io: 'input' })
+
+/** AI のネームの書き起こしの応答の JSON Schema */
+export const nameDraftJsonSchema = (): JsonSchema =>
+  z.toJSONSchema(NameDraftResponseSchema, { io: 'input' })
 
 /** AI のコマ割りの提案の応答の JSON Schema */
 export const layoutSuggestionJsonSchema = (): JsonSchema =>
@@ -35,6 +39,12 @@ if (import.meta.vitest) {
       type: 'array',
       items: { required: ['note', 'script', 'cast', 'lines'] },
     })
+  })
+
+  test('nameDraftJsonSchema describes an object of panels', () => {
+    const schema = nameDraftJsonSchema()
+    expect(schema.type).toBe('object')
+    expect(schema.required).toEqual(['panels'])
   })
 
   test('layoutSuggestionJsonSchema describes an object of options', () => {
