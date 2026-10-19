@@ -37,6 +37,19 @@ export const ConfirmCallsOnConfirm: Story = {
   },
 }
 
+export const BackdropClickKeepsOpen: Story = {
+  play: async ({ args }) => {
+    const dialog = screen.getByRole<HTMLDialogElement>('dialog', { name: 'エピソードを削除' })
+    await userEvent.pointer({
+      keys: '[MouseLeft]',
+      target: dialog,
+      coords: { clientX: 1, clientY: 1 },
+    })
+    await expect(dialog).toHaveAttribute('open')
+    await expect(args.onCancel).not.toHaveBeenCalled()
+  },
+}
+
 export const CancelCallsOnCancel: Story = {
   play: async ({ args }) => {
     await userEvent.click(screen.getByRole('button', { name: m.cancel() }))

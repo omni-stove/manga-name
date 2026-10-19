@@ -57,7 +57,7 @@ const noteOptions = (): readonly {
  * フォルダが選ばれるまでは書き出せない。
  * 範囲に採用中の絵が無いコマがあれば警告するが、書き出しは止めない。
  * 開いている間だけマウントする。書き出すで PNG / PDF なら `onExport`、JSON なら `onExportProject`、
- * 閉じる操作（キャンセル、Esc）で `onCancel`
+ * 閉じる操作（キャンセル、Esc、背景のクリック）で `onCancel`
  */
 export function ExportDialog({
   pages,
