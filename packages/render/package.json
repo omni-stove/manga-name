@@ -11,6 +11,7 @@
     "test": "vitest run --config ../../vitest.config.ts"
   },
   "dependencies": {
+    "@manga/i18n": "workspace:*",
     "@manga/schema": "workspace:*",
     "pdf-lib": "^1.17.1"
   },

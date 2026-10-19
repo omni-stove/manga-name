@@ -1,6 +1,13 @@
 import { z } from 'zod'
 import { PatchSchema } from './patch'
-import { BubbleSchema, CharacterSchema, IdSchema, PageSchema, ProjectBaseSchema } from './project'
+import {
+  BubbleSchema,
+  CameraSchema,
+  CharacterSchema,
+  IdSchema,
+  PageSchema,
+  ProjectBaseSchema,
+} from './project'
 
 const blob = z.instanceof(Blob)
 
@@ -61,14 +68,17 @@ export const PagePlanSchema = z.object({
 /** ページ割りの応答。読む順のページごとの割り振り */
 export const PagePlanResponseSchema = z.array(PagePlanSchema).min(1)
 
+/** LLM に返させるページ割り。構造化出力は根を object に限るので、ページの配列を `pages` で包む */
+export const PagePlanReplySchema = z.object({ pages: PagePlanResponseSchema })
+
 /** コマ割りの提案の 1 コマ。Panel になる */
 export const SuggestedPanelSchema = z.object({
   /** 行の中での幅の比。行のコマの width の和で割って幅にする */
   width: z.number().positive(),
   /** このコマで描くもの。Panel.note になる */
   note: z.string().min(1),
-  /** 画面の切り取り方（ロング、バストアップなど）。Panel.camera になる */
-  camera: z.string().min(1).optional(),
+  /** Panel.camera になる */
+  camera: CameraSchema.optional(),
   /** このコマのセリフ。読む順。Bubble になる */
   lines: z.array(PlanLineSchema),
 })
