@@ -12,8 +12,9 @@ import {
   XStack,
   YStack,
 } from '@manga/ui'
-import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, getRouteApi, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { BackLink } from '../back-link'
 import common from '../common.module.css'
 import { TemplateSelect, useTemplateChoice } from '../layout-templates'
 import { useTourStep } from '../onboarding/tour-guide'
@@ -137,14 +138,14 @@ function ScriptDraft() {
 
   return (
     <YStack gap={12}>
-      <XStack wrap gap={12}>
-        <Link to="/p/$projectId/episodes/$episodeId" params={{ projectId, episodeId }}>
+      <YStack as="header" gap={4} align="start">
+        <BackLink to="/p/$projectId/episodes/$episodeId" params={{ projectId, episodeId }}>
           {episode?.title ?? m.web_draft_episode_fallback()}
-        </Link>
+        </BackLink>
         <Typography as="h1" variant="heading">
           {m.web_draft_title()}
         </Typography>
-      </XStack>
+      </YStack>
       <div className={styles.layout} data-guide="draft-plan">
         <YStack
           as="form"

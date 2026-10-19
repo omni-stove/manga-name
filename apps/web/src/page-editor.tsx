@@ -56,6 +56,7 @@ import {
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useEffectEvent, useState } from 'react'
 import { useStore } from 'zustand'
+import { BackLink } from './back-link'
 import { BatchOptions, useBatchGeneration } from './batch-generation'
 import {
   type ElementMenuContext,
@@ -580,12 +581,12 @@ export function PageEditor({
           {project.title || m.untitled()}
         </Typography>
         <Area open={can('navigation')}>
-          <Link
+          <BackLink
             to="/p/$projectId/episodes/$episodeId"
             params={{ projectId, episodeId: episode.id }}
           >
             {episode.title}
-          </Link>
+          </BackLink>
           <XStack as="span" gap={2} role="group" aria-label={m.web_editor_page_navigation()}>
             <IconButton
               size="small"
