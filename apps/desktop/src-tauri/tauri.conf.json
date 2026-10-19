@@ -40,6 +40,11 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["manganame"]
+      }
+    },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhBOUQ2NUI5NEJDRDQwNEIKUldSTFFNMUx1V1dkaW9IZTRNMlZXR2xGZEp1YnRHN1pjZnlLYjlvSE5rdlhoNTQ2UnZnaTVtVnAK",
       "endpoints": [

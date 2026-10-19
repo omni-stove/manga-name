@@ -27,6 +27,7 @@ export function installFakeTauri(
       return id
     },
     unregisterCallback: (id: number) => callbacks.delete(id),
+    // getCurrentWindow が読む
     metadata: {
       currentWindow: { label: 'main' },
       currentWebview: { windowLabel: 'main', label: 'main' },

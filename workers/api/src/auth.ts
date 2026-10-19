@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth'
 import { getOAuthState } from 'better-auth/api'
-import { bearer } from 'better-auth/plugins'
+import { bearer, oneTimeToken } from 'better-auth/plugins'
 import type { Env } from './env'
 import { allowedOrigins } from './origins'
 import { hashToken } from './token'
@@ -80,7 +80,12 @@ function createAuth(env: Env) {
     verification: { modelName: 'auth_verifications' },
     // 表示名を検証して入れる口を PUT /v1/me だけにするため。update-user は長さを問わず name と image を書ける
     disabledPaths: ['/update-user'],
-    plugins: [bearer()],
+    plugins: [
+      bearer(),
+      // Desktop のログインで OS のブラウザからアプリへセッションを渡す。deep link の URL はほかのアプリにも見えうるので、
+      // 一度きりで 3 分で切れるトークンにし、D1 にはハッシュで置く
+      oneTimeToken({ storeToken: 'hashed', disableSetSessionCookie: true }),
+    ],
   })
 }
 

@@ -88,6 +88,9 @@ interface GenerateRequest {
  */
 type GenerateOutcome = 'done' | 'busy' | 'failed' | 'canceled'
 
+/** 一括生成のコマごとの結果の件数 */
+export type BatchCounts = Record<GenerateOutcome, number>
+
 interface BatchRequest {
   store: ProjectStore
   projectId: ID
@@ -109,7 +112,7 @@ interface PageRunRequest {
 }
 
 /** 範囲がすでに走っていれば `busy`。それ以外はコマごとの結果の件数 */
-type BatchOutcome = 'busy' | Record<GenerateOutcome, number>
+type BatchOutcome = 'busy' | BatchCounts
 
 export interface PanelGeneration {
   readonly generating: StoreApi<GeneratingState>
@@ -134,6 +137,8 @@ export interface PanelGenerationDeps {
   imageProvider: Pick<ImageProvider, 'generatePanelArt' | 'generatePageArt'>
   /** 失敗の文言の出し先。既定はトースト。signIn は未ログインのせいで失敗したことを表す */
   notify?(message: string, opts: { signIn: boolean }): void
+  /** 一括生成が終わるたびに、止めたときも含めて結果の件数で呼ぶ。`busy` で断ったときは呼ばない */
+  onBatchDone?(counts: BatchCounts): void
   now?(): string
   /** ImageProvider に渡す配置図の長辺 px。コマでもページでも同じ。既定 1024 */
   layoutLongSide?: number
@@ -234,6 +239,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     library,
     imageProvider,
     notify = (message, opts) => toasts.push(message, 'error', opts),
+    onBatchDone,
     now = () => new Date().toISOString(),
     layoutLongSide = 1024,
     batchConcurrency = 3,
@@ -531,7 +537,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       const controller = new AbortController()
       batchControllers.set(key, controller)
       toggle('batches', key, true)
-      const counts: Record<GenerateOutcome, number> = { done: 0, busy: 0, failed: 0, canceled: 0 }
+      const counts: BatchCounts = { done: 0, busy: 0, failed: 0, canceled: 0 }
       const errors: unknown[] = []
       try {
         const targets = batchTargets(store.get(), pageIds, includeGenerated)
@@ -566,6 +572,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
           { signIn: errors.some(needsSignIn) },
         )
       }
+      onBatchDone?.(counts)
       return counts
     },
     cancel(projectId, scope) {
@@ -599,12 +606,14 @@ if (import.meta.vitest) {
     const library = createProjectLibrary(storage)
     const store = createProjectStore(sample, { saveProject: async () => {} })
     const notify = vi.fn<(message: string, opts: { signIn: boolean }) => void>()
+    const onBatchDone = vi.fn<(counts: BatchCounts) => void>()
     let open = true
     const generation = createPanelGeneration({
       // store は library.open を通さず作るので、開いている扱いにする
       library: { ...library, isOpen: async () => open },
       imageProvider,
       notify,
+      onBatchDone,
       now: () => NOW,
       layoutLongSide: 64,
     })
@@ -618,7 +627,7 @@ if (import.meta.vitest) {
     const close = () => {
       open = false
     }
-    return { storage, library, store, notify, generation, generate, panelNow, close }
+    return { storage, library, store, notify, onBatchDone, generation, generate, panelNow, close }
   }
 
   describe('generate', () => {
@@ -880,8 +889,14 @@ if (import.meta.vitest) {
 
     test('generates the page in one call and puts a crop of it in every panel in one undo step', async () => {
       const { provider, calls } = counting()
-      const { generation, store, library, notify } = setup(provider)
+      const { generation, store, library, notify, onBatchDone } = setup(provider)
       expect(await generation.generateAll(all(store))).toEqual({
+        done: 6,
+        busy: 0,
+        failed: 0,
+        canceled: 0,
+      })
+      expect(onBatchDone).toHaveBeenCalledExactlyOnceWith({
         done: 6,
         busy: 0,
         failed: 0,
@@ -979,6 +994,31 @@ if (import.meta.vitest) {
       expect(notify).toHaveBeenCalledWith('コマ 6 件の生成に失敗しました: quota exceeded', {
         signIn: false,
       })
+    })
+
+    test('a second batch of the same scope is busy and does not count as done', async () => {
+      let release = () => {}
+      let started = () => {}
+      const called = new Promise<void>((resolve) => {
+        started = resolve
+      })
+      const fake = createFakeImageProvider()
+      const { generation, store, onBatchDone } = setup({
+        async generatePageArt(req) {
+          started()
+          await new Promise<void>((resolve) => {
+            release = resolve
+          })
+          return fake.generatePageArt(req)
+        },
+      })
+      const pending = generation.generateAll(all(store))
+      await called
+      expect(await generation.generateAll(all(store))).toBe('busy')
+      expect(onBatchDone).not.toHaveBeenCalled()
+      release()
+      expect(await pending).toMatchObject({ done: 6 })
+      expect(onBatchDone).toHaveBeenCalledOnce()
     })
 
     test('a panel removed while the page is generated is counted as failed, the rest get art', async () => {
