@@ -2,7 +2,9 @@ import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
 import { FIXTURE_PROJECT, importProject, openPage } from './app'
 
-test('エディタのヘッダーで、キーでツールとペンを選び、前後のページへ移れる', async ({ page }) => {
+test('エディタのヘッダーで、キーでツールとペンを選び、前後のページへ移れ、ページを足せる', async ({
+  page,
+}) => {
   await importProject(page, FIXTURE_PROJECT)
   await page.getByRole('button', { name: m.web_episode_add_page() }).click()
   await openPage(page, 1)
@@ -39,4 +41,7 @@ test('エディタのヘッダーで、キーでツールとペンを選び、�
   await expect(current).toHaveText(m.web_editor_page_option({ index: 2, total: 2 }))
   await page.keyboard.press('[')
   await expect(current).toHaveText(m.web_editor_page_option({ index: 1, total: 2 }))
+
+  await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+  await expect(current).toHaveText(m.web_editor_page_option({ index: 3, total: 3 }))
 })
