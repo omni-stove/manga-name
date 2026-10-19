@@ -21,6 +21,11 @@ export function installFakeTauri(
       invoke(cmd, args, options),
     transformCallback: () => ++nextCallback,
     unregisterCallback: () => {},
+    // getCurrentWindow が読む
+    metadata: {
+      currentWindow: { label: 'main' },
+      currentWebview: { windowLabel: 'main', label: 'main' },
+    },
   })
 }
 

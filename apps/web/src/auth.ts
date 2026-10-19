@@ -22,6 +22,8 @@ export interface AuthClient {
    * まだ登録していないユーザーは、招待リンクのトークンを `inviteToken` に渡したときだけ登録される
    */
   signIn(opts?: { inviteToken?: string }): Promise<void>
+  /** `openExternal` で始めたログインの、deep link で戻った一度きりのトークンをセッションに換える。換えられなければ throw */
+  completeSignIn(oneTimeToken: string): Promise<void>
   /** 表示名を変える。未ログインか、API が名前を受け付けなければ throw */
   setName(name: string): Promise<void>
   /** サーバのセッションを消し、手元のトークンとユーザーを捨てる */
@@ -48,6 +50,11 @@ export interface AuthClientOptions {
   navigate?: (url: string) => void
   /** Desktop で渡す。Web は API の Cookie から取り直せるので渡さない */
   tokenStore?: TokenStore
+  /**
+   * Desktop で渡す。signIn は API の `/v1/desktop-sign-in` をこれで OS のブラウザに開き、戻りは completeSignIn で受ける。
+   * Google は WebView の中での OAuth を断るため
+   */
+  openExternal?: (url: string) => Promise<void>
 }
 
 interface Session {
@@ -122,16 +129,7 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
     }
     // 期限を延ばしたときは bearer プラグインが新しいトークンを set-auth-token で返す
     const token = res.headers.get('set-auth-token') ?? body.session.token
-    setSession({
-      token,
-      expiresAt: Date.parse(body.session.expiresAt),
-      user: {
-        id: body.user.id,
-        name: body.user.name,
-        email: body.user.email,
-        image: body.user.image ?? null,
-      },
-    })
+    setSession(toSession(body.session, body.user, token))
     return token
   }
 
@@ -176,6 +174,12 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
     },
     async signIn({ inviteToken } = {}) {
       if (baseUrl === '') throw new Error(m.web_auth_api_url_missing())
+      if (opts.openExternal) {
+        const url = new URL(`${baseUrl}/v1/desktop-sign-in`)
+        if (inviteToken !== undefined) url.searchParams.set('invite', inviteToken)
+        await opts.openExternal(url.toString())
+        return
+      }
       const res = await authFetch('/sign-in/social', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -191,6 +195,16 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
       const { url } = (await res.json()) as { url?: string }
       if (!url) throw new Error('sign-in failed: no redirect URL')
       navigate(url)
+    },
+    async completeSignIn(oneTimeToken) {
+      const res = await doFetch(`${baseUrl}/v1/auth/one-time-token/verify`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: oneTimeToken }),
+      })
+      if (!res.ok) throw new Error(m.web_auth_sign_in_expired())
+      const body = (await res.json()) as Required<GetSessionBody>
+      setSession(toSession(body.session, body.user, body.session.token))
     },
     async setName(name) {
       if (session === null) throw new Error(m.web_auth_not_signed_in())
@@ -245,9 +259,27 @@ export function takeSignInError(url: URL): { message: string; url: URL } | null 
 }
 
 interface GetSessionBody {
-  session?: { token: string; expiresAt: string }
-  user?: { id: string; name: string; email: string; image?: string | null }
+  session?: SessionBody
+  user?: UserBody
 }
+
+interface SessionBody {
+  token: string
+  expiresAt: string
+}
+
+interface UserBody {
+  id: string
+  name: string
+  email: string
+  image?: string | null
+}
+
+const toSession = (session: SessionBody, user: UserBody, token: string): Session => ({
+  token,
+  expiresAt: Date.parse(session.expiresAt),
+  user: { id: user.id, name: user.name, email: user.email, image: user.image ?? null },
+})
 
 if (import.meta.vitest) {
   const { afterEach, describe, expect, test, vi } = import.meta.vitest
@@ -432,6 +464,39 @@ if (import.meta.vitest) {
         errorCallbackURL: 'https://app.test/p/1',
       })
       expect(new Headers(init?.headers).get('content-type')).toBe('application/json')
+    })
+
+    test('signIn with openExternal opens the desktop sign-in with the invite token', async () => {
+      const openExternal = vi.fn(async () => {})
+      const { client, fetch } = setup(() => new Response(), { openExternal })
+      await client.signIn({ inviteToken: 'a/b' })
+      expect(openExternal).toHaveBeenCalledExactlyOnceWith(
+        'https://api.test/v1/desktop-sign-in?invite=a%2Fb',
+      )
+      await client.signIn()
+      expect(openExternal).toHaveBeenLastCalledWith('https://api.test/v1/desktop-sign-in')
+      expect(fetch).not.toHaveBeenCalled()
+    })
+
+    test('completeSignIn turns the one-time token into the session and stores it', async () => {
+      const { store, tokenStore } = memoryTokenStore()
+      const { client, fetch } = setup(() => sessionResponse('t1', HOUR), { tokenStore })
+      const listener = vi.fn()
+      client.subscribe(listener)
+      await client.completeSignIn('ott')
+      expect(client.getUser()).toEqual(user)
+      expect(await client.getToken()).toBe('t1')
+      expect(store.token).toBe('t1')
+      expect(listener).toHaveBeenCalledOnce()
+      const [url, init] = fetch.mock.calls[0] ?? []
+      expect(url).toBe('https://api.test/v1/auth/one-time-token/verify')
+      expect(JSON.parse(String(init?.body))).toEqual({ token: 'ott' })
+    })
+
+    test('completeSignIn fails on a used or expired token and stays signed out', async () => {
+      const { client } = setup(() => new Response(null, { status: 400 }))
+      await expect(client.completeSignIn('ott')).rejects.toThrow('期限')
+      expect(client.getUser()).toBeNull()
     })
 
     test('takeSignInError explains the error and drops it from the URL', () => {
