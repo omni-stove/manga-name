@@ -21,7 +21,7 @@ export const aiFixtures = {
 /**
  * 入力に関わらず fixtures/ai/ の応答を返す LlmProvider。planPages は `pageCount` があれば、
  * フィクスチャの 2 ページを繰り返してその枚数にする。suggestLayout は案を要求のコマの数に合わせ、
- * 数の合う案はそのまま、合わない案は 1 段に 1 コマずつ並べ直して返す
+ * 数の合う案はそのまま、合わない案は段を 6 以下に収めて並べ直して返す
  */
 export function createFakeLlmProvider(): LlmProvider {
   return {
@@ -38,10 +38,16 @@ export function createFakeLlmProvider(): LlmProvider {
     },
     async suggestLayout(req) {
       // Workers がネームとコマの数の合わない案を弾くので、利用者が足し引きしたコマの数にそろえる
+      // 段は LayoutOptionSchema の上限 6 に収まるよう、1 段に ceil(n / 6) コマずつ詰める
+      const perRow = Math.max(1, Math.ceil(req.panels.length / 6))
+      const restacked = Array.from({ length: Math.ceil(req.panels.length / perRow) }, (_, i) => ({
+        height: 1,
+        panels: req.panels.slice(i * perRow, (i + 1) * perRow).map(() => ({ width: 1 })),
+      }))
       const options = structuredClone(aiFixtures.layoutSuggestion).options.map((option) =>
         option.rows.reduce((n, row) => n + row.panels.length, 0) === req.panels.length
           ? option
-          : { ...option, rows: req.panels.map(() => ({ height: 1, panels: [{ width: 1 }] })) },
+          : { ...option, rows: restacked },
       )
       return { options }
     },
