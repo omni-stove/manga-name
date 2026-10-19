@@ -17,10 +17,9 @@
     "prepare": "pnpm types"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.80",
+    "@anthropic-ai/sdk": "^0.135.0",
     "@manga/ai": "workspace:*",
     "@manga/schema": "workspace:*",
-    "ai": "^7.0.141",
     "better-auth": "^1.7.9",
     "hono": "catalog:",
     "lib0": "^0.2.114",

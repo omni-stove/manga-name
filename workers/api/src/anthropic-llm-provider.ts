@@ -1,7 +1,8 @@
-import { createAnthropic } from '@ai-sdk/anthropic'
+import Anthropic from '@anthropic-ai/sdk'
+import { transformJSONSchema } from '@anthropic-ai/sdk/lib/transform-json-schema'
 import { type LlmPrompt, type LlmProvider, prompts } from '@manga/ai'
-import type { CritiqueResponse, LayoutSuggestionResponse, PagePlan } from '@manga/schema'
-import { generateText, type JSONSchema7, jsonSchema, Output } from 'ai'
+import type { JsonSchema } from '@manga/schema'
+import { z } from 'zod'
 
 const ANTHROPIC_LLM_MODEL = 'claude-haiku-5-5'
 
@@ -17,53 +18,67 @@ export interface AnthropicLlmProviderOptions {
 }
 
 /**
- * AI SDK 経由で Anthropic `claude-haiku-5-5` に planPages、suggestLayout、critique をさせる LlmProvider。
- * prompts の system と user を送り、schema を構造化出力に渡して、応答の JSON をそのまま返す。
- * 型どおりかの検証と再試行は呼び出し側に任せる。JSON にならない応答や HTTP エラーは throw する。
+ * Anthropic `claude-haiku-5-5` に planPages、suggestLayout、critique をさせる LlmProvider。
+ * prompts の system と user を送り、schema を構造化出力に渡して、応答の JSON を output で検証して返す。
+ * 最後まで書き終えていない応答、JSON にならない応答、output を通らない応答、HTTP エラーは throw する。
  */
 export function createAnthropicLlmProvider(opts: AnthropicLlmProviderOptions): LlmProvider {
-  const model = createAnthropic({ apiKey: opts.apiKey })(ANTHROPIC_LLM_MODEL)
+  // SDK の再試行は切る。呼び出し側の再試行と重なると、1 要求で何度も課金されるため
+  const client = new Anthropic({ apiKey: opts.apiKey, maxRetries: 0 })
 
-  async function generate<T>(
-    { system, user }: LlmPrompt,
-    spec: Output.Output<T>,
-    maxOutputTokens: number,
+  async function generate(
+    { system, user }: LlmPrompt<unknown>,
+    schema: JsonSchema,
+    maxTokens: number,
   ) {
-    const { output } = await generateText({
-      model,
-      system,
-      prompt: user,
-      // AI SDK の再試行は切る。呼び出し側の再試行と重なると、1 要求で何度も課金されるため
-      maxRetries: 0,
-      maxOutputTokens,
-      output: spec,
-      providerOptions: {
-        // ざっくり提案してざっくり直す用途なので、思考を浅くして費用と待ち時間を抑える
-        anthropic: { structuredOutputMode: 'outputFormat', effort: 'low' },
-      },
-    })
-    return output
+    // 非 streaming では SDK が max_tokens 64,000 の要求を 10 分を超える恐れで断るので、streaming で受ける
+    const message = await client.messages
+      .stream({
+        model: ANTHROPIC_LLM_MODEL,
+        max_tokens: maxTokens,
+        system,
+        messages: [{ role: 'user', content: user }],
+        output_config: {
+          // ざっくり提案してざっくり直す用途なので、思考を浅くして費用と待ち時間を抑える
+          effort: 'low',
+          // 構造化出力が受け付けない制約（minLength など）は SDK の変換で description に移す
+          format: { type: 'json_schema', schema: transformJSONSchema(schema) },
+        },
+      })
+      .finalMessage()
+    if (message.stop_reason !== 'end_turn') {
+      throw new Error(`anthropic stopped with ${message.stop_reason}`)
+    }
+    const text = message.content.find((block) => block.type === 'text')?.text ?? ''
+    return JSON.parse(text) as unknown
   }
 
-  // jsonSchema に validate を渡さないのは、範囲と参照整合まで見る Zod の検証を呼び出し側が持つため
-  const schemaOf = <T>(schema: LlmPrompt['schema']) => jsonSchema<T>(schema as JSONSchema7)
+  function check<T>(output: z.ZodType<T>, value: unknown): T {
+    const result = output.safeParse(value)
+    if (!result.success) throw new Error(`invalid llm output\n${z.prettifyError(result.error)}`)
+    return result.data
+  }
 
   return {
-    planPages: (req) => {
+    planPages: async (req) => {
       const prompt = prompts.planPages(req)
-      // 構造化出力は根を object に限るので、AI SDK に { elements: [...] } で包ませて配列で受け取る
-      const element = schemaOf<PagePlan>(prompt.schema.items as LlmPrompt['schema'])
-      return generate(prompt, Output.array({ element }), MAX_PLAN_OUTPUT_TOKENS)
+      // 構造化出力は根を object に限るので、配列を { elements } で包ませて受け取る
+      const schema: JsonSchema = {
+        type: 'object',
+        additionalProperties: false,
+        required: ['elements'],
+        properties: { elements: prompt.schema },
+      }
+      const reply = await generate(prompt, schema, MAX_PLAN_OUTPUT_TOKENS)
+      return check(prompt.output, (reply as { elements?: unknown } | null)?.elements)
     },
-    suggestLayout: (req) => {
+    suggestLayout: async (req) => {
       const prompt = prompts.suggestLayout(req)
-      const schema = schemaOf<LayoutSuggestionResponse>(prompt.schema)
-      return generate(prompt, Output.object({ schema }), MAX_LAYOUT_OUTPUT_TOKENS)
+      return check(prompt.output, await generate(prompt, prompt.schema, MAX_LAYOUT_OUTPUT_TOKENS))
     },
-    critique: (req) => {
+    critique: async (req) => {
       const prompt = prompts.critique(req)
-      const schema = schemaOf<CritiqueResponse>(prompt.schema)
-      return generate(prompt, Output.object({ schema }), MAX_CRITIQUE_OUTPUT_TOKENS)
+      return check(prompt.output, await generate(prompt, prompt.schema, MAX_CRITIQUE_OUTPUT_TOKENS))
     },
   }
 }

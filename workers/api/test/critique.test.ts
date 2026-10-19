@@ -56,8 +56,10 @@ function scripted(responses: (() => Promise<CritiqueResponse>)[]) {
   return { provider, calls }
 }
 
-const invalid = async () =>
-  ({ summary: 's', suggestions: [{ message: 'm' }] }) as unknown as CritiqueResponse
+/** スキーマを通らない応答。LlmProvider は返さずに throw する */
+const invalid = async (): Promise<CritiqueResponse> => {
+  throw new Error('invalid llm output')
+}
 
 beforeEach(async () => {
   await env.DB.batch([

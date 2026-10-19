@@ -1,10 +1,16 @@
 import {
   type Character,
+  type CritiqueResponse,
+  CritiqueResponseSchema,
   type ID,
   type JsonSchema,
+  type LayoutSuggestionResponse,
+  LayoutSuggestionResponseSchema,
   layoutSuggestionJsonSchema,
   type Page,
   type PageDiagnosis,
+  type PagePlanResponse,
+  PagePlanResponseSchema,
   type Panel,
   type Point,
   type ProjectSettings,
@@ -14,6 +20,7 @@ import {
   StrengthSchema,
   VectorKindSchema,
 } from '@manga/schema'
+import type { z } from 'zod'
 import { critiqueSystem } from './critique.prompt'
 import {
   CHARACTER_ART_TAIL,
@@ -42,11 +49,15 @@ const MAX_PLANNED_PAGES = 64
 /** コマ割りの提案で出させる案の数。LayoutSuggestionResponseSchema の上限と揃える */
 const LAYOUT_OPTIONS = 3
 
-/** LLM に渡すプロンプト。schema は構造化出力に対応したプロバイダにそのまま渡す */
-export interface LlmPrompt {
+/**
+ * LLM に渡すプロンプト。schema は構造化出力に対応したプロバイダにそのまま渡し、
+ * プロバイダは応答を output で検証してから返す
+ */
+export interface LlmPrompt<T> {
   system: string
   user: string
   schema: JsonSchema
+  output: z.ZodType<T>
 }
 
 export type PanelArtPromptRequest = Omit<
@@ -202,7 +213,7 @@ function characterList(characters: Character[]): string[] {
  * ページ割りのプロンプト。脚本をページに割り振り、ページごとの流れ、脚本の原文、登場キャラ、セリフの配列を返させる。
  * system に出力規則と JSON Schema、user にキャラ一覧、ページ数、脚本を入れる。
  */
-function planPages(req: PagePlanRequest): LlmPrompt {
+function planPages(req: PagePlanRequest): LlmPrompt<PagePlanResponse> {
   const schema = pagePlanJsonSchema()
 
   const system = planPagesSystem(schema)
@@ -216,7 +227,7 @@ function planPages(req: PagePlanRequest): LlmPrompt {
     req.script,
   ].join('\n')
 
-  return { system, user, schema }
+  return { system, user, schema, output: PagePlanResponseSchema }
 }
 
 const POINT_JSON_SCHEMA: JsonSchema = {
@@ -230,14 +241,14 @@ const POINT_JSON_SCHEMA: JsonSchema = {
  * コマ割りの提案のプロンプト。1 ページの脚本から、段とコマに割った案を LAYOUT_OPTIONS 個返させる。
  * system に出力規則と JSON Schema、user にキャラ一覧とページの脚本を入れる
  */
-function suggestLayout(req: LayoutSuggestionRequest): LlmPrompt {
+function suggestLayout(req: LayoutSuggestionRequest): LlmPrompt<LayoutSuggestionResponse> {
   const schema = layoutSuggestionJsonSchema()
 
   const system = suggestLayoutSystem(LAYOUT_OPTIONS, schema)
 
   const user = [...characterList(req.project.characters), 'Script:', req.script].join('\n')
 
-  return { system, user, schema }
+  return { system, user, schema, output: LayoutSuggestionResponseSchema }
 }
 
 /**
@@ -312,7 +323,7 @@ const MAX_SUGGESTIONS = 5
  * user にページの要素（配列の添字つき）、焦点ごとの診断、Issue の箇条書きを入れる。
  * Patch はページを根にしたパスで、焦点とフキダシの pos の replace とベクトルの add だけを許す
  */
-function critique(req: CritiqueRequest): LlmPrompt {
+function critique(req: CritiqueRequest): LlmPrompt<CritiqueResponse> {
   const { page, diagnosis } = req
   const schema = critiqueJsonSchema()
 
@@ -358,7 +369,7 @@ function critique(req: CritiqueRequest): LlmPrompt {
     ...(issues.length > 0 ? issues : ['- (none)']),
   ].join('\n')
 
-  return { system, user, schema }
+  return { system, user, schema, output: CritiqueResponseSchema }
 }
 
 export const prompts = { panelArt, pageArt, characterArt, planPages, suggestLayout, critique }
