@@ -7,6 +7,7 @@ import {
   type PageDiagnosis,
   type Panel,
   type Point,
+  type ProjectSettings,
   pageCharacterIds,
   pagePlanJsonSchema,
   panelCharacterIds,
@@ -78,6 +79,11 @@ function panelCharacters(panel: Panel, characters: Character[]): Character[] {
 
 const describeCharacter = (c: Character) => (c.appearance ? `${c.name}: ${c.appearance}` : c.name)
 
+/** 全キャラに共通するデザインの行。キャラを描かせるプロンプトでだけ、キャラの行の前に入れる */
+const characterDesign = (settings: ProjectSettings) =>
+  settings.characterDesign &&
+  `character design shared by every character: ${settings.characterDesign}`
+
 /**
  * コマの中身を表す行。カメラ、指示メモ、登場キャラ、焦点（重い順）、誘導線、ヒント。空の行も含む。
  * `appearance` が false なら登場キャラは名前だけにする
@@ -114,12 +120,13 @@ const joinLines = (parts: (string | undefined)[]) =>
  * 焦点か誘導線のあるコマでは、末尾の前に配置の印の読み方を入れる。
  */
 function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: string } {
-  const { characters } = req.project
+  const { characters, settings } = req.project
   const panel = findPanel(req.page, req.panelId)
 
   return {
     prompt: joinLines([
       NAME_STYLE,
+      panelCharacters(panel, characters).length > 0 ? characterDesign(settings) : undefined,
       ...panelContent(panel, characters, req.hint, true),
       req.instruction && `revise the previous image: ${req.instruction}`,
       hasPlacement(panel) ? PLACEMENT_GUIDE : undefined,
@@ -142,7 +149,7 @@ const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from +
  * 焦点か誘導線のあるコマがあれば配置の印の読み方、固定の末尾を改行で連結する。
  */
 function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string } {
-  const { characters } = req.project
+  const { characters, settings } = req.project
   const cast = pageCharacterIds(req.page).flatMap((id) => characters.filter((c) => c.id === id))
   const panels = [...req.page.panels]
     .sort((a, b) => a.order - b.order)
@@ -159,6 +166,7 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
     prompt: joinLines([
       NAME_STYLE,
       PAGE_ART_HEAD,
+      cast.length > 0 ? characterDesign(settings) : undefined,
       cast.length > 0 ? `characters: ${cast.map(describeCharacter).join('; ')}` : undefined,
       ...panels,
       req.page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
@@ -168,13 +176,15 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
   }
 }
 
-/** キャラの参照画像のプロンプト。画風、名前と外見、固定の末尾を改行で連結する */
+/** キャラの参照画像のプロンプト。画風、共通のデザイン、名前と外見、固定の末尾を改行で連結する */
 function characterArt(req: CharacterArtRequest): { prompt: string; negative: string } {
-  const { name, appearance } = req.character
   return {
-    prompt: [NAME_STYLE, appearance ? `${name}: ${appearance}` : name, CHARACTER_ART_TAIL].join(
-      '\n',
-    ),
+    prompt: joinLines([
+      NAME_STYLE,
+      characterDesign(req.project.settings),
+      describeCharacter(req.character),
+      CHARACTER_ART_TAIL,
+    ]),
     negative: NAME_NEGATIVE,
   }
 }
@@ -444,6 +454,41 @@ if (import.meta.vitest) {
       character: { ...character, appearance: undefined },
     })
     expect(bare.prompt.split('\n')).toEqual([NAME_STYLE, 'エル', CHARACTER_ART_TAIL])
+  })
+
+  test('the shared character design goes before the characters only where characters are drawn', () => {
+    const settings = { ...project.settings, characterDesign: '6 頭身、太い眉' }
+    const design = 'character design shared by every character: 6 頭身、太い眉'
+    const character = { id: 'c', name: 'エル', shortName: 'L' }
+    expect(prompts.characterArt({ project: { settings }, character }).prompt.split('\n')).toEqual([
+      NAME_STYLE,
+      design,
+      'エル',
+      CHARACTER_ART_TAIL,
+    ])
+
+    const page = project.episodes[0]?.pages[0] as Page
+    const panelLines = prompts
+      .panelArt({ project: { ...project, settings }, page, panelId: 'pn_1' })
+      .prompt.split('\n')
+    expect(panelLines[1]).toBe(design)
+    const pageLines = prompts
+      .pageArt({ project: { ...project, settings }, page })
+      .prompt.split('\n')
+    expect(pageLines[2]).toBe(design)
+    expect(pageLines[3]?.startsWith('characters: ')).toBe(true)
+
+    const unpeopled = {
+      ...page,
+      panels: page.panels.map((p) => ({ ...p, bubbles: [], focusPoints: [], vectors: [] })),
+    }
+    expect(
+      prompts.pageArt({ project: { ...project, settings }, page: unpeopled }).prompt,
+    ).not.toContain(design)
+    expect(
+      prompts.panelArt({ project: { ...project, settings }, page: unpeopled, panelId: 'pn_1' })
+        .prompt,
+    ).not.toContain(design)
   })
 
   test('planPages embeds the page plan JSON Schema and lists characters, the page count and the script', () => {

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 9 as const
+export const SCHEMA_VERSION = 10 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -28,6 +28,8 @@ export const ProjectSettingsSchema = z.object({
   }),
   dpi: z.number().int().positive(),
   diagnosis: DiagnosisConfigSchema.partial().optional(),
+  /** 全キャラに共通する絵柄や頭身。キャラごとの外見（Character.appearance）と一緒に生成に渡す */
+  characterDesign: z.string().optional(),
 })
 
 export const CharacterSchema = z.object({

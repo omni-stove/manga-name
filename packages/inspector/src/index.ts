@@ -16,4 +16,5 @@ export type {
   PanelInspectorProps,
   VectorInspectorProps,
 } from './types'
+export { useDraft } from './use-draft'
 export { VectorInspector } from './vector-inspector'
