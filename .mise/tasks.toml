@@ -110,3 +110,7 @@ run = "pnpm --filter @manga/api exec wrangler dev --port 8787 --var ENVIRONMENT:
 description = "Apply workers/api D1 migrations to the local database"
 dir = "workers/api"
 run = "pnpm exec wrangler d1 migrations apply DB --local"
+
+[spec]
+description = "Print the JSDoc of apps/*, packages/* and workers/* as Markdown; with no path, the map of each file's exports"
+run = "node .agents/skills/spec/scripts/extract.ts"

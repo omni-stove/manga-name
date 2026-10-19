@@ -1,6 +1,6 @@
 import type { FocusDiagnosis, Panel, Point } from '@manga/schema'
 
-/** フキダシを焦点とみなすときの weight（04 の 0 節） */
+/** フキダシを焦点とみなすときの weight */
 const BUBBLE_WEIGHT = 0.4
 
 /** FocusPoint とフキダシの合成焦点を同じ形で扱うための焦点 */
@@ -26,7 +26,7 @@ export const panelFoci = (panel: Panel): Focus[] => [
     .map((b) => ({
       id: b.id,
       kind: 'bubble' as const,
-      // 合成焦点の label（04 の 10 節）。セリフ本文はヒントや Issue に出さない
+      // セリフ本文はヒントや Issue に出さない
       label: 'フキダシ',
       pos: b.pos,
       weight: BUBBLE_WEIGHT,

@@ -30,7 +30,7 @@ export const defaultDiagnosisConfig: DiagnosisConfig = Object.freeze({
 /** targetFocusId の無い Vector の終点を焦点に吸着させる距離（コマ高さ比） */
 const VECTOR_SNAP = 0.1
 
-/** Panel の輪郭の共通部分を囲む矩形が縦横ともこれ以上で、厚みがこの 1/√2 以上あると OVERLAP（04 の 8 節） */
+/** Panel の輪郭の共通部分を囲む矩形が縦横ともこれ以上で、厚み（面積 ÷ 囲む矩形の対角線）がこの 1/√2 以上あると OVERLAP */
 const OVERLAP_MIN = 0.01
 
 /** 距離や重なりは 2 進小数で丸まるので、閾値ちょうどの値を仕様どおり閾値側に入れる余裕 */
@@ -61,7 +61,10 @@ const nearestFocusId = (panel: Panel, foci: readonly Focus[], to: Point): string
   return best
 }
 
-/** 焦点ごとの誘導線の本数（04 の 4 節）。フキダシは bubble chain の分として strong を 1 本持つ */
+/**
+ * 焦点ごとの誘導線の本数。targetFocusId の無い Vector は終点に最も近い焦点（VECTOR_SNAP 以内）に数え、無ければ数えない。
+ * フキダシは経路から外れていても読者が追うので、bubble chain の分として strong を 1 本持つ
+ */
 const countVectors = (panel: Panel, foci: readonly Focus[]): Map<string, Counts> => {
   const counts = new Map<string, Counts>(
     foci.map((f) => [f.id, { strong: f.kind === 'bubble' ? 1 : 0, weak: 0 }]),
@@ -74,7 +77,10 @@ const countVectors = (panel: Panel, foci: readonly Focus[]): Map<string, Counts>
   return counts
 }
 
-/** 焦点のステータスと、ok 以外または経路外のときの短い説明（04 の 5 節） */
+/**
+ * 焦点のステータスと、ok 以外または経路外のときの短い説明。経路から pathBand 以内なら ok
+ * （requireStrongForOk で strong が無ければ weak）、外なら strong があれば ok、weak だけなら weak、どちらも無ければ miss
+ */
 const judge = (
   distance: number,
   { strong, weak }: Counts,
@@ -196,7 +202,7 @@ const overlapIssues = (panels: readonly Panel[]): Issue[] => {
 }
 
 /**
- * ページ内の全 Bubble を Panel.order、Bubble.order の順に並べた、ページ座標の点列（04 の 7 節）。
+ * ページ内の全 Bubble を Panel.order、Bubble.order の順に並べた、ページ座標の点列。
  * Bubble が無ければ空配列。
  */
 export function bubbleChain(page: Page): Point[] {
@@ -287,7 +293,7 @@ if (import.meta.vitest) {
       typeof v === 'number' ? Math.round(v * 1e6) / 1e6 : v,
     )
 
-  describe('sample-page-01 expectations (04 の期待値表)', () => {
+  describe('sample-page-01 expectations', () => {
     const d = diagnosePage(samplePage(), settings)
 
     test.each<[string, number]>([
