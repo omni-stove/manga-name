@@ -2,9 +2,11 @@ import { diagnosePage } from '@manga/diagnosis'
 import {
   type CanvasMenuRequest,
   convertSketchPatch,
+  copyElement,
   EditorCanvas,
   isLocked,
   type Layers,
+  pastePatch,
   removePatch,
   type ScribbleTool,
   type Selection,
@@ -70,6 +72,12 @@ import { previewPage } from './critique'
 import { CritiquePanel } from './critique-panel'
 import { chooseExportFolder, loadExportFolder, writePageFiles } from './desktop/export-folder'
 import { receiveDroppedReference } from './dropped-reference'
+import {
+  type ClipboardElement,
+  parseElement,
+  serializeElement,
+  useElementClipboard,
+} from './element-clipboard'
 import { ExportDialog, type ExportSettings } from './export-dialog'
 import { exportFileName, pageExporter } from './export-page'
 import { collectExportJob } from './export-page-job'
@@ -275,6 +283,15 @@ function hasElement(page: Page, selection: Selection): boolean {
   return findVector(page, selection.id) !== undefined
 }
 
+/** 選択要素のコマ。コマならそれ自身 */
+function panelOf(page: Page, selection: Selection): ID | undefined {
+  if (selection === null) return undefined
+  if (selection.kind === 'panel') return findPanel(page, selection.id)?.panel.id
+  if (selection.kind === 'bubble') return findBubble(page, selection.id)?.panel.id
+  if (selection.kind === 'focus') return findFocus(page, selection.id)?.panel.id
+  return findVector(page, selection.id)?.panel.id
+}
+
 /** Issue が指す要素。焦点の id はフキダシの合成焦点ならフキダシを指す */
 function issueTarget(page: Page, issue: Issue): Selection {
   const id = issue.focusPointId
@@ -394,6 +411,31 @@ export function PageEditor({
         }
       : {}),
   })
+  const copySelection = (): ClipboardElement | null => {
+    const element = foundPage ? copyElement(foundPage, selected) : null
+    return element && { projectId, element }
+  }
+  const pasteElement = (clip: ClipboardElement) => {
+    let pasted: Selection = null
+    const applied = apply(m.web_editor_history_paste_element(), (p) => {
+      const current = findPage(p, pageId)
+      if (!current) throw new Error(m.web_common_page_gone())
+      const result = pastePatch(current.page, clip.element, {
+        panelId: panelOf(current.page, selected),
+        sameProject: clip.projectId === projectId,
+        pageSize: p.settings.pageSize,
+      })
+      if (!result) throw new Error(m.web_editor_paste_no_panel())
+      pasted = result.selection
+      return pagePatch(p, pageId, result.patch)
+    })
+    if (applied) setSelection(pasted)
+  }
+  useElementClipboard({
+    copy: copySelection,
+    paste: canEdit ? pasteElement : undefined,
+    enabled: can('canvas'),
+  })
 
   useEffect(() => {
     collab?.presence.setLocation({ pageId, selection: selectedId ? [selectedId] : [] })
@@ -497,8 +539,35 @@ export function PageEditor({
     { label: 'Undo', shortcut: `${MOD}Z`, disabled: !canUndo, onSelect: () => store.undo() },
     { label: 'Redo', shortcut: `${MOD}Shift+Z`, disabled: !canRedo, onSelect: () => store.redo() },
   ]
+  const clipboardFailed = (e: unknown) =>
+    toasts.push(m.web_editor_clipboard_failed({ reason: errorMessage(e) }))
+  // メニューからは copy と paste のイベントを出せないので、Clipboard API で読み書きする
+  const copyItem = (target: NonNullable<Selection>): ContextMenuItem => ({
+    label: m.copy(),
+    shortcut: `${MOD}C`,
+    onSelect: () => {
+      const element = copyElement(page, target)
+      if (!element) return
+      navigator.clipboard.writeText(serializeElement({ projectId, element })).catch(clipboardFailed)
+    },
+  })
+  const pasteItems: ContextMenuItem[] = canEdit
+    ? [
+        {
+          label: m.paste(),
+          shortcut: `${MOD}V`,
+          onSelect: () =>
+            void navigator.clipboard.readText().then((text) => {
+              const clip = parseElement(text)
+              if (clip) pasteElement(clip)
+              else toasts.push(m.web_editor_paste_nothing())
+            }, clipboardFailed),
+        },
+      ]
+    : []
   const pageMenuItems: (ContextMenuItem | 'separator')[] = [
     ...undoItems,
+    ...pasteItems,
     'separator',
     { label: m.web_editor_menu_fit(), onSelect: () => menu?.fit() },
     ...(canEdit
@@ -562,7 +631,14 @@ export function PageEditor({
     items: shapesOf
       ? shapeMenuItems(shapesOf.bubble, menuContext)
       : menuTarget
-        ? [...elementMenuItems(menuTarget, menuContext), 'separator' as const, ...undoItems]
+        ? [
+            ...elementMenuItems(menuTarget, menuContext),
+            'separator' as const,
+            copyItem(menuTarget),
+            ...pasteItems,
+            'separator' as const,
+            ...undoItems,
+          ]
         : pageMenuItems,
   }
   const chooseFolder = () => {

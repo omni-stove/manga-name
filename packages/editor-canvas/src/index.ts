@@ -1,3 +1,4 @@
+export { type CopiedElement, copyElement, pastePatch } from './clipboard-ops'
 export { isLocked, removePatch } from './edit-ops'
 export { EditorCanvas } from './editor-canvas'
 export { fitBubblesPatch, type SplitAxis, splitPanelPatch } from './panel-ops'
