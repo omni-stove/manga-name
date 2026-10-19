@@ -2,6 +2,7 @@ import { m } from '@manga/i18n'
 import { Button, FileDrop, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
+import { BackLink } from '../back-link'
 import { tour } from '../onboarding/tour'
 import { parseProjectFile } from '../project-file'
 import { errorMessage } from '../route-error'
@@ -36,7 +37,10 @@ function NewProject() {
 
   return (
     <YStack as="section" gap={16}>
-      <Typography variant="title">{m.web_new_project_title()}</Typography>
+      <YStack as="header" gap={4}>
+        <BackLink to="/">{m.web_project_list()}</BackLink>
+        <Typography variant="title">{m.web_new_project_title()}</Typography>
+      </YStack>
       <form
         className={styles.create}
         data-guide="new-project"

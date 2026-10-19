@@ -12,6 +12,7 @@ import {
 } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
+import { BackLink } from '../back-link'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { PeerBadge, usePeers } from '../collaboration-view'
 import collabStyles from '../collaboration-view.module.css'
@@ -73,10 +74,9 @@ function EpisodePages() {
   return (
     <YStack gap={8}>
       <YStack as="header" gap={4}>
-        <Link to="/p/$projectId" params={{ projectId }} className={styles.back}>
-          <span aria-hidden>← </span>
+        <BackLink to="/p/$projectId" params={{ projectId }}>
           {m.web_episode_list()}
-        </Link>
+        </BackLink>
         <XStack gap={12} justify="between">
           <EpisodeTitle episode={episode} apply={apply} />
           <RemoveButton label={m.web_episode_remove()} onClick={() => setRemovingEpisode(true)} />
