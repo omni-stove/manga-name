@@ -6,6 +6,7 @@ import {
   type FocusDiagnosis,
   type Issue,
   intersectPolygons,
+  mayOverlap,
   type Page,
   type PageDiagnosis,
   type Panel,
@@ -172,7 +173,7 @@ const overlapIssues = (panels: readonly Panel[]): Issue[] => {
     for (let j = i + 1; j < panels.length; j++) {
       const a = panels[i]
       const b = panels[j]
-      if (!a || !b) continue
+      if (!a || !b || mayOverlap(a, b)) continue
       // 斜めに割ったコマは囲む矩形どうしが重なるので、輪郭どうしの共通部分で見る
       const outlineA = panelOutline(a)
       const outlineB = panelOutline(b)
@@ -480,6 +481,24 @@ if (import.meta.vitest) {
       expect.objectContaining({ code: 'EMPTY_PANEL', severity: 'info', panelId: 'pn_5' }),
     )
     expect(d.issues).toContainEqual(expect.objectContaining({ code: 'OVERLAP', severity: 'error' }))
+  })
+
+  test('framed panels laid over a borderless panel do not overlap, but two borderless ones do', () => {
+    const page = samplePage()
+    const base = findPanel(page, 'pn_1')
+    page.panels.push({
+      ...base,
+      id: 'pn_bg',
+      order: 7,
+      frame: 'none',
+      bubbles: [],
+      focusPoints: [],
+      vectors: [],
+      rect: { x: 0, y: 0, w: 1, h: 1 },
+    })
+    expect(diagnosePage(page, settings).issues.map((i) => i.code)).not.toContain('OVERLAP')
+    base.frame = 'none'
+    expect(diagnosePage(page, settings).issues.map((i) => i.code)).toContain('OVERLAP')
   })
 
   test('panels cut along a diagonal do not overlap even though their rects do', () => {

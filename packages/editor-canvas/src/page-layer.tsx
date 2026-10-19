@@ -11,6 +11,7 @@ import {
   type Page,
   type Panel,
   type Point,
+  paintOrder,
   type Rect,
   type ReferenceImage,
 } from '@manga/schema'
@@ -60,6 +61,9 @@ interface PageLayerProps {
 export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
   const { page, width, height } = props
   const frame = innerFrameOf(page)
+  const panels = paintOrder(page.panels)
+  // 参考画像を未生成のコマ越しに見せたいので、白い地は下敷きのあるページの枠ありのコマにだけ塗る
+  const underlay = page.panels.some((p) => p.frame === 'none')
   return (
     <g data-layer="page">
       <rect
@@ -80,7 +84,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
           height={height}
         />
       )}
-      {page.panels.map((panel, i) => {
+      {panels.map((panel, i) => {
         const ref = currentArt(panel)?.ref
         const { selection } = props
         return (
@@ -101,27 +105,26 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
                 : undefined
             }
             clipId={`${props.idPrefix}-clip-${i}`}
+            opaque={underlay && panel.frame !== 'none'}
           />
         )
       })}
-      {/* はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く。重なりの前後はレンダラと同じく order 順 */}
-      {[...page.panels]
-        .sort((a, b) => a.order - b.order)
-        .map((panel) =>
-          byOrder(panel.bubbles.filter((b) => b.overflow)).map((bubble) => (
-            <BubbleView
-              key={bubble.id}
-              bubble={bubble}
-              panelRect={panel.rect}
-              width={width}
-              height={height}
-              frame={frame}
-              selected={isSelected(props.selection, 'bubble', bubble.id)}
-            />
-          )),
-        )}
+      {/* はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く。重なりの前後はレンダラと同じくコマの重なり順 */}
+      {panels.map((panel) =>
+        byOrder(panel.bubbles.filter((b) => b.overflow)).map((bubble) => (
+          <BubbleView
+            key={bubble.id}
+            bubble={bubble}
+            panelRect={panel.rect}
+            width={width}
+            height={height}
+            frame={frame}
+            selected={isSelected(props.selection, 'bubble', bubble.id)}
+          />
+        )),
+      )}
       {/* スピナーと生成ボタンはエディタだけの UI なので、フキダシに隠れないよう最後に描く */}
-      {page.panels.map((panel) => (
+      {panels.map((panel) => (
         <PanelOverlay
           key={panel.id}
           panelId={panel.id}
@@ -160,6 +163,7 @@ const PanelView = memo(function PanelView({
   selected,
   selectedBubble,
   clipId,
+  opaque,
 }: {
   panel: Panel
   width: number
@@ -171,6 +175,8 @@ const PanelView = memo(function PanelView({
   selected: boolean
   selectedBubble: ID | undefined
   clipId: string
+  /** 下に敷いた枠なしのコマを隠す白い地を塗るか */
+  opaque: boolean
 }) {
   const rect = panelBox(panel, width, height)
   const outline = panelPolygon(panel, width, height)
@@ -185,7 +191,11 @@ const PanelView = memo(function PanelView({
       <clipPath id={clipId}>
         <polygon points={points} />
       </clipPath>
-      {panel.fill === 'black' && <polygon points={points} fill="#000" data-panel-fill="black" />}
+      {panel.fill === 'black' ? (
+        <polygon points={points} fill="#000" data-panel-fill="black" />
+      ) : (
+        opaque && <polygon points={points} fill="#fff" data-panel-fill="white" />
+      )}
       {artRef === undefined ? (
         placeholder
       ) : (
@@ -214,12 +224,14 @@ const PanelView = memo(function PanelView({
           onBlack={panel.fill === 'black'}
         />
       ))}
+      {/* 枠なしのコマは出力に枠線が出ないが、選んで動かせるよう作業用の点線で輪郭を見せる */}
       <polygon
-        data-panel-frame=""
+        data-panel-frame={panel.frame ?? ''}
         points={points}
         fill="none"
         stroke="#000"
-        style={selected ? { stroke: GUIDE } : undefined}
+        strokeDasharray={panel.frame === 'none' && !selected ? '4 3' : undefined}
+        style={selected || panel.frame === 'none' ? { stroke: GUIDE } : undefined}
         data-selected={selected || undefined}
         strokeWidth={selected ? 2 : 1}
         strokeLinejoin="miter"

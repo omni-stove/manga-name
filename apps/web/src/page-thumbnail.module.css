@@ -17,6 +17,17 @@
   stroke-width: 1;
 }
 
+.ground {
+  fill: var(--paper);
+}
+
+.borderless {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink) 40%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+}
+
 .art {
   fill: color-mix(in srgb, var(--ink) 25%, transparent);
 }

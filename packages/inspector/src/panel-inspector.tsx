@@ -120,6 +120,17 @@ export function PanelInspector({
           )
         }
       />
+      <Checkbox
+        label={m.panel_frame_none()}
+        checked={panel.frame === 'none'}
+        onChange={(e) =>
+          onChange(
+            e.target.checked
+              ? [{ op: 'add', path: '/frame', value: 'none' }]
+              : [{ op: 'remove', path: '/frame' }],
+          )
+        }
+      />
       <CastSection panel={panel} characters={characters} onChange={onChange} />
       {diagnosis && !diagnosis.bubbleOrderOk && (
         <p className={styles.hint} data-bubble-order-ok={false}>
@@ -577,6 +588,33 @@ if (import.meta.vitest) {
       expect(checkboxIn(container).checked).toBe(true)
       await act(async () => checkboxIn(container).click())
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/fill' }])
+    })
+
+    test('the borderless checkbox adds and removes frame', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = {
+        characters: project.characters,
+        onChange,
+        onGenerate: () => {},
+        resolveAsset,
+      }
+      const checkboxIn = (container: HTMLElement) =>
+        must(
+          [...container.querySelectorAll('label')]
+            .find((el) => el.textContent === m.panel_frame_none())
+            ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+        )
+      const { container, root } = await render(<PanelInspector panel={samplePanel} {...props} />)
+      expect(checkboxIn(container).checked).toBe(false)
+      await act(async () => checkboxIn(container).click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/frame', value: 'none' }])
+
+      await act(async () =>
+        root.render(<PanelInspector panel={{ ...samplePanel, frame: 'none' }} {...props} />),
+      )
+      expect(checkboxIn(container).checked).toBe(true)
+      await act(async () => checkboxIn(container).click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/frame' }])
     })
 
     test('the generate buttons call onGenerate with and without an instruction', async () => {

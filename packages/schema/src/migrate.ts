@@ -24,9 +24,11 @@ const migrations: Record<number, (json: Record<string, unknown>) => Record<strin
   9: (json) => ({ ...json, schemaVersion: 10 }),
   // v11 は Panel.fill を足しただけ。版を上げる理由は v2 と同じ
   10: (json) => ({ ...json, schemaVersion: 11 }),
-  // v12 は Page.side を除き、Page.spread と Episode.startsRight を足した。残った side は ProjectSchema が読み捨てる。
-  // 版を上げる理由は v6 と同じ
+  // v12 は Panel.frame を足しただけ。版を上げる理由は v2 と同じ
   11: (json) => ({ ...json, schemaVersion: 12 }),
+  // v13 は Page.side を除き、Page.spread と Episode.startsRight を足した。残った side は ProjectSchema が読み捨てる。
+  // 版を上げる理由は v6 と同じ
+  12: (json) => ({ ...json, schemaVersion: 13 }),
 }
 
 /**
@@ -55,17 +57,17 @@ export function migrate(json: unknown): unknown {
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('migrate v12 → v12 is a no-op', () => {
-    const json = { schemaVersion: 12, title: 't' }
+  test('migrate v13 → v13 is a no-op', () => {
+    const json = { schemaVersion: 13, title: 't' }
     expect(migrate(json)).toBe(json)
   })
 
-  test('migrate v1 → v12 only bumps the version', () => {
-    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 12, title: 't' })
+  test('migrate v1 → v13 only bumps the version', () => {
+    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 13, title: 't' })
   })
 
   test('migrate rejects unknown, newer or missing versions and non-objects', () => {
-    expect(() => migrate({ schemaVersion: 13 })).toThrow()
+    expect(() => migrate({ schemaVersion: 14 })).toThrow()
     expect(() => migrate({ schemaVersion: 0 })).toThrow()
     expect(() => migrate({})).toThrow()
     expect(() => migrate(null)).toThrow()
