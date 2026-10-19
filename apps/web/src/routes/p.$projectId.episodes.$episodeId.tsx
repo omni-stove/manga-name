@@ -74,11 +74,9 @@ function EpisodePages() {
   return (
     <YStack gap={8}>
       <YStack as="header" gap={4}>
-        <YStack align="start">
-          <BackLink to="/p/$projectId" params={{ projectId }}>
-            {m.web_episode_list()}
-          </BackLink>
-        </YStack>
+        <BackLink to="/p/$projectId" params={{ projectId }}>
+          {m.web_episode_list()}
+        </BackLink>
         <XStack gap={12} justify="between">
           <EpisodeTitle episode={episode} apply={apply} />
           <RemoveButton label={m.web_episode_remove()} onClick={() => setRemovingEpisode(true)} />
