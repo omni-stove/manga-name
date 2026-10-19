@@ -51,6 +51,20 @@ export const INNER_FRAME = {
   h: 220 / 257,
 } as const
 
+/** 内枠から仕上がりまでの余白のうち、組み込みのテンプレートのコマを内枠の外へ出す割合 */
+const OVERHANG = 1 / 3
+
+/**
+ * 組み込みのテンプレートがコマを割る範囲。コマの外周が内枠の線にそろうと作り物めいて見えるので、内枠を四方へ
+ * 余白の OVERHANG だけ広げる
+ */
+const PANEL_AREA = {
+  x: INNER_FRAME.x * (1 - OVERHANG),
+  y: INNER_FRAME.y * (1 - OVERHANG),
+  w: INNER_FRAME.w + 2 * INNER_FRAME.x * OVERHANG,
+  h: INNER_FRAME.h + 2 * INNER_FRAME.y * OVERHANG,
+} as const
+
 const emptyPanel = (order: number, rect: Panel['rect']): Panel => ({
   id: newId(),
   order,
@@ -63,7 +77,7 @@ const emptyPanel = (order: number, rect: Panel['rect']): Panel => ({
 
 /**
  * テンプレートからページを作る。登録したコマ割り（LayoutTemplate）なら、その枠と order のまま空のコマを置き、
- * direction は見ない。組み込みのテンプレートなら、createRowPanels で内枠を同じ高さの行数ぶんの段に割り、
+ * direction は見ない。組み込みのテンプレートなら、createRowPanels で内枠を四方へ少し広げた範囲（PANEL_AREA）を同じ高さの行数ぶんの段に割り、
  * 各段を同じ幅の 2 列に割る
  */
 export function createPage(
@@ -91,24 +105,25 @@ export interface RowLayout {
 }
 
 /**
- * 段の比から空のコマを作る。内枠（INNER_FRAME）を段の height の比で上から縦に割り、各段を widths の比で横に割る。
+ * 段の比から空のコマを作る。内枠（INNER_FRAME）を四方へ少し広げた範囲（PANEL_AREA）を段の height の比で
+ * 上から縦に割り、各段を widths の比で横に割る。
  * コマはコマ間（GUTTER）を空けて重ならない。order は段ごとに上から、段の中は widths の順に振り、
  * rtl なら右から、ltr なら左から並べる。比はどれも正の数
  */
 export function createRowPanels(rows: readonly RowLayout[], direction: ReadingDirection): Panel[] {
   const totalHeight = rows.reduce((sum, row) => sum + row.height, 0)
-  const freeHeight = INNER_FRAME.h - GUTTER * (rows.length - 1)
+  const freeHeight = PANEL_AREA.h - GUTTER * (rows.length - 1)
   const panels: Panel[] = []
-  let y = INNER_FRAME.y
+  let y = PANEL_AREA.y
   for (const row of rows) {
     const h = (freeHeight * row.height) / totalHeight
     const totalWidth = row.widths.reduce((sum, w) => sum + w, 0)
-    const freeWidth = INNER_FRAME.w - GUTTER * (row.widths.length - 1)
+    const freeWidth = PANEL_AREA.w - GUTTER * (row.widths.length - 1)
     let offset = 0
     for (const width of row.widths) {
       const w = (freeWidth * width) / totalWidth
       const x =
-        direction === 'rtl' ? INNER_FRAME.x + INNER_FRAME.w - offset - w : INNER_FRAME.x + offset
+        direction === 'rtl' ? PANEL_AREA.x + PANEL_AREA.w - offset - w : PANEL_AREA.x + offset
       panels.push(emptyPanel(panels.length + 1, { x, y, w, h }))
       offset += w + GUTTER
     }
@@ -179,7 +194,7 @@ if (import.meta.vitest) {
     expect(ProjectSchema.safeParse(p).success).toBe(true)
   })
 
-  test('createRowPanels splits the inner frame by the ratios in reading order', () => {
+  test('createRowPanels splits the panel area by the ratios in reading order', () => {
     const rows = [
       { height: 2, widths: [1] },
       { height: 1, widths: [2, 1] },
@@ -188,12 +203,12 @@ if (import.meta.vitest) {
       const [wide, first, second] = createRowPanels(rows, direction)
       if (!wide || !first || !second) throw new Error('コマが 3 つない')
       expect([wide.order, first.order, second.order]).toEqual([1, 2, 3])
-      expect(wide.rect.w).toBeCloseTo(INNER_FRAME.w)
+      expect(wide.rect.w).toBeCloseTo(PANEL_AREA.w)
       expect(wide.rect.h).toBeCloseTo(2 * first.rect.h)
       expect(first.rect.y).toBeCloseTo(wide.rect.y + wide.rect.h + GUTTER)
       expect(first.rect.w).toBeCloseTo(2 * second.rect.w)
       expect(first.rect.x > second.rect.x).toBe(direction === 'rtl')
-      expect(first.rect.y + first.rect.h).toBeCloseTo(INNER_FRAME.y + INNER_FRAME.h)
+      expect(first.rect.y + first.rect.h).toBeCloseTo(PANEL_AREA.y + PANEL_AREA.h)
     }
   })
 
@@ -226,10 +241,12 @@ if (import.meta.vitest) {
           })
           const right = Math.max(...page.panels.map((p) => p.rect.x + p.rect.w))
           const bottom = Math.max(...page.panels.map((p) => p.rect.y + p.rect.h))
-          expect(Math.min(...page.panels.map((p) => p.rect.x))).toBeCloseTo(INNER_FRAME.x)
-          expect(Math.min(...page.panels.map((p) => p.rect.y))).toBeCloseTo(INNER_FRAME.y)
-          expect(right).toBeCloseTo(INNER_FRAME.x + INNER_FRAME.w)
-          expect(bottom).toBeCloseTo(INNER_FRAME.y + INNER_FRAME.h)
+          expect(Math.min(...page.panels.map((p) => p.rect.x))).toBeCloseTo(PANEL_AREA.x)
+          expect(Math.min(...page.panels.map((p) => p.rect.y))).toBeCloseTo(PANEL_AREA.y)
+          expect(right).toBeCloseTo(PANEL_AREA.x + PANEL_AREA.w)
+          expect(bottom).toBeCloseTo(PANEL_AREA.y + PANEL_AREA.h)
+          expect(PANEL_AREA.x).toBeLessThan(INNER_FRAME.x)
+          expect(PANEL_AREA.x).toBeGreaterThan(0)
         })
       }
     }
