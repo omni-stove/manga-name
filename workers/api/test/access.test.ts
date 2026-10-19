@@ -57,7 +57,7 @@ describe('changesOnlyScribbles', () => {
     expect(changesOnlyScribbles(saved, moved)).toBe(false)
 
     const added = structuredClone(project)
-    added.episodes[0]?.pages.push({ id: 'pg_new', side: 'single', panels: [], scribbles: [] })
+    added.episodes[0]?.pages.push({ id: 'pg_new', panels: [], scribbles: [] })
     expect(changesOnlyScribbles(saved, added)).toBe(false)
   })
 

@@ -91,7 +91,7 @@ export function LayoutSuggestions({
         replacePanelsPatch(
           current,
           pageId,
-          suggestedPanels(option, current.settings, current.characters),
+          suggestedPanels(currentPage, option, current.settings, current.characters),
         ),
         { source: 'ai', label: m.web_layout_suggest_history() },
       )

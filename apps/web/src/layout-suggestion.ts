@@ -8,6 +8,7 @@ import {
   type Panel,
   type Patch,
   type Project,
+  pageSizeOf,
 } from '@manga/schema'
 import { lineBubbles } from './page-plan'
 import { pagePatch } from './project-ops'
@@ -29,6 +30,7 @@ export function layoutRequest(
  * 居ない話し手は落とし、空のセリフは捨てる
  */
 export function suggestedPanels(
+  page: Pick<Page, 'spread'>,
   option: LayoutOption,
   settings: Pick<Project['settings'], 'direction' | 'pageSize'>,
   characters: readonly Character[],
@@ -38,6 +40,7 @@ export function suggestedPanels(
   const frames = createRowPanels(
     option.rows.map((row) => ({ height: row.height, widths: row.panels.map((p) => p.width) })),
     settings.direction,
+    page,
   )
   return frames.map((frame, i) => {
     const panel = suggested[i]
@@ -55,7 +58,7 @@ export function suggestedPanels(
             { ...line, text, ...(speakerId !== undefined && known(speakerId) && { speakerId }) },
           ]
         }),
-        settings,
+        { ...settings, pageSize: pageSizeOf(page, settings.pageSize) },
       ),
     }
   })
@@ -68,7 +71,7 @@ export function suggestedPage(
   settings: Pick<Project['settings'], 'direction' | 'pageSize'>,
   characters: readonly Character[],
 ): Page {
-  return { ...page, panels: suggestedPanels(option, settings, characters) }
+  return { ...page, panels: suggestedPanels(page, option, settings, characters) }
 }
 
 /** ページのコマを panels で置き換える Project 根の Patch */
@@ -108,7 +111,7 @@ if (import.meta.vitest) {
   })
 
   test('suggestedPanels turns rows into panels in reading order with notes, cameras and bubbles', () => {
-    const panels = suggestedPanels(option, project.settings, project.characters)
+    const panels = suggestedPanels({}, option, project.settings, project.characters)
     const suggested = option.rows.flatMap((row) => row.panels)
     expect(panels.map((p) => p.order)).toEqual(suggested.map((_, i) => i + 1))
     expect(panels.map((p) => p.note)).toEqual(suggested.map((p) => p.note))
@@ -128,7 +131,7 @@ if (import.meta.vitest) {
       ...project,
       episodes: [...project.episodes, { id: newId(), title: '', pages: [page] }],
     })
-    const panels = suggestedPanels(option, project.settings, project.characters)
+    const panels = suggestedPanels(page, option, project.settings, project.characters)
     const patch = replacePanelsPatch(base, page.id, panels)
     expect(patch).toEqual([
       {

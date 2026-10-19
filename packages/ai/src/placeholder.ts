@@ -3,6 +3,7 @@ import {
   type Panel,
   type Point,
   type ProjectSettings,
+  pageSizeOf,
   panelOutline,
 } from '@manga/schema'
 import { encodeGrayPng } from './png'
@@ -65,7 +66,7 @@ function createRaster(width: number, height: number) {
   return { pixels, fill, line, text }
 }
 
-/** コマの実寸の縦横比で、長辺を 512px にした出力サイズ */
+/** コマの実寸の縦横比で、長辺を 512px にした出力サイズ。見開きのコマには settings.pageSize を pageSizeOf で広げて渡す */
 export function placeholderSize(panel: Panel, settings: ProjectSettings): { w: number; h: number } {
   const aspect = (panel.rect.w * settings.pageSize.w) / (panel.rect.h * settings.pageSize.h)
   return aspect >= 1
@@ -126,10 +127,11 @@ function inside(outline: readonly Point[], p: Point): boolean {
 
 /**
  * ページ全体の生成画像の代わり。白地の各コマの輪郭の内側に、コマを囲む矩形の寸法で描いた placeholderPng の画素を置く。
- * 長辺 1024px で判型の縦横比。コマの rect で切り抜くと、そのコマの placeholderPng とほぼ同じ絵になる
+ * 長辺 1024px で紙面（見開きなら 2 ページ分）の縦横比。コマの rect で切り抜くと、そのコマの placeholderPng とほぼ同じ絵になる
  */
 export function placeholderPagePng(page: Page, settings: ProjectSettings): Uint8Array<ArrayBuffer> {
-  const aspect = settings.pageSize.w / settings.pageSize.h
+  const pageSize = pageSizeOf(page, settings.pageSize)
+  const aspect = pageSize.w / pageSize.h
   const width = aspect >= 1 ? PAGE_LONG_SIDE : Math.max(1, Math.round(PAGE_LONG_SIDE * aspect))
   const height = aspect >= 1 ? Math.max(1, Math.round(PAGE_LONG_SIDE / aspect)) : PAGE_LONG_SIDE
   const pixels = new Uint8Array(width * height).fill(PAPER)
@@ -224,7 +226,6 @@ if (import.meta.vitest) {
   test('placeholderPagePng leaves the outside of a shaped panel white', async () => {
     const triangle: Page = {
       id: 'pg',
-      side: 'single',
       scribbles: [],
       panels: [
         {

@@ -3,7 +3,7 @@ import {
   bubbleTextBox,
   clipTextBox,
   currentArt,
-  INNER_FRAME,
+  innerFrameOf,
   type Page,
   type Panel,
   panelOutline,
@@ -23,7 +23,7 @@ import {
 import { drawVerticalText, layoutBubbleText } from './text'
 import type { RenderContext, RenderOptions, Surface } from './types'
 
-/** ページ幅に対する比率 */
+/** 1 ページの幅に対する比率。見開きでも 1 ページ分の幅に対してとり、線と文字を 1 ページのときと同じ太さにする */
 const FRAME_WIDTH = 0.003
 const BUBBLE_LINE_WIDTH = 0.002
 const MIN_FONT = 0.012
@@ -62,8 +62,9 @@ export async function drawPage(
   opts: RenderOptions,
 ): Promise<Surface> {
   const [backend] = await Promise.all([getBackend(), loadFonts()])
-  const pageSize = pagePixelSize(ctx.settings, opts.width)
-  const margin = opts.notes === 'margin' ? Math.round(pageSize.w * NOTES_MARGIN) : 0
+  const unit = pagePixelSize(ctx.settings, opts.width)
+  const pageSize = page.spread ? { w: unit.w * 2, h: unit.h } : unit
+  const margin = opts.notes === 'margin' ? Math.round(unit.w * NOTES_MARGIN) : 0
   const marginOnLeft = ctx.settings.direction === 'ltr'
   const surface = backend.createSurface(pageSize.w + margin, pageSize.h)
   const c = surface.ctx
@@ -72,7 +73,7 @@ export async function drawPage(
   c.fillStyle = '#fff'
   c.fillRect(0, 0, surface.width, surface.height)
 
-  const innerRect = rectToPx(INNER_FRAME, pageRect)
+  const innerRect = rectToPx(innerFrameOf(page), pageRect)
   const panels = byOrder(page.panels)
   const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx)))
   const drawBubbles = (panel: Panel, overflow: boolean) => {
@@ -80,10 +81,10 @@ export async function drawPage(
     for (const bubble of byOrder(panel.bubbles)) {
       if ((bubble.overflow === true) !== overflow) continue
       const g = bubbleGeometry(bubble, rect)
-      drawBubble(c, bubble.shape, g, pageSize.w * BUBBLE_LINE_WIDTH)
+      drawBubble(c, bubble.shape, g, unit.w * BUBBLE_LINE_WIDTH)
       const text = bubbleTextBox(bubble.shape, g)
       const box = clipTextBox(overflow ? text : clipTextBox(text, rect), innerRect)
-      const { lines, fontPx } = layoutBubbleText(bubble.text, box, pageSize.w * MIN_FONT)
+      const { lines, fontPx } = layoutBubbleText(bubble.text, box, unit.w * MIN_FONT)
       // 白い地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
       const onBlack = !overflow && panel.fill === 'black' && !bubbleOutline(bubble.shape, g).fill
       drawVerticalText(c, lines, fontPx, box, onBlack ? '#fff' : '#000')
@@ -97,14 +98,14 @@ export async function drawPage(
     if (panel.fill === 'black') fillBlack(c, outline)
     if (image) drawCover(c, image, rect, outline)
     else if (panel.fill === undefined) {
-      drawPlaceholder(c, panel, rect, outline, pageSize.w * NOTE_FONT)
+      drawPlaceholder(c, panel, rect, outline, unit.w * NOTE_FONT)
     }
     if (opts.panelNumbers) {
-      drawPanelNumber(c, panel.order, outline, pageSize.w * NOTE_FONT * 1.5)
+      drawPanelNumber(c, panel.order, outline, unit.w * NOTE_FONT * 1.5)
     }
     // 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く
     withClip(c, outline, () => drawBubbles(panel, false))
-    drawFrame(c, outline, pageSize.w * FRAME_WIDTH)
+    drawFrame(c, outline, unit.w * FRAME_WIDTH)
   })
 
   // はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く
@@ -112,7 +113,7 @@ export async function drawPage(
 
   if (margin > 0) {
     const area: PxRect = { x: marginOnLeft ? 0 : pageSize.w, y: 0, w: margin, h: pageSize.h }
-    drawNotesMargin(c, panels, area, pageSize.w * MARGIN_FONT)
+    drawNotesMargin(c, panels, area, unit.w * MARGIN_FONT)
   }
 
   return surface

@@ -1,5 +1,6 @@
 import { m } from '@manga/i18n'
 import {
+  brokenSpreads,
   type Character,
   createLayoutTemplate,
   createPage,
@@ -13,6 +14,8 @@ import {
   type Project,
   type ProjectSettings,
   panelCharacterIds,
+  pageSlots,
+  spreadStartsAt,
 } from '@manga/schema'
 
 /**
@@ -95,7 +98,7 @@ export function resolveTemplate(
   return registered
 }
 
-/** ページのコマ割りを name のテンプレートとして末尾に登録する。コマが無いページと空の名前は throw */
+/** ページのコマ割りを name のテンプレートとして末尾に登録する。コマが無いページ、見開きのページと空の名前は throw */
 export function addLayoutTemplatePatch(
   project: Project,
   pageId: ID,
@@ -104,6 +107,7 @@ export function addLayoutTemplatePatch(
   const found = findPage(project, pageId)
   if (!found) throw new Error(m.web_common_page_gone())
   if (found.page.panels.length === 0) throw new Error(m.web_template_no_panels())
+  if (found.page.spread) throw new Error(m.web_template_spread())
   if (!name.trim()) throw new Error(m.web_name_required())
   const template = createLayoutTemplate(found.page, name)
   // 登録が無いプロジェクトは layoutTemplates を持たないので、配列ごと足す
@@ -156,15 +160,49 @@ export function removeEpisodePatch(project: Project, episodeId: ID): Patch {
 }
 
 /**
+ * 並びか始まりの左右を変えたエピソードで、見開きが新しく割れるなら throw する。
+ * もとから割れている見開き（同時編集で入ったものなど）は、それを直さない操作も止めないよう数えない
+ */
+function assertSpreadsKept(
+  project: Project,
+  before: Pick<Episode, 'pages' | 'startsRight'>,
+  after: Pick<Episode, 'pages' | 'startsRight'>,
+): void {
+  const { direction } = project.settings
+  const broken = new Set(brokenSpreads(before, direction))
+  if (brokenSpreads(after, direction).some((id) => !broken.has(id))) {
+    throw new Error(m.web_episode_spread_breaks())
+  }
+}
+
+/** 次に足すページから見開きを始められるか。エピソードが無ければ、足すときに作る 1 話目で見る */
+export function canAddSpread(project: Project, episodeId?: ID): boolean {
+  const episode =
+    episodeId === undefined ? project.episodes.at(-1) : project.episodes.find((e) => e.id === episodeId)
+  const slots = pageSlots(episode ?? { pages: [] })
+  const last = slots.at(-1)
+  const next = last ? last.number + (last.page.spread ? 2 : 1) : 1
+  return spreadStartsAt(next, episode?.startsRight === true, project.settings.direction)
+}
+
+/**
  * テンプレートからページを作り、エピソードの末尾に足す。
  * `episodeId` を省くと最後のエピソードに足し、エピソードが無ければ 1 話目を作ってそこに入れる。
+ * `spread` なら見開きのページにする。組み込みのテンプレートしか受けず、見開きを始められない位置（canAddSpread）なら throw する
  */
 export function addPagePatch(
   project: Project,
   template: PageTemplate | LayoutTemplate,
   episodeId?: ID,
+  spread = false,
 ): { patch: Patch; page: Page } {
-  const page = createPage(template, project.settings.direction)
+  if (!spread) {
+    const page = createPage(template, project.settings.direction)
+    return { patch: appendPagesPatch(project, [page], episodeId), page }
+  }
+  if (typeof template === 'object') throw new Error(m.web_episode_spread_builtin_only())
+  if (!canAddSpread(project, episodeId)) throw new Error(m.web_episode_spread_breaks())
+  const page = createPage(template, project.settings.direction, true)
   return { patch: appendPagesPatch(project, [page], episodeId), page }
 }
 
@@ -189,25 +227,68 @@ export function appendPagesPatch(project: Project, pages: Page[], episodeId?: ID
   }))
 }
 
+/** ページを消す。後ろの見開きが割れるなら throw する（canRemovePage） */
 export function removePagePatch(project: Project, pageId: ID): Patch {
   const found = findPage(project, pageId)
   if (!found) return []
+  const episode = project.episodes[found.episodeIndex] as Episode
+  assertSpreadsKept(project, episode, {
+    ...episode,
+    pages: episode.pages.filter((p) => p.id !== pageId),
+  })
   return [{ op: 'remove', path: `/episodes/${found.episodeIndex}/pages/${found.pageIndex}` }]
 }
 
-/** エピソード内でページを `delta` だけ動かす。端を越える移動は空の patch */
+/** 消しても見開きが割れないか */
+export function canRemovePage(project: Project, pageId: ID): boolean {
+  return succeeds(() => removePagePatch(project, pageId))
+}
+
+/** エピソード内でページを `delta` だけ動かす。端を越える移動は空の patch。見開きが割れるなら throw する（canMovePage） */
 export function movePagePatch(project: Project, pageId: ID, delta: number): Patch {
   const found = findPage(project, pageId)
   if (!found) return []
-  const pages = project.episodes[found.episodeIndex]?.pages ?? []
+  const episode = project.episodes[found.episodeIndex] as Episode
+  const pages = episode.pages
   const to = found.pageIndex + delta
   if (delta === 0 || to < 0 || to >= pages.length) return []
+  const moved = pages.filter((p) => p.id !== pageId)
+  moved.splice(to, 0, found.page)
+  assertSpreadsKept(project, episode, { ...episode, pages: moved })
   const base = `/episodes/${found.episodeIndex}/pages`
   // PatchSchema に move が無いので remove と add で動かす。add の添字は remove 後の配列で解決される
   return [
     { op: 'remove', path: `${base}/${found.pageIndex}` },
     { op: 'add', path: `${base}/${to}`, value: found.page },
   ]
+}
+
+/** 動かしても見開きが割れず、端も越えないか */
+export function canMovePage(project: Project, pageId: ID, delta: number): boolean {
+  return succeeds(() => movePagePatch(project, pageId, delta).length > 0)
+}
+
+/** 1 ページ目を右ページにするか切り替える。見開きが割れるなら throw する（canSetStartsRight） */
+export function startsRightPatch(project: Project, episodeId: ID, startsRight: boolean): Patch {
+  const index = project.episodes.findIndex((e) => e.id === episodeId)
+  const episode = project.episodes[index]
+  if (!episode || (episode.startsRight === true) === startsRight) return []
+  assertSpreadsKept(project, episode, { pages: episode.pages, ...(startsRight && { startsRight }) })
+  const path = `/episodes/${index}/startsRight`
+  return startsRight ? [{ op: 'add', path, value: true }] : [{ op: 'remove', path }]
+}
+
+/** 始まりの左右を切り替えても見開きが割れないか */
+export function canSetStartsRight(project: Project, episodeId: ID, startsRight: boolean): boolean {
+  return succeeds(() => startsRightPatch(project, episodeId, startsRight))
+}
+
+function succeeds(run: () => unknown): boolean {
+  try {
+    return run() !== false
+  } catch {
+    return false
+  }
 }
 
 export type CharacterFields = Pick<Character, 'name' | 'shortName'> &
@@ -408,6 +489,54 @@ if (import.meta.vitest) {
       expect(removeEpisodePatch(store.get(), episode.id)).toEqual([])
       store.undo()
       expect(store.get().episodes[0]).toEqual(episode)
+    })
+
+    test('a spread is added only where it starts on the right, and nothing may split it', () => {
+      const store = storeOf(sample)
+      const ids = () => store.get().episodes[0]?.pages.map((p) => p.id) ?? []
+      const episodeId = store.get().episodes[0]?.id as ID
+      // 1 ページ目は左なので、次の 2 ページ目（右）から見開きを始められる
+      expect(canAddSpread(store.get())).toBe(true)
+      store.applyPatch(addPagePatch(store.get(), '2rows', undefined, true).patch)
+      const spreadId = ids()[1] as ID
+      expect(store.get().episodes[0]?.pages[1]?.spread).toBe(true)
+      store.applyPatch(addPagePatch(store.get(), 'blank').patch)
+      const [first, , last] = ids()
+      if (!first || !last) throw new Error('page が 3 つない')
+      // 次は 5 ページ目（左）
+      expect(canAddSpread(store.get())).toBe(false)
+      expect(() => addPagePatch(store.get(), '2rows', undefined, true)).toThrow(
+        m.web_episode_spread_breaks(),
+      )
+
+      expect(canRemovePage(store.get(), first)).toBe(false)
+      expect(() => removePagePatch(store.get(), first)).toThrow(m.web_episode_spread_breaks())
+      expect(canRemovePage(store.get(), last)).toBe(true)
+      expect(canRemovePage(store.get(), spreadId)).toBe(true)
+      expect(canMovePage(store.get(), last, -1)).toBe(false)
+      expect(canMovePage(store.get(), last, 1)).toBe(false)
+      expect(canSetStartsRight(store.get(), episodeId, true)).toBe(false)
+      expect(startsRightPatch(store.get(), episodeId, false)).toEqual([])
+
+      store.applyPatch(removePagePatch(store.get(), spreadId))
+      store.applyPatch(startsRightPatch(store.get(), episodeId, true))
+      expect(store.get().episodes[0]?.startsRight).toBe(true)
+      store.applyPatch(startsRightPatch(store.get(), episodeId, false))
+      expect(store.get().episodes[0]?.startsRight).toBeUndefined()
+    })
+
+    test('a spread takes only a built-in template', () => {
+      const { template } = addLayoutTemplatePatch(sample, firstPage().id, 'six')
+      expect(() => addPagePatch(sample, template, undefined, true)).toThrow(
+        m.web_episode_spread_builtin_only(),
+      )
+      // 見開きのコマ割りは 1 ページの紙面に合わないので、登録もさせない
+      const store = storeOf(sample)
+      const { patch, page } = addPagePatch(store.get(), '2rows', undefined, true)
+      store.applyPatch(patch)
+      expect(() => addLayoutTemplatePatch(store.get(), page.id, 'spread')).toThrow(
+        m.web_template_spread(),
+      )
     })
 
     test('removePage', () => {

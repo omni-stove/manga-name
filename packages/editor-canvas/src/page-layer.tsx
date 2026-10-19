@@ -7,7 +7,7 @@ import {
   cornerAnchor,
   currentArt,
   type ID,
-  INNER_FRAME,
+  innerFrameOf,
   type Page,
   type Panel,
   type Point,
@@ -59,6 +59,7 @@ interface PageLayerProps {
  */
 export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
   const { page, width, height } = props
+  const frame = innerFrameOf(page)
   return (
     <g data-layer="page">
       <rect
@@ -88,6 +89,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
             panel={panel}
             width={width}
             height={height}
+            frame={frame}
             artRef={props.showArt ? ref : undefined}
             resolveAsset={props.resolveAsset}
             generating={props.generating.has(panel.id)}
@@ -113,6 +115,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
               panelRect={panel.rect}
               width={width}
               height={height}
+              frame={frame}
               selected={isSelected(props.selection, 'bubble', bubble.id)}
             />
           )),
@@ -150,6 +153,7 @@ const PanelView = memo(function PanelView({
   panel,
   width,
   height,
+  frame,
   artRef,
   resolveAsset,
   generating,
@@ -160,6 +164,7 @@ const PanelView = memo(function PanelView({
   panel: Panel
   width: number
   height: number
+  frame: Rect
   artRef: string | undefined
   resolveAsset(ref: string): Promise<string>
   generating: boolean
@@ -203,6 +208,7 @@ const PanelView = memo(function PanelView({
           panelRect={panel.rect}
           width={width}
           height={height}
+          frame={frame}
           selected={bubble.id === selectedBubble}
           clipId={clipId}
           onBlack={panel.fill === 'black'}
@@ -527,6 +533,7 @@ const BubbleView = memo(function BubbleView({
   panelRect,
   width,
   height,
+  frame,
   selected,
   clipId,
   onBlack = false,
@@ -535,6 +542,8 @@ const BubbleView = memo(function BubbleView({
   panelRect: Rect
   width: number
   height: number
+  /** ページの内枠（innerFrameOf）。セリフはこの外に出さない */
+  frame: Rect
   selected: boolean
   clipId?: string
   /** 黒塗りのコマの中。白い地を持たないフキダシのセリフを白で描く */
@@ -546,7 +555,7 @@ const BubbleView = memo(function BubbleView({
   const text = bubbleTextBox(bubble.shape, g)
   const box = clipTextBox(
     clipId ? clipTextBox(text, panel) : text,
-    panelBox({ rect: INNER_FRAME }, width, height),
+    panelBox({ rect: frame }, width, height),
   )
   const layout = layoutVertical(bubble.text, box)
   const pitch = layout.fontSize * COLUMN_PITCH

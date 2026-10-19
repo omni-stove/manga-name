@@ -14,6 +14,7 @@ import {
   type Project,
   type ProjectSettings,
   pageCharacterIds,
+  pageSizeOf,
   panelCharacterIds,
   type ReferenceImage,
 } from '@manga/schema'
@@ -153,16 +154,17 @@ function panelCharacters(panel: Panel, characters: readonly Character[]): Charac
   return panelCharacterIds(panel).flatMap((id) => characters.filter((c) => c.id === id))
 }
 
-/** コマの実寸の縦横比で、長辺を `longSide` にしたときの幅 */
-function layoutWidth(panel: Panel, settings: ProjectSettings, longSide: number): number {
-  const { pageSize } = settings
+type PageSize = ProjectSettings['pageSize']
+
+/** コマの実寸の縦横比で、長辺を `longSide` にしたときの幅。pageSize は紙面の大きさ（pageSizeOf） */
+function layoutWidth(panel: Panel, pageSize: PageSize, longSide: number): number {
   const aspect = (panel.rect.h * pageSize.h) / (panel.rect.w * pageSize.w)
   return Math.round(aspect > 1 ? longSide / aspect : longSide)
 }
 
-/** 判型の縦横比で、長辺を `longSide` にしたときの幅 */
-function pageLayoutWidth(settings: ProjectSettings, longSide: number): number {
-  const aspect = settings.pageSize.h / settings.pageSize.w
+/** 紙面（見開きなら 2 ページ分）の縦横比で、長辺を `longSide` にしたときの幅 */
+function pageLayoutWidth(pageSize: PageSize, longSide: number): number {
+  const aspect = pageSize.h / pageSize.w
   return Math.round(aspect > 1 ? longSide / aspect : longSide)
 }
 
@@ -284,11 +286,11 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     reference: ReferenceImage | undefined,
     projectId: ID,
     panel: Panel,
-    settings: ProjectSettings,
+    pageSize: PageSize,
   ) => {
     if (!reference || !usesReference(referenceOptOut.getState(), projectId, panel.id))
       return undefined
-    return crop(await library.loadAsset(reference.ref), settings.pageSize, panel.rect)
+    return crop(await library.loadAsset(reference.ref), pageSize, panel.rect)
   }
 
   const loadPrevious = async (panel: Panel, instruction: string) => {
@@ -316,12 +318,13 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     const panel = page && findPanel(page, panelId)?.panel
     if (!page || !panel) throw new Error(m.web_generate_panel_gone())
     const { settings, characters } = project
+    const pageSize = pageSizeOf(page, settings.pageSize)
 
     const layoutPng = await renderLayoutPng(page, panelId, {
-      width: layoutWidth(panel, settings, layoutLongSide),
-      pageSize: settings.pageSize,
+      width: layoutWidth(panel, pageSize, layoutLongSide),
+      pageSize,
     })
-    const referencePng = await loadReference(page.reference, projectId, panel, settings)
+    const referencePng = await loadReference(page.reference, projectId, panel, pageSize)
     const characterRefs = await loadCharacterRefs(panelCharacters(panel, characters))
     const previous = instruction === undefined ? undefined : await loadPrevious(panel, instruction)
     const hint = usesHint(hintOptOut.getState(), projectId, panelId)
@@ -403,10 +406,11 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     if (!found) throw new Error(m.web_common_page_gone())
     const { page } = found
     const { settings, characters } = project
+    const pageSize = pageSizeOf(page, settings.pageSize)
 
     const layoutPng = await renderPageLayoutPng(page, {
-      width: pageLayoutWidth(settings, layoutLongSide),
-      pageSize: settings.pageSize,
+      width: pageLayoutWidth(pageSize, layoutLongSide),
+      pageSize,
     })
     const referencePng =
       page.reference &&

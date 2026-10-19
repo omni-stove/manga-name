@@ -2,18 +2,12 @@
 import { m } from '@manga/i18n'
 import type { Page, PageDiagnosis, Patch } from '@manga/schema'
 import { Button, Checkbox, Field, RemoveButton, Typography, XStack } from '@manga/ui'
-import { DEBOUNCE_MS, option, SelectField, TextField } from './fields'
+import { DEBOUNCE_MS, TextField } from './fields'
 import { SEVERITY_LABELS } from './issue-list'
 import styles from './page-inspector.module.css'
 import { optionalString, replace } from './patch'
 import section from './section.module.css'
 import type { PageInspectorProps } from './types'
-
-const SIDES: readonly { value: Page['side']; label: string }[] = [
-  option('right', m.page_side_right),
-  option('left', m.page_side_left),
-  option('single', m.page_side_single),
-]
 
 export function PageInspector({
   page,
@@ -31,12 +25,6 @@ export function PageInspector({
         {m.page()}
       </Typography>
       <fieldset disabled={!editable} className={section.fields}>
-        <SelectField
-          label={m.page_side()}
-          value={page.side}
-          options={SIDES}
-          onCommit={(v) => onChange(replace('/side', v))}
-        />
         <TextField
           label={m.page_note()}
           value={page.note ?? ''}
@@ -138,7 +126,7 @@ export function PageInspector({
 if (import.meta.vitest) {
   const { describe, expect, test, vi } = import.meta.vitest
   const { act } = await import('react')
-  const { buttonNamed, choose, inputLabelled, must, render, samplePage, selectLabelled, setValue } =
+  const { buttonNamed, inputLabelled, must, render, samplePage, setValue } =
     await import('./dom-harness')
 
   describe('PageInspector', () => {
@@ -148,7 +136,7 @@ if (import.meta.vitest) {
       reference: { ref: 'blob:ref_page', opacity: 0.5, visible: true },
     }
 
-    test('side replaces and note is debounced', async () => {
+    test('note is debounced', async () => {
       vi.useFakeTimers()
       const onChange = vi.fn<(patch: Patch) => void>()
       const { container } = await render(
@@ -159,11 +147,8 @@ if (import.meta.vitest) {
           onPickReference={() => {}}
         />,
       )
-      await choose(selectLabelled(container, m.page_side()), 'left')
-      expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/side', value: 'left' }])
-
       await act(async () => setValue(inputLabelled(container, m.page_note()), '見開きの導入'))
-      expect(onChange).toHaveBeenCalledTimes(1)
+      expect(onChange).not.toHaveBeenCalled()
       await act(async () => vi.advanceTimersByTime(DEBOUNCE_MS))
       expect(onChange).toHaveBeenLastCalledWith([
         { op: 'add', path: '/note', value: '見開きの導入' },
