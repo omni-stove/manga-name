@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { getLocale, m } from '@manga/i18n'
 import {
   type Bubble,
@@ -384,11 +385,241 @@ function ArtImage({ url, alt }: { url: Promise<string | null>; alt: string }) {
 }
 
 if (import.meta.vitest) {
-  const { expect, test } = import.meta.vitest
+  const { describe, expect, test, vi } = import.meta.vitest
+  const { act } = await import('react')
+  const { inputLabelled, must, project, render, resolveAsset, samplePanel, setValue } =
+    await import('./dom-harness')
 
   test('selectArtPatch adds when nothing is selected, replaces otherwise, and skips the same art', () => {
     expect(selectArtPatch(undefined, 'a')).toEqual([{ op: 'add', path: '/artId', value: 'a' }])
     expect(selectArtPatch('a', 'b')).toEqual([{ op: 'replace', path: '/artId', value: 'b' }])
     expect(selectArtPatch('a', 'a')).toEqual([])
+  })
+
+  const art = (id: string, instruction?: string) => ({
+    id,
+    ref: `blob:${id}`,
+    provider: 'fake',
+    prompt: `prompt ${id}`,
+    instruction,
+    createdAt: '2026-10-16T00:00:00.000Z',
+  })
+  const panelWithArts: Panel = {
+    ...samplePanel,
+    arts: [art('art_1'), art('art_2', '顔を大きく'), art('art_3')],
+    artId: 'art_2',
+  }
+
+  describe('PanelInspector', () => {
+    test('lists the cast with why each character is in it and adds or removes only cast entries', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const focused = must(samplePanel.focusPoints.find((f) => f.characterId)?.characterId)
+      const extra = { id: 'chr_extra', name: '通行人', shortName: '通' }
+      const { container } = await render(
+        <PanelInspector
+          panel={samplePanel}
+          characters={[...project.characters, extra]}
+          onChange={onChange}
+          onGenerate={() => {}}
+          resolveAsset={resolveAsset}
+        />,
+      )
+      const item = must(container.querySelector(`[data-cast-id="${focused}"]`))
+      expect(item.textContent).toContain(m.focus_point())
+      expect(item.querySelector('button')).toBeNull()
+
+      const select = must(
+        container.querySelector<HTMLSelectElement>(
+          `select[aria-label="${m.inspector_panel_cast_add()}"]`,
+        ),
+      )
+      await act(async () => {
+        select.value = extra.id
+        select.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      expect(onChange).toHaveBeenCalledWith([{ op: 'add', path: '/cast', value: [extra.id] }])
+    })
+
+    test('a character added to the cast can be removed', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const extra = { id: 'chr_extra', name: '通行人', shortName: '通' }
+      const { container } = await render(
+        <PanelInspector
+          panel={{ ...samplePanel, cast: [extra.id] }}
+          characters={[...project.characters, extra]}
+          onChange={onChange}
+          onGenerate={() => {}}
+          resolveAsset={resolveAsset}
+        />,
+      )
+      await act(async () =>
+        must(container.querySelector<HTMLElement>(`[data-cast-id="${extra.id}"] button`)).click(),
+      )
+      expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/cast' }])
+    })
+
+    test('switching among three arts emits replace /artId and highlights the current one', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const { container } = await render(
+        <PanelInspector
+          panel={panelWithArts}
+          characters={project.characters}
+          onChange={onChange}
+          onGenerate={() => {}}
+          resolveAsset={resolveAsset}
+        />,
+      )
+      const items = container.querySelectorAll('[data-art-id]')
+      expect(items).toHaveLength(3)
+      expect(must(container.querySelector('[data-current]')).getAttribute('data-art-id')).toBe(
+        'art_2',
+      )
+      expect(container.querySelector('[data-art-id="art_2"] p')?.textContent).toBe('顔を大きく')
+
+      await act(async () =>
+        must(container.querySelector<HTMLElement>('[data-art-id="art_3"] button')).click(),
+      )
+      expect(onChange).toHaveBeenCalledWith([{ op: 'replace', path: '/artId', value: 'art_3' }])
+
+      await act(async () =>
+        must(container.querySelector<HTMLElement>('[data-art-id="art_2"] button')).click(),
+      )
+      expect(onChange).toHaveBeenCalledTimes(1)
+    })
+
+    test('every art but the current one has a remove button that calls onRemoveArt', async () => {
+      const onRemoveArt = vi.fn<(artId: string) => void>()
+      const props = {
+        panel: panelWithArts,
+        characters: project.characters,
+        onChange: () => {},
+        onGenerate: () => {},
+        resolveAsset,
+      }
+      const removeOf = (container: HTMLElement, id: string) =>
+        [...container.querySelectorAll(`[data-art-id="${id}"] button`)].find(
+          (b) => b.getAttribute('aria-label') === m.remove(),
+        ) as HTMLButtonElement | undefined
+
+      const { container, root } = await render(<PanelInspector {...props} />)
+      expect(removeOf(container, 'art_1')).toBeUndefined()
+
+      await act(async () => root.render(<PanelInspector {...props} onRemoveArt={onRemoveArt} />))
+      expect(removeOf(container, 'art_2')).toBeUndefined()
+      await act(async () => must(removeOf(container, 'art_3')).click())
+      expect(onRemoveArt).toHaveBeenCalledWith('art_3')
+    })
+
+    test('note is debounced DEBOUNCE_MS, order commits on Enter, an invalid order emits nothing', async () => {
+      vi.useFakeTimers()
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const { container } = await render(
+        <PanelInspector
+          panel={samplePanel}
+          characters={project.characters}
+          onChange={onChange}
+          onGenerate={() => {}}
+          resolveAsset={resolveAsset}
+        />,
+      )
+      await act(async () => setValue(inputLabelled(container, m.panel_note()), 'メモ'))
+      expect(onChange).not.toHaveBeenCalled()
+      await act(async () => vi.advanceTimersByTime(DEBOUNCE_MS - 1))
+      expect(onChange).not.toHaveBeenCalled()
+      await act(async () => vi.advanceTimersByTime(1))
+      expect(onChange).toHaveBeenCalledWith([{ op: 'add', path: '/note', value: 'メモ' }])
+
+      const order = inputLabelled(container, m.inspector_reading_order())
+      await act(async () => setValue(order, '0'))
+      expect(order.getAttribute('aria-invalid')).toBe('true')
+      expect(onChange).toHaveBeenCalledTimes(1)
+      await act(async () => setValue(order, '3'))
+      expect(onChange).toHaveBeenCalledTimes(1)
+      await act(async () => {
+        order.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      })
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/order', value: 3 }])
+    })
+
+    test('the generate buttons call onGenerate with and without an instruction', async () => {
+      const onGenerate = vi.fn<(instruction?: string) => void>()
+      const { container } = await render(
+        <PanelInspector
+          panel={panelWithArts}
+          characters={project.characters}
+          onChange={() => {}}
+          onGenerate={onGenerate}
+          resolveAsset={resolveAsset}
+        />,
+      )
+      const buttons = [...container.querySelectorAll('button')]
+      const generate = must(buttons.find((b) => b.textContent === m.generate()))
+      const regenerate = must(buttons.find((b) => b.textContent === m.inspector_panel_regenerate()))
+      expect(regenerate.disabled).toBe(true)
+      await act(async () => generate.click())
+      expect(onGenerate).toHaveBeenCalledWith()
+
+      await act(async () =>
+        setValue(inputLabelled(container, m.inspector_panel_instruction()), ' もっと暗く '),
+      )
+      expect(regenerate.disabled).toBe(false)
+      await act(async () => regenerate.click())
+      expect(onGenerate).toHaveBeenLastCalledWith('もっと暗く')
+    })
+
+    test('shows the hint read-only and the use-hint checkbox reports its state', async () => {
+      const onUseHintChange = vi.fn<(use: boolean) => void>()
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const hint = '視線は中央の glass-crystal forest を大きく捉える'
+      const props = {
+        panel: samplePanel,
+        characters: project.characters,
+        diagnosis: {
+          panelId: samplePanel.id,
+          sweepPath: [],
+          focus: [],
+          bubbleOrderOk: true,
+          hint,
+        },
+        onChange,
+        onGenerate: () => {},
+        onUseHintChange,
+        resolveAsset,
+      }
+      const { container, root } = await render(<PanelInspector {...props} />)
+      const shown = must(container.querySelector('[data-hint]'))
+      expect(shown.textContent).toBe(hint)
+      expect(shown.querySelector('input, textarea')).toBeNull()
+      const checkbox = must(
+        [...container.querySelectorAll('label')]
+          .find((el) => el.textContent === m.inspector_panel_use_hint())
+          ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+      )
+      expect(checkbox.checked).toBe(true)
+
+      await act(async () => checkbox.click())
+      expect(onUseHintChange).toHaveBeenLastCalledWith(false)
+      expect(onChange).not.toHaveBeenCalled()
+
+      await act(async () => root.render(<PanelInspector {...props} useHint={false} />))
+      expect(checkbox.checked).toBe(false)
+      expect(shown.getAttribute('data-used')).toBe('false')
+      await act(async () => checkbox.click())
+      expect(onUseHintChange).toHaveBeenLastCalledWith(true)
+    })
+
+    test('renders without diagnosis and with an empty panel', async () => {
+      const { container } = await render(
+        <PanelInspector
+          panel={{ ...samplePanel, bubbles: [], arts: [], artId: undefined }}
+          characters={[]}
+          onChange={() => {}}
+          onGenerate={() => {}}
+          resolveAsset={resolveAsset}
+        />,
+      )
+      expect(container.textContent).toContain(m.inspector_panel_bubbles_empty())
+      expect(container.textContent).toContain(m.inspector_panel_history_empty())
+    })
   })
 }
