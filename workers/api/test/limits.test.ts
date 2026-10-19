@@ -210,8 +210,8 @@ describe('CORS', () => {
       env,
     )
 
-  test('allows apps/web and tauri://localhost', async () => {
-    for (const origin of ['http://localhost:5173', 'tauri://localhost']) {
+  test('allows apps/web and the Tauri WebView origins', async () => {
+    for (const origin of ['http://localhost:5173', 'tauri://localhost', 'http://tauri.localhost']) {
       const res = await preflight(origin)
       expect(res.status).toBe(204)
       expect(res.headers.get('access-control-allow-origin')).toBe(origin)
@@ -222,8 +222,10 @@ describe('CORS', () => {
   })
 
   test('does not allow other origins', async () => {
-    const res = await preflight('https://evil.example')
-    expect(res.headers.get('access-control-allow-origin')).toBeNull()
+    for (const origin of ['https://evil.example', 'https://tauri.localhost']) {
+      const res = await preflight(origin)
+      expect(res.headers.get('access-control-allow-origin')).toBeNull()
+    }
   })
 
   test('exposes ETag to apps/web', async () => {

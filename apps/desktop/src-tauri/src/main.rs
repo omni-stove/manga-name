@@ -60,7 +60,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_fs::init())
-        // ダイアログで選んだファイルの読み書きの許可は実行時に足されるだけなので、最近開いたファイルを再起動後も開けるよう残す
+        // ダイアログで選んだファイルとウィンドウに落としたファイルの読み書きの許可は実行時に足されるだけなので、最近開いたファイルを再起動後も開けるよう残す
         .plugin(tauri_plugin_persisted_scope::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())

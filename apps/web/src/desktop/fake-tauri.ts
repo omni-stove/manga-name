@@ -8,25 +8,33 @@ type FakeInvoke = (
 /**
  * テスト用に、`@tauri-apps/api` が IPC に使う `window.__TAURI_INTERNALS__` を差し替える。
  * `@tauri-apps/api/mocks` の mockIPC を使わないのは、invoke の第 3 引数（plugin-fs が書き込み先のパスを載せる headers）を捨てるため。
- * `window` を `globalThis` にするので、呼び出し側は `vi.unstubAllGlobals()` で戻す
+ * `window` を `globalThis` にするので、呼び出し側は `vi.unstubAllGlobals()` で戻す。
+ * ウィンドウと WebView のラベルは `main`。`callback` は IPC の引数に載った番号から、`listen` などに渡した関数を引く
  */
 export function installFakeTauri(
   stubGlobal: (name: string, value: unknown) => unknown,
   invoke: FakeInvoke,
-): void {
+): { callback(id: number): ((response: unknown) => void) | undefined } {
   let nextCallback = 0
+  const callbacks = new Map<number, (response: unknown) => void>()
   stubGlobal('window', globalThis)
   stubGlobal('__TAURI_INTERNALS__', {
     invoke: async (cmd: string, args: unknown, options?: { headers?: Record<string, string> }) =>
       invoke(cmd, args, options),
-    transformCallback: () => ++nextCallback,
-    unregisterCallback: () => {},
+    transformCallback: (callback?: (response: unknown) => void) => {
+      const id = ++nextCallback
+      if (callback) callbacks.set(id, callback)
+      return id
+    },
+    unregisterCallback: (id: number) => callbacks.delete(id),
     // getCurrentWindow が読む
     metadata: {
       currentWindow: { label: 'main' },
       currentWebview: { windowLabel: 'main', label: 'main' },
     },
   })
+  stubGlobal('__TAURI_EVENT_PLUGIN_INTERNALS__', { unregisterListener: () => {} })
+  return { callback: (id) => callbacks.get(id) }
 }
 
 /** Tauri のメモリ上の Store（plugin-store）。`plugin:store|*` の IPC に答える */

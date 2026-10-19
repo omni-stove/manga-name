@@ -186,7 +186,7 @@ async function readImageForm<S extends z.ZodType>(c: Context<UserEnv>, schema: S
  * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、Desktop のログインの口 `/v1/desktop-sign-in`、`POST /v1/ai/panel-art`、`POST /v1/ai/page-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/suggest-layout`、`POST /v1/ai/critique`、
  * `/v1/projects` の CRUD とアセットと参加者、招待リンクの受け口 `/v1/invites/:token`、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
  * `/v1/health`、`/v1/auth/*`、`/v1/desktop-sign-in`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
- * CORS は WEB_ORIGINS と tauri://localhost だけに許す。`/v1/health` 以外は ALLOWED_COUNTRIES の国からの接続だけを通す。
+ * CORS は WEB_ORIGINS と Tauri の WebView のオリジン（tauri://localhost と http://tauri.localhost）だけに許す。`/v1/health` 以外は ALLOWED_COUNTRIES の国からの接続だけを通す。
  */
 export function createApp(options: AppOptions = {}) {
   const createImage = options.imageProvider ?? (() => createFakeImageProvider())

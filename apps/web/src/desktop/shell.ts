@@ -14,6 +14,7 @@ import { errorMessage } from '../route-error'
 import type { createAppRouter } from '../router'
 import { toasts } from '../toasts'
 import { isEditable } from '../use-undo-shortcuts'
+import { startFileDrop } from './file-drop'
 import {
   loadRecentFiles,
   pushRecent,
@@ -36,6 +37,7 @@ const separator = predefined('Separator')
 /**
  * Desktop のアプリメニュー（ファイル、編集、表示）を張り、ファイルを開く・保存するダイアログと最近開いたファイルをつなぐ。
  * 開くは `.manga.json` をライブラリに読み込んで開き、保存は開いているプロジェクトを JSON でそのファイルに書く。
+ * ウィンドウに落とした `.manga.json` も開くと同じく開く（startFileDrop）。
  * 編集の Undo / Redo はページの編集画面のときだけ、そのプロジェクトの store に送る。
  * ウィンドウの位置と大きさは Rust 側の window-state プラグインが戻す
  */
@@ -239,6 +241,7 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
   }
 
   await rebuildMenu()
+  await startFileDrop(openPath)
 }
 
 if (import.meta.vitest) {
@@ -279,9 +282,15 @@ if (import.meta.vitest) {
     const written = new Map<string, string>()
     let menu: SentItem[] = []
     const dialogs: { cmd: string; options: unknown }[] = []
-    installFakeTauri(vi.stubGlobal, (cmd, args, options) => {
+    const listeners = new Map<string, number>()
+    const tauri = installFakeTauri(vi.stubGlobal, (cmd, args, options) => {
       if (cmd.startsWith('plugin:store|')) return store.handle(cmd, args)
       switch (cmd) {
+        case 'plugin:event|listen': {
+          const { event, handler } = args as { event: string; handler: number }
+          listeners.set(event, handler)
+          return handler
+        }
         case 'plugin:menu|new':
           menu = (args as { options: { items: SentItem[] } }).options.items
           return [1, 'menu']
@@ -343,6 +352,12 @@ if (import.meta.vitest) {
       return rest.length === 0 ? found : find(rest, found.items)
     }
     const click = (...path: string[]) => find(path).handler?.onmessage('id')
+    const drop = (...paths: string[]) =>
+      tauri.callback(listeners.get('tauri://drag-drop') ?? -1)?.({
+        event: 'tauri://drag-drop',
+        id: 1,
+        payload: { paths, position: { x: 0, y: 0 } },
+      })
     return {
       store,
       written,
@@ -353,6 +368,7 @@ if (import.meta.vitest) {
       execCommand,
       find,
       click,
+      drop,
       menuTexts: () => menu.map((i) => i.text),
     }
   }
@@ -427,6 +443,21 @@ if (import.meta.vitest) {
       await vi.waitFor(() => expect(toasts.state.getState().toasts).toHaveLength(1))
       expect(toasts.state.getState().toasts[0]?.message).toBe('開けません: JSON として読めません')
       expect(shell.router.navigate).not.toHaveBeenCalled()
+    })
+
+    test('a project file dropped on the window is imported, remembered and opened', async () => {
+      const shell = await setup({ files: { '/w/a.manga.json': exportProjectJson(fileProject) } })
+      shell.drop('/w/a.manga.json')
+      await vi.waitFor(() => expect(shell.router.navigate).toHaveBeenCalled())
+      expect(shell.library.import).toHaveBeenCalledExactlyOnceWith(fileProject)
+      expect(shell.router.navigate).toHaveBeenCalledWith({
+        to: '/p/$projectId',
+        params: { projectId: 'imported' },
+      })
+      expect(shell.store.values.get('recentFiles')).toEqual([
+        { path: '/w/a.manga.json', projectId: 'imported' },
+      ])
+      expect(shell.dialogs).toEqual([])
     })
 
     test('save writes the open project to the file it came from', async () => {

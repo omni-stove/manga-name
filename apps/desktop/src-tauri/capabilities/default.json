@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "メインウィンドウの権限。ファイルは createFileStorage の保存先（$APPDATA/projects）と、ダイアログで選んだファイルだけを読み書きできる。deep link を受けたらウィンドウを前に出す",
+  "description": "メインウィンドウの権限。ファイルは createFileStorage の保存先（$APPDATA/projects）と、ダイアログで選んだファイルとウィンドウに落としたファイル（plugin-fs が実行時に足す）だけを読み書きできる。deep link を受けたらウィンドウを前に出す",
   "windows": ["main"],
   "permissions": [
     "core:default",
