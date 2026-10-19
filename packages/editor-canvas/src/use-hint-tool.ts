@@ -9,6 +9,7 @@ import {
   createFocusPatch,
   createVectorPatch,
   findFocus,
+  focusWeight,
   hintAt,
   hintTolerance,
   moveFocusPatch,
@@ -40,12 +41,21 @@ interface Options {
 /** ドラッグ中に描くもの。座標はコマ内座標 */
 export type HintDraft =
   | { kind: 'focus'; focusId: ID; pos: Point }
+  | { kind: 'place'; panelId: ID; focusKind: FocusKind; pos: Point; weight: number }
   | { kind: 'vector'; panelId: ID; from: Point; to: Point }
 
 type Pos = { x: number; y: number }
 
 type Gesture =
-  | { kind: 'place'; pointerId: number; panelId: ID; pos: Point; client: Pos }
+  | {
+      kind: 'place'
+      pointerId: number
+      panelId: ID
+      pos: Point
+      from: PagePoint
+      client: Pos
+      dragging: boolean
+    }
   | {
       kind: 'move'
       pointerId: number
@@ -64,7 +74,8 @@ function boxOf(el: Element): ClientBox {
 
 /**
  * `focus` と `vector` ツールの操作。
- * `focus` はコマの上のクリックで `focusKind` の焦点を置いて選び、既存の焦点はドラッグで動かす。
+ * `focus` はコマの上のクリックで既定の大きさの、ドラッグで押した点を中心に離した点までを半径にした大きさ
+ * （weight）の `focusKind` の焦点を置いて選び、既存の焦点はドラッグで動かす。
  * 位置をロックした焦点は動かさない。
  * `vector` はコマの上のドラッグで始点から終点へのベクトルを作って選ぶ。動かずに離したときは何もせず、
  * クリックの選択は useSelection に任せる。
@@ -133,7 +144,15 @@ export function useHintTool(opts: Options) {
         const panel = panelAt(opts.page, opts.width, opts.height, at)
         if (!panel) return
         const pos = toPanelPoint(panel, opts.width, opts.height, at)
-        take(e, { kind: 'place', pointerId: e.pointerId, panelId: panel.id, pos, client })
+        take(e, {
+          kind: 'place',
+          pointerId: e.pointerId,
+          panelId: panel.id,
+          pos,
+          from: at,
+          client,
+          dragging: false,
+        })
         return
       }
       if (!panelAt(opts.page, opts.width, opts.height, at)) return
@@ -153,12 +172,22 @@ export function useHintTool(opts: Options) {
         end()
         return
       }
-      if (g.pointerId !== e.pointerId || g.kind === 'place') return
+      if (g.pointerId !== e.pointerId) return
       const moved = Math.hypot(e.clientX - g.client.x, e.clientY - g.client.y)
       if (!g.dragging && moved <= CLICK_SLOP) return
       const at = pointAt(e)
       if (at === null) return
       g.dragging = true
+      if (g.kind === 'place') {
+        setDraft({
+          kind: 'place',
+          panelId: g.panelId,
+          focusKind: opts.focusKind,
+          pos: g.pos,
+          weight: focusWeight(Math.hypot(at.x - g.from.x, at.y - g.from.y)),
+        })
+        return
+      }
       if (g.kind === 'move') {
         const panel = findFocus(opts.page, g.focusId)?.panel
         if (!panel) return
@@ -188,8 +217,10 @@ export function useHintTool(opts: Options) {
       if (g.pointerId !== e.pointerId) return
       end()
       if (g.kind === 'place') {
-        if (Math.hypot(e.clientX - g.client.x, e.clientY - g.client.y) > CLICK_SLOP) return
-        const created = createFocusPatch(opts.page, g.panelId, g.pos, opts.focusKind)
+        const at = g.dragging ? pointAt(e) : null
+        const weight =
+          at === null ? undefined : focusWeight(Math.hypot(at.x - g.from.x, at.y - g.from.y))
+        const created = createFocusPatch(opts.page, g.panelId, g.pos, opts.focusKind, weight)
         if (!created) return
         opts.onChange(created.patch)
         opts.onSelect({ kind: 'focus', id: created.id })
