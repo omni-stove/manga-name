@@ -266,8 +266,19 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
         {
           text: m.web_menu_view(),
           items: [
-            { text: m.web_project_list(), action: () => void router.navigate({ to: '/' }) },
-            { text: m.web_app_settings(), accelerator: 'CmdOrCtrl+,', action: openSettings },
+            {
+              text: m.web_project_list(),
+              action: () => {
+                if (document.hasFocus()) void router.navigate({ to: '/' })
+              },
+            },
+            {
+              text: m.web_app_settings(),
+              accelerator: 'CmdOrCtrl+,',
+              action: () => {
+                if (document.hasFocus()) openSettings()
+              },
+            },
             separator,
             {
               text: m.web_menu_script_window(),
