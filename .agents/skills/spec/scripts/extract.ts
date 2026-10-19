@@ -1,8 +1,6 @@
 /**
  * git が追跡しているプロダクトのコード（apps/*, packages/*, workers/* の src/ 以下の .ts/.tsx）から JSDoc を抜き出し、
- * パッケージごとに README の本文を添えて、ファイルごとの Markdown で標準出力に出す。
- * 引数にパスを渡すとその下のファイルの JSDoc を全部出す。引数が無ければリポジトリ全体の地図として、ファイルごとに
- * export の名前だけを出す（全体の JSDoc は一度に読むには大きすぎる）。
+ * 引数のパスの下のファイルについて、パッケージごとに README の本文を添えて、ファイルごとの Markdown で標準出力に出す。
  * JSDoc の無い export も名前を出すので、書き漏れもこの出力で分かる。z.infer で作るだけの型は元のスキーマに任せて出さない。
  * テスト（in-source の `if (import.meta.vitest)` を含む）、stories、生成物、src/dev は仕様ではないので出さない。
  */
@@ -29,7 +27,11 @@ const NOT_SPEC = /(\.test\.tsx?|\.stories\.tsx|\.gen\.ts)$|\/src\/dev\/|\/src\/p
 const LISTED = /^(workers\/[^/]+\/migrations\/.+\.sql|apps\/[^/]+\/src-tauri\/src\/.+\.rs)$/
 
 const paths = process.argv.slice(2)
-const tracked = execFileSync('git', ['ls-files', '--', ...(paths.length ? paths : ['.'])], {
+if (paths.length === 0) {
+  console.error('usage: extract.ts <path>...')
+  process.exit(2)
+}
+const tracked = execFileSync('git', ['ls-files', '--', ...paths], {
   cwd: root,
   encoding: 'utf8',
 })
@@ -38,7 +40,7 @@ const tracked = execFileSync('git', ['ls-files', '--', ...(paths.length ? paths 
 
 if (tracked.length === 0) {
   console.error(
-    `extract: ${paths.join(' ') || '.'} の下に apps/*, packages/*, workers/* のソースが無い。パスを直して実行し直す`,
+    `extract: ${paths.join(' ')} の下に apps/*, packages/*, workers/* のソースが無い。パスを直して実行し直す`,
   )
   process.exit(1)
 }
@@ -160,13 +162,7 @@ for (const [pkg, files] of byPackage) {
   for (const file of files) {
     console.log(`## ${file}\n`)
     if (LISTED.test(file)) continue
-    const entries = extract(file)
-    if (paths.length === 0) {
-      const exported = entries.filter((e) => e.depth === 0 && e.label.startsWith('export '))
-      console.log(`${exported.map((e) => e.label.replace(/^export (default )?/, '')).join(', ')}\n`)
-      continue
-    }
-    for (const { depth, label, doc } of entries) {
+    for (const { depth, label, doc } of extract(file)) {
       const indent = '  '.repeat(depth)
       const [head = '', ...rest] = (doc ?? '（JSDoc なし）').split('\n')
       console.log(`${indent}- \`${label}\`: ${head}`)
