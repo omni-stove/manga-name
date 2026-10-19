@@ -138,7 +138,7 @@ function ScriptDraft() {
 
   return (
     <YStack gap={12}>
-      <YStack as="header" gap={4}>
+      <YStack as="header" gap={4} align="start">
         <BackLink to="/p/$projectId/episodes/$episodeId" params={{ projectId, episodeId }}>
           {episode?.title ?? m.web_draft_episode_fallback()}
         </BackLink>

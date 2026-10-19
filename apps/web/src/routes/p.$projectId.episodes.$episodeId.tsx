@@ -73,7 +73,7 @@ function EpisodePages() {
 
   return (
     <YStack gap={8}>
-      <YStack as="header" gap={4}>
+      <YStack as="header" gap={4} align="start">
         <BackLink to="/p/$projectId" params={{ projectId }}>
           {m.web_episode_list()}
         </BackLink>

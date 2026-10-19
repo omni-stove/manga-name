@@ -85,7 +85,7 @@ function NewCharacter() {
 
   return (
     <YStack gap={12}>
-      <YStack as="header" gap={4}>
+      <YStack as="header" gap={4} align="start">
         <BackLink to="/p/$projectId/characters" params={{ projectId }}>
           {m.web_characters_title()}
         </BackLink>

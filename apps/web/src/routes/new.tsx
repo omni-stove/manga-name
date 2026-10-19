@@ -37,7 +37,7 @@ function NewProject() {
 
   return (
     <YStack as="section" gap={16}>
-      <YStack as="header" gap={4}>
+      <YStack as="header" gap={4} align="start">
         <BackLink to="/">{m.web_project_list()}</BackLink>
         <Typography variant="title">{m.web_new_project_title()}</Typography>
       </YStack>
