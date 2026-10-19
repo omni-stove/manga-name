@@ -84,7 +84,7 @@ function breakColumns(paragraphs: Unit[][], perColumn: number): Unit[][] {
 const fitsHeight = (columns: readonly Unit[][], fontSize: number, height: number) =>
   columns.every((c) => glyphCount(c) * fontSize <= height)
 
-const columnWidth =(column: readonly Unit[], fontSize: number) =>
+const columnWidth = (column: readonly Unit[], fontSize: number) =>
   column.some((u) => u.ruby) ? fontSize * (1 + RUBY_SCALE) : fontSize
 
 function blockWidth(columns: readonly Unit[][], fontSize: number): number {
