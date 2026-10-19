@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 10 as const
+export const SCHEMA_VERSION = 11 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -118,6 +118,11 @@ export const StrokeSchema = z.object({
   points: z.array(PointSchema),
   width: z.number().positive(),
   color: z.enum(['ink', 'red', 'blue']),
+  /**
+   * ペンで描いた線の点ごとの筆圧（0..1）。points と同じ並びで、無い線と足りない点は一定の太さ（筆圧 0.5）で描く。
+   * Point に持たせないのは、コマやフキダシの頂点にも使う Point の形を変えずに済ませるため
+   */
+  pressure: z.array(unit).optional(),
 })
 
 type RefineCtx = z.RefinementCtx

@@ -6,6 +6,7 @@ import {
   type Panel,
   type Patch,
   panelOutline,
+  type Stroke,
 } from '@manga/schema'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -317,6 +318,7 @@ function pointer(
     y: number
     button?: number
     pointerType?: string
+    pressure?: number
     shiftKey?: boolean
     altKey?: boolean
   },
@@ -334,6 +336,7 @@ function pointer(
   Object.defineProperties(e, {
     pointerId: { value: init.id },
     pointerType: { value: init.pointerType ?? 'mouse' },
+    pressure: { value: init.pressure ?? 0 },
   })
   return e
 }
@@ -1727,6 +1730,42 @@ describe('scribble', () => {
       `${x},${y} ${x},${y}`,
     )
     expect(svg.querySelector('[data-live-stroke]')).toBeNull()
+  })
+
+  test('a pen keeps the pressure of each point and draws the line as a filled outline', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ tool: 'scribble', onChange })
+    layout(svg)
+    const pen = { pointerType: 'pen' }
+    const from = clientAt(0.2, 0.2)
+    fire(svg, pointer('pointerdown', { id: 1, ...from, ...pen, pressure: 0.2 }))
+    fire(svg, pointer('pointermove', { id: 1, x: from.x + 40, y: from.y, ...pen, pressure: 0.9 }))
+    const live = must(svg.querySelector('[data-live-pen-stroke]'))
+    expect(live.getAttribute('d')).toMatch(/^M/)
+    expect(must(svg.querySelector('[data-live-stroke]')).getAttribute('points') ?? '').toBe('')
+    fire(svg, pointer('pointerup', { id: 1, x: from.x + 40, y: from.y, ...pen }))
+    expect(live.getAttribute('d')).toBe('')
+    const { value } = patchOf(onChange)[0] as { value: Stroke }
+    expect(value.pressure).toEqual([0.2, 0.9])
+    expect(value.points).toHaveLength(2)
+  })
+
+  test('a mouse stroke has no pressure, and a stroke with pressure is drawn as a filled path', async () => {
+    const onChange = vi.fn()
+    const svg = await render({ tool: 'scribble', onChange })
+    layout(svg)
+    drag(svg, clientAt(0.2, 0.2), clientAt(0.3, 0.2))
+    expect((patchOf(onChange)[0] as { value: Stroke }).value).not.toHaveProperty('pressure')
+
+    const pressed = await render({
+      page: {
+        ...samplePage,
+        scribbles: [{ ...stroke('st_pen', [{ x: 0.2, y: 0.2 }]), pressure: [1] }],
+      },
+    })
+    const path = must(pressed.querySelector('[data-stroke-id="st_pen"]'))
+    expect(path.tagName).toBe('path')
+    expect(path.getAttribute('fill')).not.toBe('none')
   })
 
   test('the eraser removes the topmost stroke under the pointer, and nothing elsewhere', async () => {

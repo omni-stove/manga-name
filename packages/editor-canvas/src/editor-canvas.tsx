@@ -18,6 +18,7 @@ import { HintsLayer } from './hints-layer'
 import { panelBox, panelPolygon, polygonPoints } from './hit-test'
 import { PageLayer } from './page-layer'
 import { PanelToolLayer } from './panel-tool-layer'
+import { pressurePath } from './pressure-stroke'
 import type { EditorCanvasProps, Selection } from './types'
 import { useBubbleTool } from './use-bubble-tool'
 import { useHintTool } from './use-hint-tool'
@@ -141,6 +142,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
     onChange: props.onChange,
   })
   const liveRef = useRef<SVGPolylineElement>(null)
+  const livePenRef = useRef<SVGPathElement>(null)
   const scribbleTool = props.scribbleTool ?? 'ink'
   const scribble = useScribble({
     page,
@@ -150,9 +152,11 @@ export function EditorCanvas(props: EditorCanvasProps) {
     view,
     tool: scribbleTool,
     liveRef,
+    livePenRef,
     onChange: props.onChange,
   })
   const sketchLiveRef = useRef<SVGPolylineElement>(null)
+  const sketchLivePenRef = useRef<SVGPathElement>(null)
   const sketch = useScribble({
     page,
     key: 'sketch',
@@ -161,6 +165,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
     view,
     tool: props.sketchTool === 'eraser' ? 'eraser' : 'ink',
     liveRef: sketchLiveRef,
+    livePenRef: sketchLivePenRef,
     onChange: props.onChange,
   })
   const scribbleSelected = props.tool === 'scribble' || props.tool === 'sketch'
@@ -349,15 +354,18 @@ export function EditorCanvas(props: EditorCanvasProps) {
             color={SKETCH_COLOR}
           />
           {scribbling && props.tool === 'sketch' && (
-            <polyline
-              ref={sketchLiveRef}
-              data-live-stroke
-              fill="none"
-              stroke={SKETCH_COLOR}
-              strokeWidth={SCRIBBLE_WIDTH * pageW}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <>
+              <polyline
+                ref={sketchLiveRef}
+                data-live-stroke
+                fill="none"
+                stroke={SKETCH_COLOR}
+                strokeWidth={SCRIBBLE_WIDTH * pageW}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path ref={sketchLivePenRef} data-live-pen-stroke fill={SKETCH_COLOR} />
+            </>
           )}
         </g>
       )}
@@ -365,15 +373,22 @@ export function EditorCanvas(props: EditorCanvasProps) {
         <g data-layer="scribble" pointerEvents="none">
           <Scribbles scribbles={page.scribbles} width={pageW} height={pageH} />
           {scribbling && props.tool === 'scribble' && (
-            <polyline
-              ref={liveRef}
-              data-live-stroke
-              fill="none"
-              stroke={SCRIBBLE_COLORS[scribbleTool === 'eraser' ? 'ink' : scribbleTool]}
-              strokeWidth={SCRIBBLE_WIDTH * pageW}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <>
+              <polyline
+                ref={liveRef}
+                data-live-stroke
+                fill="none"
+                stroke={SCRIBBLE_COLORS[scribbleTool === 'eraser' ? 'ink' : scribbleTool]}
+                strokeWidth={SCRIBBLE_WIDTH * pageW}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                ref={livePenRef}
+                data-live-pen-stroke
+                fill={SCRIBBLE_COLORS[scribbleTool === 'eraser' ? 'ink' : scribbleTool]}
+              />
+            </>
           )}
         </g>
       )}
@@ -450,6 +465,15 @@ const StrokeLine = memo(function StrokeLine({
   height: number
   color?: string
 }) {
+  if (stroke.pressure) {
+    return (
+      <path
+        data-stroke-id={stroke.id}
+        d={pressurePath(stroke.points, stroke.pressure, stroke.width, width, height)}
+        fill={color ?? SCRIBBLE_COLORS[stroke.color]}
+      />
+    )
+  }
   return (
     <polyline
       data-stroke-id={stroke.id}
