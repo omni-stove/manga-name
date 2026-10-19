@@ -135,10 +135,12 @@ if (import.meta.vitest) {
 
     test('a project file that cannot be opened shows the same toast as the Open menu', async () => {
       const win = await setup()
-      win.openPath.mockRejectedValueOnce(new Error('JSON として読めません'))
+      win.openPath.mockRejectedValueOnce(new Error(m.web_project_file_invalid_json()))
       win.drop('C:\\w\\broken.MANGA.JSON')
       await vi.waitFor(() =>
-        expect(win.toastMessages()).toEqual(['開けません: JSON として読めません']),
+        expect(win.toastMessages()).toEqual([
+          m.web_menu_open_failed({ reason: m.web_project_file_invalid_json() }),
+        ]),
       )
     })
 
@@ -166,9 +168,7 @@ if (import.meta.vitest) {
       const win = await setup({ '/w/a.jpg': [1] })
       win.drop('/w/a.jpg')
       await vi.waitFor(() =>
-        expect(win.toastMessages()).toEqual([
-          '画像と PDF はページの編集画面に落とすと参考画像になります',
-        ]),
+        expect(win.toastMessages()).toEqual([m.web_drop_reference_outside_editor()]),
       )
       expect(win.reads).toEqual([])
     })
@@ -178,7 +178,9 @@ if (import.meta.vitest) {
       const win = await setup()
       win.drop('/w/gone.png')
       await vi.waitFor(() =>
-        expect(win.toastMessages()).toEqual(['参考画像を読み込めません: no such file']),
+        expect(win.toastMessages()).toEqual([
+          m.web_editor_reference_import_failed({ reason: 'no such file' }),
+        ]),
       )
       expect(importReference).not.toHaveBeenCalled()
     })

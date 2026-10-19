@@ -12,7 +12,7 @@ export interface HttpProviderOptions {
 /** トークンが無いか、プロキシが 401 を返したときに throw する。画面はこれを見てログインを促す */
 export class SignInRequiredError extends Error {
   constructor() {
-    super('ログインが必要です')
+    super('sign-in required')
     this.name = 'SignInRequiredError'
   }
 }

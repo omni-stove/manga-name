@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { expect, type Page, test } from '@playwright/test'
 import { FIXTURE_PROJECT, importProject, openPage, selectTool } from './app'
 
@@ -17,9 +18,9 @@ test('2 つのタブで別々のフキダシを同時にドラッグしても、
   await bob.goto(alice.url())
   for (const page of [alice, bob]) {
     await expect(
-      page.getByRole('list', { name: '開いている人' }).getByRole('listitem'),
+      page.getByRole('list', { name: m.web_collab_peers() }).getByRole('listitem'),
     ).toHaveCount(2)
-    await selectTool(page, 'フキダシ')
+    await selectTool(page, m.bubble())
   }
 
   // 6 コマ目と 3 コマ目のフキダシ。同じページの bubbles を 2 人が同時に書き換える

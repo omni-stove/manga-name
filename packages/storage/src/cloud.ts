@@ -191,7 +191,7 @@ function browserConnectivity(): Connectivity {
 export const conflictCopyTitle = (title: string) => m.storage_conflict_copy_title({ title })
 
 /** POST は trim 後 1〜200 文字のタイトルだけを受け付ける。本文は直後の PUT で上書きされるので、初期値だけ収める */
-const postTitle = (title: string) => title.trim().slice(0, 200) || '無題'
+const postTitle = (title: string) => title.trim().slice(0, 200) || m.untitled()
 
 /** メモリだけに CloudLink を持つ。リロードで消える */
 export function createMemoryLinkStore(): CloudLinkStore {

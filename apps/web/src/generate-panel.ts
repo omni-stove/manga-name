@@ -314,7 +314,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     const project = store.get()
     const page = findPage(project, pageId)?.page
     const panel = page && findPanel(page, panelId)?.panel
-    if (!page || !panel) throw new Error(`panel ${panelId} is not in page ${pageId}`)
+    if (!page || !panel) throw new Error(m.web_generate_panel_gone())
     const { settings, characters } = project
 
     const layoutPng = await renderLayoutPng(page, panelId, {
@@ -400,7 +400,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     signal.throwIfAborted()
     const project = store.get()
     const found = findPage(project, pageId)
-    if (!found) throw new Error(`page ${pageId} is not in project ${projectId}`)
+    if (!found) throw new Error(m.web_common_page_gone())
     const { page } = found
     const { settings, characters } = project
 
@@ -674,7 +674,10 @@ if (import.meta.vitest) {
       expect(await generate('直して')).toBe('failed')
       expect(panelNow().arts).toHaveLength(0)
       expect(store.state.getState().canUndo).toBe(false)
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining('採用中の絵'), { signIn: false })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_panel_failed({ reason: m.web_generate_previous_art_required() }),
+        { signIn: false },
+      )
     })
 
     test('undo returns artId to the previous art and redo moves forward', async () => {
@@ -703,9 +706,12 @@ if (import.meta.vitest) {
       const before = store.get()
       expect(await generate()).toBe('failed')
       expect(store.get()).toBe(before)
-      expect(notify).toHaveBeenCalledWith('コマの生成に失敗しました: quota exceeded', {
-        signIn: false,
-      })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_panel_failed({ reason: 'quota exceeded' }),
+        {
+          signIn: false,
+        },
+      )
     })
 
     test('a failure for want of sign-in asks for sign-in', async () => {
@@ -715,9 +721,12 @@ if (import.meta.vitest) {
         },
       })
       expect(await generate()).toBe('failed')
-      expect(notify).toHaveBeenCalledWith('コマの生成に失敗しました: ログインが必要です', {
-        signIn: true,
-      })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_panel_failed({ reason: m.web_sign_in_required() }),
+        {
+          signIn: true,
+        },
+      )
     })
 
     test('the same panel is not generated twice at once', async () => {
@@ -823,9 +832,12 @@ if (import.meta.vitest) {
       const before = store.get()
       expect(await generate()).toBe('failed')
       expect(store.get()).toBe(before)
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining('削除されました'), {
-        signIn: false,
-      })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_panel_failed({ reason: m.web_generate_project_deleted() }),
+        {
+          signIn: false,
+        },
+      )
     })
 
     test('a panel removed while generating fails without a patch', async () => {
@@ -851,9 +863,12 @@ if (import.meta.vitest) {
       release()
       expect(await pending).toBe('failed')
       expect(store.get()).toBe(before)
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining('コマが消えました'), {
-        signIn: false,
-      })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_panel_failed({ reason: m.web_generate_panel_gone() }),
+        {
+          signIn: false,
+        },
+      )
     })
   })
 
@@ -991,9 +1006,12 @@ if (import.meta.vitest) {
       expect(await generation.generateAll(all(store))).toMatchObject({ failed: 6, done: 0 })
       expect(store.get()).toBe(before)
       expect(notify).toHaveBeenCalledTimes(1)
-      expect(notify).toHaveBeenCalledWith('コマ 6 件の生成に失敗しました: quota exceeded', {
-        signIn: false,
-      })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_batch_failed({ count: 6, reason: 'quota exceeded' }),
+        {
+          signIn: false,
+        },
+      )
     })
 
     test('a second batch of the same scope is busy and does not count as done', async () => {
@@ -1043,9 +1061,12 @@ if (import.meta.vitest) {
       release()
       expect(await pending).toMatchObject({ done: 5, failed: 1 })
       expect(pagePanels(store).map((p) => p.arts.length)).toEqual([1, 1, 1, 1, 1])
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining('コマが消えました'), {
-        signIn: false,
-      })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_batch_failed({ count: 1, reason: m.web_generate_panel_gone() }),
+        {
+          signIn: false,
+        },
+      )
     })
 
     test('cancel drops the page reply without a patch', async () => {

@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { useState } from 'react'
 import { expect, fn } from 'storybook/test'
@@ -45,12 +46,16 @@ export const ToggleHidesContent: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText('選んだ要素のフォーム')).toBeVisible()
 
-    await userEvent.click(canvas.getByRole('button', { name: 'インスペクタを畳む' }))
+    await userEvent.click(
+      canvas.getByRole('button', { name: m.ui_sidebar_collapse({ title: args.title }) }),
+    )
     await expect(args.onExpandedChange).toHaveBeenLastCalledWith(false)
     await expect(canvas.getByText('選んだ要素のフォーム')).not.toBeVisible()
-    await expect(canvas.getByRole('complementary', { name: 'インスペクタ' })).toBeVisible()
+    await expect(canvas.getByRole('complementary', { name: args.title })).toBeVisible()
 
-    await userEvent.click(canvas.getByRole('button', { name: 'インスペクタを開く' }))
+    await userEvent.click(
+      canvas.getByRole('button', { name: m.ui_sidebar_expand({ title: args.title }) }),
+    )
     await expect(canvas.getByText('選んだ要素のフォーム')).toBeVisible()
   },
 }

@@ -1,5 +1,5 @@
 import { m } from '@manga/i18n'
-import type { FocusKind } from '@manga/schema'
+import type { FocusKind, FocusStatus } from '@manga/schema'
 import { Field, Typography } from '@manga/ui'
 import { option, SelectField, TextField } from './fields'
 import styles from './hint-inspector.module.css'
@@ -12,6 +12,12 @@ export const FOCUS_KINDS: readonly { value: FocusKind; label: string }[] = [
   option('keyObject', m.focus_point_kind_key_object),
   option('sfx', m.focus_point_kind_sfx),
 ]
+
+const STATUS_LABELS: Record<FocusStatus, () => string> = {
+  ok: m.focus_status_ok,
+  weak: m.focus_status_weak,
+  miss: m.focus_status_miss,
+}
 
 export function FocusInspector({ focus, characters, diagnosis, onChange }: FocusInspectorProps) {
   return (
@@ -65,7 +71,7 @@ export function FocusInspector({ focus, characters, diagnosis, onChange }: Focus
             })}
           </dd>
           <dt>{m.inspector_focus_status()}</dt>
-          <dd data-status={diagnosis.status}>{diagnosis.status}</dd>
+          <dd data-status={diagnosis.status}>{STATUS_LABELS[diagnosis.status]()}</dd>
           {diagnosis.reason && (
             <>
               <dt>{m.inspector_focus_reason()}</dt>

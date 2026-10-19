@@ -56,7 +56,7 @@ if (import.meta.vitest) {
         source: 'ai',
       })
       expect(applyPatch).toHaveBeenCalledTimes(2)
-      expect(() => restricted.applyPatch(title)).toThrow('手描きメモだけ')
+      expect(() => restricted.applyPatch(title)).toThrow(m.web_restricted_commenter())
       expect(() => restricted.applyPatch([...scribble, ...title])).toThrow()
       expect(() =>
         restricted.applyPatch([{ op: 'add', path: '/episodes/0/pages/1/scribblesX', value: 1 }]),
@@ -67,8 +67,10 @@ if (import.meta.vitest) {
     test('a viewer cannot change anything, but remote patches still apply', () => {
       const { applyPatch, store } = fakeStore()
       const restricted = restrictStore(store, 'viewer')
-      expect(() => restricted.applyPatch(scribble)).toThrow('閲覧のみ')
-      expect(() => restricted.applyPatch(title, { source: 'ai' })).toThrow('閲覧のみ')
+      expect(() => restricted.applyPatch(scribble)).toThrow(m.web_restricted_viewer())
+      expect(() => restricted.applyPatch(title, { source: 'ai' })).toThrow(
+        m.web_restricted_viewer(),
+      )
       expect(applyPatch).not.toHaveBeenCalled()
       restricted.applyPatch(title, { source: 'remote' })
       expect(applyPatch).toHaveBeenCalledExactlyOnceWith(title, { source: 'remote' })

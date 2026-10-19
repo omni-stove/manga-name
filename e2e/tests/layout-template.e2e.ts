@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
 import { FIXTURE_EPISODE, FIXTURE_PROJECT, importProject, openPage } from './app'
 
@@ -8,26 +9,32 @@ test('ページのコマ割りをテンプレートに登録し、そのテン�
   await openPage(page, 1)
   // 左上の隅は作業台
   await page
-    .getByRole('application', { name: 'キャンバス' })
+    .getByRole('application', { name: m.web_editor_canvas() })
     .click({ button: 'right', position: { x: 4, y: 4 } })
-  await page.getByRole('menuitem', { name: 'コマ割りをテンプレートに登録…' }).click()
-  const register = page.getByRole('dialog', { name: 'コマ割りをテンプレートに登録' })
-  await register.getByLabel('テンプレート名').fill('6 コマの基本')
-  await register.getByRole('button', { name: '登録' }).click()
+  await page.getByRole('menuitem', { name: m.web_editor_menu_register_layout() }).click()
+  const register = page.getByRole('dialog', { name: m.web_layout_template_register_title() })
+  await register.getByLabel(m.layout_template_name()).fill('6 コマの基本')
+  await register.getByRole('button', { name: m.web_layout_template_register() }).click()
   await expect(register).toBeHidden()
-  await expect(page.getByText('「6 コマの基本」をテンプレートに登録しました')).toBeVisible()
+  await expect(
+    page.getByText(m.web_layout_template_registered({ name: '6 コマの基本' })),
+  ).toBeVisible()
 
   await page.getByRole('link', { name: FIXTURE_EPISODE }).click()
-  const template = page.getByLabel('テンプレート')
+  const template = page.getByLabel(m.layout_template())
   await template.selectOption({ label: '6 コマの基本' })
-  await page.getByRole('button', { name: 'ページを追加' }).click()
-  const added = page.getByRole('listitem').filter({ hasText: '2 ページ' })
-  await expect(added).toContainText('コマ 6')
+  await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+  const added = page
+    .getByRole('listitem')
+    .filter({ hasText: m.web_episode_page_number({ number: 2 }) })
+  await expect(added).toContainText(m.web_episode_page_summary({ panels: 6 }))
 
-  await page.getByRole('button', { name: 'テンプレートを削除' }).click()
-  const dialog = page.getByRole('dialog', { name: 'テンプレートを削除' })
-  await expect(dialog).toContainText('「6 コマの基本」')
-  await dialog.getByRole('button', { name: '削除' }).click()
+  await page.getByRole('button', { name: m.web_episode_remove_template() }).click()
+  const dialog = page.getByRole('dialog', { name: m.web_episode_remove_template() })
+  await expect(dialog).toContainText(
+    m.web_episode_remove_template_confirm({ name: '6 コマの基本' }),
+  )
+  await dialog.getByRole('button', { name: m.remove() }).click()
   await expect(template.locator('option', { hasText: '6 コマの基本' })).toHaveCount(0)
   await expect(template).toHaveValue('3rows')
 })

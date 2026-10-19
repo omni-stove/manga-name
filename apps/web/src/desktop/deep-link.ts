@@ -85,9 +85,9 @@ if (import.meta.vitest) {
         kind: 'signed-in',
         token: 'ott',
       })
-      expect(parseDeepLink('manganame://auth?error=invite_required')).toMatchObject({
+      expect(parseDeepLink('manganame://auth?error=invite_required')).toEqual({
         kind: 'sign-in-error',
-        message: expect.stringContaining('招待リンク'),
+        message: m.web_sign_in_error_invite_required(),
       })
       expect(parseDeepLink('manganame://invite/a%2Fb')).toEqual({ kind: 'invite', token: 'a/b' })
     })
@@ -132,7 +132,7 @@ if (import.meta.vitest) {
         params: { token: 't1' },
       })
       expect(toasts.state.getState().toasts.map((t) => t.message)).toEqual([
-        expect.stringContaining('別のメールアドレス'),
+        m.web_sign_in_error_invite_email_mismatch(),
       ])
       expect(calls).toContain('plugin:event|listen')
       expect(calls).toContain('plugin:window|set_focus')

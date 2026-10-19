@@ -147,7 +147,7 @@ if (import.meta.vitest) {
 
   test('exportFileName', () => {
     expect(exportFileName('夏の話', [3], 'png')).toBe('夏の話_p03.png')
-    expect(exportFileName('', [1], 'png')).toBe('無題_p01.png')
+    expect(exportFileName('', [1], 'png')).toBe(`${m.untitled()}_p01.png`)
     expect(exportFileName('a/b:c', [10], 'png')).toBe('a_b_c_p10.png')
     expect(exportFileName('夏の話', [1, 2, 3], 'pdf')).toBe('夏の話_p01-03.pdf')
   })
