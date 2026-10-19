@@ -1,4 +1,5 @@
 import { m } from '@manga/i18n'
+import { useDraft } from '@manga/inspector'
 import type { Character } from '@manga/schema'
 import {
   Button,
@@ -31,6 +32,16 @@ function CharacterList() {
   const resolveAsset = useAssetResolver(library.resolveAsset)
   const navigate = useNavigate()
   const [removing, setRemoving] = useState<Character>()
+  // 編集中に他の端末や取り消しで値が変わっても、入力途中の下書きを上書きしない
+  const design = useDraft(
+    project.settings.characterDesign ?? '',
+    (next) => {
+      // 閲覧のみの store は空の Patch でも断るので、変わらないときは apply しない
+      if (characterDesignPatch(store.get().settings, next).length === 0) return
+      apply(m.web_characters_design_history(), (p) => characterDesignPatch(p.settings, next))
+    },
+    null,
+  )
   return (
     <YStack gap={8}>
       <XStack wrap gap={12}>
@@ -47,19 +58,14 @@ function CharacterList() {
         </Button>
       </XStack>
       <TextArea
-        // 他の端末や取り消しで変わった値を欄に映すため、値ごとに作り直す
-        key={project.settings.characterDesign ?? ''}
         className={styles.design}
         label={m.web_characters_design()}
         hint={m.web_characters_design_hint()}
         placeholder={m.web_characters_design_placeholder()}
         rows={3}
-        defaultValue={project.settings.characterDesign ?? ''}
-        onBlur={(e) => {
-          const next = e.currentTarget.value.trim()
-          if (characterDesignPatch(project.settings, next).length === 0) return
-          apply(m.web_characters_design_history(), (p) => characterDesignPatch(p.settings, next))
-        }}
+        value={design.draft}
+        onChange={(e) => design.set(e.target.value)}
+        onBlur={design.flush}
       />
       {error && (
         <Typography tone="alert" role="alert">
