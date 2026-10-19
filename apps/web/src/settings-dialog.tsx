@@ -7,6 +7,7 @@ import {
   Input,
   SegmentedControl,
   Select,
+  TextArea,
   type ThemePreference,
   Typography,
   useThemePreference,
@@ -16,7 +17,7 @@ import {
 import { useMatch, useNavigate, useRouteContext, useSearch } from '@tanstack/react-router'
 import common from './common.module.css'
 import { DisplayNameForm } from './display-name'
-import { settingsPatch } from './project-ops'
+import { characterDesignPatch, settingsPatch } from './project-ops'
 import styles from './project-settings.module.css'
 import { SharingPanel } from './sharing-panel'
 import { SignInButton } from './sign-in'
@@ -139,7 +140,7 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
   const role = library.role(projectId) ?? 'owner'
   const project = useProject(store)
   const { apply, error } = useApplyPatch(store)
-  const { direction, pageSize, dpi } = project.settings
+  const { direction, pageSize, dpi, characterDesign } = project.settings
 
   return (
     <YStack gap={16}>
@@ -158,8 +159,12 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
             dpi: number('dpi'),
           }
           const title = text('title')
+          const design = text('characterDesign')
           apply(m.web_settings_change_project(), (p) => {
-            const patch = settingsPatch(p.settings, next)
+            const patch = [
+              ...settingsPatch(p.settings, next),
+              ...characterDesignPatch(p.settings, design),
+            ]
             if (title !== p.title) patch.unshift({ op: 'replace', path: '/title', value: title })
             return patch
           })
@@ -203,6 +208,14 @@ function ProjectSettingsForm({ projectId, store }: { projectId: ID; store: WebPr
           step="1"
           required
           defaultValue={dpi}
+        />
+        <TextArea
+          label={m.project_settings_character_design()}
+          name="characterDesign"
+          hint={m.web_settings_character_design_hint()}
+          placeholder={m.web_settings_character_design_placeholder()}
+          rows={3}
+          defaultValue={characterDesign}
         />
         <Button type="submit" variant="primary" disabled={role !== 'owner' && role !== 'editor'}>
           {m.save()}
