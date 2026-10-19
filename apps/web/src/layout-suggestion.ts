@@ -44,6 +44,19 @@ function normalizeNamePanel({ camera, ...panel }: NamePanel): NamePanel {
 export const isNameReady = (panels: readonly NamePanel[]) =>
   panels.length > 0 && panels.every((p) => p.note.trim() !== '')
 
+/** コマ index の先頭のセリフを前のコマの末尾へ（by -1）、末尾のセリフを次のコマの先頭へ（by 1）移したネーム */
+export function moveEdgeLine(panels: NamePanel[], index: number, by: -1 | 1): NamePanel[] {
+  const from = panels[index]
+  const line = by === -1 ? from?.lines[0] : from?.lines.at(-1)
+  if (!line || !panels[index + by]) return panels
+  return panels.map((p, i) => {
+    if (i === index) return { ...p, lines: by === -1 ? p.lines.slice(1) : p.lines.slice(0, -1) }
+    if (i === index + by)
+      return { ...p, lines: by === -1 ? [...p.lines, line] : [line, ...p.lines] }
+    return p
+  })
+}
+
 /** コマ割りの提案の要求。ネームのコマは normalizeNamePanel にかけて送る */
 export function layoutRequest(panels: readonly NamePanel[]): LayoutSuggestionRequest {
   return { panels: panels.map(normalizeNamePanel) }
@@ -171,6 +184,20 @@ if (import.meta.vitest) {
     expect(isNameReady(name)).toBe(true)
     expect(isNameReady([])).toBe(false)
     expect(isNameReady([...name, { note: ' ', lines: [] }])).toBe(false)
+  })
+
+  test('moveEdgeLine moves the edge line to the neighbouring panel and keeps the name at the ends', () => {
+    const a = { text: 'a', shape: 'normal' as const }
+    const b = { text: 'b', shape: 'normal' as const }
+    const panels = [
+      { note: '1', lines: [a] },
+      { note: '2', lines: [b] },
+    ]
+    expect(moveEdgeLine(panels, 0, 1).map((p) => p.lines)).toEqual([[], [a, b]])
+    expect(moveEdgeLine(panels, 1, -1).map((p) => p.lines)).toEqual([[a, b], []])
+    expect(moveEdgeLine(panels, 0, -1)).toBe(panels)
+    expect(moveEdgeLine(panels, 1, 1)).toBe(panels)
+    expect(moveEdgeLine([{ note: '1', lines: [] }, ...panels], 0, 1)[1]).toBe(panels[0])
   })
 
   test('suggestedPanels puts the name panels into the frames in reading order', () => {

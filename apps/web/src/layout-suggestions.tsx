@@ -27,6 +27,7 @@ import {
   isNameReady,
   layoutRequest,
   loadName,
+  moveEdgeLine,
   nameRequest,
   replacePanelsPatch,
   saveName,
@@ -305,20 +306,6 @@ function NameEditor({
     onChange(panels.map((p, i) => (i === index ? { ...p, ...next } : p)))
   const editLines = (index: number, next: (lines: PlanLine[]) => PlanLine[]) =>
     editPanel(index, { lines: next(panels[index]?.lines ?? []) })
-  /** コマ index の先頭のセリフを前のコマの末尾へ（by -1）、末尾のセリフを次のコマの先頭へ（by 1）移す */
-  const moveEdgeLine = (index: number, by: -1 | 1) => {
-    const from = panels[index]
-    if (!from || from.lines.length === 0 || !panels[index + by]) return
-    const line = (by === -1 ? from.lines[0] : from.lines.at(-1)) as PlanLine
-    onChange(
-      panels.map((p, i) => {
-        if (i === index) return { ...p, lines: by === -1 ? p.lines.slice(1) : p.lines.slice(0, -1) }
-        if (i === index + by)
-          return { ...p, lines: by === -1 ? [...p.lines, line] : [line, ...p.lines] }
-        return p
-      }),
-    )
-  }
 
   return (
     <YStack gap={6} as="fieldset" className={styles.fieldset} disabled={disabled}>
@@ -372,7 +359,7 @@ function NameEditor({
                       <IconButton
                         size="small"
                         label={m.web_name_line_to_previous_panel()}
-                        onClick={() => moveEdgeLine(index, -1)}
+                        onClick={() => onChange(moveEdgeLine(panels, index, -1))}
                       >
                         ↑
                       </IconButton>
@@ -381,7 +368,7 @@ function NameEditor({
                       <IconButton
                         size="small"
                         label={m.web_name_line_to_next_panel()}
-                        onClick={() => moveEdgeLine(index, 1)}
+                        onClick={() => onChange(moveEdgeLine(panels, index, 1))}
                       >
                         ↓
                       </IconButton>
@@ -419,4 +406,78 @@ function NameEditor({
       </Button>
     </YStack>
   )
+}
+
+if (import.meta.vitest) {
+  const { describe, expect, onTestFinished, test, vi } = import.meta.vitest
+  const { renderToStaticMarkup } = await import('react-dom/server')
+  const { aiFixtures, createFakeLlmProvider } = await import('@manga/ai')
+  const { fixtures } = await import('@manga/schema')
+
+  const html = (panels: NamePanel[]) =>
+    renderToStaticMarkup(
+      <NameEditor
+        panels={panels}
+        characters={fixtures.samplePage01.characters}
+        disabled={false}
+        onChange={vi.fn()}
+      />,
+    )
+
+  describe('LayoutSuggestions', () => {
+    const project = fixtures.samplePage01
+    const page = project.episodes[0]?.pages[0] as Page
+    const markup = (script: string | undefined, canEdit = true) =>
+      renderToStaticMarkup(
+        <LayoutSuggestions
+          store={{} as ProjectStore}
+          project={project}
+          page={{ ...page, script }}
+          pageId={page.id}
+          llmProvider={createFakeLlmProvider()}
+          canEdit={canEdit}
+        />,
+      )
+
+    test('asks for a script before the name can be transcribed', () => {
+      expect(markup(undefined)).toContain(m.web_name_needs_script())
+      expect(markup('E「……」')).not.toContain(m.web_name_needs_script())
+      expect(markup('E「……」')).toContain(m.web_name_transcribe())
+    })
+
+    test('shows the name kept in this browser and asks for a note on every panel', () => {
+      const stored = new Map<string, string>()
+      vi.stubGlobal('localStorage', {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => stored.set(key, value),
+      })
+      onTestFinished(() => {
+        vi.unstubAllGlobals()
+      })
+      saveName(page.id, aiFixtures.nameDraft.panels)
+      const ready = markup('E「……」')
+      expect(ready).toContain(m.web_name_transcribe_again())
+      expect(ready).toContain(m.web_layout_suggest())
+      expect(ready).not.toContain(m.web_name_needs_note())
+      saveName(page.id, [...aiFixtures.nameDraft.panels, { note: '', lines: [] }])
+      expect(markup('E「……」')).toContain(m.web_name_needs_note())
+    })
+  })
+
+  describe('NameEditor', () => {
+    test('lists the panels in reading order with their notes and lines', () => {
+      const markup = html(aiFixtures.nameDraft.panels)
+      expect(markup.match(/data-name-panel=/g)).toHaveLength(aiFixtures.nameDraft.panels.length)
+      for (const panel of aiFixtures.nameDraft.panels) {
+        expect(markup).toContain(panel.note)
+        for (const line of panel.lines) expect(markup).toContain(line.text)
+      }
+      expect(markup).toContain(m.web_name_line_to_next_panel())
+      expect(markup).toContain(m.web_name_line_to_previous_panel())
+    })
+
+    test('says so for a panel without lines', () => {
+      expect(html([{ note: 'n', lines: [] }])).toContain(m.web_draft_no_lines())
+    })
+  })
 }
