@@ -4,9 +4,9 @@ import {
   type Page,
   type Panel,
   type ProjectSettings,
+  pageSizeOf,
   paintOrder,
   panelOutline,
-  pageSizeOf,
 } from '@manga/schema'
 import { Suspense, use, useId } from 'react'
 import styles from './page-thumbnail.module.css'

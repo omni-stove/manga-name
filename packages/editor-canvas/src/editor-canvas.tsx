@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { m } from '@manga/i18n'
-import { type Bubble, type ID, type Page, type Panel, type Patch, pageSizeOf, type Stroke } from '@manga/schema'
+import {
+  type Bubble,
+  type ID,
+  type Page,
+  type Panel,
+  type Patch,
+  pageSizeOf,
+  type Stroke,
+} from '@manga/schema'
 import {
   memo,
   type PointerEvent as ReactPointerEvent,

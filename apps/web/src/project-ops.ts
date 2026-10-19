@@ -13,8 +13,8 @@ import {
   type Patch,
   type Project,
   type ProjectSettings,
-  panelCharacterIds,
   pageSlots,
+  panelCharacterIds,
   spreadStartsAt,
 } from '@manga/schema'
 
@@ -178,7 +178,9 @@ function assertSpreadsKept(
 /** 次に足すページから見開きを始められるか。エピソードが無ければ、足すときに作る 1 話目で見る */
 export function canAddSpread(project: Project, episodeId?: ID): boolean {
   const episode =
-    episodeId === undefined ? project.episodes.at(-1) : project.episodes.find((e) => e.id === episodeId)
+    episodeId === undefined
+      ? project.episodes.at(-1)
+      : project.episodes.find((e) => e.id === episodeId)
   const slots = pageSlots(episode ?? { pages: [] })
   const last = slots.at(-1)
   const next = last ? last.number + (last.page.spread ? 2 : 1) : 1

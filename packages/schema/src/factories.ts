@@ -159,8 +159,7 @@ export function createRowPanels(
     let offset = 0
     for (const width of row.widths) {
       const w = (freeWidth * width) / totalWidth
-      const x =
-        direction === 'rtl' ? area.x + area.w - offset - w : area.x + offset
+      const x = direction === 'rtl' ? area.x + area.w - offset - w : area.x + offset
       panels.push(emptyPanel(panels.length + 1, { x, y, w, h }))
       offset += w + GUTTER
     }

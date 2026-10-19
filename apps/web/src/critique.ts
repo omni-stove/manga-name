@@ -15,8 +15,8 @@ import {
   type PageDiagnosis,
   type Patch,
   type Point,
-  type Size,
   pageSizeOf,
+  type Size,
 } from '@manga/schema'
 import { applyPatches, produce } from 'immer'
 import { findPage, pagePatch } from './project-ops'

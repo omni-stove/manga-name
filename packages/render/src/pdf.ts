@@ -447,7 +447,12 @@ if (import.meta.vitest) {
   test('見開きのページは spread でなければ 2 枚に切り、spread なら倍幅の 1 枚にする', async () => {
     const project = projectOf(2)
     const pages = project.episodes[0]?.pages ?? []
-    const spread = { ...project, episodes: [{ ...episode, pages: [pages[0] as Page, { ...(pages[1] as Page), spread: true as const }] }] }
+    const spread = {
+      ...project,
+      episodes: [
+        { ...episode, pages: [pages[0] as Page, { ...(pages[1] as Page), spread: true as const }] },
+      ],
+    }
     const split = await reload(await exportPdf(spread, episode.id, opts()))
     expect(split.getPageCount()).toBe(3)
     expect(split.getPage(1).getWidth()).toBeCloseTo(split.getPage(0).getWidth(), 0)

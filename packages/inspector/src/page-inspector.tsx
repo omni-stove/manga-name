@@ -126,8 +126,9 @@ export function PageInspector({
 if (import.meta.vitest) {
   const { describe, expect, test, vi } = import.meta.vitest
   const { act } = await import('react')
-  const { buttonNamed, inputLabelled, must, render, samplePage, setValue } =
-    await import('./dom-harness')
+  const { buttonNamed, inputLabelled, must, render, samplePage, setValue } = await import(
+    './dom-harness'
+  )
 
   describe('PageInspector', () => {
     const page = samplePage

@@ -1,7 +1,10 @@
 import type { Episode, ID, Page, ReadingDirection, Size } from './project'
 
 /** 紙面の大きさ（mm）。見開きなら幅を 2 ページ分にする */
-export function pageSizeOf<S extends Pick<Size, 'w' | 'h'>>(page: Pick<Page, 'spread'>, pageSize: S): S {
+export function pageSizeOf<S extends Pick<Size, 'w' | 'h'>>(
+  page: Pick<Page, 'spread'>,
+  pageSize: S,
+): S {
   return page.spread ? { ...pageSize, w: pageSize.w * 2 } : pageSize
 }
 
@@ -28,7 +31,11 @@ export function pageSlots(episode: Pick<Episode, 'pages' | 'startsRight'>): Page
   const startsRight = episode.startsRight === true
   let number = 1
   return episode.pages.map((page) => {
-    const slot: PageSlot = { page, number, side: page.spread ? 'spread' : sideOf(number, startsRight) }
+    const slot: PageSlot = {
+      page,
+      number,
+      side: page.spread ? 'spread' : sideOf(number, startsRight),
+    }
     number += page.spread ? 2 : 1
     return slot
   })

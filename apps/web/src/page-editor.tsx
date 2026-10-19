@@ -37,8 +37,8 @@ import {
   type Patch,
   type Project,
   pageCharacterIds,
-  panelCharacterIds,
   pageSizeOf,
+  panelCharacterIds,
 } from '@manga/schema'
 import { detectPlatform } from '@manga/storage'
 import {
