@@ -4,6 +4,7 @@ import {
   type Character,
   createLayoutTemplate,
   createPage,
+  createSpreadPage,
   type Episode,
   type ID,
   type LayoutTemplate,
@@ -190,7 +191,7 @@ export function canAddSpread(project: Project, episodeId?: ID): boolean {
 /**
  * テンプレートからページを作り、エピソードの末尾に足す。
  * `episodeId` を省くと最後のエピソードに足し、エピソードが無ければ 1 話目を作ってそこに入れる。
- * `spread` なら見開きのページにする。組み込みのテンプレートしか受けず、見開きを始められない位置（canAddSpread）なら throw する
+ * `spread` ならテンプレートによらず見開きのページ（createSpreadPage）にし、見開きを始められない位置（canAddSpread）なら throw する
  */
 export function addPagePatch(
   project: Project,
@@ -202,9 +203,8 @@ export function addPagePatch(
     const page = createPage(template, project.settings.direction)
     return { patch: appendPagesPatch(project, [page], episodeId), page }
   }
-  if (typeof template === 'object') throw new Error(m.web_episode_spread_builtin_only())
   if (!canAddSpread(project, episodeId)) throw new Error(m.web_episode_spread_breaks())
-  const page = createPage(template, project.settings.direction, true)
+  const page = createSpreadPage()
   return { patch: appendPagesPatch(project, [page], episodeId), page }
 }
 
@@ -527,11 +527,15 @@ if (import.meta.vitest) {
       expect(store.get().episodes[0]?.startsRight).toBeUndefined()
     })
 
-    test('a spread takes only a built-in template', () => {
+    test('a spread starts with one borderless panel whatever the template', () => {
       const { template } = addLayoutTemplatePatch(sample, firstPage().id, 'six')
-      expect(() => addPagePatch(sample, template, undefined, true)).toThrow(
-        m.web_episode_spread_builtin_only(),
-      )
+      for (const choice of ['4rows', template] as const) {
+        const { page } = addPagePatch(sample, choice, undefined, true)
+        expect(page.spread).toBe(true)
+        expect(page.panels).toEqual([
+          expect.objectContaining({ frame: 'none', rect: { x: 0, y: 0, w: 1, h: 1 } }),
+        ])
+      }
       // 見開きのコマ割りは 1 ページの紙面に合わないので、登録もさせない
       const store = storeOf(sample)
       const { patch, page } = addPagePatch(store.get(), '2rows', undefined, true)

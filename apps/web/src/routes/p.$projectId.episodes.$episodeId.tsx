@@ -53,7 +53,7 @@ const projectRoute = getRouteApi('/p/$projectId')
 /**
  * 1 話分の見出し、ページの追加と下書きと一括生成、ページのカードを並べる。
  * ページの追加では登録したコマ割りもテンプレートに選べ、選んでいるときは確認を経てその登録を消せる。
- * 組み込みのテンプレートなら見開きのページとしても足せる。1 ページ目は左ページで、「右ページから始める」で右にできる。
+ * 見開きのページも足せ、テンプレートによらず紙面いっぱいの枠なしのコマが 1 つ入る。1 ページ目は左ページで、「右ページから始める」で右にできる。
  * カードにはノンブルと左右を出し、見開きは 2 枚分の幅で並べる。
  * 見開きを始められない位置への見開きの追加と、見開きを割る移動、削除、始まりの切り替えはできない
  */
@@ -80,7 +80,7 @@ function EpisodePages() {
   const registeredTemplate = templateOptions(project).find(
     (o) => o.registered && o.value === template,
   )
-  const spreadAvailable = !registeredTemplate && canAddSpread(project, episode.id)
+  const spreadAvailable = canAddSpread(project, episode.id)
   const startsRight = episode.startsRight === true
 
   return (
@@ -130,13 +130,7 @@ function EpisodePages() {
           label={m.web_episode_spread()}
           checked={spread && spreadAvailable}
           disabled={!spreadAvailable}
-          title={
-            spreadAvailable
-              ? undefined
-              : registeredTemplate
-                ? m.web_episode_spread_builtin_only()
-                : m.web_episode_spread_unavailable()
-          }
+          title={spreadAvailable ? undefined : m.web_episode_spread_unavailable()}
           onChange={(e) => setSpread(e.currentTarget.checked)}
         />
         {registeredTemplate && (

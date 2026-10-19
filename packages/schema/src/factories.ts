@@ -98,18 +98,11 @@ const emptyPanel = (order: number, rect: Panel['rect']): Panel => ({
 /**
  * テンプレートからページを作る。登録したコマ割り（LayoutTemplate）なら、その枠と order のまま空のコマを置き、
  * direction は見ない。組み込みのテンプレートなら、createRowPanels で内枠を四方へ少し広げた範囲を同じ高さの行数ぶんの段に割り、
- * 各段を同じ幅の 2 列に割る。spread なら見開きのページを作り、見開きの内枠（SPREAD_INNER_FRAME）から割る。
- * 登録したコマ割りは 1 ページの紙面の座標なので、見開きには組み込みのテンプレートしか受けない
+ * 各段を同じ幅の 2 列に割る
  */
-export function createPage(template: PageTemplate, direction: ReadingDirection, spread: true): Page
 export function createPage(
   template: PageTemplate | LayoutTemplate,
   direction: ReadingDirection,
-): Page
-export function createPage(
-  template: PageTemplate | LayoutTemplate,
-  direction: ReadingDirection,
-  spread?: true,
 ): Page {
   if (typeof template === 'object') {
     const panels = template.panels.map(({ order, rect, shape }) => ({
@@ -122,10 +115,17 @@ export function createPage(
     height: 1,
     widths: Array.from({ length: COLUMNS }, () => 1),
   }))
+  return { id: newId(), panels: createRowPanels(rows, direction), scribbles: [] }
+}
+
+/**
+ * 見開きのページを作る。見開きの紙面いっぱいの枠なしのコマを 1 つだけ置き、枠ありのコマはその上に重ねて割らせる
+ */
+export function createSpreadPage(): Page {
   return {
     id: newId(),
-    ...(spread && { spread }),
-    panels: createRowPanels(rows, direction, { spread }),
+    spread: true,
+    panels: [{ ...emptyPanel(1, { x: 0, y: 0, w: 1, h: 1 }), frame: 'none' }],
     scribbles: [],
   }
 }
@@ -288,15 +288,25 @@ if (import.meta.vitest) {
     }
   })
 
-  test('a spread page splits the spread inner frame, which spans the gutter', () => {
-    const page = createPage('2rows', 'rtl', true)
-    expect(page.spread).toBe(true)
-    expect(PageSchema.safeParse(page).success).toBe(true)
+  test('a spread is split from the spread inner frame, which spans the gutter', () => {
+    const panels = createRowPanels([{ height: 1, widths: [1, 1] }], 'rtl', { spread: true })
     const area = panelArea(SPREAD_INNER_FRAME)
-    expect(Math.min(...page.panels.map((p) => p.rect.x))).toBeCloseTo(area.x)
-    expect(Math.max(...page.panels.map((p) => p.rect.x + p.rect.w))).toBeCloseTo(area.x + area.w)
+    expect(Math.min(...panels.map((p) => p.rect.x))).toBeCloseTo(area.x)
+    expect(Math.max(...panels.map((p) => p.rect.x + p.rect.w))).toBeCloseTo(area.x + area.w)
     // 見開きの外側の余白（mm）は 1 ページのときと同じ
     expect(SPREAD_INNER_FRAME.x * 2).toBeCloseTo(INNER_FRAME.x)
+  })
+
+  test('a spread page starts with one borderless panel over the whole spread', () => {
+    const page = createSpreadPage()
+    expect(page.spread).toBe(true)
+    expect(PageSchema.safeParse(page).success).toBe(true)
+    expect(page.panels).toHaveLength(1)
+    expect(page.panels[0]).toMatchObject({
+      order: 1,
+      frame: 'none',
+      rect: { x: 0, y: 0, w: 1, h: 1 },
+    })
     expect(createPage('2rows', 'rtl').spread).toBeUndefined()
   })
 
