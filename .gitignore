@@ -10,3 +10,5 @@ target/
 .env.*
 !.env.example
 .wrangler/
+fixtures/art/
+apps/web/src/routeTree.gen.ts

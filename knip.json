@@ -9,7 +9,11 @@
       "entry": ["src/backend-node.ts"]
     },
     "apps/web": {
-      "entry": ["src/store/project-store.ts", "src/store/yjs-project-store.ts"]
+      "entry": [
+        "src/store/project-store.ts",
+        "src/store/yjs-project-store.ts",
+        "src/routeTree.gen.ts"
+      ]
     },
     "packages/i18n": {
       "ignoreDependencies": ["@inlang/plugin-message-format"]
