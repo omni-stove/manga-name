@@ -80,7 +80,11 @@ function breakColumns(paragraphs: Unit[][], perColumn: number): Unit[][] {
   return columns
 }
 
-const columnWidth = (column: readonly Unit[], fontSize: number) =>
+/** ルビを振った語を割らないので、列が perColumn 字を超えうる。高さに収まるかを別に確かめる */
+const fitsHeight = (columns: readonly Unit[][], fontSize: number, height: number) =>
+  columns.every((c) => glyphCount(c) * fontSize <= height)
+
+const columnWidth =(column: readonly Unit[], fontSize: number) =>
   column.some((u) => u.ruby) ? fontSize * (1 + RUBY_SCALE) : fontSize
 
 function blockWidth(columns: readonly Unit[][], fontSize: number): number {
@@ -119,14 +123,16 @@ export function layoutVertical(text: string, box: { w: number; h: number }): Ver
   const max = Math.min(MAX_FONT, box.w, box.h)
   for (let fontSize = max; fontSize >= MIN_FONT; fontSize -= FONT_STEP) {
     const columns = breakColumns(paragraphs, Math.floor(box.h / fontSize))
-    if (blockWidth(columns, fontSize) <= box.w) return toLayout(columns, fontSize, false)
+    if (fitsHeight(columns, fontSize, box.h) && blockWidth(columns, fontSize) <= box.w) {
+      return toLayout(columns, fontSize, false)
+    }
   }
   const fontSize = MIN_FONT
   const perColumn = Math.max(1, Math.floor(box.h / fontSize))
   const all = breakColumns(paragraphs, perColumn)
   let fit = 1
   while (fit < all.length && blockWidth(all.slice(0, fit + 1), fontSize) <= box.w) fit++
-  if (all.length <= fit) return toLayout(all, fontSize, false)
+  if (all.length <= fit && fitsHeight(all, fontSize, box.h)) return toLayout(all, fontSize, false)
   const kept = all.slice(0, fit)
   const last = kept[kept.length - 1] ?? []
   const ellipsis = { glyphs: [ELLIPSIS] }

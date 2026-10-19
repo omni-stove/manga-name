@@ -335,4 +335,26 @@ if (import.meta.vitest) {
     expect(layoutBubbleText('あい\nうえ', { w: 22, h: 20 }, 1).fontPx).toBe(10)
     expect(layoutBubbleText('|あい《る》\nうえ', { w: 22, h: 20 }, 1).fontPx).toBe(8)
   })
+
+  test('ルビは親文字の右に半分の大きさで置く', () => {
+    const fonts: string[] = []
+    const placed: { text: string; x: number }[] = []
+    const ctx = {
+      save() {},
+      restore() {},
+      translate() {},
+      rotate() {},
+      set font(value: string) {
+        fonts.push(value)
+      },
+      fillText(text: string, x: number) {
+        placed.push({ text, x })
+      },
+    } as unknown as CanvasRenderingContext2D
+    const lines: TextUnit[][] = [[{ glyphs: ['魔'], ruby: ['ま'] }]]
+    drawVerticalText(ctx, lines, 10, { x: 0, y: 0, w: 30, h: 30 })
+    expect(placed.map((p) => p.text)).toEqual(['魔', 'ま'])
+    expect(placed[1]?.x).toBeGreaterThan(placed[0]?.x ?? 0)
+    expect(fonts.some((f) => f.startsWith('5px'))).toBe(true)
+  })
 }
