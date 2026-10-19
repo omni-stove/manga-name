@@ -40,6 +40,24 @@ test('コマを右クリックすると選ばれ、そのコマへの操作が�
   await expect(panels).toHaveCount(count - 1)
 })
 
+test('コマを右クリックして分割し、サイズを変えるハンドルを出せる', async ({ page }) => {
+  await importProject(page, FIXTURE_PROJECT)
+  await openPage(page, 1)
+
+  const panels = page.locator('[data-panel-id]')
+  const count = await panels.count()
+  const box = await panels.first().boundingBox()
+  if (!box) throw new Error('panel is not rendered')
+  const menu = page.getByRole('menu', { name: m.web_editor_menu_panel() })
+  await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.3, { button: 'right' })
+  await menu.getByRole('menuitem', { name: m.web_canvas_menu_panel_split_horizontal() }).click()
+  await expect(panels).toHaveCount(count + 1)
+
+  await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.2, { button: 'right' })
+  await menu.getByRole('menuitem', { name: m.web_canvas_menu_panel_resize() }).click()
+  await expect(page.locator('[data-handle]')).toHaveCount(8)
+})
+
 test('フキダシを右クリックして形を変えられる', async ({ page }) => {
   await importProject(page, FIXTURE_PROJECT)
   await openPage(page, 1)
