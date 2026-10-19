@@ -516,6 +516,9 @@ importers:
 
   packages/render:
     dependencies:
+      '@manga/i18n':
+        specifier: workspace:*
+        version: link:../i18n
       '@manga/schema':
         specifier: workspace:*
         version: link:../schema

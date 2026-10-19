@@ -2550,7 +2550,7 @@ if (import.meta.vitest) {
             },
           ],
           artId: `art_${id}`,
-          camera: 'ロング',
+          camera: 'long',
           focusPoints: [],
           vectors: [],
         })

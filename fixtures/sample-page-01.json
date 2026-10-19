@@ -1,7 +1,7 @@
 {
   "$comment": "6 コマ、右綴じの 1 ページ。arts は空で、生成前のネーム。sample-page-01.diagnosis.json の入力。",
   "project": {
-    "schemaVersion": 12,
+    "schemaVersion": 13,
     "id": "prj_sample",
     "title": "sample",
     "createdAt": "2026-10-15T00:00:00.000Z",
@@ -58,7 +58,7 @@
                     }
                   }
                 ],
-                "camera": "ロング",
+                "camera": "long",
                 "note": "ガラス結晶の森。E は米粒サイズで歩いている。",
                 "arts": [],
                 "focusPoints": [
@@ -140,7 +140,7 @@
                   "h": 0.23
                 },
                 "bubbles": [],
-                "camera": "バストアップ",
+                "camera": "bust",
                 "note": "マスク越しの真剣な目。手元のサンプル瓶が光る。",
                 "arts": [],
                 "focusPoints": [
@@ -298,8 +298,8 @@
                   "h": 0.31
                 },
                 "bubbles": [],
-                "camera": "ロング、俯瞰気味",
-                "note": "磁器の獣面が画面中央に大きく。E は右下で身を屈めて静止。",
+                "camera": "long",
+                "note": "俯瞰気味。磁器の獣面が画面中央に大きく。E は右下で身を屈めて静止。",
                 "arts": [],
                 "focusPoints": [
                   {
@@ -380,8 +380,8 @@
                   "h": 0.165
                 },
                 "bubbles": [],
-                "camera": "目元のアップ",
-                "note": "レンズ越しの目。感情を読ませない。",
+                "camera": "close_up",
+                "note": "目元。レンズ越しの目。感情を読ませない。",
                 "arts": [],
                 "focusPoints": [
                   {
@@ -428,8 +428,8 @@
                     }
                   }
                 ],
-                "camera": "足元のアップ",
-                "note": "足跡の中に新芽。",
+                "camera": "close_up",
+                "note": "足元。足跡の中に新芽。",
                 "arts": [],
                 "focusPoints": [
                   {
