@@ -15,6 +15,14 @@ export interface ExportSettings {
   /** PDF だけ。見開きで 1 枚にまとめる */
   spread: boolean
   dpi: number
+  /** PNG だけ。zip にまとめず、書き出し先フォルダへページごとに上書きで書く */
+  toFolder: boolean
+}
+
+/** Desktop の書き出し先フォルダ。`path` は覚えているフォルダで、選んだことが無ければ null */
+interface ExportFolder {
+  path: string | null
+  onChoose(): void
 }
 
 type Range = 'current' | 'all' | 'custom'
@@ -45,6 +53,8 @@ const noteOptions = (): readonly {
 
 /**
  * 書き出しのモーダル。形式（PNG / PDF / JSON）を選び、PNG と PDF ではページ範囲、指示メモ、コマ番号、見開き、dpi も選ぶ。
+ * `folder` を渡すと（Desktop）、PNG で「フォルダへ書き出す」を選べ、書き出し先フォルダを表示して選び直せる。
+ * フォルダが選ばれるまでは書き出せない。
  * 範囲に採用中の絵が無いコマがあれば警告するが、書き出しは止めない。
  * 開いている間だけマウントする。書き出すで PNG / PDF なら `onExport`、JSON なら `onExportProject`、
  * 閉じる操作（キャンセル、Esc）で `onCancel`
@@ -53,6 +63,7 @@ export function ExportDialog({
   pages,
   currentIndex,
   dpi,
+  folder,
   onCancel,
   onExport,
   onExportProject,
@@ -63,6 +74,8 @@ export function ExportDialog({
   currentIndex: number
   /** プロジェクト設定の dpi。dpi 欄の既定 */
   dpi: number
+  /** Web では渡さない */
+  folder?: ExportFolder
   onCancel(): void
   onExport(settings: ExportSettings): void
   onExportProject(): void
@@ -74,6 +87,7 @@ export function ExportDialog({
   const [panelNumbers, setPanelNumbers] = useState(false)
   const [spread, setSpread] = useState(false)
   const [dpiText, setDpiText] = useState(String(dpi))
+  const [toFolder, setToFolder] = useState(false)
 
   const [from, to] =
     range === 'current'
@@ -93,10 +107,12 @@ export function ExportDialog({
   const rendersPages = format !== 'json'
   const missing = !rendersPages || rangeError ? 0 : countMissingArts(pages.slice(from - 1, to))
   const effectiveNotes = format === 'png' && notes === 'sheet' ? 'none' : notes
+  const effectiveToFolder = format === 'png' && folder !== undefined && toFolder
+  const folderError = effectiveToFolder && !folder?.path ? m.web_export_folder_missing() : undefined
 
   const submit = () => {
     if (format === 'json') return onExportProject()
-    if (rangeError || dpiError) return
+    if (rangeError || dpiError || folderError) return
     onExport({
       format,
       from,
@@ -105,6 +121,7 @@ export function ExportDialog({
       panelNumbers,
       spread: format === 'pdf' && spread,
       dpi: dpiValue,
+      toFolder: effectiveToFolder,
     })
   }
 
@@ -119,7 +136,7 @@ export function ExportDialog({
           <Button
             type="submit"
             variant="primary"
-            disabled={rendersPages && (!!rangeError || !!dpiError)}
+            disabled={rendersPages && (!!rangeError || !!dpiError || !!folderError)}
           >
             {m.web_export_submit()}
           </Button>
@@ -197,6 +214,21 @@ export function ExportDialog({
               checked={spread}
               onChange={(e) => setSpread(e.target.checked)}
             />
+          )}
+          {format === 'png' && folder && (
+            <Checkbox
+              label={m.web_export_to_folder()}
+              checked={toFolder}
+              onChange={(e) => setToFolder(e.target.checked)}
+            />
+          )}
+          {effectiveToFolder && folder && (
+            <FieldGroup label={m.web_export_folder()} error={folderError}>
+              {folder.path && <Typography as="span">{folder.path}</Typography>}
+              <Button size="small" onClick={folder.onChoose}>
+                {m.web_export_choose_folder()}
+              </Button>
+            </FieldGroup>
           )}
           <Input
             label="dpi"

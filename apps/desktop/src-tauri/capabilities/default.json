@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "メインウィンドウの権限。ファイルは createFileStorage の保存先（$APPDATA/projects）と、ダイアログで選んだファイルだけを読み書きできる",
+  "description": "メインウィンドウの権限。ファイルは createFileStorage の保存先（$APPDATA/projects）と、ダイアログで選んだファイルとフォルダの直下だけを読み書きできる",
   "windows": ["main"],
   "permissions": [
     "core:default",
