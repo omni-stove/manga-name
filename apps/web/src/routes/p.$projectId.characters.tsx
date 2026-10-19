@@ -1,20 +1,11 @@
 import { m } from '@manga/i18n'
-import { useDraft } from '@manga/inspector'
 import type { Character } from '@manga/schema'
-import {
-  Button,
-  ConfirmDialog,
-  RemoveButton,
-  TextArea,
-  Typography,
-  XStack,
-  YStack,
-} from '@manga/ui'
-import { createFileRoute, getRouteApi, useNavigate } from '@tanstack/react-router'
+import { Button, ConfirmDialog, RemoveButton, Typography, XStack, YStack } from '@manga/ui'
+import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { CharacterPane } from '../character-pane'
 import common from '../common.module.css'
-import { characterDesignPatch, characterUsage, removeCharacterPatch } from '../project-ops'
+import { characterUsage, removeCharacterPatch } from '../project-ops'
 import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
 import styles from './characters.module.css'
@@ -32,16 +23,6 @@ function CharacterList() {
   const resolveAsset = useAssetResolver(library.resolveAsset)
   const navigate = useNavigate()
   const [removing, setRemoving] = useState<Character>()
-  // 編集中に他の端末や取り消しで値が変わっても、入力途中の下書きを上書きしない
-  const design = useDraft(
-    project.settings.characterDesign ?? '',
-    (next) => {
-      // 閲覧のみの store は空の Patch でも断るので、変わらないときは apply しない
-      if (characterDesignPatch(store.get().settings, next).length === 0) return
-      apply(m.web_characters_design_history(), (p) => characterDesignPatch(p.settings, next))
-    },
-    null,
-  )
   return (
     <YStack gap={8}>
       <XStack wrap gap={12}>
@@ -57,16 +38,12 @@ function CharacterList() {
           {m.web_characters_add()}
         </Button>
       </XStack>
-      <TextArea
-        className={styles.design}
-        label={m.project_settings_character_design()}
-        hint={m.web_characters_design_hint()}
-        placeholder={m.web_characters_design_placeholder()}
-        rows={3}
-        value={design.draft}
-        onChange={(e) => design.set(e.target.value)}
-        onBlur={design.flush}
-      />
+      <Typography tone="muted">
+        <Link to="." search={(prev) => ({ ...prev, settings: 'project' })} replace>
+          {m.web_project_settings()}
+        </Link>
+        {m.web_characters_design_in_settings()}
+      </Typography>
       {error && (
         <Typography tone="alert" role="alert">
           {error}
