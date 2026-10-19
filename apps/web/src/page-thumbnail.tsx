@@ -4,6 +4,7 @@ import {
   type Page,
   type Panel,
   type ProjectSettings,
+  paintOrder,
   panelOutline,
 } from '@manga/schema'
 import { Suspense, use, useId } from 'react'
@@ -122,13 +123,20 @@ export function PageThumbnail({
       aria-label={m.web_thumbnail_layout()}
     >
       <rect width={w} height={h} className={styles.paper} />
-      {page.panels.map((panel) =>
-        panel.artId === undefined ? null : (
-          <PanelArt key={panel.id} panel={panel} w={w} h={h} resolveAsset={resolveAsset} />
-        ),
-      )}
-      {page.panels.map((panel) => (
-        <polygon key={panel.id} points={outlinePoints(panel, w, h)} className={styles.panel} />
+      {/* 枠なしのコマは下に敷くので先に描き、枠ありのコマは紙の地でその絵を隠す */}
+      {paintOrder(page.panels).map((panel) => (
+        <g key={panel.id}>
+          {panel.frame !== 'none' && (
+            <polygon points={outlinePoints(panel, w, h)} className={styles.ground} />
+          )}
+          {panel.artId !== undefined && (
+            <PanelArt panel={panel} w={w} h={h} resolveAsset={resolveAsset} />
+          )}
+          <polygon
+            points={outlinePoints(panel, w, h)}
+            className={panel.frame === 'none' ? styles.borderless : styles.panel}
+          />
+        </g>
       ))}
     </svg>
   )

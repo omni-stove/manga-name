@@ -726,6 +726,24 @@ if (import.meta.vitest) {
       expect(text.getAttribute('fill')).toBe('#fff')
     })
 
+    test('a borderless panel is drawn first with a dashed guide outline, and framed panels get a white ground', async () => {
+      const [pn1, ...rest] = samplePage.panels as [Panel, ...Panel[]]
+      const background = { ...pn1, id: 'pn_bg', order: 99, frame: 'none' as const }
+      const page = { ...samplePage, panels: [pn1, ...rest, background] }
+      const svg = await render({ page })
+      const ids = [...svg.querySelectorAll('[data-layer="page"] > [data-panel-id]')].map((g) =>
+        g.getAttribute('data-panel-id'),
+      )
+      expect(ids[0]).toBe('pn_bg')
+      const frame = must(svg.querySelector('[data-panel-id="pn_bg"] > [data-panel-frame="none"]'))
+      expect(frame.getAttribute('stroke-dasharray')).not.toBeNull()
+      expect(svg.querySelector('[data-panel-id="pn_bg"] [data-panel-fill="white"]')).toBeNull()
+      expect(svg.querySelector('[data-panel-id="pn_1"] [data-panel-fill="white"]')).not.toBeNull()
+
+      const plain = await render({ page: samplePage })
+      expect(plain.querySelector('[data-panel-fill="white"]')).toBeNull()
+    })
+
     test('the selected panel gets a guide-coloured frame', async () => {
       const svg = await render({ selection: { kind: 'panel', id: 'pn_2' } })
       const frame = must(

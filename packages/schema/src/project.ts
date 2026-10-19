@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 11 as const
+export const SCHEMA_VERSION = 12 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -143,6 +143,8 @@ const PanelBaseSchema = z.object({
   shape: z.array(PointSchema).min(3).optional(),
   /** コマの地の色。黒は暗転や無音の間に使う。絵があれば絵が上に乗る */
   fill: z.enum(['black']).optional(),
+  /** 枠線。none は枠線を引かず、他のコマを上に重ねる下敷きの大ゴマにもなる。省略は枠あり */
+  frame: z.enum(['none']).optional(),
   bubbles: z.array(BubbleSchema),
   note: z.string().optional(),
   camera: z.string().optional(),

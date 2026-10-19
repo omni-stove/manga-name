@@ -4,6 +4,7 @@ import {
   isBoxShape,
   type Page,
   type Panel,
+  paintOrder,
   panelOutline,
 } from '@manga/schema'
 import { type Box, bubbleGeometry } from './bubble-shape'
@@ -49,35 +50,33 @@ export function inBubble(bubble: Bubble, panel: Box, p: PagePoint): boolean {
 
 /**
  * ページ座標の点にある要素。描画の前後と同じく、overflow のフキダシは全コマの後に描かれるので
- * 最も手前、次に各コマ内の overflow でないフキダシ、最後にコマ。それぞれ order の大きいものが手前。
- * overflow でないフキダシは、コマの輪郭で切られて見えない所では当たらない。何も無ければ null
+ * 最も手前、次に点を含む最も手前のコマの overflow でないフキダシ、最後にそのコマ。
+ * コマどうしは paintOrder の後ろが手前、フキダシどうしは order の大きいものが手前。
+ * overflow でないフキダシは、コマの輪郭で切られるか手前のコマに隠されて見えない所では当たらない。何も無ければ null
  */
 export function hitTest(page: Page, width: number, height: number, p: PagePoint): Selection {
-  const panels = [...page.panels].sort((a, b) => b.order - a.order)
-  for (const overflow of [true, false]) {
-    for (const panel of panels) {
-      const box = panelBox(panel, width, height)
-      if (!overflow && !containsPoint(panelPolygon(panel, width, height), p)) continue
-      for (const bubble of [...panel.bubbles].sort((a, b) => b.order - a.order)) {
-        if (Boolean(bubble.overflow) === overflow && inBubble(bubble, box, p)) {
-          return { kind: 'bubble', id: bubble.id }
-        }
-      }
-    }
+  const topFirst = (bubbles: Bubble[]) => [...bubbles].sort((a, b) => b.order - a.order)
+  for (const panel of paintOrder(page.panels).reverse()) {
+    const box = panelBox(panel, width, height)
+    const hit = topFirst(panel.bubbles).find((b) => b.overflow && inBubble(b, box, p))
+    if (hit) return { kind: 'bubble', id: hit.id }
   }
   const panel = panelAt(page, width, height, p)
-  return panel === undefined ? null : { kind: 'panel', id: panel.id }
+  if (panel === undefined) return null
+  const box = panelBox(panel, width, height)
+  const hit = topFirst(panel.bubbles).find((b) => !b.overflow && inBubble(b, box, p))
+  return hit ? { kind: 'bubble', id: hit.id } : { kind: 'panel', id: panel.id }
 }
 
-/** フキダシを見ずに、ページ座標の点にあるコマ。重なっていれば order の大きいもの */
+/** フキダシを見ずに、ページ座標の点にあるコマ。重なっていれば最も手前に描かれるもの */
 export function panelAt(
   page: Page,
   width: number,
   height: number,
   p: PagePoint,
 ): Panel | undefined {
-  return [...page.panels]
-    .sort((a, b) => b.order - a.order)
+  return paintOrder(page.panels)
+    .reverse()
     .find((panel) => containsPoint(panelPolygon(panel, width, height), p))
 }
 
@@ -139,6 +138,32 @@ if (import.meta.vitest) {
       id: 'pn_1',
     })
     expect(hitTest(triangle, w, h, { x: 0.8 * w, y: 0.8 * h })).toBeNull()
+  })
+
+  test('hitTest picks a framed panel over the borderless panel under it, and skips the hidden bubbles of the latter', () => {
+    const base = page.panels[0] as Panel
+    const bubble = { ...(base.bubbles[0] as Bubble), id: 'bb_under', pos: { x: 0.25, y: 0.25 } }
+    const laid: Page = {
+      ...page,
+      panels: [
+        { ...base, id: 'b', order: 1, rect: { x: 0, y: 0, w: 0.5, h: 0.5 }, bubbles: [] },
+        {
+          ...base,
+          id: 'bg',
+          order: 2,
+          frame: 'none',
+          rect: { x: 0, y: 0, w: 1, h: 1 },
+          bubbles: [bubble],
+        },
+      ],
+    }
+    const alone = { ...laid, panels: laid.panels.slice(1) }
+    expect(hitTest(alone, w, h, { x: 0.25 * w, y: 0.25 * h })).toEqual({
+      kind: 'bubble',
+      id: 'bb_under',
+    })
+    expect(hitTest(laid, w, h, { x: 0.25 * w, y: 0.25 * h })).toEqual({ kind: 'panel', id: 'b' })
+    expect(hitTest(laid, w, h, { x: 0.8 * w, y: 0.8 * h })).toEqual({ kind: 'panel', id: 'bg' })
   })
 
   test('hitTest picks the panel with the larger order where panels overlap', () => {
