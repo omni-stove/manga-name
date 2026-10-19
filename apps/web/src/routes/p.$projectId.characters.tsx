@@ -59,7 +59,7 @@ function CharacterList() {
       </XStack>
       <TextArea
         className={styles.design}
-        label={m.web_characters_design()}
+        label={m.project_settings_character_design()}
         hint={m.web_characters_design_hint()}
         placeholder={m.web_characters_design_placeholder()}
         rows={3}
@@ -93,7 +93,7 @@ function CharacterList() {
             <XStack as="span" wrap gap={6} className={common.cardActions}>
               <RemoveButton
                 size="small"
-                label={m.web_common_delete()}
+                label={m.remove()}
                 onClick={() => setRemoving(character)}
               />
             </XStack>
@@ -104,7 +104,7 @@ function CharacterList() {
         <ConfirmDialog
           title={m.web_characters_remove()}
           message={m.web_characters_remove_confirm({ name: removing.name })}
-          confirmLabel={m.web_common_delete()}
+          confirmLabel={m.remove()}
           onConfirm={() => {
             apply(m.web_characters_remove(), (p) => removeCharacterPatch(p, removing.id))
             setRemoving(undefined)

@@ -86,7 +86,7 @@ export function setLocked(ctx: Pick<ElementMenuContext, 'edit'>, target: Target,
 /** 要素を右クリックしたときの、その要素への操作。要素がもう無ければ空 */
 export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuItems {
   const remove: ContextMenuItem = {
-    label: m.web_common_delete(),
+    label: m.remove(),
     shortcut: 'Delete',
     onSelect: () => ctx.remove(target),
   }

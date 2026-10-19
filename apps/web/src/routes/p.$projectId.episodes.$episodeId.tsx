@@ -217,7 +217,7 @@ function EpisodePages() {
                 </Button>
                 <RemoveButton
                   size="small"
-                  label={m.web_common_delete()}
+                  label={m.remove()}
                   onClick={() => setRemovingPage({ id: page.id, number: index + 1 })}
                 />
               </XStack>
@@ -229,7 +229,7 @@ function EpisodePages() {
         <ConfirmDialog
           title={m.web_episode_remove_template()}
           message={m.web_episode_remove_template_confirm({ name: removingTemplate.name })}
-          confirmLabel={m.web_common_delete()}
+          confirmLabel={m.remove()}
           onConfirm={() => {
             apply(m.web_episode_remove_template(), (p) =>
               removeLayoutTemplatePatch(p, removingTemplate.id),
@@ -243,7 +243,7 @@ function EpisodePages() {
         <ConfirmDialog
           title={m.web_episode_remove_page()}
           message={m.web_episode_remove_page_confirm({ number: removingPage.number })}
-          confirmLabel={m.web_common_delete()}
+          confirmLabel={m.remove()}
           onConfirm={() => {
             apply(m.web_episode_remove_page(), (p) => removePagePatch(p, removingPage.id))
             setRemovingPage(undefined)
@@ -299,7 +299,7 @@ function EpisodeTitle({
       }}
     >
       <Input
-        label={m.web_episode_name_label()}
+        label={m.episode_title()}
         hideLabel
         required
         value={title}
@@ -308,10 +308,10 @@ function EpisodeTitle({
         autoFocus
       />
       <Button type="submit" size="small" variant="primary">
-        {m.web_common_save()}
+        {m.save()}
       </Button>
       <Button size="small" variant="ghost" onClick={() => setEditing(false)}>
-        {m.web_common_cancel()}
+        {m.cancel()}
       </Button>
     </XStack>
   )
@@ -349,7 +349,7 @@ function EpisodeBatch({
   return (
     <XStack wrap gap={12} className={common.toolbar}>
       <Button disabled={batch.running || episode.pages.length === 0} onClick={batch.start}>
-        {batch.running ? m.web_common_generating() : m.web_episode_generate_all()}
+        {batch.running ? m.generating() : m.web_episode_generate_all()}
       </Button>
       <BatchOptions batch={batch} />
     </XStack>

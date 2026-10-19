@@ -115,7 +115,7 @@ export function ExportDialog({
       onSubmit={submit}
       actions={
         <>
-          <Button onClick={onCancel}>{m.web_common_cancel()}</Button>
+          <Button onClick={onCancel}>{m.cancel()}</Button>
           <Button
             type="submit"
             variant="primary"
@@ -174,7 +174,7 @@ export function ExportDialog({
             </FieldGroup>
           )}
           <Select
-            label={m.web_export_notes()}
+            label={m.panel_note()}
             value={effectiveNotes}
             onChange={(e) => setNotes(e.target.value as RenderOptions['notes'])}
           >

@@ -44,7 +44,7 @@ function EpisodeList() {
   return (
     <YStack gap={8}>
       <XStack wrap gap={12} className={common.toolbar}>
-        <Typography variant="heading">{m.web_nav_episodes()}</Typography>
+        <Typography variant="heading">{m.episode()}</Typography>
         <Button onClick={addEpisode} data-guide="add-episode">
           {m.web_episodes_add()}
         </Button>
@@ -91,7 +91,7 @@ function EpisodeList() {
               <XStack as="span" wrap gap={6} className={common.cardActions}>
                 <RemoveButton
                   size="small"
-                  label={m.web_common_delete()}
+                  label={m.remove()}
                   onClick={() => setRemoving(episode)}
                 />
               </XStack>
@@ -103,7 +103,7 @@ function EpisodeList() {
         <RemoveEpisodeDialog
           episode={removing}
           onConfirm={() => {
-            apply(m.web_episodes_remove(), (p) => removeEpisodePatch(p, removing.id))
+            apply(m.web_episode_remove(), (p) => removeEpisodePatch(p, removing.id))
             setRemoving(undefined)
           }}
           onCancel={() => setRemoving(undefined)}

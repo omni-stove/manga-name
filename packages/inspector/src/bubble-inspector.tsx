@@ -8,15 +8,15 @@ import type { BubbleInspectorProps } from './types'
 
 /** フキダシの形と、画面での呼び名 */
 export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[] = [
-  option('normal', m.inspector_bubble_shape_normal),
-  option('shout', m.inspector_bubble_shape_shout),
-  option('thought', m.inspector_bubble_shape_thought),
-  option('whisper', m.inspector_bubble_shape_whisper),
-  option('tremble', m.inspector_bubble_shape_tremble),
-  option('electronic', m.inspector_bubble_shape_electronic),
-  option('urchin', m.inspector_bubble_shape_urchin),
-  option('narration', m.inspector_bubble_shape_narration),
-  option('none', m.inspector_bubble_shape_none),
+  option('normal', m.bubble_shape_normal),
+  option('shout', m.bubble_shape_shout),
+  option('thought', m.bubble_shape_thought),
+  option('whisper', m.bubble_shape_whisper),
+  option('tremble', m.bubble_shape_tremble),
+  option('electronic', m.bubble_shape_electronic),
+  option('urchin', m.bubble_shape_urchin),
+  option('narration', m.bubble_shape_narration),
+  option('none', m.bubble_shape_none),
 ]
 
 const isOrder = (n: number) => BubbleSchema.shape.order.safeParse(n).success
@@ -28,29 +28,29 @@ export function BubbleInspector({ bubble, characters, onChange }: BubbleInspecto
         {m.inspector_bubble_title({ order: bubble.order })}
       </Typography>
       <SelectField
-        label={m.inspector_bubble_speaker()}
+        label={m.bubble_speaker()}
         value={bubble.speakerId ?? ''}
         options={[
-          { value: '', label: m.inspector_none() },
+          { value: '', label: m.none() },
           ...characters.map((c) => ({ value: c.id, label: c.name })),
         ]}
         onCommit={(v) => onChange(optionalString('/speakerId', bubble.speakerId, v))}
       />
       <TextField
-        label={m.inspector_bubble_text()}
+        label={m.bubble_text()}
         value={bubble.text}
         rows={4}
         delayMs={DEBOUNCE_MS}
         onCommit={(v) => v !== bubble.text && onChange(replace('/text', v))}
       />
       <SelectField
-        label={m.inspector_bubble_shape()}
+        label={m.bubble_shape()}
         value={bubble.shape}
         options={BUBBLE_SHAPES}
         onCommit={(v) => onChange(replace('/shape', v))}
       />
       <Checkbox
-        label={m.inspector_bubble_overflow()}
+        label={m.bubble_overflow()}
         checked={bubble.overflow === true}
         onChange={(e) =>
           onChange(
@@ -61,7 +61,7 @@ export function BubbleInspector({ bubble, characters, onChange }: BubbleInspecto
         }
       />
       <NumberField
-        label={m.inspector_bubble_order()}
+        label={m.bubble_order()}
         value={bubble.order}
         min={1}
         step={1}

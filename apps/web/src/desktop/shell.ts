@@ -186,7 +186,7 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
             { text: m.web_menu_recent(), items: recentItems() },
             separator,
             {
-              text: m.web_common_save(),
+              text: m.save(),
               accelerator: 'CmdOrCtrl+S',
               action: run((reason) => m.web_menu_save_failed({ reason }), saveCurrent),
             },

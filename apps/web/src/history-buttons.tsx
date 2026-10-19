@@ -13,7 +13,7 @@ export const MOD =
 export function HistoryButtons({ store }: { store: WebProjectStore }) {
   const { canUndo, canRedo } = useStore(store.state)
   return (
-    <XStack as="span" gap={2} role="group" aria-label={m.web_history_group()}>
+    <XStack as="span" gap={2} role="group" aria-label={m.history()}>
       <IconButton
         size="small"
         label={m.web_history_undo()}

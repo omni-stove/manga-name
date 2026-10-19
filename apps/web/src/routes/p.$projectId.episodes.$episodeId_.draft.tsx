@@ -61,9 +61,7 @@ function ScriptDraft() {
   const navigate = useNavigate()
   const touring = useTourStep(projectId) === 'draft'
   const [script, setScript] = useState(() =>
-    touring
-      ? m.web_tour_script({ name: project.characters[0]?.name ?? m.web_common_untitled() })
-      : '',
+    touring ? m.web_tour_script({ name: project.characters[0]?.name ?? m.untitled() }) : '',
   )
   const [pageCountText, setPageCountText] = useState(touring ? '1' : '')
   const [tone, setTone] = useState('')
@@ -347,7 +345,7 @@ function PlanList({
                 wrap
                 gap={8}
                 className={styles.fieldset}
-                aria-label={m.web_draft_cast()}
+                aria-label={m.page_cast()}
               >
                 {characters.map((c) => (
                   <Checkbox
@@ -459,7 +457,7 @@ function LineEditor({
           onChange(id === '' ? rest : { ...rest, speakerId: id })
         }}
       >
-        <option value="">{m.web_draft_no_speaker()}</option>
+        <option value="">{m.none()}</option>
         {characters.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}
@@ -467,7 +465,7 @@ function LineEditor({
         ))}
       </Select>
       <Select
-        label={m.web_draft_shape()}
+        label={m.bubble_shape()}
         hideLabel
         className={styles.lineSelect}
         value={line.shape}
@@ -480,7 +478,7 @@ function LineEditor({
         ))}
       </Select>
       <Input
-        label={m.web_draft_line()}
+        label={m.bubble_text()}
         hideLabel
         className={styles.lineText}
         value={line.text}

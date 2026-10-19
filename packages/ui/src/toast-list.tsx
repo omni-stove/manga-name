@@ -35,7 +35,7 @@ export function ToastList({
               {toast.action.label}
             </Button>
           )}
-          <IconButton label={m.ui_toast_dismiss()} size="small" onClick={() => onDismiss(toast.id)}>
+          <IconButton label={m.close()} size="small" onClick={() => onDismiss(toast.id)}>
             ×
           </IconButton>
         </li>

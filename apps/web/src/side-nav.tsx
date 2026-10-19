@@ -87,15 +87,10 @@ function ProjectItems({
 }) {
   const project = useProject(store)
   return (
-    <YStack
-      as="ul"
-      gap={2}
-      className={styles.list}
-      aria-label={project.title || m.web_common_untitled()}
-    >
+    <YStack as="ul" gap={2} className={styles.list} aria-label={project.title || m.untitled()}>
       {!collapsed && (
         <Typography as="li" variant="label" tone="muted" className={styles.project}>
-          {project.title || m.web_common_untitled()}
+          {project.title || m.untitled()}
         </Typography>
       )}
       <NavItem
@@ -104,14 +99,14 @@ function ProjectItems({
         // エピソードとエディタはエピソード一覧の下の階層なので、そこにいる間もエピソードを選ばれた状態にする
         activeOptions={{ exact: !inEpisodes }}
         icon={<PagesIcon />}
-        label={m.web_nav_episodes()}
+        label={m.episode()}
         guide="nav-episodes"
       />
       <NavItem
         to="/p/$projectId/characters"
         params={{ projectId }}
         icon={<PersonIcon />}
-        label={m.web_nav_characters()}
+        label={m.character()}
         guide="nav-characters"
       />
       <NavItem

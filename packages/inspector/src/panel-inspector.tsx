@@ -90,7 +90,7 @@ export function PanelInspector({
         onCommit={(n) => onChange(replace('/order', n))}
       />
       <TextField
-        label={m.inspector_panel_camera()}
+        label={m.panel_camera()}
         value={panel.camera ?? ''}
         list={cameraListId}
         placeholder={m.inspector_panel_camera_placeholder()}
@@ -102,7 +102,7 @@ export function PanelInspector({
         ))}
       </datalist>
       <TextField
-        label={m.inspector_panel_note()}
+        label={m.panel_note()}
         value={panel.note ?? ''}
         rows={4}
         delayMs={DEBOUNCE_MS}
@@ -116,7 +116,7 @@ export function PanelInspector({
       )}
 
       <Typography variant="label" tone="muted" className={section.heading}>
-        {m.inspector_panel_bubbles()}
+        {m.bubble()}
       </Typography>
       {bubbles.length === 0 ? (
         <Typography tone="muted">{m.inspector_panel_bubbles_empty()}</Typography>
@@ -130,7 +130,7 @@ export function PanelInspector({
                 <span className={styles.order}>{bubble.order}</span>
                 <span className={styles.line}>
                   {speakerOf(bubble) && <b className={styles.speaker}>{speakerOf(bubble)}</b>}
-                  {bubble.text.split('\n')[0] || m.inspector_panel_bubble_empty_text()}
+                  {bubble.text.split('\n')[0] || m.empty()}
                 </span>
                 <IconButton
                   size="small"
@@ -173,7 +173,7 @@ export function PanelInspector({
       )}
 
       <Typography variant="label" tone="muted" className={section.heading}>
-        {m.inspector_generate()}
+        {m.generate()}
       </Typography>
       {diagnosis && (
         <>
@@ -200,7 +200,7 @@ export function PanelInspector({
       )}
       <XStack wrap className={section.group}>
         <Button variant="primary" disabled={generating} onClick={() => onGenerate()}>
-          {generating ? m.inspector_generating() : m.inspector_generate()}
+          {generating ? m.generating() : m.generate()}
         </Button>
       </XStack>
       <TextArea
@@ -220,7 +220,7 @@ export function PanelInspector({
       </XStack>
 
       <Typography variant="label" tone="muted" className={section.heading}>
-        {m.inspector_panel_history()}
+        {m.history()}
       </Typography>
       {arts.length === 0 ? (
         <Typography tone="muted">{m.inspector_panel_history_empty()}</Typography>
@@ -265,12 +265,12 @@ function CastSection({
   const reasons = (id: ID) =>
     [
       panel.bubbles.some((b) => b.speakerId === id) && m.inspector_panel_cast_reason_dialogue(),
-      panel.focusPoints.some((f) => f.characterId === id) && m.inspector_focus(),
+      panel.focusPoints.some((f) => f.characterId === id) && m.focus_point(),
     ].filter((r) => r !== false)
   return (
     <>
       <Typography variant="label" tone="muted" className={section.heading}>
-        {m.inspector_panel_cast()}
+        {m.panel_cast()}
       </Typography>
       {cast.length === 0 ? (
         <Typography tone="muted">{m.inspector_panel_cast_empty()}</Typography>
@@ -347,7 +347,7 @@ function ArtItem({
       data-current={current || undefined}
     >
       <button type="button" className={styles.thumb} aria-pressed={current} onClick={onSelect}>
-        <Suspense fallback={<span>{m.inspector_loading()}</span>}>
+        <Suspense fallback={<span>{m.loading()}</span>}>
           <ArtImage url={url} alt={art.instruction ?? m.inspector_panel_art_alt()} />
         </Suspense>
       </button>
@@ -358,7 +358,7 @@ function ArtItem({
           {onRemove && (
             <RemoveButton
               size="small"
-              label={m.inspector_remove()}
+              label={m.remove()}
               className={styles.remove}
               onClick={onRemove}
             />
