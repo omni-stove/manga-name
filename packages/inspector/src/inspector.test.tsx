@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { BubbleInspector } from './bubble-inspector'
 import { CharacterInspector } from './character-inspector'
 import { FocusInspector } from './focus-inspector'
+import { IssueList } from './issue-list'
 import { PageInspector } from './page-inspector'
 import { PageScriptInspector } from './page-script-inspector'
 import { PanelInspector } from './panel-inspector'
@@ -587,6 +588,44 @@ describe('FocusInspector', () => {
       )
       expect(must(container.querySelector('[data-status]')).textContent).toBe(label)
     }
+  })
+})
+
+describe('IssueList', () => {
+  test('says so when there are no issues', async () => {
+    const { container } = await render(<IssueList issues={[]} onFocus={() => {}} />)
+    expect(must(container.querySelector('[data-issue-list]')).textContent).toBe(
+      m.inspector_issue_list_empty(),
+    )
+  })
+
+  test('sorts by severity, and only an issue that points at an element can be pressed', async () => {
+    const onFocus = vi.fn()
+    const pointing = {
+      severity: 'warning' as const,
+      code: 'FOCUS_WEAK' as const,
+      panelId: 'pn_2',
+      message: '焦点が弱い',
+    }
+    const { container } = await render(
+      <IssueList
+        issues={[
+          { severity: 'info', code: 'READING_ORDER', message: '補足' },
+          pointing,
+          { severity: 'error', code: 'READING_ORDER', message: '読み順が逆' },
+        ]}
+        onFocus={onFocus}
+      />,
+    )
+    const buttons = [...container.querySelectorAll('button')]
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      `${m.issue_severity_error()}読み順が逆`,
+      `${m.issue_severity_warning()}焦点が弱い`,
+      `${m.issue_severity_info()}補足`,
+    ])
+    expect(buttons.map((b) => b.disabled)).toEqual([true, false, true])
+    await act(async () => must(buttons[1]).click())
+    expect(onFocus).toHaveBeenCalledWith(pointing)
   })
 })
 
