@@ -2,6 +2,9 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": ["biome", "mise", "tauri-driver"],
   "workspaces": {
+    ".": {
+      "entry": [".agents/skills/*/scripts/*.ts"]
+    },
     "packages/render": {
       "entry": ["src/backend-node.ts"]
     },
