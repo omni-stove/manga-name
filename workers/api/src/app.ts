@@ -48,6 +48,8 @@ const MAX_ATTEMPTS = 2
 
 /** 脚本の最大文字数。LLM に渡すトークン数とその費用を 1 要求あたりで抑えるため */
 const MAX_SCRIPT_LENGTH = 20_000
+const MAX_NAME_TEXT_LENGTH = 2_000
+const MAX_NAME_LINES = 50
 /** 脚本を割り振るページ数の上限。Web の MAX_PAGE_COUNT と @manga/ai のプロンプトの上限と揃える */
 const MAX_PAGE_COUNT = 64
 /**
@@ -106,7 +108,22 @@ const NameDraftRequestSchema = z.object({
 
 /** `@manga/ai` の LayoutSuggestionRequest */
 const LayoutSuggestionRequestSchema = z.object({
-  panels: z.array(NamePanelSchema).min(1).max(MAX_NAME_PANELS),
+  panels: z
+    .array(
+      NamePanelSchema.extend({
+        note: z.string().min(1).max(MAX_NAME_TEXT_LENGTH),
+        camera: z.string().min(1).max(MAX_NAME_TEXT_LENGTH).optional(),
+        lines: z
+          .array(
+            NamePanelSchema.shape.lines.element.extend({
+              text: z.string().min(1).max(MAX_NAME_TEXT_LENGTH),
+            }),
+          )
+          .max(MAX_NAME_LINES),
+      }),
+    )
+    .min(1)
+    .max(MAX_NAME_PANELS),
 })
 
 /** `@manga/ai` の CritiqueRequest。診断は同じページのものに限る */
