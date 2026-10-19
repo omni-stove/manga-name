@@ -26,7 +26,8 @@ const mapObjects = (value: unknown, fn: (item: Json) => Json): unknown =>
 function cameraToEnum(panel: Json): Json {
   const { camera, ...rest } = panel
   if (typeof camera !== 'string' || camera.trim() === '') return rest
-  const value = CAMERA_NAMES[camera.trim()]
+  const key = camera.trim()
+  const value = Object.hasOwn(CAMERA_NAMES, key) ? CAMERA_NAMES[key] : undefined
   if (value) return { ...rest, camera: value }
   const note =
     typeof panel.note === 'string' && panel.note !== '' ? `${camera}\n${panel.note}` : camera
