@@ -1,5 +1,6 @@
 import { m } from '@manga/i18n'
 import type { ID, Project } from '@manga/schema'
+import { emit } from '@tauri-apps/api/event'
 import { Menu, type MenuItemOptions, type PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
@@ -21,7 +22,7 @@ import {
   recentLabel,
   saveRecentFiles,
 } from './recent-files'
-import { openScriptWindow } from './windows'
+import { EDIT_EVENT, openScriptWindow } from './windows'
 
 export interface DesktopShellOptions {
   router: ReturnType<typeof createAppRouter>
@@ -49,6 +50,11 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
     task().catch((e: unknown) => toasts.push(failure(errorMessage(e))))
   }
 
+  // メニューは別ウィンドウ（脚本）にも付くが、ここの router と library はこのウィンドウのもの。フォーカスのないときの操作で、このウィンドウの状態を書いたり開いたりしない
+  const whenFocused = (task: () => Promise<void>) => async () => {
+    if (document.hasFocus()) await task()
+  }
+
   const currentProjectId = (): ID | undefined => {
     for (const match of router.state.matches) {
       const { projectId } = match.params as { projectId?: ID }
@@ -57,8 +63,11 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
   }
 
   const command = async (name: 'undo' | 'redo') => {
-    // アプリメニューは別ウィンドウ（脚本）にも付き、accelerator はここに届く。フォーカスのないこのウィンドウの store は触らない
-    if (!document.hasFocus()) return
+    // アプリメニューは別ウィンドウ（脚本）にも付き、accelerator はここに届く。フォーカスのないこのウィンドウの store は触らず、フォーカスのあるウィンドウへ event で渡す
+    if (!document.hasFocus()) {
+      await emit(EDIT_EVENT, name)
+      return
+    }
     // メニューの accelerator が Cmd+Z を取るので、入力欄の中では入力欄自身の取り消しを呼び直す
     if (isEditable(document.activeElement)) {
       document.execCommand(name)
@@ -132,7 +141,7 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
         text: recentLabel(f.path),
         action: run(
           (reason) => m.web_menu_open_failed({ reason }),
-          () => openPath(f.path),
+          whenFocused(() => openPath(f.path)),
         ),
       })),
       separator,
@@ -210,19 +219,19 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
             {
               text: m.web_menu_open(),
               accelerator: 'CmdOrCtrl+O',
-              action: run((reason) => m.web_menu_open_failed({ reason }), openDialog),
+              action: run((reason) => m.web_menu_open_failed({ reason }), whenFocused(openDialog)),
             },
             { text: m.web_menu_recent(), items: recentItems() },
             separator,
             {
               text: m.save(),
               accelerator: 'CmdOrCtrl+S',
-              action: run((reason) => m.web_menu_save_failed({ reason }), saveCurrent),
+              action: run((reason) => m.web_menu_save_failed({ reason }), whenFocused(saveCurrent)),
             },
             {
               text: m.web_menu_save_as(),
               accelerator: 'CmdOrCtrl+Shift+S',
-              action: run((reason) => m.web_menu_save_failed({ reason }), saveAs),
+              action: run((reason) => m.web_menu_save_failed({ reason }), whenFocused(saveAs)),
             },
             separator,
             isMac ? predefined('CloseWindow') : predefined('Quit'),

@@ -1,4 +1,5 @@
 import type { ID } from '@manga/schema'
+import { listen } from '@tauri-apps/api/event'
 import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow'
 
 /** tauri.conf.json の最初のウィンドウのラベル */
@@ -10,6 +11,16 @@ export const MAIN_WINDOW = 'main'
  */
 export const scriptWindowLabel = (episodeId: ID): string =>
   `script-${episodeId.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+
+/** メインのウィンドウがフォーカスのないまま受けた Undo / Redo を、フォーカスのあるウィンドウへ渡す event。payload は `'undo' | 'redo'` */
+export const EDIT_EVENT = 'desktop-edit'
+
+/** 脚本のウィンドウで、メニューの Undo / Redo を入力欄自身の取り消しとして実行する。フォーカスのないウィンドウは何もしない */
+export async function listenEdit(): Promise<void> {
+  await listen<'undo' | 'redo'>(EDIT_EVENT, (e) => {
+    if (document.hasFocus()) document.execCommand(e.payload)
+  })
+}
 
 /** このページを載せているのがメインのウィンドウか。アプリメニューはメインのウィンドウだけが張る */
 export const isMainWindow = (): boolean => getCurrentWebviewWindow().label === MAIN_WINDOW
