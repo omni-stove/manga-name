@@ -247,3 +247,32 @@ export function ExportDialog({
     </Dialog>
   )
 }
+
+if (import.meta.vitest) {
+  const { describe, expect, test, vi } = import.meta.vitest
+  const { renderToStaticMarkup } = await import('react-dom/server')
+
+  const html = (folder?: ExportFolder) =>
+    renderToStaticMarkup(
+      <ExportDialog
+        pages={[]}
+        currentIndex={0}
+        dpi={350}
+        folder={folder}
+        onCancel={vi.fn()}
+        onExport={vi.fn()}
+        onExportProject={vi.fn()}
+      />,
+    )
+
+  describe('ExportDialog', () => {
+    test('offers the folder checkbox only when a folder is given', () => {
+      expect(html({ path: '/sync/a', onChoose: vi.fn() })).toContain(m.web_export_to_folder())
+      expect(html()).not.toContain(m.web_export_to_folder())
+    })
+
+    test('shows the folder only after the checkbox is checked', () => {
+      expect(html({ path: null, onChoose: vi.fn() })).not.toContain(m.web_export_choose_folder())
+    })
+  })
+}
