@@ -37,6 +37,7 @@ import {
   type Patch,
   type Project,
   pageCharacterIds,
+  pageSizeOf,
   panelCharacterIds,
 } from '@manga/schema'
 import { detectPlatform } from '@manga/storage'
@@ -423,7 +424,7 @@ export function PageEditor({
       const result = pastePatch(current.page, clip.element, {
         panelId: panelOf(current.page, selected),
         sameProject: clip.projectId === projectId,
-        pageSize: p.settings.pageSize,
+        pageSize: pageSizeOf(current.page, p.settings.pageSize),
       })
       if (!result) throw new Error(m.web_editor_paste_no_panel())
       pasted = result.selection
@@ -525,7 +526,7 @@ export function PageEditor({
       if (!current) throw new Error(m.web_common_page_gone())
       const { patch, ...counts } = convertSketchPatch(
         current.page,
-        p.settings.pageSize,
+        pageSizeOf(current.page, p.settings.pageSize),
         p.settings.direction,
       )
       // 何も変えない変換を Undo の履歴に積まない
@@ -993,7 +994,7 @@ export function PageEditor({
                   store={store}
                   page={page}
                   pageId={pageId}
-                  pageSize={project.settings.pageSize}
+                  pageSize={pageSizeOf(page, project.settings.pageSize)}
                   diagnosis={diagnosis}
                   llmProvider={llmProvider}
                   canEdit={canEdit}

@@ -16,11 +16,12 @@ import type { Selection } from './types'
 
 /**
  * コピーした要素。フキダシ、焦点、ベクトルはコマ内座標なので、元のコマの id と rect も持つ。
- * rect は別のコマへ貼ったときにページ上の大きさを保つのに使う
+ * rect は別のコマへ貼ったときにページ上の大きさを保つのに使う。
+ * spread はコピー元が見開きか。rect の正規化座標の基準が 1 ページ幅か 2 ページ幅かで変わる
  */
 export type CopiedElement =
-  | { kind: 'panel'; panel: Panel }
-  | { kind: 'bubble'; bubble: Bubble; panelId: ID; panelRect: Rect }
+  | { kind: 'panel'; panel: Panel; spread: boolean }
+  | { kind: 'bubble'; bubble: Bubble; panelId: ID; panelRect: Rect; spread: boolean }
   | { kind: 'focus'; focus: FocusPoint; panelId: ID }
   | { kind: 'vector'; vector: Vector; panelId: ID }
 
@@ -37,13 +38,19 @@ export function copyElement(page: Page, selection: Selection): CopiedElement | n
   if (selection === null) return null
   for (const panel of page.panels) {
     if (selection.kind === 'panel' && panel.id === selection.id) {
-      return { kind: 'panel', panel: structuredClone(panel) }
+      return { kind: 'panel', panel: structuredClone(panel), spread: !!page.spread }
     }
     const at = { panelId: panel.id }
     if (selection.kind === 'bubble') {
       const bubble = panel.bubbles.find((b) => b.id === selection.id)
       if (bubble)
-        return { kind: 'bubble', bubble: structuredClone(bubble), ...at, panelRect: panel.rect }
+        return {
+          kind: 'bubble',
+          bubble: structuredClone(bubble),
+          ...at,
+          panelRect: panel.rect,
+          spread: !!page.spread,
+        }
     }
     if (selection.kind === 'focus') {
       const focus = panel.focusPoints.find((f) => f.id === selection.id)
@@ -83,6 +90,10 @@ const shifted = (p: Point, dx: number, dy: number): Point => ({
   x: round(clamp(p.x + dx, 0, 1)),
   y: round(clamp(p.y + dy, 0, 1)),
 })
+
+/** コピー元の正規化した横幅を貼り先のページの基準に直す倍率 */
+const widthScale = (fromSpread: boolean, to: Pick<Page, 'spread'>) =>
+  (fromSpread ? 2 : 1) / (to.spread ? 2 : 1)
 
 export interface PasteOptions {
   /** フキダシ、焦点、ベクトルを貼るコマ。無いかページに無ければコピー元のコマ、それも無ければ読み順で最初のコマ */
@@ -156,7 +167,13 @@ export function pastePatch(
 ): { patch: Patch; selection: NonNullable<Selection> } | null {
   if (copied.kind === 'panel') {
     const { locked: _, ...source } = renewPanel(copied.panel, opts.sameProject)
-    const { rect } = source
+    // 横の正規化座標は紙面の幅が基準なので、コピー元と貼り先で見開きかどうかが違えば換算する
+    const scale = widthScale(copied.spread, page)
+    const w = Math.min(1, source.rect.w * scale)
+    const rect = { ...source.rect, w, x: Math.min(source.rect.x * scale, 1 - w) }
+    // 多角形のコマは輪郭を shape で描くので、rect と同じ換算をかけないと枠と絵がずれる
+    const offset = rect.x - source.rect.x * scale
+    const shape = source.shape?.map((p) => ({ ...p, x: round(clamp(p.x * scale + offset, 0, 1)) }))
     const { dx, dy } = freeShift(
       (dx, dy) =>
         page.panels.some((p) => near(p.rect.x, rect.x + dx) && near(p.rect.y, rect.y + dy)),
@@ -164,6 +181,7 @@ export function pastePatch(
     )
     const panel: Panel = {
       ...source,
+      ...(shape && { shape }),
       order: Math.max(0, ...page.panels.map((p) => p.order)) + 1,
       rect: { ...rect, x: round(rect.x + dx), y: round(rect.y + dy) },
     }
@@ -191,7 +209,7 @@ export function pastePatch(
       (dx, dy) => panel.bubbles.some((b) => samePoint(b.pos, shifted(source.pos, dx, dy))),
       { x: 1, y: 1, at: source.pos },
     )
-    const from = copied.panelRect
+    const from = { ...copied.panelRect, w: copied.panelRect.w * widthScale(copied.spread, page) }
     const moved: Bubble = {
       ...source,
       id: newId(),
@@ -309,6 +327,30 @@ if (import.meta.vitest) {
       expect(pasted.rect).not.toMatchObject({ x: source.rect.x, y: source.rect.y })
     })
 
+    test('a panel pasted between a single page and a spread keeps its width in mm', () => {
+      const source = page.panels[0] as Panel
+      const shaped: Panel = {
+        ...source,
+        rect: { x: 0.1, y: 0.1, w: 0.4, h: 0.3 },
+        shape: [
+          { x: 0.1, y: 0.1 },
+          { x: 0.5, y: 0.1 },
+          { x: 0.1, y: 0.4 },
+        ],
+      }
+      const spread: Page = { ...page, spread: true, panels: [] }
+      const result = pastePatch(spread, { kind: 'panel', panel: shaped, spread: false }, opts)
+      const pasted = apply(spread, result?.patch ?? []).panels.at(-1) as Panel
+      expect(pasted.rect.w).toBeCloseTo(0.2)
+      expect(pasted.shape?.map((p) => p.x)).toEqual([0.05, 0.25, 0.05])
+      const back = pastePatch(
+        { ...page, panels: [] },
+        { kind: 'panel', panel: pasted, spread: true },
+        opts,
+      )
+      expect((back?.patch[0]?.value as Panel | undefined)?.rect.w).toBeCloseTo(0.4)
+    })
+
     test('a panel pasted into another project drops its art and character references', () => {
       const source = page.panels.find((p) => p.bubbles.some((b) => b.speakerId))
       if (!source) throw new Error('fixture に話者のあるフキダシがない')
@@ -327,6 +369,7 @@ if (import.meta.vitest) {
         bubble: { ...bubble, locked: true },
         panelId: 'pn_3',
         panelRect: page.panels[2]?.rect as Rect,
+        spread: false,
       }
       const same = paste(copied)
       const inSame = same.page.panels[2]?.bubbles.at(-1) as Bubble
@@ -369,6 +412,7 @@ if (import.meta.vitest) {
         bubble,
         panelId: 'pn_3',
         panelRect: page.panels[2]?.rect as Rect,
+        spread: false,
       }
       expect(pastePatch({ ...page, panels: [] }, copied, opts)).toBeNull()
     })

@@ -10,6 +10,7 @@ import {
   type Panel,
   type Patch,
   type Project,
+  pageSizeOf,
 } from '@manga/schema'
 import { lineBubbles } from './page-plan'
 import { pagePatch } from './project-ops'
@@ -66,6 +67,7 @@ export function layoutRequest(panels: readonly NamePanel[]): LayoutSuggestionReq
  * 居ない話し手は落とし、空のセリフは捨てる。ネームより枠が多ければ余りの枠は空のままにする
  */
 export function suggestedPanels(
+  page: Pick<Page, 'spread'>,
   option: LayoutOption,
   name: readonly NamePanel[],
   settings: Pick<Project['settings'], 'direction' | 'pageSize'>,
@@ -75,6 +77,7 @@ export function suggestedPanels(
   const frames = createRowPanels(
     option.rows.map((row) => ({ height: row.height, widths: row.panels.map((p) => p.width) })),
     settings.direction,
+    page,
   )
   return frames.map((frame, i) => {
     const source = name[i]
@@ -90,7 +93,7 @@ export function suggestedPanels(
           ...line,
           ...(speakerId !== undefined && known(speakerId) && { speakerId }),
         })),
-        settings,
+        { ...settings, pageSize: pageSizeOf(page, settings.pageSize) },
       ),
     }
   })
@@ -104,7 +107,7 @@ export function suggestedPage(
   settings: Pick<Project['settings'], 'direction' | 'pageSize'>,
   characters: readonly Character[],
 ): Page {
-  return { ...page, panels: suggestedPanels(option, name, settings, characters) }
+  return { ...page, panels: suggestedPanels(page, option, name, settings, characters) }
 }
 
 const nameKey = (pageId: ID) => `manga.name.${pageId}`
@@ -198,7 +201,7 @@ if (import.meta.vitest) {
   })
 
   test('suggestedPanels puts the name panels into the frames in reading order', () => {
-    const panels = suggestedPanels(option, name, project.settings, project.characters)
+    const panels = suggestedPanels({}, option, name, project.settings, project.characters)
     expect(panels.map((p) => p.order)).toEqual(name.map((_, i) => i + 1))
     expect(panels.map((p) => p.note)).toEqual(name.map((p) => p.note))
     expect(panels.map((p) => p.camera)).toEqual(name.map((p) => p.camera))
@@ -217,7 +220,7 @@ if (import.meta.vitest) {
       ...project,
       episodes: [...project.episodes, { id: newId(), title: '', pages: [page] }],
     })
-    const panels = suggestedPanels(option, name, project.settings, project.characters)
+    const panels = suggestedPanels(page, option, name, project.settings, project.characters)
     const patch = replacePanelsPatch(base, page.id, panels)
     expect(patch).toEqual([
       {
@@ -243,7 +246,7 @@ if (import.meta.vitest) {
   test('suggestedPanels leaves the frames past the name empty', () => {
     const [first] = name
     if (!first) throw new Error('fixture has no name panel')
-    const panels = suggestedPanels(option, [first], project.settings, project.characters)
+    const panels = suggestedPanels({}, option, [first], project.settings, project.characters)
     expect(panels).toHaveLength(name.length)
     expect(panels.slice(1).every((p) => p.note === undefined && p.bubbles.length === 0)).toBe(true)
   })

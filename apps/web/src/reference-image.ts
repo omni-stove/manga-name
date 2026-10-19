@@ -403,7 +403,7 @@ if (import.meta.vitest) {
   })
 
   describe('referencePatch', () => {
-    const page: Page = { id: 'p', side: 'single', panels: [], scribbles: [] }
+    const page: Page = { id: 'p', panels: [], scribbles: [] }
 
     test('a new reference is half transparent and visible', () => {
       expect(referencePatch(page, 'blob:a')).toEqual([

@@ -5,6 +5,7 @@ import {
   convexHull,
   createBubble,
   INNER_FRAME,
+  innerFrameOf,
   intersectPolygons,
   newId,
   type Page,
@@ -168,7 +169,7 @@ export interface SketchConversion {
  * 丸い図形は中心を含むコマのフキダシにする。中心を含むコマが重なっていれば枠ありのコマに入れる。セリフは空のままで、しっぽは付けない。
  * コマを足したら order を読む順に振り直し、フキダシの order はコマ内の既存の次から、rtl なら右上、ltr なら左上から振る。
  * 変換した線は下描きから消し、文字や絵のように閉じていない線、小さい線、どのコマにも入らない図形は残す。
- * pageSize はページの大きさ（mm）
+ * pageSize は紙面の大きさ（mm、pageSizeOf）
  */
 export function convertSketchPatch(
   page: Page,
@@ -186,8 +187,9 @@ export function convertSketchPatch(
     // 外側のコマを先に作り、その中に描いた四角をナレーションとして拾えるようにする
     .sort((a, b) => b.shape.box.w * b.shape.box.h - a.shape.box.w * a.shape.box.h)
 
-  const xs = [0, 1, INNER_FRAME.x, INNER_FRAME.x + INNER_FRAME.w]
-  const ys = [0, 1, INNER_FRAME.y, INNER_FRAME.y + INNER_FRAME.h]
+  const frame = innerFrameOf(page)
+  const xs = [0, 1, frame.x, frame.x + frame.w]
+  const ys = [0, 1, frame.y, frame.y + frame.h]
   for (const p of page.panels) {
     xs.push(p.rect.x, p.rect.x + p.rect.w)
     ys.push(p.rect.y, p.rect.y + p.rect.h)
