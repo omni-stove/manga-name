@@ -180,6 +180,7 @@ const PanelView = memo(function PanelView({
       <clipPath id={clipId}>
         <polygon points={points} />
       </clipPath>
+      {panel.fill === 'black' && <polygon points={points} fill="#000" data-panel-fill="black" />}
       {artRef === undefined ? (
         placeholder
       ) : (
@@ -204,6 +205,7 @@ const PanelView = memo(function PanelView({
           height={height}
           selected={bubble.id === selectedBubble}
           clipId={clipId}
+          onBlack={panel.fill === 'black'}
         />
       ))}
       <polygon
@@ -527,6 +529,7 @@ const BubbleView = memo(function BubbleView({
   height,
   selected,
   clipId,
+  onBlack = false,
 }: {
   bubble: Bubble
   panelRect: Rect
@@ -534,6 +537,8 @@ const BubbleView = memo(function BubbleView({
   height: number
   selected: boolean
   clipId?: string
+  /** 黒塗りのコマの中。白い地を持たないフキダシのセリフを白で描く */
+  onBlack?: boolean
 }) {
   const panel = panelBox({ rect: panelRect }, width, height)
   const g = bubbleGeometry(bubble, panel)
@@ -579,7 +584,7 @@ const BubbleView = memo(function BubbleView({
             fontFamily={FONT_FAMILY}
             fontSize={layout.fontSize}
             textAnchor="middle"
-            fill="#000"
+            fill={onBlack && !paths.fill ? '#fff' : '#000'}
             data-truncated={layout.truncated || undefined}
           >
             {layout.columns.map((column, i) => (

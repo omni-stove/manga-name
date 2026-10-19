@@ -109,6 +109,17 @@ export function PanelInspector({
         delayMs={DEBOUNCE_MS}
         onCommit={(v) => onChange(optionalString('/note', panel.note, v))}
       />
+      <Checkbox
+        label={m.panel_fill_black()}
+        checked={panel.fill === 'black'}
+        onChange={(e) =>
+          onChange(
+            e.target.checked
+              ? [{ op: 'add', path: '/fill', value: 'black' }]
+              : [{ op: 'remove', path: '/fill' }],
+          )
+        }
+      />
       <CastSection panel={panel} characters={characters} onChange={onChange} />
       {diagnosis && !diagnosis.bubbleOrderOk && (
         <p className={styles.hint} data-bubble-order-ok={false}>
@@ -539,6 +550,33 @@ if (import.meta.vitest) {
         order.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
       })
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/order', value: 3 }])
+    })
+
+    test('the black checkbox adds and removes fill', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = {
+        characters: project.characters,
+        onChange,
+        onGenerate: () => {},
+        resolveAsset,
+      }
+      const checkboxIn = (container: HTMLElement) =>
+        must(
+          [...container.querySelectorAll('label')]
+            .find((el) => el.textContent === m.panel_fill_black())
+            ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+        )
+      const { container, root } = await render(<PanelInspector panel={samplePanel} {...props} />)
+      expect(checkboxIn(container).checked).toBe(false)
+      await act(async () => checkboxIn(container).click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/fill', value: 'black' }])
+
+      await act(async () =>
+        root.render(<PanelInspector panel={{ ...samplePanel, fill: 'black' }} {...props} />),
+      )
+      expect(checkboxIn(container).checked).toBe(true)
+      await act(async () => checkboxIn(container).click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/fill' }])
     })
 
     test('the generate buttons call onGenerate with and without an instruction', async () => {

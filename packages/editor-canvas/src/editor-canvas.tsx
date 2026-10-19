@@ -705,6 +705,27 @@ if (import.meta.vitest) {
       expect(first.textContent).toContain('ガラス結晶の森')
     })
 
+    test('a black panel is filled black and the dialogue of an unpainted bubble in it is white', async () => {
+      const [pn1, ...rest] = samplePage.panels as [Panel, ...Panel[]]
+      const bubble = BubbleSchema.parse({
+        id: 'bb_black',
+        order: 9,
+        text: '……',
+        shape: 'none',
+        pos: { x: 0.5, y: 0.5 },
+        size: { w: 0.3, h: 0.5 },
+      })
+      const page = {
+        ...samplePage,
+        panels: [{ ...pn1, fill: 'black' as const, bubbles: [bubble] }, ...rest],
+      }
+      const svg = await render({ page })
+      expect(svg.querySelector('[data-panel-id="pn_1"] [data-panel-fill="black"]')).not.toBeNull()
+      expect(svg.querySelector('[data-panel-id="pn_2"] [data-panel-fill]')).toBeNull()
+      const text = must(svg.querySelector('[data-bubble-id="bb_black"] text[writing-mode]'))
+      expect(text.getAttribute('fill')).toBe('#fff')
+    })
+
     test('the selected panel gets a guide-coloured frame', async () => {
       const svg = await render({ selection: { kind: 'panel', id: 'pn_2' } })
       const frame = must(

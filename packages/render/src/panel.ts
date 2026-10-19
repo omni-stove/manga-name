@@ -44,6 +44,15 @@ export function withClip(ctx: Ctx, outline: readonly PxPoint[], draw: () => void
   ctx.restore()
 }
 
+/** 輪郭 outline の内側を黒で塗る。黒塗りのコマの地 */
+export function fillBlack(ctx: Ctx, outline: readonly PxPoint[]): void {
+  ctx.save()
+  ctx.fillStyle = '#000'
+  tracePolygon(ctx, outline)
+  ctx.fill()
+  ctx.restore()
+}
+
 export function drawFrame(ctx: Ctx, outline: readonly PxPoint[], lineWidth: number): void {
   ctx.save()
   ctx.lineWidth = lineWidth
@@ -204,6 +213,12 @@ if (import.meta.vitest) {
     expect(at(80, 50)).toEqual([0, 0, 0])
     expect(at(50, 50)).toEqual(GREY)
     expect(at(10, 50)).toEqual(GREY)
+  })
+
+  test('fillBlack paints the inside of the outline black and leaves the outside alone', async () => {
+    const { at } = await paint(100, 100, (ctx) => fillBlack(ctx, triangle))
+    expect(at(10, 10)).toEqual([0, 0, 0])
+    expect(at(80, 80)).toEqual(GREY)
   })
 
   describe('drawCover', () => {

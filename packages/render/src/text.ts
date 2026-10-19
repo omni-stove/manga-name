@@ -110,18 +110,19 @@ export function layoutBubbleText(
   return { lines: breakLines(paragraphs, Math.max(1, Math.floor(size.h / min))), fontPx: min }
 }
 
-/** 行割り済みの縦書きを、箱の中央に右の行から左へ描く */
+/** 行割り済みの縦書きを、箱の中央に右の行から左へ color で描く */
 export function drawVerticalText(
   ctx: CanvasRenderingContext2D,
   lines: string[][],
   fontPx: number,
   box: PxRect,
+  color = '#000',
 ): void {
   ctx.save()
   ctx.font = `${fontPx}px "${FONT_FAMILY}"`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
-  ctx.fillStyle = '#000'
+  ctx.fillStyle = color
   const pitch = fontPx * COLUMN_PITCH
   const right = box.x + box.w / 2 + blockWidth(lines.length, fontPx) / 2
   lines.forEach((line, column) => {
