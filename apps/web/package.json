@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prepare": "tsr generate",
     "build": "vite build",
     "preview": "vite preview",
     "size": "vite build && node scripts/bundle-size.ts",
@@ -45,6 +46,7 @@
     "@inlang/paraglide-js": "^2.29.0",
     "@manga/api": "workspace:*",
     "@rolldown/plugin-babel": "^0.2.4",
+    "@tanstack/router-cli": "^1.167.45",
     "@tanstack/router-plugin": "^1.168.46",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",

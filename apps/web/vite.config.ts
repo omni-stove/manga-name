@@ -6,14 +6,10 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  // ルートファイルを変換するため、router プラグインは react より前に置く
+  // ルートファイルを変換するため、router プラグインは react より前に置く。
+  // 設定は install 時の tsr generate と共有するため tsr.config.json に置く
   plugins: [
-    tanstackRouter({
-      target: 'react',
-      autoCodeSplitting: false,
-      quoteStyle: 'single',
-      semicolons: false,
-    }),
+    tanstackRouter(),
     react(),
     // plugin-react の compiler オプションは Rust 移植で experimental なので、安定版の Babel プラグインを使う。
     // コンパイルできないコンポーネントは黙って最適化から外れ、Biome の useReactCompiler も構文の未対応は拾わないので、ビルドを落とす。
