@@ -20,7 +20,7 @@ import { createLlmProvider } from './llm-provider'
 import { createProjectLibrary } from './project-library'
 import { errorMessage } from './route-error'
 import { createAppRouter } from './router'
-import { createSharingClient } from './sharing'
+import { createSharingClient, readAppOrigin } from './sharing'
 import { createTabSync } from './store/tab-sync'
 import { SyncStatusProvider } from './sync-status'
 import { toasts } from './toasts'
@@ -69,6 +69,7 @@ const sharing = createSharingClient({
   baseUrl,
   fetch: auth.fetch,
   cloudId: async (id) => (await cloud?.cloudId(id)) ?? null,
+  appOrigin: readAppOrigin(platform),
 })
 // 本番の同期サーバにつなぐのは別タスクなので、e2e のビルドだけ同じブラウザのタブ同士でつなぐ
 const library = createProjectLibrary(storage, {
