@@ -376,6 +376,21 @@ describe('CharacterInspector', () => {
     expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/shortName', value: 'L' }])
   })
 
+  test('titles an unnamed character with the untitled label', async () => {
+    const { container } = await render(
+      <CharacterInspector
+        character={{ ...character, name: '' }}
+        onChange={() => {}}
+        onPickReference={() => {}}
+        onGenerateReference={() => {}}
+        resolveAsset={resolveAsset}
+      />,
+    )
+    expect(must(container.querySelector('[data-inspector="character"]')).textContent).toContain(
+      m.inspector_character_untitled(),
+    )
+  })
+
   test('appearance and note are debounced, and clearing appearance removes it', async () => {
     vi.useFakeTimers()
     const onChange = vi.fn<(patch: Patch) => void>()
@@ -562,6 +577,16 @@ describe('FocusInspector', () => {
     expect(must(container.querySelector('dl')).textContent).not.toContain(
       m.inspector_focus_reason(),
     )
+
+    for (const [status, label] of [
+      ['ok', m.focus_status_ok()],
+      ['miss', m.focus_status_miss()],
+    ] as const) {
+      await act(async () =>
+        root.render(<FocusInspector {...props} diagnosis={{ ...withoutReason, status }} />),
+      )
+      expect(must(container.querySelector('[data-status]')).textContent).toBe(label)
+    }
   })
 })
 
@@ -789,5 +814,31 @@ describe('PageInspector', () => {
       `[${m.issue_severity_error()}] 読み順が逆`,
       `[${m.issue_severity_warning()}] 焦点が弱い`,
     ])
+  })
+
+  test('labels a matching reading order as ok and an info issue by its severity', async () => {
+    const diagnosis: PageDiagnosis = {
+      pageId: page.id,
+      readingOrderOk: true,
+      inferredOrder: [],
+      panels: [],
+      bubbleChain: [],
+      summary: { total: 0, ok: 0, weak: 0, miss: 0 },
+      issues: [{ severity: 'info', code: 'READING_ORDER', message: '補足' }],
+    }
+    const { container } = await render(
+      <PageInspector
+        page={page}
+        diagnosis={diagnosis}
+        onChange={() => {}}
+        onGenerateAll={() => {}}
+        onPickReference={() => {}}
+      />,
+    )
+    const dl = must(container.querySelector('dl'))
+    expect(must(dl.querySelector('[data-ok]')).textContent).toBe(
+      m.inspector_page_reading_order_ok(),
+    )
+    expect(must(dl.querySelector('li')).textContent).toBe(`[${m.issue_severity_info()}] 補足`)
   })
 })
