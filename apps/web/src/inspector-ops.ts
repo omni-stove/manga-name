@@ -1,10 +1,12 @@
+import { compactOrderOps } from '@manga/editor-canvas'
 import { m } from '@manga/i18n'
 import type { Bubble, FocusPoint, ID, Page, Panel, Patch, Project, Vector } from '@manga/schema'
 import { findPage } from './project-ops'
 
 /**
  * Inspector が出す「要素 root」の JSON Patch を Project root 基準に付け替える。
- * `replace /order` は、同じ order を持つ兄弟と入れ替える Patch を足す（order はページ内・コマ内で一意のため）
+ * `replace /order` は、同じ order を持つ兄弟と入れ替える Patch を足す（order はページ内・コマ内で一意のため）。
+ * コマの order を空いた番号にしたときは、抜けた番号を詰め直す
  */
 
 const prefixed = (prefix: string, patch: Patch): Patch =>
@@ -78,6 +80,23 @@ const pagePrefix = (project: Project, pageId: ID) => {
   return { page: found.page, prefix: `/episodes/${found.episodeIndex}/pages/${found.pageIndex}` }
 }
 
+/** 空いた番号への `replace /order` を当てた後の order の抜けを詰める Patch */
+function orderGaps(
+  base: string,
+  items: readonly { order: number }[],
+  self: number,
+  patch: Patch,
+): Patch {
+  const op = patch.findLast((op) => op.op === 'replace' && op.path === '/order')
+  if (op?.op !== 'replace' || typeof op.value !== 'number') return []
+  const value = op.value
+  if (items.some((item, i) => i !== self && item.order === value)) return []
+  return compactOrderOps(
+    base,
+    items.map((item, i) => ({ order: i === self ? value : item.order })),
+  )
+}
+
 /** Panel root の Patch を Project root に。無いコマなら throw */
 export function panelPatch(project: Project, pageId: ID, panelId: ID, patch: Patch): Patch {
   const { page, prefix } = pagePrefix(project, pageId)
@@ -87,6 +106,7 @@ export function panelPatch(project: Project, pageId: ID, panelId: ID, patch: Pat
   return [
     ...prefixed(`${base}/${found.panelIndex}`, patch),
     ...orderSwaps(base, page.panels, found.panelIndex, patch),
+    ...orderGaps(base, page.panels, found.panelIndex, patch),
   ]
 }
 
@@ -194,11 +214,14 @@ if (import.meta.vitest) {
       expect(orders[0]).toBe(3)
     })
 
-    test('replace /order to a free order swaps nothing', () => {
+    test('replace /order to a free order moves the panel last and closes the gap', () => {
       const patch = panelPatch(sample, pageId, panelOf(0).id, [
         { op: 'replace', path: '/order', value: 99 },
       ])
-      expect(patch).toHaveLength(1)
+      const store = storeOf()
+      store.applyPatch(patch)
+      const orders = store.get().episodes[0]?.pages[0]?.panels.map((p) => p.order) ?? []
+      expect(orders).toEqual([6, 1, 2, 3, 4, 5])
     })
 
     test('throws for an unknown page or panel', () => {

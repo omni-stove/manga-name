@@ -976,10 +976,10 @@ if (import.meta.vitest) {
     test('Delete emits a remove patch rooted at the page and clears the selection', async () => {
       const onChange = vi.fn()
       const onSelect = vi.fn()
-      const svg = await render({ onChange, onSelect, selection: { kind: 'panel', id: 'pn_2' } })
+      const svg = await render({ onChange, onSelect, selection: { kind: 'panel', id: 'pn_6' } })
       const e = key(svg, { key: 'Delete' })
       expect(e.defaultPrevented).toBe(true)
-      expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/panels/1' }])
+      expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/panels/5' }])
       expect(onSelect).toHaveBeenCalledWith(null)
     })
 
