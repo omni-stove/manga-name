@@ -125,7 +125,7 @@ if (import.meta.vitest) {
   describe('startFileDrop', () => {
     test('a dropped project file is opened like the Open menu, ahead of other files', async () => {
       const importReference = openEditor()
-      const win =await setup()
+      const win = await setup()
       win.drop('/w/ref.png', '/w/作品.manga.json', '/w/b.manga.json')
       await vi.waitFor(() => expect(win.openPath).toHaveBeenCalled())
       expect(win.openPath).toHaveBeenCalledExactlyOnceWith('/w/作品.manga.json')
@@ -134,7 +134,7 @@ if (import.meta.vitest) {
     })
 
     test('a project file that cannot be opened shows the same toast as the Open menu', async () => {
-      const win =await setup()
+      const win = await setup()
       win.openPath.mockRejectedValueOnce(new Error('JSON として読めません'))
       win.drop('C:\\w\\broken.MANGA.JSON')
       await vi.waitFor(() =>
@@ -144,7 +144,7 @@ if (import.meta.vitest) {
 
     test('an image dropped on the page editor becomes the reference image', async () => {
       const importReference = openEditor()
-      const win =await setup({ '/w/ラフ.WebP': [1, 2, 3] })
+      const win = await setup({ '/w/ラフ.WebP': [1, 2, 3] })
       win.drop('/w/ラフ.WebP')
       await vi.waitFor(() => expect(importReference).toHaveBeenCalledOnce())
       const [file] = importReference.mock.calls[0] as [File]
@@ -156,14 +156,14 @@ if (import.meta.vitest) {
 
     test('a PDF is passed on with its MIME type', async () => {
       const importReference = openEditor()
-      const win =await setup({ '/w/name.pdf': [37] })
+      const win = await setup({ '/w/name.pdf': [37] })
       win.drop('/w/name.pdf')
       await vi.waitFor(() => expect(importReference).toHaveBeenCalledOnce())
       expect((importReference.mock.calls[0] as [File])[0].type).toBe('application/pdf')
     })
 
     test('an image dropped outside the page editor is not read and tells where to drop it', async () => {
-      const win =await setup({ '/w/a.jpg': [1] })
+      const win = await setup({ '/w/a.jpg': [1] })
       win.drop('/w/a.jpg')
       await vi.waitFor(() =>
         expect(win.toastMessages()).toEqual([
@@ -175,7 +175,7 @@ if (import.meta.vitest) {
 
     test('an image that cannot be read shows a toast', async () => {
       const importReference = openEditor()
-      const win =await setup()
+      const win = await setup()
       win.drop('/w/gone.png')
       await vi.waitFor(() =>
         expect(win.toastMessages()).toEqual(['参考画像を読み込めません: no such file']),
@@ -185,7 +185,7 @@ if (import.meta.vitest) {
 
     test('other files are refused with a toast and nothing is opened or read', async () => {
       const importReference = openEditor()
-      const win =await setup()
+      const win = await setup()
       win.drop('/w/memo.txt')
       win.drop('/w/Makefile')
       await vi.waitFor(() => expect(win.toastMessages()).toHaveLength(2))
@@ -198,7 +198,7 @@ if (import.meta.vitest) {
     })
 
     test('dragging over the window, leaving it or dropping nothing does nothing', async () => {
-      const win =await setup()
+      const win = await setup()
       win.emit('tauri://drag-enter', { paths: ['/w/a.manga.json'], position: { x: 0, y: 0 } })
       win.emit('tauri://drag-over', { position: { x: 1, y: 1 } })
       win.emit('tauri://drag-leave', null)
