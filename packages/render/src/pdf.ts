@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { type ID, type Page, type PageSlot, type Project, pageSlots } from '@manga/schema'
 import {
   concatTransformationMatrix,
@@ -267,7 +268,12 @@ async function renderNotesSheets(
   for (const panel of [...page.panels].sort((a, b) => a.order - b.order)) {
     blocks.push({ text: '', indent: 0 })
     blocks.push({
-      text: [String(panel.order), panel.camera && `[${panel.camera}]`].filter(Boolean).join('  '),
+      text: [
+        String(panel.order),
+        panel.camera && `[${m[`panel_camera_${panel.camera}` as const]()}]`,
+      ]
+        .filter(Boolean)
+        .join('  '),
       indent: 0,
       bold: true,
     })

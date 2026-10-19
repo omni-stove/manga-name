@@ -1074,7 +1074,7 @@ function ElementOutline({
                 onClick={() => onSelect({ kind: 'panel', id: panel.id })}
               >
                 {m.web_editor_outline_panel({ order: panel.order })}
-                {panel.camera && ` [${panel.camera}]`}
+                {panel.camera && ` [${m[`panel_camera_${panel.camera}` as const]()}]`}
               </button>
               {badges(by)}
               {panel.bubbles.length > 0 && (

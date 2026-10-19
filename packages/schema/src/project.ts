@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 13 as const
+export const SCHEMA_VERSION = 14 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -94,6 +94,15 @@ export const FocusPointSchema = z.object({
 })
 
 export const VectorKindSchema = z.enum(['gaze', 'motion', 'speed'])
+/** コマの画面の切り取り方。画面には messages/schema の `panel_camera_<値>` で出す */
+export const CameraSchema = z.enum([
+  'long',
+  'middle',
+  'bust',
+  'close_up',
+  'low_angle',
+  'high_angle',
+])
 export const StrengthSchema = z.enum(['strong', 'weak'])
 
 export const VectorSchema = z.object({
@@ -147,7 +156,7 @@ const PanelBaseSchema = z.object({
   frame: z.enum(['none']).optional(),
   bubbles: z.array(BubbleSchema),
   note: z.string().optional(),
-  camera: z.string().optional(),
+  camera: CameraSchema.optional(),
   arts: z.array(PanelArtSchema),
   artId: IdSchema.optional(),
   focusPoints: z.array(FocusPointSchema),
@@ -299,6 +308,7 @@ export type Sweep = z.infer<typeof SweepSchema>
 export type FocusKind = z.infer<typeof FocusKindSchema>
 export type FocusPoint = z.infer<typeof FocusPointSchema>
 export type VectorKind = z.infer<typeof VectorKindSchema>
+export type Camera = z.infer<typeof CameraSchema>
 export type Strength = z.infer<typeof StrengthSchema>
 export type Vector = z.infer<typeof VectorSchema>
 export type ReferenceImage = z.infer<typeof ReferenceImageSchema>

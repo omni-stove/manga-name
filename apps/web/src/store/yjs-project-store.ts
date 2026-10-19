@@ -1,4 +1,4 @@
-import { PatchSchema, type Project, ProjectSchema, parseProject } from '@manga/schema'
+import { migrate, PatchSchema, type Project, ProjectSchema, parseProject } from '@manga/schema'
 import {
   applyPatches,
   enablePatches,
@@ -11,7 +11,7 @@ import { createStore } from 'zustand/vanilla'
 import { toImmerPatch } from './json-patch'
 import type { ProjectStoreOptions, ProjectStoreState, WebProjectStore } from './project-store-types'
 import { createSaveScheduler } from './save-scheduler'
-import { applyPatchToY, applyYEvents, writeYMap } from './yjs-mapping'
+import { applyPatchToY, applyYEvents, writeYChanges, writeYMap } from './yjs-mapping'
 
 enablePatches()
 
@@ -21,7 +21,7 @@ export const PROJECT_ROOT = 'project'
 export interface YjsProjectStoreOptions extends ProjectStoreOptions {
   /** Project を置く Y.Doc。既に Project を持っていればそれを起点にし、`initial` は使わない。省略時は新しく作る */
   doc?: Y.Doc
-  /** 古い版の Y.Doc を開いたとき版を書き戻すか。既定 true。サーバが版の変更を許さないロールでは false にして、読むだけにする */
+  /** 古い版の Y.Doc を開いたとき、移行した版と内容を書き戻すか。既定 true。サーバが版の変更を許さないロールでは false にして、読むだけにする */
   writeBackVersion?: boolean
 }
 
@@ -68,7 +68,9 @@ export function createYjsProjectStore(
     const stored = root.toJSON()
     project = parseProject(stored)
     if (writeBackVersion && stored.schemaVersion !== project.schemaVersion) {
-      doc.transact(() => root.set('schemaVersion', project.schemaVersion), untracked)
+      // ProjectSchema が読み捨てる古いキーまで消さないよう、parse 前の移行結果との差だけを書く
+      const migrated = migrate(stored) as Record<string, unknown>
+      doc.transact(() => writeYChanges(root, stored, migrated), untracked)
     }
   }
 
@@ -242,6 +244,44 @@ if (import.meta.vitest) {
       doc.getMap(PROJECT_ROOT).set('title', 1)
       const create = () => createYjsProjectStore(createEmptyProject('t'), { ...options(), doc })
       expect(create).toThrow()
+    })
+
+    test('an older doc is migrated, and written back only when the role may write', () => {
+      const old = () => {
+        const project = createEmptyProject('t')
+        const json = structuredClone(project) as unknown as Record<string, unknown>
+        const panel = { id: 'pn', order: 1, rect: { x: 0, y: 0, w: 1, h: 1 } }
+        const empty = { bubbles: [], focusPoints: [], vectors: [], arts: [] }
+        const page = {
+          id: 'pg',
+          side: 'single',
+          scribbles: [],
+          panels: [{ ...panel, ...empty, camera: 'ロング' }],
+        }
+        const doc = new Y.Doc()
+        writeYMap(doc.getMap(PROJECT_ROOT), {
+          ...json,
+          schemaVersion: 12,
+          episodes: [{ id: 'ep', title: '', pages: [page] }],
+        })
+        return doc
+      }
+      const panelOf = (doc: Y.Doc) =>
+        (doc.getMap(PROJECT_ROOT).toJSON() as Project).episodes[0]?.pages[0]?.panels[0]
+
+      const writer = createYjsProjectStore(createEmptyProject('x'), { ...options(), doc: old() })
+      expect(writer.get().episodes[0]?.pages[0]?.panels[0]?.camera).toBe('long')
+      expect(writer.doc.getMap(PROJECT_ROOT).get('schemaVersion')).toBe(14)
+      expect(panelOf(writer.doc)?.camera).toBe('long')
+
+      const reader = createYjsProjectStore(createEmptyProject('x'), {
+        ...options(),
+        doc: old(),
+        writeBackVersion: false,
+      })
+      expect(reader.get().episodes[0]?.pages[0]?.panels[0]?.camera).toBe('long')
+      expect(reader.doc.getMap(PROJECT_ROOT).get('schemaVersion')).toBe(12)
+      expect(panelOf(reader.doc)?.camera).toBe('ロング')
     })
 
     test('changes reach the other client and notify its subscribers', () => {

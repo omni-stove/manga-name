@@ -1,4 +1,5 @@
-import { cornerAnchor } from '@manga/schema'
+import { m } from '@manga/i18n'
+import { type Camera, cornerAnchor } from '@manga/schema'
 import { FONT_FAMILY } from './backend'
 import type { PxPoint, PxRect } from './geometry'
 import { alphabeticY, wrapHorizontal } from './text'
@@ -69,7 +70,7 @@ export function drawFrame(ctx: Ctx, outline: readonly PxPoint[], lineWidth: numb
  */
 export function drawPlaceholder(
   ctx: Ctx,
-  panel: { order: number; camera?: string; note?: string },
+  panel: { order: number; camera?: Camera; note?: string },
   rect: PxRect,
   outline: readonly PxPoint[],
   fontPx: number,
@@ -89,7 +90,9 @@ export function drawPlaceholder(
   const lineHeight = fontPx * 1.4
   let y = rect.y + pad + numberPx * 1.3
   const bottom = rect.y + rect.h - pad
-  const text = [panel.camera && `[${panel.camera}]`, panel.note].filter(Boolean).join('\n')
+  const text = [panel.camera && `[${m[`panel_camera_${panel.camera}` as const]()}]`, panel.note]
+    .filter(Boolean)
+    .join('\n')
   for (const line of wrapHorizontal(ctx, text, rect.w - pad * 2)) {
     if (y + lineHeight > bottom) break
     ctx.fillText(line, rect.x + pad, alphabeticY(y, fontPx, 'top'))
@@ -127,7 +130,7 @@ export function drawPanelNumber(
 /** 余白のメモ。コマ番号と camera の行、続けて note を横書きで列挙する */
 export function drawNotesMargin(
   ctx: Ctx,
-  panels: { order: number; camera?: string; note?: string }[],
+  panels: { order: number; camera?: Camera; note?: string }[],
   area: PxRect,
   fontPx: number,
 ): void {
@@ -144,7 +147,9 @@ export function drawNotesMargin(
   let y = area.y + pad
   for (const panel of panels) {
     ctx.font = `bold ${fontPx}px "${FONT_FAMILY}"`
-    const head = [String(panel.order), panel.camera].filter(Boolean).join(' ')
+    const head = [String(panel.order), panel.camera && m[`panel_camera_${panel.camera}` as const]()]
+      .filter(Boolean)
+      .join(' ')
     for (const line of wrapHorizontal(ctx, head, area.w - pad * 2)) {
       ctx.fillText(line, area.x + pad, alphabeticY(y, fontPx, 'top'))
       y += lineHeight
@@ -254,7 +259,7 @@ if (import.meta.vitest) {
   })
 
   describe('drawPlaceholder', () => {
-    const panel = { order: 3, camera: 'ロング', note: 'ガラス結晶の森を歩く。'.repeat(20) }
+    const panel = { order: 3, camera: 'long' as const, note: 'ガラス結晶の森を歩く。'.repeat(20) }
 
     test('writes the order and the text inside the outline only', async () => {
       const rect = { x: 0, y: 0, w: 100, h: 100 }
@@ -298,9 +303,9 @@ if (import.meta.vitest) {
 
   test('drawNotesMargin writes every panel inside the margin and clips the rest', async () => {
     const panels = [
-      { order: 1, camera: 'ロング', note: 'ガラス結晶の森' },
+      { order: 1, camera: 'long' as const, note: 'ガラス結晶の森' },
       { order: 2, note: '見上げる' },
-      { order: 3, camera: 'アップ', note: '新芽。'.repeat(80) },
+      { order: 3, camera: 'close_up' as const, note: '新芽。'.repeat(80) },
     ]
     const area = { x: 100, y: 0, w: 60, h: 120 }
     const { darkPixels } = await paint(200, 160, (ctx) => drawNotesMargin(ctx, panels, area, 8))

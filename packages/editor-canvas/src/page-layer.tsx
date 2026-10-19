@@ -390,7 +390,7 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
         {error && (
           <div style={{ color: 'var(--alert)' }}>{m.editor_canvas_panel_image_load_failed()}</div>
         )}
-        {panel.camera && <div>[{panel.camera}]</div>}
+        {panel.camera && <div>[{m[`panel_camera_${panel.camera}` as const]()}]</div>}
         {panel.note && <div>{panel.note}</div>}
       </div>
     </foreignObject>
