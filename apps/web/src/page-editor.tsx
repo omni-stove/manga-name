@@ -67,6 +67,7 @@ import {
 import { CollaborationBar, PeerBadge, peerColor, usePeers } from './collaboration-view'
 import { previewPage } from './critique'
 import { CritiquePanel } from './critique-panel'
+import { chooseExportFolder, loadExportFolder, writePageFiles } from './desktop/export-folder'
 import { receiveDroppedReference } from './dropped-reference'
 import { ExportDialog, type ExportSettings } from './export-dialog'
 import { exportFileName, pageExporter } from './export-page'
@@ -328,6 +329,11 @@ export function PageEditor({
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
+  const desktop = detectPlatform() === 'desktop'
+  // 読み込みを待つ間に別のプロジェクトへ移っても前のプロジェクトのフォルダへ書かないよう、どのプロジェクトのものかを持つ
+  const [loadedFolder, setLoadedFolder] = useState<{ projectId: ID; path: string | null }>()
+  /** Desktop でこのプロジェクトの書き出し先として覚えているフォルダ。選んだことが無ければ null */
+  const exportFolder = loadedFolder?.projectId === projectId ? loadedFolder.path : null
   const [inspectorExpanded, setInspectorExpanded] = useStoredFlag('manga.inspector.expanded', true)
   const [scriptExpanded, setScriptExpanded] = useStoredFlag('manga.script.expanded', true)
   const [menu, setMenu] = useState<OpenMenu | null>(null)
@@ -392,6 +398,13 @@ export function PageEditor({
     collab?.presence.setLocation({ pageId, selection: selectedId ? [selectedId] : [] })
   }, [collab, pageId, selectedId])
   useEffect(() => () => collab?.presence.setLocation({ pageId: null, selection: [] }), [collab])
+  useEffect(() => {
+    if (!desktop) return
+    loadExportFolder(projectId).then(
+      (path) => setLoadedFolder({ projectId, path }),
+      (e: unknown) => toasts.push(m.web_export_folder_failed({ reason: errorMessage(e) })),
+    )
+  }, [desktop, projectId])
 
   // 開いている間に Undo や別タブの操作でページが消えることがある
   if (!found) return <PageNotFound />
@@ -411,33 +424,54 @@ export function PageEditor({
     set: (panelId, use) => generation.setUseHint(projectId, panelId, use),
   }
   // ダイアログは先に閉じ、描いている間も編集できるようにする。終わればダウンロードか保存先の選択が始まる
-  const exportPages = async ({ format, from, to, dpi, ...opts }: ExportSettings) => {
+  const exportPages = async ({ format, from, to, dpi, toFolder, ...opts }: ExportSettings) => {
     const total = to - from + 1
     const numbers = Array.from({ length: total }, (_, i) => from + i)
     const ext = format === 'pdf' ? 'pdf' : total === 1 ? 'png' : 'zip'
+    const width = Math.round((project.settings.pageSize.w / MM_PER_INCH) * dpi)
+    const onProgress = (done: number) => setExporting({ done, total })
+    const render = async (pageIds: ID[], progress?: (done: number) => void) =>
+      pageExporter.run(
+        await collectExportJob(
+          project,
+          episode.id,
+          pageIds,
+          format,
+          { ...opts, width },
+          library.loadAsset,
+        ),
+        progress,
+      )
+    const saveToFile = async () =>
+      saveFile(
+        await render(
+          episode.pages.slice(from - 1, to).map((p) => p.id),
+          onProgress,
+        ),
+        exportFileName(project.title, numbers, ext),
+        [{ name: ext.toUpperCase(), extensions: [ext] }],
+      )
+    const saveToFolder = async (folder: string) => {
+      await writePageFiles(
+        folder,
+        numbers,
+        (number) => render(episode.pages.slice(number - 1, number).map((p) => p.id)),
+        onProgress,
+      )
+      return folder
+    }
+    const folder = toFolder ? exportFolder : null
+    const write = folder ? () => saveToFolder(folder) : saveToFile
     setExporting({ done: 0, total })
     /** 保存したパス。書き出せなければ undefined */
     let path: string | null | undefined
     try {
-      const pageIds = episode.pages.slice(from - 1, to).map((p) => p.id)
-      const width = Math.round((project.settings.pageSize.w / MM_PER_INCH) * dpi)
-      const job = await collectExportJob(
-        project,
-        episode.id,
-        pageIds,
-        format,
-        { ...opts, width },
-        library.loadAsset,
-      )
-      const blob = await pageExporter.run(job, (done) => setExporting({ done, total }))
-      path = await saveFile(blob, exportFileName(project.title, numbers, ext), [
-        { name: ext.toUpperCase(), extensions: [ext] },
-      ])
+      path = await write()
     } catch (e) {
       toasts.push(m.web_page_export_failed({ reason: errorMessage(e) }))
     }
     setExporting('closed')
-    // React Compiler は try の中の条件式を扱えないので、try を出てから見る。
+    // React Compiler は try の中の条件式を扱えないので、書き出し先は try の前に選び、結果は try を出てから見る。
     // Web は常に null を返すので、保存先の選択を閉じたかどうかは Desktop でだけ分かる
     if (path !== undefined && (path !== null || detectPlatform() === 'web')) onExport?.()
   }
@@ -522,6 +556,14 @@ export function PageEditor({
       : menuTarget
         ? [...elementMenuItems(menuTarget, menuContext), 'separator' as const, ...undoItems]
         : pageMenuItems,
+  }
+  const chooseFolder = () => {
+    chooseExportFolder(projectId, exportFolder).then(
+      (path) => {
+        if (path !== null) setLoadedFolder({ projectId, path })
+      },
+      (e: unknown) => toasts.push(m.web_export_folder_failed({ reason: errorMessage(e) })),
+    )
   }
   const exportProject = () => {
     setExporting('closed')
@@ -699,6 +741,7 @@ export function PageEditor({
           pages={episode.pages}
           currentIndex={pageIndex}
           dpi={project.settings.dpi}
+          folder={desktop ? { path: exportFolder, onChoose: chooseFolder } : undefined}
           onCancel={() => setExporting('closed')}
           onExport={(settings) => void exportPages(settings)}
           onExportProject={exportProject}
