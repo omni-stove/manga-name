@@ -57,6 +57,8 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
   }
 
   const command = async (name: 'undo' | 'redo') => {
+    // アプリメニューは別ウィンドウ（脚本）にも付き、accelerator はここに届く。フォーカスのないこのウィンドウの store は触らない
+    if (!document.hasFocus()) return
     // メニューの accelerator が Cmd+Z を取るので、入力欄の中では入力欄自身の取り消しを呼び直す
     if (isEditable(document.activeElement)) {
       document.execCommand(name)
@@ -354,7 +356,7 @@ if (import.meta.vitest) {
     vi.stubGlobal('navigator', { userAgent })
     vi.stubGlobal('HTMLElement', FakeElement)
     const execCommand = vi.fn()
-    vi.stubGlobal('document', { activeElement: null, execCommand })
+    vi.stubGlobal('document', { activeElement: null, execCommand, hasFocus: () => true })
 
     const stores = new Map(
       libraryProjects.map((p) => [p.id, { get: () => p, undo: vi.fn(), redo: vi.fn() }]),
@@ -538,6 +540,7 @@ if (import.meta.vitest) {
       vi.stubGlobal('document', {
         activeElement: new FakeElement('INPUT'),
         execCommand: shell.execCommand,
+        hasFocus: () => true,
       })
       shell.click('編集', '取り消す')
       await vi.waitFor(() => expect(shell.execCommand).toHaveBeenCalledWith('undo'))
