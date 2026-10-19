@@ -39,6 +39,7 @@ import {
   pageCharacterIds,
   pageSizeOf,
   panelCharacterIds,
+  stripRuby,
 } from '@manga/schema'
 import { detectPlatform } from '@manga/storage'
 import {
@@ -1118,7 +1119,7 @@ function ElementOutline({
                           >
                             {m.web_editor_outline_bubble({
                               order: bubble.order,
-                              text: bubble.text || m.empty(),
+                              text: stripRuby(bubble.text) || m.empty(),
                             })}
                           </button>
                           {badges(byBubble)}
@@ -1245,7 +1246,10 @@ function SelectionInspector({
         ...found.panel.bubbles.map((b) => ({
           value: b.id,
           label: m
-            .web_editor_vector_target_bubble({ order: b.order, text: b.text.split('\n')[0] ?? '' })
+            .web_editor_vector_target_bubble({
+              order: b.order,
+              text: stripRuby(b.text).split('\n')[0] ?? '',
+            })
             .trim(),
         })),
       ]}

@@ -42,6 +42,7 @@ export function BubbleInspector({ bubble, characters, onChange }: BubbleInspecto
         value={bubble.text}
         rows={4}
         delayMs={DEBOUNCE_MS}
+        placeholder={m.inspector_bubble_text_placeholder()}
         onCommit={(v) => v !== bubble.text && onChange(replace('/text', v))}
       />
       <SelectField

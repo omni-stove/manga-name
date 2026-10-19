@@ -1,5 +1,12 @@
 import { m } from '@manga/i18n'
-import { type ID, type Page, type PageSlot, type Project, pageSlots } from '@manga/schema'
+import {
+  type ID,
+  type Page,
+  type PageSlot,
+  type Project,
+  pageSlots,
+  stripRuby,
+} from '@manga/schema'
 import {
   concatTransformationMatrix,
   drawObject,
@@ -280,7 +287,7 @@ async function renderNotesSheets(
     if (panel.note) blocks.push({ text: panel.note, indent: 1 })
     for (const bubble of [...panel.bubbles].sort((a, b) => a.order - b.order)) {
       const speaker = bubble.speakerId ? names.get(bubble.speakerId) : undefined
-      blocks.push({ text: `${speaker ?? '—'}「${bubble.text}」`, indent: 1 })
+      blocks.push({ text: `${speaker ?? '—'}「${stripRuby(bubble.text)}」`, indent: 1 })
     }
   }
 
