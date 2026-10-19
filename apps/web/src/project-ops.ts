@@ -38,7 +38,7 @@ export function findPage(project: Project, pageId: ID): PageLocation | undefined
 /** page を root とした JSON Patch を Project root 基準に付け替える。無いページなら throw */
 export function pagePatch(project: Project, pageId: ID, patch: Patch): Patch {
   const found = findPage(project, pageId)
-  if (!found) throw new Error(`page ${pageId} is not in project ${project.id}`)
+  if (!found) throw new Error(m.web_common_page_gone())
   const prefix = `/episodes/${found.episodeIndex}/pages/${found.pageIndex}`
   return patch.map((op) => ({ ...op, path: `${prefix}${op.path}` }))
 }
@@ -102,7 +102,7 @@ export function addLayoutTemplatePatch(
   name: string,
 ): { patch: Patch; template: LayoutTemplate } {
   const found = findPage(project, pageId)
-  if (!found) throw new Error(`page ${pageId} is not in project ${project.id}`)
+  if (!found) throw new Error(m.web_common_page_gone())
   if (found.page.panels.length === 0) throw new Error(m.web_template_no_panels())
   if (!name.trim()) throw new Error(m.web_name_required())
   const template = createLayoutTemplate(found.page, name)
@@ -329,7 +329,11 @@ if (import.meta.vitest) {
       const { patch, page } = addPagePatch(store.get(), '3rows')
       store.applyPatch(patch)
       expect(store.get().episodes).toEqual([
-        { id: expect.any(String), title: '第1話', pages: [page] },
+        {
+          id: expect.any(String),
+          title: m.web_episode_default_title({ number: 1 }),
+          pages: [page],
+        },
       ])
       expect(page.panels).toHaveLength(6)
     })
@@ -344,7 +348,7 @@ if (import.meta.vitest) {
       const [a, b] = store.get().episodes
       expect(a?.pages.map((p) => p.panels.length)).toEqual([6, 4])
       expect(b?.pages.map((p) => p.panels.length)).toEqual([0])
-      expect(b?.title).toBe('第2話')
+      expect(b?.title).toBe(m.web_episode_default_title({ number: 2 }))
       expect(() => addPagePatch(store.get(), 'blank', 'nope')).toThrow()
     })
 
@@ -389,7 +393,7 @@ if (import.meta.vitest) {
       store.applyPatch(renameEpisodePatch(store.get(), episode.id, ' 出会い '))
       expect(store.get().episodes[0]?.title).toBe('出会い')
       expect(renameEpisodePatch(store.get(), episode.id, '出会い')).toEqual([])
-      expect(() => renameEpisodePatch(store.get(), episode.id, ' ')).toThrow('名前')
+      expect(() => renameEpisodePatch(store.get(), episode.id, ' ')).toThrow(m.web_name_required())
       expect(() => renameEpisodePatch(store.get(), 'nope', 'x')).toThrow()
       store.undo()
       expect(store.get().episodes[0]?.title).toBe(episode.title)
@@ -443,7 +447,9 @@ if (import.meta.vitest) {
       store.applyPatch(removeLayoutTemplatePatch(store.get(), second.template.id))
       expect(store.get().layoutTemplates).toBeUndefined()
       expect(removeLayoutTemplatePatch(store.get(), second.template.id)).toEqual([])
-      expect(() => resolveTemplate(store.get(), first.template.id)).toThrow('見つかりません')
+      expect(() => resolveTemplate(store.get(), first.template.id)).toThrow(
+        m.web_template_not_found(),
+      )
     })
 
     test('refuses a page without panels and an empty name', () => {
@@ -452,8 +458,12 @@ if (import.meta.vitest) {
       store.applyPatch(addPagePatch(store.get(), 'blank').patch)
       const blank = store.get().episodes[0]?.pages[0]
       if (!blank) throw new Error('page を足せていない')
-      expect(() => addLayoutTemplatePatch(store.get(), blank.id, 'a')).toThrow('コマが無い')
-      expect(() => addLayoutTemplatePatch(sample, firstPage().id, ' ')).toThrow('名前')
+      expect(() => addLayoutTemplatePatch(store.get(), blank.id, 'a')).toThrow(
+        m.web_template_no_panels(),
+      )
+      expect(() => addLayoutTemplatePatch(sample, firstPage().id, ' ')).toThrow(
+        m.web_name_required(),
+      )
       expect(() => addLayoutTemplatePatch(sample, page.id, 'a')).toThrow()
     })
   })
@@ -478,14 +488,18 @@ if (import.meta.vitest) {
           referenceRef: 'asset:a',
         },
       ])
-      expect(() => addCharacterPatch({ name: '', shortName: 'x' })).toThrow('名前')
-      expect(() => addCharacterPatch({ name: 'x', shortName: ' ' })).toThrow('略称')
+      expect(() => addCharacterPatch({ name: '', shortName: 'x' })).toThrow(m.web_name_required())
+      expect(() => addCharacterPatch({ name: 'x', shortName: ' ' })).toThrow(
+        m.web_short_name_required(),
+      )
     })
 
     test('remove refuses a character that is still referenced', () => {
       const used = sample.characters.find((c) => characterUsage(sample, c.id) > 0)
       if (!used) throw new Error('fixture に参照されているキャラクターがない')
-      expect(() => removeCharacterPatch(sample, used.id)).toThrow('削除できません')
+      expect(() => removeCharacterPatch(sample, used.id)).toThrow(
+        m.web_character_used_in_panels({ count: characterUsage(sample, used.id) }),
+      )
 
       const store = storeOf(createEmptyProject('t'))
       const { patch, character } = addCharacterPatch({ name: 'A', shortName: 'A' })
@@ -502,7 +516,9 @@ if (import.meta.vitest) {
         { op: 'add', path: '/episodes/0/pages/0/panels/0/cast', value: [character.id] },
       ])
       expect(characterUsage(store.get(), character.id)).toBe(1)
-      expect(() => removeCharacterPatch(store.get(), character.id)).toThrow('削除できません')
+      expect(() => removeCharacterPatch(store.get(), character.id)).toThrow(
+        m.web_character_used_in_panels({ count: 1 }),
+      )
     })
 
     test('a character only in a page cast cannot be removed', () => {
@@ -513,7 +529,9 @@ if (import.meta.vitest) {
         { op: 'add', path: '/episodes/0/pages/0/cast', value: [character.id] },
       ])
       expect(characterUsage(store.get(), character.id)).toBe(0)
-      expect(() => removeCharacterPatch(store.get(), character.id)).toThrow('1 ページの登場キャラ')
+      expect(() => removeCharacterPatch(store.get(), character.id)).toThrow(
+        m.web_character_used_in_cast({ count: 1 }),
+      )
     })
   })
 
@@ -523,7 +541,7 @@ if (import.meta.vitest) {
       expect(pagePatch(sample, page.id, [{ op: 'remove', path: '/panels/1' }])).toEqual([
         { op: 'remove', path: '/episodes/0/pages/0/panels/1' },
       ])
-      expect(() => pagePatch(sample, 'nope', [])).toThrow('page')
+      expect(() => pagePatch(sample, 'nope', [])).toThrow(m.web_common_page_gone())
     })
 
     test('a Delete from the canvas comes back with Undo', () => {

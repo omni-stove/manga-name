@@ -199,7 +199,7 @@ export function ExportDialog({
             />
           )}
           <Input
-            label="dpi"
+            label={m.web_dpi()}
             error={dpiError}
             type="number"
             min={72}

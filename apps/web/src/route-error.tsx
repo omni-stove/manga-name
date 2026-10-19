@@ -1,5 +1,6 @@
+import { SignInRequiredError } from '@manga/ai'
 import { m } from '@manga/i18n'
-import { ApiError } from '@manga/schema'
+import { ApiError, HttpError } from '@manga/schema'
 import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { type ErrorComponentProps, Link, useRouter } from '@tanstack/react-router'
 import { apiErrorMessage } from './api-error-message'
@@ -28,12 +29,15 @@ const hasIssues = (error: unknown): error is { issues: IssueLike[] } =>
   typeof error === 'object' && error !== null && 'issues' in error && Array.isArray(error.issues)
 
 /**
- * 画面に出すエラー文。workers/api の ApiError は code に対応する文言にする。
+ * 画面に出すエラー文。workers/api の ApiError は code に対応する文言に、SignInRequiredError はログインを促す文言に、
+ * 本文が ApiErrorBody でない HttpError は状態コードを添えた文言にする。
  * ZodError は JSON の塊を message に持つので、issue ごとに「パス: 理由」の行にする。
  * zod に依存しないよう `issues` の有無で見分ける
  */
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return apiErrorMessage(error)
+  if (error instanceof SignInRequiredError) return m.web_sign_in_required()
+  if (error instanceof HttpError) return m.web_http_error({ status: error.status })
   if (hasIssues(error)) {
     return error.issues
       .map((issue) => `${issue.path.map(String).join('.') || '(root)'}: ${issue.message}`)
@@ -52,8 +56,11 @@ if (import.meta.vitest) {
     expect(errorMessage(result.error)).toMatch(/^title: /)
     expect(errorMessage(new Error('x'))).toBe('x')
     expect(errorMessage('y')).toBe('y')
+    expect(errorMessage(new HttpError(502, '<h1>Bad Gateway</h1>', 'GET'))).toBe(
+      m.web_http_error({ status: 502 }),
+    )
     expect(errorMessage(new ApiError(403, { code: 'owner_only' }, 'PUT member'))).toBe(
-      '参加者の管理はオーナーだけができます',
+      m.api_error_owner_only(),
     )
   })
 }

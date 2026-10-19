@@ -62,7 +62,7 @@ if (import.meta.vitest) {
   })
 
   test('rejects text that is not JSON or not a project', () => {
-    expect(() => parseProjectFile('{')).toThrow('JSON として読めません')
+    expect(() => parseProjectFile('{')).toThrow(m.web_project_file_invalid_json())
     expect(() => parseProjectFile('{"project": {"schemaVersion": 1}}')).toThrow()
     expect(() => parseProjectFile('[]')).toThrow()
   })

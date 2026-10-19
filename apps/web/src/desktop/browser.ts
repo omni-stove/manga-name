@@ -31,7 +31,7 @@ if (import.meta.vitest) {
       ['plugin:opener|open_url', { url: 'https://api.test/v1/desktop-sign-in', with: undefined }],
     ])
     expect(toasts.state.getState().toasts).toMatchObject([
-      { kind: 'info', message: expect.stringContaining('ブラウザ') },
+      { kind: 'info', message: m.web_auth_continue_in_browser() },
     ])
   })
 

@@ -65,8 +65,11 @@ if (import.meta.vitest) {
       await notifyBatchDone(counts(5), () => false)
       await notifyBatchDone(counts(4, 2), () => false)
       expect(sent).toEqual([
-        { title: 'Manga Name', body: '5 コマの生成が終わりました' },
-        { title: 'Manga Name', body: '4 コマの生成が終わり、2 コマが失敗しました' },
+        { title: 'Manga Name', body: m.web_desktop_batch_done({ count: 5 }) },
+        {
+          title: 'Manga Name',
+          body: m.web_desktop_batch_done_with_failures({ count: 4, failed: 2 }),
+        },
       ])
     })
 

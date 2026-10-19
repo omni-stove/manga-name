@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
 import {
   clickInsidePanel,
@@ -13,12 +14,12 @@ test('コマを斜めの線で割ると 2 つの台形になり、頂点を動�
 }) => {
   await importProject(page, FIXTURE_PROJECT)
   await openPage(page, 1)
-  await selectTool(page, 'コマ')
+  await selectTool(page, m.panel())
   await clickInsidePanel(page, 0)
 
   const pn1 = await page.locator('[data-panel-id="pn_1"]').boundingBox()
   if (!pn1) throw new Error('pn_1 is not rendered')
-  await page.getByRole('button', { name: 'コマを線で分割' }).click()
+  await page.getByRole('button', { name: m.editor_canvas_panel_cut_aria() }).click()
   // 右上から左下へ、コマの外まで引く。線は伸ばして使うので端はコマの外でもよい
   await page.mouse.move(pn1.x + pn1.width * 0.6, pn1.y + pn1.height * 0.1)
   await page.mouse.down()

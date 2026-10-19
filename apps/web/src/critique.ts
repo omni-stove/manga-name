@@ -1,5 +1,6 @@
 import {
   type CritiquePatchCheck,
+  type CritiquePatchRejection,
   type CritiqueRequest,
   type CritiqueResponse,
   checkCritiquePatch,
@@ -103,6 +104,38 @@ function isApplied(page: Page, patch: Patch): boolean {
   })
 }
 
+/** checkCritiquePatch が提案を拒否した理由を、利用者に見せる文言にする */
+function rejectionMessage(rejection: CritiquePatchRejection): string {
+  switch (rejection.code) {
+    case 'rect':
+      return m.web_critique_reject_rect()
+    case 'empty':
+      return m.web_critique_reject_empty()
+    case 'vector_add_only':
+      return m.web_critique_reject_vector_add_only()
+    case 'replace_only':
+      return m.web_critique_reject_replace_only(rejection)
+    case 'missing_item':
+      return m.web_critique_reject_missing_item(rejection)
+    case 'locked':
+      return m.web_critique_reject_locked(rejection)
+    case 'not_point':
+      return m.web_critique_reject_not_point(rejection)
+    case 'missing_panel':
+      return m.web_critique_reject_missing_panel(rejection)
+    case 'index_out_of_range':
+      return m.web_critique_reject_index_out_of_range(rejection)
+    case 'not_vector':
+      return m.web_critique_reject_not_vector(rejection)
+    case 'vector_id_taken':
+      return m.web_critique_reject_vector_id_taken(rejection)
+    case 'vector_endpoint':
+      return m.web_critique_reject_vector_endpoint(rejection)
+    case 'not_allowed':
+      return m.web_critique_reject_not_allowed(rejection)
+  }
+}
+
 /**
  * 提案が今の page に対してどの状態か。フキダシの移動は枠に収まる位置へ直した patch にする。
  * pageSize はページの大きさ（mm）。すでに入っているかを先に見るのは、
@@ -116,7 +149,7 @@ export function suggestionState(
   const rooted = fitBubbleMoves(page, pageRootedPatch(suggestion.patch), pageSize)
   if (rooted.length > 0 && isApplied(page, rooted)) return { kind: 'applied', patch: rooted }
   const checked: CritiquePatchCheck = checkCritiquePatch(page, suggestion.patch)
-  if (!checked.ok) return { kind: 'rejected', reason: checked.reason }
+  if (!checked.ok) return { kind: 'rejected', reason: rejectionMessage(checked.rejection) }
   const patch = fitBubbleMoves(page, checked.patch, pageSize)
   if (!previewPage(page, patch)) {
     return { kind: 'rejected', reason: m.web_critique_inapplicable() }
@@ -239,12 +272,14 @@ if (import.meta.vitest) {
     test('状態は rejected で、理由に rect を含む', () => {
       const state = suggestionState(page, rectSuggestion, pageSize)
       expect(state.kind).toBe('rejected')
-      if (state.kind === 'rejected') expect(state.reason).toContain('rect')
+      if (state.kind === 'rejected') expect(state.reason).toBe(m.web_critique_reject_rect())
     })
 
     test('applySuggestion は throw し、store も履歴も変えない', () => {
       const store = setup()
-      expect(() => applySuggestion(store, pageId, rectSuggestion)).toThrow('rect')
+      expect(() => applySuggestion(store, pageId, rectSuggestion)).toThrow(
+        m.web_critique_reject_rect(),
+      )
       expect(store.get()).toBe(project)
       expect(store.state.getState().canUndo).toBe(false)
     })
@@ -254,7 +289,9 @@ if (import.meta.vitest) {
     const store = setup()
     const suggestion = aiFixtures.critique.suggestions[1] as Suggestion
     applySuggestion(store, pageId, suggestion)
-    expect(() => applySuggestion(store, pageId, suggestion)).toThrow('もう適用')
+    expect(() => applySuggestion(store, pageId, suggestion)).toThrow(
+      m.web_critique_already_applied(),
+    )
   })
 
   test('既存の id で中身の違うベクトルの追加は適用済みにせず、拒否する', () => {

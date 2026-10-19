@@ -191,7 +191,7 @@ export function createAuthClient(opts: AuthClientOptions): AuthClient {
           ...(inviteToken !== undefined && { additionalData: { inviteToken } }),
         }),
       })
-      if (!res.ok) throw new Error(`sign-in failed: ${res.status}`)
+      if (!res.ok) throw await readApiError(res, 'POST sign-in')
       const { url } = (await res.json()) as { url?: string }
       if (!url) throw new Error('sign-in failed: no redirect URL')
       navigate(url)
@@ -344,7 +344,7 @@ if (import.meta.vitest) {
       await client.restore()
       expect(client.getUser()).toBeNull()
       expect(await client.getToken()).toBeNull()
-      await expect(client.signIn()).rejects.toThrow('API の URL')
+      await expect(client.signIn()).rejects.toThrow(m.web_auth_api_url_missing())
       await client.signOut()
       expect(fetch).not.toHaveBeenCalled()
     })
@@ -495,19 +495,19 @@ if (import.meta.vitest) {
 
     test('completeSignIn fails on a used or expired token and stays signed out', async () => {
       const { client } = setup(() => new Response(null, { status: 400 }))
-      await expect(client.completeSignIn('ott')).rejects.toThrow('期限')
+      await expect(client.completeSignIn('ott')).rejects.toThrow(m.web_auth_sign_in_expired())
       expect(client.getUser()).toBeNull()
     })
 
     test('takeSignInError explains the error and drops it from the URL', () => {
       expect(takeSignInError(new URL('https://app.test/p/1?settings=1'))).toBeNull()
       const refused = takeSignInError(new URL('https://app.test/invite/t?error=invite_required'))
-      expect(refused?.message).toContain('招待リンク')
+      expect(refused?.message).toBe(m.web_sign_in_error_invite_required())
       expect(refused?.url.href).toBe('https://app.test/invite/t')
       const other = takeSignInError(
         new URL('https://app.test/?settings=1&error=access_denied&error_description=x'),
       )
-      expect(other?.message).toContain('access_denied')
+      expect(other?.message).toBe(m.web_sign_in_error_unknown({ code: 'access_denied' }))
       expect(other?.url.href).toBe('https://app.test/?settings=1')
     })
 
@@ -528,7 +528,7 @@ if (import.meta.vitest) {
       vi.stubGlobal('window', { location: { href: 'https://app.test/' } })
       const navigate = vi.fn()
       const failing = setup(() => new Response(null, { status: 500 }), { navigate })
-      await expect(failing.client.signIn()).rejects.toThrow('sign-in failed: 500')
+      await expect(failing.client.signIn()).rejects.toThrow('POST sign-in: 500')
       const empty = setup(() => new Response('{}'), { navigate })
       await expect(empty.client.signIn()).rejects.toThrow('no redirect URL')
       expect(navigate).not.toHaveBeenCalled()

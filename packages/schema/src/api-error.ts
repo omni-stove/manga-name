@@ -68,8 +68,20 @@ export class ApiError extends Error {
   }
 }
 
+/** 本文が ApiErrorBody でない失敗応答（プロキシの応答など）を受けたときに throw する */
+export class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    text: string,
+    what: string,
+  ) {
+    super(`${what}: ${status} ${text}`.trim())
+    this.name = 'HttpError'
+  }
+}
+
 /**
- * 失敗した応答を Error にする。本文が ApiErrorBody なら ApiError、そうでなければ（プロキシの応答など）本文を載せた Error。
+ * 失敗した応答を Error にする。本文が ApiErrorBody なら ApiError、そうでなければ本文を載せた HttpError。
  * what はメッセージの先頭に付ける、失敗した要求の説明
  */
 export async function readApiError(res: Response, what: string): Promise<Error> {
@@ -81,7 +93,7 @@ export async function readApiError(res: Response, what: string): Promise<Error> 
     body = undefined
   }
   if (isApiErrorBody(body)) return new ApiError(res.status, body, what)
-  return new Error(`${what}: ${res.status} ${text}`.trim())
+  return new HttpError(res.status, text, what)
 }
 
 if (import.meta.vitest) {
@@ -107,13 +119,13 @@ if (import.meta.vitest) {
     expect(error.message).toBe('POST: 400 invalid_request (bad)')
   })
 
-  test('an unknown code or a non-JSON body is a plain Error with the body text', async () => {
+  test('an unknown code or a non-JSON body is an HttpError with the body text', async () => {
     const unknown = await readApiError(json({ code: 'nope' }, 400), 'GET')
-    expect(unknown).not.toBeInstanceOf(ApiError)
+    expect(unknown).toBeInstanceOf(HttpError)
     expect(unknown.message).toBe('GET: 400 {"code":"nope"}')
 
     const html = await readApiError(new Response('<h1>Bad Gateway</h1>', { status: 502 }), 'GET')
-    expect(html).not.toBeInstanceOf(ApiError)
+    expect(html).toBeInstanceOf(HttpError)
     expect(html.message).toBe('GET: 502 <h1>Bad Gateway</h1>')
   })
 }

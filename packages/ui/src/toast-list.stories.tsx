@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn } from 'storybook/test'
 import { ToastList } from './toast-list'
@@ -34,7 +35,7 @@ export const Empty: Story = {
 // 押した閉じるボタンにフォーカスが残るので、見た目のストーリーとは分ける
 export const CloseCallsOnDismiss: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    const [, close] = canvas.getAllByRole('button', { name: '閉じる' })
+    const [, close] = canvas.getAllByRole('button', { name: m.close() })
     if (close) await userEvent.click(close)
     await expect(args.onDismiss).toHaveBeenCalledWith(2)
   },
