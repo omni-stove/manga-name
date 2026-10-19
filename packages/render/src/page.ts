@@ -1,4 +1,5 @@
 import {
+  bubbleOutline,
   bubbleTextBox,
   clipTextBox,
   currentArt,
@@ -16,6 +17,7 @@ import {
   drawNotesMargin,
   drawPanelNumber,
   drawPlaceholder,
+  fillBlack,
   withClip,
 } from './panel'
 import { drawVerticalText, layoutBubbleText } from './text'
@@ -82,7 +84,9 @@ export async function drawPage(
       const text = bubbleTextBox(bubble.shape, g)
       const box = clipTextBox(overflow ? text : clipTextBox(text, rect), innerRect)
       const { lines, fontPx } = layoutBubbleText(bubble.text, box, pageSize.w * MIN_FONT)
-      drawVerticalText(c, lines, fontPx, box)
+      // 白い地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
+      const onBlack = !overflow && panel.fill === 'black' && !bubbleOutline(bubble.shape, g).fill
+      drawVerticalText(c, lines, fontPx, box, onBlack ? '#fff' : '#000')
     }
   }
 
@@ -90,8 +94,11 @@ export async function drawPage(
     const rect = rectToPx(panel.rect, pageRect)
     const outline = panelOutline(panel).map((p) => pointToPx(p, pageRect))
     const image = arts[i]
+    if (panel.fill === 'black') fillBlack(c, outline)
     if (image) drawCover(c, image, rect, outline)
-    else drawPlaceholder(c, panel, rect, outline, pageSize.w * NOTE_FONT)
+    else if (panel.fill === undefined) {
+      drawPlaceholder(c, panel, rect, outline, pageSize.w * NOTE_FONT)
+    }
     if (opts.panelNumbers) {
       drawPanelNumber(c, panel.order, outline, pageSize.w * NOTE_FONT * 1.5)
     }
@@ -258,6 +265,42 @@ if (import.meta.vitest) {
       panelNumbers: true,
     })
     await matchPngSnapshot('page-shaped', png)
+  })
+
+  test('黒塗りのコマは輪郭の内側を黒で塗り、地の無いフキダシのセリフを白で描く', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const bubble = {
+      id: 'bb_black',
+      order: 1,
+      text: 'ーーーーーー',
+      shape: 'none' as const,
+      pos: { x: 0.5, y: 0.5 },
+      size: { w: 0.3, h: 0.8 },
+    }
+    const page: Page = {
+      ...emptyPage,
+      panels: [{ ...pn1, fill: 'black', bubbles: [bubble] }, ...rest],
+    }
+    const png = await renderPage(page, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    const { width, data } = await pixels(png)
+    const px = (p: { x: number; y: number }) => {
+      const at = (Math.round(p.y) * width + Math.round(p.x)) * 4
+      return [data[at], data[at + 1], data[at + 2]]
+    }
+    const rect = pn1.rect
+    const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+    const corner = { x: (rect.x + rect.w * 0.05) * width, y: (rect.y + rect.h * 0.9) * pageH }
+    expect(px(corner)).toEqual([0, 0, 0])
+    // 縦棒の長音を並べたセリフなので、箱の中央の列に白い画素がある
+    const cx = (rect.x + rect.w * 0.5) * width
+    const column = Array.from({ length: Math.round(rect.h * pageH * 0.3) }, (_, i) =>
+      px({ x: cx, y: (rect.y + rect.h * 0.35) * pageH + i }),
+    )
+    expect(column.some(([r]) => (r ?? 0) > 200)).toBe(true)
   })
 
   test('同じ入力で 2 回描くとバイト一致する', async () => {

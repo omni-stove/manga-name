@@ -98,7 +98,7 @@ interface BatchRequest {
   scope: string
   /** 対象のページ。並びの順に 1 ページ 1 回で生成する */
   pageIds: readonly ID[]
-  /** false なら絵の無いコマだけに絵を入れ、絵の無いコマが無いページは呼ばない */
+  /** false なら絵の無いコマだけに絵を入れ、絵の無いコマが無いページは呼ばない。黒塗りのコマはどちらでも入れない */
   includeGenerated: boolean
 }
 
@@ -508,7 +508,9 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
   const batchTargets = (project: Project, pageIds: readonly ID[], includeGenerated: boolean) =>
     pageIds.flatMap((pageId) => {
       const panelIds = (findPage(project, pageId)?.page.panels ?? [])
-        .filter((panel) => includeGenerated || panel.artId === undefined)
+        .filter(
+          (panel) => panel.fill === undefined && (includeGenerated || panel.artId === undefined),
+        )
         .map((panel) => panel.id)
       return panelIds.length > 0 ? [{ pageId, panelIds }] : []
     })
@@ -944,6 +946,14 @@ if (import.meta.vitest) {
 
       expect(await generation.generateAll(all(store, true))).toMatchObject({ done: 6 })
       expect(pagePanels(store).map((p) => p.arts.length)).toEqual([2, 2, 2, 2, 2, 2])
+    })
+
+    test('never fills a black panel, even with includeGenerated', async () => {
+      const { provider } = counting()
+      const { generation, store } = setup(provider)
+      store.applyPatch([{ op: 'add', path: '/episodes/0/pages/0/panels/0/fill', value: 'black' }])
+      expect(await generation.generateAll(all(store, true))).toMatchObject({ done: 5 })
+      expect(pagePanels(store).map((p) => p.arts.length)).toEqual([0, 1, 1, 1, 1, 1])
     })
 
     test('a panel being generated on its own is busy and gets no crop', async () => {
