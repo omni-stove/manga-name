@@ -171,6 +171,9 @@ export function pastePatch(
     const scale = widthScale(copied.spread, page)
     const w = Math.min(1, source.rect.w * scale)
     const rect = { ...source.rect, w, x: Math.min(source.rect.x * scale, 1 - w) }
+    // 多角形のコマは輪郭を shape で描くので、rect と同じ換算をかけないと枠と絵がずれる
+    const offset = rect.x - source.rect.x * scale
+    const shape = source.shape?.map((p) => ({ ...p, x: round(clamp(p.x * scale + offset, 0, 1)) }))
     const { dx, dy } = freeShift(
       (dx, dy) =>
         page.panels.some((p) => near(p.rect.x, rect.x + dx) && near(p.rect.y, rect.y + dy)),
@@ -178,6 +181,7 @@ export function pastePatch(
     )
     const panel: Panel = {
       ...source,
+      ...(shape && { shape }),
       order: Math.max(0, ...page.panels.map((p) => p.order)) + 1,
       rect: { ...rect, x: round(rect.x + dx), y: round(rect.y + dy) },
     }
@@ -321,6 +325,30 @@ if (import.meta.vitest) {
         linked?.sourceFocusId,
       )
       expect(pasted.rect).not.toMatchObject({ x: source.rect.x, y: source.rect.y })
+    })
+
+    test('a panel pasted between a single page and a spread keeps its width in mm', () => {
+      const source = page.panels[0] as Panel
+      const shaped: Panel = {
+        ...source,
+        rect: { x: 0.1, y: 0.1, w: 0.4, h: 0.3 },
+        shape: [
+          { x: 0.1, y: 0.1 },
+          { x: 0.5, y: 0.1 },
+          { x: 0.1, y: 0.4 },
+        ],
+      }
+      const spread: Page = { ...page, spread: true, panels: [] }
+      const result = pastePatch(spread, { kind: 'panel', panel: shaped, spread: false }, opts)
+      const pasted = apply(spread, result?.patch ?? []).panels.at(-1) as Panel
+      expect(pasted.rect.w).toBeCloseTo(0.2)
+      expect(pasted.shape?.map((p) => p.x)).toEqual([0.05, 0.25, 0.05])
+      const back = pastePatch(
+        { ...page, panels: [] },
+        { kind: 'panel', panel: pasted, spread: true },
+        opts,
+      )
+      expect((back?.patch[0]?.value as Panel | undefined)?.rect.w).toBeCloseTo(0.4)
     })
 
     test('a panel pasted into another project drops its art and character references', () => {

@@ -101,9 +101,9 @@ if (import.meta.vitest) {
       expect(brokenSpreads({ pages: [page('a'), page('b', true)] }, 'rtl')).toEqual([])
       expect(brokenSpreads({ pages: [page('b', true)] }, 'rtl')).toEqual(['b'])
       expect(brokenSpreads({ pages: [page('b', true)], startsRight: true }, 'rtl')).toEqual([])
-      expect(
-        brokenSpreads({ pages: [page('a'), page('b'), page('c', true)] }, 'rtl'),
-      ).toEqual(['c'])
+      expect(brokenSpreads({ pages: [page('a'), page('b'), page('c', true)] }, 'rtl')).toEqual([
+        'c',
+      ])
     })
 
     test('ltr: a spread must start on a left page', () => {
