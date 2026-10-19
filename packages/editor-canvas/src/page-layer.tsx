@@ -20,7 +20,7 @@ import { type AssetState, loadAsset } from './asset'
 import { type Box, bubbleGeometry, bubblePaths } from './bubble-shape'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
-import { COLUMN_PITCH, layoutVertical } from './vertical-text'
+import { layoutVertical, RUBY_SCALE } from './vertical-text'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
 /** 選択やコマ番号など、出力に出ない作業用の色。値は @manga/ui の tokens.css が持つ */
@@ -570,10 +570,10 @@ const BubbleView = memo(function BubbleView({
     panelBox({ rect: frame }, width, height),
   )
   const layout = layoutVertical(bubble.text, box)
-  const pitch = layout.fontSize * COLUMN_PITCH
-  const blockWidth =
-    layout.columns.length === 0 ? 0 : (layout.columns.length - 1) * pitch + layout.fontSize
-  const right = box.x + box.w / 2 + blockWidth / 2 - layout.fontSize / 2
+  const right = box.x + box.w / 2 + layout.width / 2
+  const fs = layout.fontSize
+  const rubySize = fs * RUBY_SCALE
+  const ink = onBlack && !paths.fill ? '#fff' : '#000'
   const shapes = paths.tail === null ? [paths.body] : [paths.tail, paths.body]
   const illegible =
     layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
@@ -600,21 +600,43 @@ const BubbleView = memo(function BubbleView({
         {paths.fill && shapes.map((d) => <path key={`fill-${d}`} d={d} fill="#fff" />)}
         {paths.ink !== null && <path d={paths.ink} fill="#000" />}
         {layout.columns.length > 0 && (
-          <text
-            writingMode="vertical-rl"
-            fontFamily={FONT_FAMILY}
-            fontSize={layout.fontSize}
-            textAnchor="middle"
-            fill={onBlack && !paths.fill ? '#fff' : '#000'}
-            data-truncated={layout.truncated || undefined}
-          >
-            {layout.columns.map((column, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
-              <tspan key={i} x={right - i * pitch} y={box.y + box.h / 2}>
-                {column}
-              </tspan>
-            ))}
-          </text>
+          <>
+            <text
+              writingMode="vertical-rl"
+              fontFamily={FONT_FAMILY}
+              fontSize={fs}
+              textAnchor="middle"
+              fill={ink}
+              data-truncated={layout.truncated || undefined}
+            >
+              {layout.columns.map((column, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
+                <tspan key={i} x={right - column.offset} y={box.y + box.h / 2}>
+                  {column.text}
+                </tspan>
+              ))}
+            </text>
+            {layout.columns.flatMap((column, i) => {
+              // 列は中央揃えで、字は 1 字が文字サイズ 1 つぶんの高さとみなす
+              const top = box.y + box.h / 2 - (column.length * fs) / 2
+              return column.rubies.map((ruby) => (
+                <text
+                  // biome-ignore lint/suspicious/noArrayIndexKey: ルビは列と列の中の位置で決まる
+                  key={`${i}-${ruby.start}`}
+                  writingMode="vertical-rl"
+                  fontFamily={FONT_FAMILY}
+                  fontSize={rubySize}
+                  textAnchor="middle"
+                  fill={ink}
+                  x={right - column.offset + (fs + rubySize) / 2}
+                  y={top + (ruby.start + ruby.length / 2) * fs}
+                  data-ruby
+                >
+                  {ruby.text}
+                </text>
+              ))
+            })}
+          </>
         )}
       </g>
       {selected ? (

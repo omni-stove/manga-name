@@ -22,6 +22,7 @@
   "inspector_character_default_reference": "既定の画像",
   "inspector_character_untitled": "キャラクター",
   "inspector_character_appearance_placeholder": "生成プロンプトに入る",
+  "inspector_bubble_text_placeholder": "|単語《ルビ》 でルビを振れる",
   "inspector_character_reference_alt": "{name} の参照画像",
   "inspector_character_reference_pick": "画像を選ぶ",
   "inspector_character_generate_needs_appearance": "外見を入れると生成できます",

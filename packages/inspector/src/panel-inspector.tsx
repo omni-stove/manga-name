@@ -12,6 +12,7 @@ import {
   PanelSchema,
   type Patch,
   panelCharacterIds,
+  stripRuby,
 } from '@manga/schema'
 import {
   Button,
@@ -144,7 +145,7 @@ export function PanelInspector({
                 <span className={styles.order}>{bubble.order}</span>
                 <span className={styles.line}>
                   {speakerOf(bubble) && <b className={styles.speaker}>{speakerOf(bubble)}</b>}
-                  {bubble.text.split('\n')[0] || m.empty()}
+                  {stripRuby(bubble.text).split('\n')[0] || m.empty()}
                 </span>
                 <IconButton
                   size="small"
