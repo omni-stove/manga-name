@@ -1,28 +1,51 @@
 import type { LayoutSuggestionResponse, LlmProvider } from '@manga/ai'
 import { m } from '@manga/i18n'
-import type { ID, LayoutOption, Page, Project } from '@manga/schema'
-import { Button, ConfirmDialog, Typography, XStack, YStack } from '@manga/ui'
+import {
+  type Character,
+  type ID,
+  type LayoutOption,
+  MAX_NAME_PANELS,
+  type NamePanel,
+  type Page,
+  type PlanLine,
+  type Project,
+} from '@manga/schema'
+import {
+  Button,
+  ConfirmDialog,
+  IconButton,
+  Input,
+  TextArea,
+  Typography,
+  XStack,
+  YStack,
+} from '@manga/ui'
 import { useEffect, useRef, useState } from 'react'
 import {
   hasLockedPanel,
   hasPanelContent,
+  isNameReady,
   layoutRequest,
+  loadName,
+  nameRequest,
   replacePanelsPatch,
+  saveName,
   suggestedPage,
   suggestedPanels,
 } from './layout-suggestion'
 import styles from './layout-suggestions.module.css'
+import { LineEditor } from './line-editor'
 import { PageThumbnail } from './page-thumbnail'
 import { findPage } from './project-ops'
 import { errorMessage } from './route-error'
 import { FailureAlert } from './sign-in'
 import type { ProjectStore } from './store/project-store-types'
 
-type Suggestion =
+type Request<T> =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'error'; error: unknown }
-  | { status: 'done'; response: LayoutSuggestionResponse }
+  | { status: 'done'; response: T }
 
 interface LayoutSuggestionsProps {
   store: ProjectStore
@@ -34,8 +57,12 @@ interface LayoutSuggestionsProps {
 }
 
 /**
- * 「脚本からコマ割りを提案」。ページの脚本を LlmProvider.suggestLayout に送り、案ごとにコマ割りの縮図と狙いを並べる。
- * 「このコマ割りにする」でページのコマを案のコマ（指示メモ、カメラ、フキダシつき）に置き換え、`source: 'ai'` の 1 手として入れる。
+ * 脚本からコマ割りまでを 2 段で提案する。
+ * 「脚本からネームを書き起こす」でページの脚本を LlmProvider.transcribeName に送り、読む順のコマごとの描くもの、カメラ、
+ * セリフを並べて、コマとセリフを足し引きし、セリフを隣のコマへ移して直せるようにする。直したネームはこのブラウザにページごとに残す。
+ * 「このネームでコマ割りを提案」でネームを LlmProvider.suggestLayout に送り、案ごとにネームを当てたコマ割りの縮図と狙いを並べる。
+ * コマを足し引きすると、数の合わなくなった案は消す。
+ * 「このコマ割りにする」でページのコマを案の枠にネームを当てたコマ（指示メモ、カメラ、フキダシつき）に置き換え、`source: 'ai'` の 1 手として入れる。
  * 今のコマに絵やフキダシがあれば確かめてから置き換え、位置をロックしたコマがあれば置き換えない。
  * ページを替えるときは key で作り直し、遅れて届いた応答は捨てる
  */
@@ -47,8 +74,12 @@ export function LayoutSuggestions({
   llmProvider,
   canEdit,
 }: LayoutSuggestionsProps) {
-  const [suggestion, setSuggestion] = useState<Suggestion>({ status: 'idle' })
-  const [confirming, setConfirming] = useState<LayoutOption>()
+  const [name, setNameState] = useState<NamePanel[] | undefined>(() => loadName(pageId))
+  const [transcription, setTranscription] = useState<Request<undefined>>({ status: 'idle' })
+  const [suggestion, setSuggestion] = useState<Request<LayoutSuggestionResponse>>({
+    status: 'idle',
+  })
+  const [confirming, setConfirming] = useState<{ option: LayoutOption; name: NamePanel[] }>()
   const [applyError, setApplyError] = useState<string>()
   const requestId = useRef(0)
 
@@ -62,19 +93,44 @@ export function LayoutSuggestions({
   const script = page.script?.trim() ?? ''
   const locked = hasLockedPanel(page)
 
-  const ask = async () => {
+  const setName = (next: NamePanel[]) => {
+    if (next.length !== name?.length) {
+      // 案の枠はネームのコマと 1 対 1 なので、コマの数が変われば案を使えない
+      requestId.current++
+      setSuggestion({ status: 'idle' })
+    }
+    setNameState(next)
+    saveName(pageId, next)
+  }
+
+  const transcribe = async () => {
+    const id = ++requestId.current
+    setTranscription({ status: 'loading' })
+    setSuggestion({ status: 'idle' })
+    setApplyError(undefined)
+    try {
+      const response = await llmProvider.transcribeName(nameRequest(project, script))
+      if (requestId.current !== id) return
+      setTranscription({ status: 'done', response: undefined })
+      setName(response.panels)
+    } catch (e) {
+      if (requestId.current === id) setTranscription({ status: 'error', error: e })
+    }
+  }
+
+  const ask = async (panels: NamePanel[]) => {
     const id = ++requestId.current
     setSuggestion({ status: 'loading' })
     setApplyError(undefined)
     try {
-      const response = await llmProvider.suggestLayout(layoutRequest(project, script))
+      const response = await llmProvider.suggestLayout(layoutRequest(panels))
       if (requestId.current === id) setSuggestion({ status: 'done', response })
     } catch (e) {
       if (requestId.current === id) setSuggestion({ status: 'error', error: e })
     }
   }
 
-  const apply = (option: LayoutOption) => {
+  const apply = (option: LayoutOption, panels: NamePanel[]) => {
     setConfirming(undefined)
     const current = store.get()
     const currentPage = findPage(current, pageId)?.page
@@ -91,7 +147,7 @@ export function LayoutSuggestions({
         replacePanelsPatch(
           current,
           pageId,
-          suggestedPanels(option, current.settings, current.characters),
+          suggestedPanels(option, panels, current.settings, current.characters),
         ),
         { source: 'ai', label: m.web_layout_suggest_history() },
       )
@@ -101,7 +157,9 @@ export function LayoutSuggestions({
     }
   }
 
+  const transcribing = transcription.status === 'loading'
   const loading = suggestion.status === 'loading'
+  const busy = transcribing || loading
   return (
     <YStack
       as="section"
@@ -112,26 +170,58 @@ export function LayoutSuggestions({
       <XStack wrap>
         <Button
           size="small"
-          variant="primary"
-          disabled={!canEdit || loading || script === ''}
-          onClick={() => void ask()}
+          variant={name === undefined ? 'primary' : 'secondary'}
+          disabled={!canEdit || busy || script === ''}
+          onClick={() => void transcribe()}
         >
-          {loading
-            ? m.web_layout_suggesting()
-            : suggestion.status === 'done'
-              ? m.web_layout_suggest_again()
-              : m.web_layout_suggest()}
+          {transcribing
+            ? m.web_name_transcribing()
+            : name === undefined
+              ? m.web_name_transcribe()
+              : m.web_name_transcribe_again()}
         </Button>
       </XStack>
       {script === '' && (
         <Typography variant="caption" tone="muted">
-          {m.web_layout_suggest_needs_script()}
+          {m.web_name_needs_script()}
         </Typography>
+      )}
+      {transcription.status === 'error' && (
+        <FailureAlert failure={m.web_name_transcribe_failed()} error={transcription.error} />
+      )}
+      {name !== undefined && (
+        <>
+          <NameEditor
+            panels={name}
+            characters={project.characters}
+            disabled={!canEdit || transcribing}
+            onChange={setName}
+          />
+          <XStack wrap>
+            <Button
+              size="small"
+              variant="primary"
+              disabled={!canEdit || busy || !isNameReady(name)}
+              onClick={() => void ask(name)}
+            >
+              {loading
+                ? m.web_layout_suggesting()
+                : suggestion.status === 'done'
+                  ? m.web_layout_suggest_again()
+                  : m.web_layout_suggest()}
+            </Button>
+          </XStack>
+          {!isNameReady(name) && (
+            <Typography variant="caption" tone="muted">
+              {m.web_name_needs_note()}
+            </Typography>
+          )}
+        </>
       )}
       {suggestion.status === 'error' && (
         <FailureAlert failure={m.web_layout_suggest_failed()} error={suggestion.error} />
       )}
-      {suggestion.status === 'done' && (
+      {suggestion.status === 'done' && name !== undefined && (
         <>
           {locked && (
             <Typography variant="caption" tone="alert" role="alert">
@@ -151,7 +241,7 @@ export function LayoutSuggestions({
                 <XStack gap={8} align="start">
                   <div className={styles.thumbnail}>
                     <PageThumbnail
-                      page={suggestedPage(page, option, project.settings, project.characters)}
+                      page={suggestedPage(page, option, name, project.settings, project.characters)}
                       pageSize={project.settings.pageSize}
                     />
                   </div>
@@ -169,7 +259,9 @@ export function LayoutSuggestions({
                   <Button
                     size="small"
                     disabled={!canEdit || locked}
-                    onClick={() => (hasPanelContent(page) ? setConfirming(option) : apply(option))}
+                    onClick={() =>
+                      hasPanelContent(page) ? setConfirming({ option, name }) : apply(option, name)
+                    }
                   >
                     {m.web_layout_suggest_apply()}
                   </Button>
@@ -189,10 +281,142 @@ export function LayoutSuggestions({
           title={m.web_layout_suggest_confirm_title()}
           message={m.web_layout_suggest_confirm_message()}
           confirmLabel={m.web_layout_suggest_apply()}
-          onConfirm={() => apply(confirming)}
+          onConfirm={() => apply(confirming.option, confirming.name)}
           onCancel={() => setConfirming(undefined)}
         />
       )}
+    </YStack>
+  )
+}
+
+/** ネームのコマを読む順に並べ、描くもの、カメラ、セリフを直し、コマとセリフを足し引きできるようにする */
+function NameEditor({
+  panels,
+  characters,
+  disabled,
+  onChange,
+}: {
+  panels: NamePanel[]
+  characters: readonly Character[]
+  disabled: boolean
+  onChange(next: NamePanel[]): void
+}) {
+  const editPanel = (index: number, next: Partial<NamePanel>) =>
+    onChange(panels.map((p, i) => (i === index ? { ...p, ...next } : p)))
+  const editLines = (index: number, next: (lines: PlanLine[]) => PlanLine[]) =>
+    editPanel(index, { lines: next(panels[index]?.lines ?? []) })
+  /** コマ index の先頭のセリフを前のコマの末尾へ（by -1）、末尾のセリフを次のコマの先頭へ（by 1）移す */
+  const moveEdgeLine = (index: number, by: -1 | 1) => {
+    const from = panels[index]
+    if (!from || from.lines.length === 0 || !panels[index + by]) return
+    const line = (by === -1 ? from.lines[0] : from.lines.at(-1)) as PlanLine
+    onChange(
+      panels.map((p, i) => {
+        if (i === index) return { ...p, lines: by === -1 ? p.lines.slice(1) : p.lines.slice(0, -1) }
+        if (i === index + by)
+          return { ...p, lines: by === -1 ? [...p.lines, line] : [line, ...p.lines] }
+        return p
+      }),
+    )
+  }
+
+  return (
+    <YStack gap={6} as="fieldset" className={styles.fieldset} disabled={disabled}>
+      <Typography as="legend" variant="label" tone="muted">
+        {m.web_name_section()}
+      </Typography>
+      <ol className={styles.panels}>
+        {panels.map((panel, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: コマに id が無く、入力中の欄は位置で追えば足りる
+          <YStack as="li" gap={6} key={index} className={styles.panel} data-name-panel={index + 1}>
+            <XStack justify="between">
+              <Typography variant="label">{m.web_name_panel({ n: index + 1 })}</Typography>
+              <IconButton
+                size="small"
+                label={m.web_name_remove_panel()}
+                disabled={panels.length === 1}
+                onClick={() => onChange(panels.filter((_, i) => i !== index))}
+              >
+                ×
+              </IconButton>
+            </XStack>
+            <TextArea
+              label={m.panel_note()}
+              rows={2}
+              value={panel.note}
+              onChange={(e) => editPanel(index, { note: e.target.value })}
+            />
+            <Input
+              label={m.panel_camera()}
+              value={panel.camera ?? ''}
+              onChange={(e) => editPanel(index, { camera: e.target.value })}
+            />
+            {panel.lines.length === 0 && (
+              <Typography variant="caption" tone="muted">
+                {m.web_draft_no_lines()}
+              </Typography>
+            )}
+            <ol className={styles.lines}>
+              {panel.lines.map((line, j) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: セリフに id が無く、入力中の欄は位置で追えば足りる
+                <li key={j} className={styles.line} data-name-line>
+                  <LineEditor
+                    line={line}
+                    characters={characters}
+                    onChange={(next) =>
+                      editLines(index, (lines) => lines.map((l, k) => (k === j ? next : l)))
+                    }
+                  />
+                  <XStack gap={2}>
+                    {j === 0 && index > 0 && (
+                      <IconButton
+                        size="small"
+                        label={m.web_name_line_to_previous_panel()}
+                        onClick={() => moveEdgeLine(index, -1)}
+                      >
+                        ↑
+                      </IconButton>
+                    )}
+                    {j === panel.lines.length - 1 && index < panels.length - 1 && (
+                      <IconButton
+                        size="small"
+                        label={m.web_name_line_to_next_panel()}
+                        onClick={() => moveEdgeLine(index, 1)}
+                      >
+                        ↓
+                      </IconButton>
+                    )}
+                    <IconButton
+                      size="small"
+                      label={m.web_draft_remove_line()}
+                      onClick={() => editLines(index, (lines) => lines.filter((_, k) => k !== j))}
+                    >
+                      ×
+                    </IconButton>
+                  </XStack>
+                </li>
+              ))}
+            </ol>
+            <Button
+              size="small"
+              variant="ghost"
+              className={styles.add}
+              onClick={() => editLines(index, (lines) => [...lines, { text: '', shape: 'normal' }])}
+            >
+              {m.web_draft_add_line()}
+            </Button>
+          </YStack>
+        ))}
+      </ol>
+      <Button
+        size="small"
+        variant="ghost"
+        className={styles.add}
+        disabled={panels.length >= MAX_NAME_PANELS}
+        onClick={() => onChange([...panels, { note: '', lines: [] }])}
+      >
+        {m.web_name_add_panel()}
+      </Button>
     </YStack>
   )
 }

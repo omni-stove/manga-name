@@ -8,8 +8,10 @@ const ANTHROPIC_LLM_MODEL = 'claude-haiku-5-5'
 
 /** 64 ページ分の流れ、登場キャラ、ページごとの脚本の原文、脚本のセリフ全部を返しても切れない上限 */
 const MAX_PLAN_OUTPUT_TOKENS = 64_000
-/** 1 ページのコマ割りの案 3 つを、コマごとの描くものとセリフつきで返しても切れない上限 */
-const MAX_LAYOUT_OUTPUT_TOKENS = 8_000
+/** 1 ページのネームを、上限のコマの数まで描くものとセリフつきで返しても切れない上限 */
+const MAX_NAME_OUTPUT_TOKENS = 8_000
+/** 1 ページのコマ割りの案 3 つで切れない上限。コマごとには幅の比しか返さない */
+const MAX_LAYOUT_OUTPUT_TOKENS = 4_000
 /** 1 ページの講評と提案 5 件で切れない上限 */
 const MAX_CRITIQUE_OUTPUT_TOKENS = 8_000
 
@@ -18,7 +20,7 @@ export interface AnthropicLlmProviderOptions {
 }
 
 /**
- * Anthropic `claude-haiku-5-5` に planPages、suggestLayout、critique をさせる LlmProvider。
+ * Anthropic `claude-haiku-5-5` に planPages、transcribeName、suggestLayout、critique をさせる LlmProvider。
  * prompts の system と user を送り、schema を構造化出力に渡して、応答の JSON を output で検証して返す。
  * 最後まで書き終えていない応答、JSON にならない応答、output を通らない応答、HTTP エラーは throw する。
  */
@@ -71,6 +73,10 @@ export function createAnthropicLlmProvider(opts: AnthropicLlmProviderOptions): L
       }
       const reply = await generate(prompt, schema, MAX_PLAN_OUTPUT_TOKENS)
       return check(prompt.output, (reply as { elements?: unknown } | null)?.elements)
+    },
+    transcribeName: async (req) => {
+      const prompt = prompts.transcribeName(req)
+      return check(prompt.output, await generate(prompt, prompt.schema, MAX_NAME_OUTPUT_TOKENS))
     },
     suggestLayout: async (req) => {
       const prompt = prompts.suggestLayout(req)

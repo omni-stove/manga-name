@@ -7,6 +7,10 @@ import {
   type LayoutSuggestionResponse,
   LayoutSuggestionResponseSchema,
   layoutSuggestionJsonSchema,
+  type NameDraftResponse,
+  NameDraftResponseSchema,
+  type NamePanel,
+  nameDraftJsonSchema,
   type Page,
   type PageDiagnosis,
   type PagePlanResponse,
@@ -32,12 +36,14 @@ import {
 } from './image.prompt'
 import { suggestLayoutSystem } from './layout.prompt'
 import { LINE_FIELDS } from './lines.prompt'
+import { transcribeNameSystem } from './name.prompt'
 import { planPagesSystem } from './plan-pages.prompt'
 import {
   type CharacterArtRequest,
   type CritiqueRequest,
   findPanel,
   type LayoutSuggestionRequest,
+  type NameDraftRequest,
   type PageArtRequest,
   type PagePlanRequest,
   type PanelArtRequest,
@@ -238,15 +244,41 @@ const POINT_JSON_SCHEMA: JsonSchema = {
 }
 
 /**
- * コマ割りの提案のプロンプト。1 ページの脚本から、段とコマに割った案を LAYOUT_OPTIONS 個返させる。
+ * ネームの書き起こしのプロンプト。1 ページの脚本を、読む順のコマごとの描くもの、カメラ、セリフに割らせる。
  * system に出力規則と JSON Schema、user にキャラ一覧とページの脚本を入れる
+ */
+function transcribeName(req: NameDraftRequest): LlmPrompt<NameDraftResponse> {
+  const schema = nameDraftJsonSchema()
+
+  const system = transcribeNameSystem(schema)
+
+  const user = [...characterList(req.project.characters), 'Script:', req.script].join('\n')
+
+  return { system, user, schema, output: NameDraftResponseSchema }
+}
+
+/** ネームの 1 コマを、番号、描くもの、カメラ、セリフの行にする。話し手は枠の大きさに効かないので書かない */
+function namePanelLines(panel: NamePanel, index: number): string[] {
+  const camera = panel.camera === undefined ? '' : ` (${panel.camera})`
+  return [
+    `${index + 1}. ${panel.note}${camera}`,
+    ...(panel.lines.length > 0 ? panel.lines.map((l) => `   - ${l.text}`) : ['   - (no lines)']),
+  ]
+}
+
+/**
+ * コマ割りの提案のプロンプト。ネームのコマを段に割った案を LAYOUT_OPTIONS 個返させる。
+ * system に出力規則と JSON Schema、user にコマの数と、読む順のコマごとの描くもの、カメラ、セリフを入れる
  */
 function suggestLayout(req: LayoutSuggestionRequest): LlmPrompt<LayoutSuggestionResponse> {
   const schema = layoutSuggestionJsonSchema()
 
   const system = suggestLayoutSystem(LAYOUT_OPTIONS, schema)
 
-  const user = [...characterList(req.project.characters), 'Script:', req.script].join('\n')
+  const user = [
+    `Panels: exactly ${req.panels.length}, in reading order.`,
+    ...req.panels.flatMap(namePanelLines),
+  ].join('\n')
 
   return { system, user, schema, output: LayoutSuggestionResponseSchema }
 }
@@ -372,7 +404,15 @@ function critique(req: CritiqueRequest): LlmPrompt<CritiqueResponse> {
   return { system, user, schema, output: CritiqueResponseSchema }
 }
 
-export const prompts = { panelArt, pageArt, characterArt, planPages, suggestLayout, critique }
+export const prompts = {
+  panelArt,
+  pageArt,
+  characterArt,
+  planPages,
+  transcribeName,
+  suggestLayout,
+  critique,
+}
 
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
@@ -528,16 +568,16 @@ if (import.meta.vitest) {
     ).toContain(`- (none)\nPages: as many as the script needs, at most ${MAX_PLANNED_PAGES}.`)
   })
 
-  test('suggestLayout embeds the layout JSON Schema and lists characters and the page script', () => {
-    const { system, user, schema } = prompts.suggestLayout({
+  test('transcribeName embeds the name JSON Schema and lists characters and the page script', () => {
+    const { system, user, schema } = prompts.transcribeName({
       project: {
         settings: project.settings,
         characters: [{ id: 'chr_e', name: 'エリ', shortName: 'E' }],
       },
       script: 'E「こんにちは」\n森を歩く。',
     })
-    expect(schema).toEqual(layoutSuggestionJsonSchema())
-    expect(system).toContain(`JSON Schema:\n${JSON.stringify(layoutSuggestionJsonSchema())}`)
+    expect(schema).toEqual(nameDraftJsonSchema())
+    expect(system).toContain(`JSON Schema:\n${JSON.stringify(nameDraftJsonSchema())}`)
     expect(system).toContain(LINE_FIELDS.join('\n'))
     expect(user).toBe(
       [
@@ -546,6 +586,30 @@ if (import.meta.vitest) {
         'Script:',
         'E「こんにちは」',
         '森を歩く。',
+      ].join('\n'),
+    )
+  })
+
+  test('suggestLayout embeds the layout JSON Schema and lists the name panels in reading order', () => {
+    const { system, user, schema } = prompts.suggestLayout({
+      panels: [
+        {
+          note: '森の全景',
+          camera: 'ロング',
+          lines: [{ speakerId: 'chr_e', text: 'こんにちは', shape: 'normal' }],
+        },
+        { note: '足元', lines: [] },
+      ],
+    })
+    expect(schema).toEqual(layoutSuggestionJsonSchema())
+    expect(system).toContain(`JSON Schema:\n${JSON.stringify(layoutSuggestionJsonSchema())}`)
+    expect(user).toBe(
+      [
+        'Panels: exactly 2, in reading order.',
+        '1. 森の全景 (ロング)',
+        '   - こんにちは',
+        '2. 足元',
+        '   - (no lines)',
       ].join('\n'),
     )
   })
