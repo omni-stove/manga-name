@@ -103,7 +103,7 @@ import {
   vectorPatch,
 } from './inspector-ops'
 import { LayoutSuggestions } from './layout-suggestions'
-import { LayoutTemplateDialog } from './layout-templates'
+import { AddPageDialog, LayoutTemplateDialog } from './layout-templates'
 import type { LlmProvider } from './llm-provider'
 import styles from './page-editor.module.css'
 import {
@@ -112,7 +112,7 @@ import {
   exportFileName as projectFileName,
 } from './project-file'
 import type { Collaboration, ProjectLibrary } from './project-library'
-import { addPagePatch, findPage, pagePatch } from './project-ops'
+import { findPage, pagePatch } from './project-ops'
 import { firstFile, referencePatch, toReferenceImage } from './reference-image'
 import { errorMessage } from './route-error'
 import { saveFile } from './save-file'
@@ -357,6 +357,7 @@ export function PageEditor({
   const [scriptExpanded, setScriptExpanded] = useStoredFlag('manga.script.expanded', true)
   const [menu, setMenu] = useState<OpenMenu | null>(null)
   const [registeringLayout, setRegisteringLayout] = useState(false)
+  const [addingPage, setAddingPage] = useState(false)
   const canUndo = useStore(store.state, (s) => s.canUndo)
   const canRedo = useStore(store.state, (s) => s.canRedo)
   useUndoShortcuts(store, can('history'))
@@ -400,18 +401,6 @@ export function PageEditor({
   const nextPage = found ? episodePages?.[found.pageIndex + 1] : undefined
   const openPage = (id: ID) =>
     void navigate({ to: '/p/$projectId/pages/$pageId', params: { projectId, pageId: id } })
-  /** 開いているページの話の末尾に 3 段のページを足して開く */
-  const addPage = () => {
-    const episodeId = found && project.episodes[found.episodeIndex]?.id
-    if (!episodeId) return
-    let added: ID | undefined
-    const applied = apply(m.web_episode_add_page(), (p) => {
-      const { patch, page } = addPagePatch(p, '3rows', episodeId)
-      added = page.id
-      return patch
-    })
-    if (applied && added) openPage(added)
-  }
   useKeyShortcuts({
     ...(can('tools') ? shortcutsOf(tools, setTool) : {}),
     ...(tool === 'scribble' ? shortcutsOf(scribbleTools, setScribbleTool) : {}),
@@ -722,7 +711,11 @@ export function PageEditor({
               </Icon>
             </IconButton>
             {canEdit && (
-              <IconButton size="small" label={m.web_episode_add_page()} onClick={addPage}>
+              <IconButton
+                size="small"
+                label={m.web_episode_add_page()}
+                onClick={() => setAddingPage(true)}
+              >
                 <Icon>
                   <path d="M12 5v14M5 12h14" />
                 </Icon>
@@ -831,6 +824,18 @@ export function PageEditor({
           y={menu.y}
           onClose={() => setMenu(null)}
           items={openMenu.items}
+        />
+      )}
+      {addingPage && (
+        <AddPageDialog
+          project={project}
+          episodeId={episode.id}
+          apply={apply}
+          onAdded={(id) => {
+            setAddingPage(false)
+            openPage(id)
+          }}
+          onClose={() => setAddingPage(false)}
         />
       )}
       {registeringLayout && (

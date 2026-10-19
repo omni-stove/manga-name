@@ -43,5 +43,9 @@ test('エディタのヘッダーで、キーでツールとペンを選び、�
   await expect(current).toHaveText(m.web_editor_page_option({ index: 1, total: 2 }))
 
   await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+  await page
+    .getByRole('dialog', { name: m.web_episode_add_page() })
+    .getByRole('button', { name: m.web_episode_add_page() })
+    .click()
   await expect(current).toHaveText(m.web_editor_page_option({ index: 3, total: 3 }))
 })
