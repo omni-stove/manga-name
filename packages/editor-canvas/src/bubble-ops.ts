@@ -356,6 +356,7 @@ if (import.meta.vitest) {
         { op: 'remove', path: '/panels/2/bubbles/1/joinedTo' },
       ])
       expect(detachBubblePatch(page, 'bb_3')).toEqual([])
+      expect(detachBubblePatch(page, 'nope')).toEqual([])
     })
   })
 

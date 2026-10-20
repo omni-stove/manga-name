@@ -357,6 +357,9 @@ if (import.meta.vitest) {
       if (!bubble) throw new Error('コピーできなかった')
       const pasted = PageSchema.parse(apply(joined, pastePatch(joined, bubble, opts)?.patch ?? []))
       expect(pasted.panels[0]?.bubbles.at(-1)).not.toHaveProperty('joinedTo')
+      const other = pastePatch(joined, bubble, { ...opts, sameProject: false })?.patch ?? []
+      const elsewhere = PageSchema.parse(apply(joined, other))
+      expect(elsewhere.panels[0]?.bubbles.at(-1)).not.toHaveProperty('joinedTo')
     })
 
     test('a panel pasted between a single page and a spread keeps its width in mm', () => {

@@ -791,6 +791,43 @@ if (import.meta.vitest) {
       expect(must(unpainted.querySelector('text[writing-mode]')).getAttribute('fill')).toBe('#000')
     })
 
+    test('joined bubbles share one outline with a neck in the line of the holder, and each keeps its dialogue', async () => {
+      const panel3 = must(samplePage.panels.find((p) => p.id === 'pn_3'))
+      const bb3 = must(panel3.bubbles[0])
+      const page: Page = {
+        ...samplePage,
+        panels: samplePage.panels.map((panel) =>
+          panel.id === 'pn_3'
+            ? {
+                ...panel,
+                bubbles: [
+                  { ...bb3, shape: 'whisper', joinedTo: 'bj_1' },
+                  { ...bb3, id: 'bj_1', order: 2, shape: 'urchin', pos: { x: 0.2, y: 0.6 } },
+                ],
+              }
+            : panel,
+        ),
+      }
+      const props = { ...defaults, page }
+      const { svg, root } = await mount({ ...props, selection: { kind: 'bubble', id: 'bj_1' } })
+      // 選択を移して描き直しても、組は 1 つの輪郭のまま
+      await act(async () =>
+        root.render(<EditorCanvas {...props} selection={{ kind: 'bubble', id: 'bb_3' }} />),
+      )
+      const group = must(svg.querySelector('[data-bubble-group="bb_3 bj_1"]'))
+      expect(
+        must(group.querySelector('[data-bubble-id="bb_3"]')).getAttribute('data-joined-to'),
+      ).toBe('bj_1')
+      expect(group.querySelectorAll('[data-bubble-id] text[writing-mode]')).toHaveLength(2)
+      // 輪郭は組でまとめて描き、フキダシごとには描かない。線を持たないウニには太線を引かず、
+      // ささやきの本体としっぽと首にだけ破線を引く
+      expect(group.querySelector('[data-bubble-id] path[stroke]')).toBeNull()
+      const strokes = [...group.querySelectorAll(':scope > g > path[stroke="#000"]')]
+      expect(strokes).toHaveLength(1 + (bb3.tails?.length ?? 0) + 1)
+      for (const stroke of strokes) expect(stroke.getAttribute('stroke-dasharray')).not.toBeNull()
+      expect(group.querySelectorAll(':scope > g > path[fill="#000"]:not([stroke])')).toHaveLength(1)
+    })
+
     test('dialogue is set in the typeface of the shape unless the bubble names one', async () => {
       const textOf = (svg: SVGSVGElement) =>
         must(svg.querySelector('[data-bubble-id="bb_3"] text[writing-mode]'))
