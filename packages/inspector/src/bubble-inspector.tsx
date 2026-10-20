@@ -23,6 +23,7 @@ export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[]
   option('electronic', m.bubble_shape_electronic),
   option('urchin', m.bubble_shape_urchin),
   option('narration', m.bubble_shape_narration),
+  option('monologue', m.bubble_shape_monologue),
   option('none', m.bubble_shape_none),
 ]
 

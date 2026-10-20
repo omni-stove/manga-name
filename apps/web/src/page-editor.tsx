@@ -606,6 +606,7 @@ export function PageEditor({
     page,
     settings: project.settings,
     tools,
+    tool,
     edit: (label: string, target: NonNullable<Selection>, patch: Patch) =>
       apply(label, (p) => elementPatch(p, pageId, target, patch)),
     editPage: (label: string, build: (page: Page) => Patch) =>

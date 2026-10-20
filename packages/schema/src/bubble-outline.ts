@@ -2,13 +2,13 @@ import type { Bubble, Point } from './project'
 
 type Shape = Bubble['shape']
 
-/** 単位を問わない座標のフキダシ。rx, ry は本体の楕円の半径、tail はしっぽの先端 */
+/** 単位を問わない座標のフキダシ。rx, ry は本体の楕円の半径、tails はしっぽごとの先端 */
 export interface BubbleGeometry {
   cx: number
   cy: number
   rx: number
   ry: number
-  tail?: Point
+  tails?: readonly Point[]
 }
 
 /** 輪郭の描画命令。SVG の path 命令と Canvas の moveTo などに 1 対 1 で写せる */
@@ -22,8 +22,8 @@ export type PathCommand =
 export interface BubbleOutline {
   /** 本体 */
   body: PathCommand[]
-  /** しっぽ。付かない形やしっぽが無いときは空 */
-  tail: PathCommand[]
+  /** しっぽごとの命令列。並びは BubbleGeometry.tails と同じ。付かない形やしっぽが無いときは空 */
+  tails: PathCommand[][]
   /** 黒で塗る形（ウニフラの放射線）。無ければ空 */
   ink: PathCommand[]
   /** 本体としっぽを白で塗るか。枠なしは塗らない */
@@ -51,6 +51,8 @@ const URCHIN_SPACING = 0.1
 const URCHIN_GAP = 0.04
 const URCHIN_LENGTH = 0.35
 const URCHIN_WIDTH = 0.03
+/** モノローグ枠の角の半径。短辺に対する比率 */
+const MONOLOGUE_CORNER = 0.1
 /** しっぽの付け根の開き（ラジアン）と、付け根を輪郭から中心へ入れる深さ。深さは最も深い凹みより深くする */
 const TAIL_SPREAD = 0.35
 const TAIL_INSET = 0.5
@@ -66,10 +68,11 @@ const SHAPE_STYLE: Record<Shape, { tail: boolean; box: boolean }> = {
   electronic: { tail: true, box: false },
   urchin: { tail: false, box: false },
   narration: { tail: false, box: true },
+  monologue: { tail: false, box: true },
   none: { tail: false, box: true },
 }
 
-/** その形にしっぽが付くか。ナレーション、枠なし、ウニフラは話し手を指さない */
+/** その形にしっぽが付くか。ナレーション、モノローグ、枠なし、ウニフラは話し手を指さない */
 export const hasTail = (shape: Shape): boolean => SHAPE_STYLE[shape].tail
 
 /** 本体が楕円でなく、半径で囲む矩形そのものか */
@@ -153,6 +156,27 @@ function ellipse(cx: number, cy: number, rx: number, ry: number): PathCommand[] 
   ]
 }
 
+/** 角を半径 r の四分円で丸めた矩形。右上の角の終わりから時計回り（y 下向き） */
+function roundedBox(g: BubbleGeometry, r: number): PathCommand[] {
+  const k = r * (1 - KAPPA)
+  const l = g.cx - g.rx
+  const t = g.cy - g.ry
+  const rt = g.cx + g.rx
+  const b = g.cy + g.ry
+  return [
+    { op: 'M', x: rt, y: t + r },
+    { op: 'L', x: rt, y: b - r },
+    { op: 'C', x1: rt, y1: b - k, x2: rt - k, y2: b, x: rt - r, y: b },
+    { op: 'L', x: l + r, y: b },
+    { op: 'C', x1: l + k, y1: b, x2: l, y2: b - k, x: l, y: b - r },
+    { op: 'L', x: l, y: t + r },
+    { op: 'C', x1: l, y1: t + k, x2: l + k, y2: t, x: l + r, y: t },
+    { op: 'L', x: rt - r, y: t },
+    { op: 'C', x1: rt - k, y1: t, x2: rt, y2: t + k, x: rt, y: t + r },
+    { op: 'Z' },
+  ]
+}
+
 function body(shape: Shape, g: BubbleGeometry): PathCommand[] {
   const unit = unitOf(g)
   switch (shape) {
@@ -168,6 +192,8 @@ function body(shape: Shape, g: BubbleGeometry): PathCommand[] {
         { x: g.cx + g.rx, y: g.cy + g.ry },
         { x: g.cx - g.rx, y: g.cy + g.ry },
       ])
+    case 'monologue':
+      return roundedBox(g, 2 * unit * MONOLOGUE_CORNER)
     case 'shout': {
       // 先と谷の深さを揺らし、均一な星形（値札のような形）に見えないようにする
       const s = stations(g, countAlong(g, SHOUT_SPACING, 10, 40) * 2)
@@ -240,9 +266,7 @@ function tailBase(g: BubbleGeometry, tail: Point) {
   return { angle, a: foot(angle - TAIL_SPREAD), b: foot(angle + TAIL_SPREAD) }
 }
 
-function tailOf(shape: Shape, g: BubbleGeometry): PathCommand[] {
-  const tail = g.tail
-  if (!tail || !hasTail(shape)) return []
+function tailOf(shape: Shape, g: BubbleGeometry, tail: Point): PathCommand[] {
   const { angle, a, b } = tailBase(g, tail)
   if (shape === 'thought') {
     const edge = ellipseAt(g, angle).p
@@ -296,7 +320,7 @@ function tailOf(shape: Shape, g: BubbleGeometry): PathCommand[] {
 export function bubbleOutline(shape: Shape, g: BubbleGeometry): BubbleOutline {
   return {
     body: body(shape, g),
-    tail: tailOf(shape, g),
+    tails: hasTail(shape) ? (g.tails ?? []).map((tail) => tailOf(shape, g, tail)) : [],
     ink: shape === 'urchin' ? urchinRays(g) : [],
     fill: shape !== 'none',
     line:
@@ -346,7 +370,7 @@ export function bubbleReach(shape: Shape, rx: number, ry: number, n: Point): num
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
 
-  const g = { cx: 100, cy: 100, rx: 60, ry: 40, tail: { x: 100, y: 190 } }
+  const g = { cx: 100, cy: 100, rx: 60, ry: 40, tails: [{ x: 100, y: 190 }] }
   const points = (cmds: PathCommand[]) =>
     cmds.flatMap((c) => (c.op === 'Z' ? [] : [{ x: c.x, y: c.y }]))
   const SHAPES = [
@@ -358,13 +382,14 @@ if (import.meta.vitest) {
     'electronic',
     'urchin',
     'narration',
+    'monologue',
     'none',
   ] as const
 
   test('every outline is made of closed subpaths', () => {
     for (const shape of SHAPES) {
       const o = bubbleOutline(shape, g)
-      for (const cmds of [o.body, o.tail, o.ink]) {
+      for (const cmds of [o.body, ...o.tails, o.ink]) {
         if (cmds.length === 0) continue
         expect(cmds[0]?.op).toBe('M')
         expect(cmds.at(-1)?.op).toBe('Z')
@@ -380,14 +405,33 @@ if (import.meta.vitest) {
       { x: 160, y: 140 },
       { x: 40, y: 140 },
     ])
-    expect(o.tail).toEqual([])
+    expect(o.tails).toEqual([])
   })
 
-  test('narration, none and urchin take no tail; the rest do', () => {
-    for (const shape of SHAPES) {
-      expect(bubbleOutline(shape, g).tail.length > 0).toBe(hasTail(shape))
+  test('monologue is a box with corners rounded by a tenth of the short side, and no tail', () => {
+    const o = bubbleOutline('monologue', g)
+    expect(isBoxShape('monologue')).toBe(true)
+    expect(o.body.filter((c) => c.op === 'C')).toHaveLength(4)
+    const ps = points(o.body)
+    // 短辺 80 の 0.1 倍の半径で、角の点は各辺から 8 だけ内に入る
+    expect(ps).toContainEqual({ x: 160, y: 68 })
+    expect(ps).toContainEqual({ x: 152, y: 140 })
+    expect(ps).toContainEqual({ x: 40, y: 132 })
+    expect(ps).toContainEqual({ x: 48, y: 60 })
+    for (const p of ps) {
+      expect(p.x).toBeGreaterThanOrEqual(40)
+      expect(p.x).toBeLessThanOrEqual(160)
+      expect(p.y).toBeGreaterThanOrEqual(60)
+      expect(p.y).toBeLessThanOrEqual(140)
     }
-    expect(SHAPES.filter((s) => !hasTail(s))).toEqual(['urchin', 'narration', 'none'])
+    expect(o.tails).toEqual([])
+  })
+
+  test('narration, monologue, none and urchin take no tail; the rest do', () => {
+    for (const shape of SHAPES) {
+      expect(bubbleOutline(shape, g).tails.length > 0).toBe(hasTail(shape))
+    }
+    expect(SHAPES.filter((s) => !hasTail(s))).toEqual(['urchin', 'narration', 'monologue', 'none'])
   })
 
   test('how each shape is painted', () => {
@@ -398,6 +442,7 @@ if (import.meta.vitest) {
     expect(style('normal')).toEqual({ fill: true, line: 'solid', ink: false })
     expect(style('whisper')).toEqual({ fill: true, line: 'dashed', ink: false })
     expect(style('urchin')).toEqual({ fill: true, line: 'none', ink: true })
+    expect(style('monologue')).toEqual({ fill: true, line: 'solid', ink: false })
     expect(style('none')).toEqual({ fill: false, line: 'none', ink: false })
   })
 
@@ -439,15 +484,34 @@ if (import.meta.vitest) {
 
   test('the tail reaches the tip, and its base sits inside the body', () => {
     for (const shape of ['normal', 'shout', 'electronic', 'tremble'] as const) {
-      const ps = points(bubbleOutline(shape, g).tail)
+      const ps = points(bubbleOutline(shape, g).tails[0] ?? [])
       expect(ps).toContainEqual({ x: 100, y: 190 })
       const r = ps.map((p) => Math.hypot((p.x - 100) / 60, (p.y - 100) / 40)).sort((a, b) => a - b)
       expect(r[1]).toBeLessThan(0.8)
     }
   })
 
+  test('each tail runs from the body to its own tip, in the order of the tips', () => {
+    const tips = [
+      { x: 100, y: 190 },
+      { x: 10, y: 20 },
+    ]
+    const alone = (shape: Shape, tip: Point) => bubbleOutline(shape, { ...g, tails: [tip] }).tails
+    for (const shape of SHAPES.filter(hasTail)) {
+      expect(bubbleOutline(shape, { ...g, tails: tips }).tails).toEqual(
+        tips.flatMap((tip) => alone(shape, tip)),
+      )
+    }
+    const [down, up] = bubbleOutline('normal', { ...g, tails: tips }).tails.map(points)
+    expect(down).toContainEqual({ x: 100, y: 190 })
+    expect(up).toContainEqual({ x: 10, y: 20 })
+    expect(bubbleOutline('normal', { ...g, tails: [] }).tails).toEqual([])
+    expect(bubbleOutline('narration', { ...g, tails: tips }).tails).toEqual([])
+  })
+
   test('bubbleTextBox keeps more of a box-shaped body', () => {
     expect(bubbleTextBox('narration', g)).toEqual({ x: 49, y: 66, w: 102, h: 68 })
+    expect(bubbleTextBox('monologue', g)).toEqual({ x: 49, y: 66, w: 102, h: 68 })
     expect(bubbleTextBox('none', g)).toEqual({ x: 49, y: 66, w: 102, h: 68 })
     expect(bubbleTextBox('normal', g)).toEqual({ x: 58, y: 70, w: 84, h: 60 })
   })
@@ -466,7 +530,7 @@ if (import.meta.vitest) {
 
   test('bubbleReach covers the drawn outline in every direction', () => {
     for (const shape of SHAPES) {
-      const o = bubbleOutline(shape, { ...g, tail: undefined })
+      const o = bubbleOutline(shape, { ...g, tails: undefined })
       for (const p of points([...o.body, ...o.ink])) {
         const d = Math.hypot(p.x - 100, p.y - 100)
         if (d === 0) continue
