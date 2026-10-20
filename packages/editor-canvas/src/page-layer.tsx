@@ -641,7 +641,8 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
 }
 
 /**
- * フキダシ。太線で輪郭を描いてから同じ形を白で塗り重ね、本体としっぽの継ぎ目の線を消す。
+ * フキダシ。太線で輪郭を描いてから同じ形を地の色（黒フキダシは黒、他は白）で塗り重ね、本体としっぽの継ぎ目の線を消す。
+ * 黒フキダシのセリフは白で描く。
  * 外側に残る線は太線の半分になる。枠なしは何も描かない代わりに、選択していなくても薄い破線で範囲を示す。
  * clipId を渡すと、輪郭と文字をその clipPath で切る。フキダシは内枠の外に出てよいが、セリフは断裁で
  * 切れないよう内枠の内側に寄せる
@@ -676,7 +677,9 @@ const BubbleView = memo(function BubbleView({
     panelBox({ rect: frame }, width, height),
   )
   const layout = layoutVertical(bubble.text, box)
-  const ink = onBlack && !paths.fill ? '#fff' : '#000'
+  const black = paths.fill && bubble.fill === 'black'
+  const paper = black ? '#000' : '#fff'
+  const ink = black || (onBlack && !paths.fill) ? '#fff' : '#000'
   const typeface = bubbleTypeface(bubble)
   const shapes = paths.tail === null ? [paths.body] : [paths.tail, paths.body]
   const illegible =
@@ -687,6 +690,7 @@ const BubbleView = memo(function BubbleView({
       data-bubble-id={bubble.id}
       data-shape={bubble.shape}
       data-typeface={typeface}
+      data-bubble-fill={black ? 'black' : undefined}
     >
       <g clipPath={clipId && `url(#${clipId})`}>
         {paths.line !== 'none' &&
@@ -694,7 +698,7 @@ const BubbleView = memo(function BubbleView({
             <path
               key={`stroke-${d}`}
               d={d}
-              fill="#fff"
+              fill={paper}
               stroke="#000"
               strokeWidth={BUBBLE_STROKE}
               strokeDasharray={
@@ -706,7 +710,7 @@ const BubbleView = memo(function BubbleView({
               vectorEffect="non-scaling-stroke"
             />
           ))}
-        {paths.fill && shapes.map((d) => <path key={`fill-${d}`} d={d} fill="#fff" />)}
+        {paths.fill && shapes.map((d) => <path key={`fill-${d}`} d={d} fill={paper} />)}
         {paths.ink !== null && <path d={paths.ink} fill="#000" />}
         <VerticalText
           layout={layout}
