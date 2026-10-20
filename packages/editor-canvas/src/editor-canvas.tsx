@@ -1013,12 +1013,13 @@ if (import.meta.vitest) {
       const svg = await render({ page })
       const lettered = [...svg.querySelectorAll('[data-sfx-id]')]
       expect(lettered.map((g) => g.getAttribute('data-sfx-id'))).toEqual(['fp_sfx'])
-      const text = must(svg.querySelector('[data-sfx-id="fp_sfx"] text[writing-mode]'))
+      const text = must(svg.querySelector('[data-sfx-id="fp_sfx"] text[data-dialogue]'))
+      const outline = must(svg.querySelector('[data-sfx-id="fp_sfx"] text[aria-hidden]'))
       expect(text.textContent).toBe('ドン')
       expect(text.getAttribute('font-weight')).toBe('700')
       expect(text.getAttribute('fill')).toBe('#000')
-      expect(text.getAttribute('stroke')).toBe('#fff')
-      expect(text.getAttribute('paint-order')).toBe('stroke')
+      expect(outline.getAttribute('stroke')).toBe('#fff')
+      expect(outline.getAttribute('paint-order')).toBe('stroke')
       const { w, h } = project.settings.pageSize
       const size = Math.min(panel.rect.w * w, panel.rect.h * h) * 0.25
       expect(Number(text.getAttribute('font-size'))).toBeCloseTo(size)
