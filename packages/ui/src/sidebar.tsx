@@ -88,11 +88,24 @@ export function Sidebar({
 const MIN_WIDTH = 192
 const KEY_STEP = 16
 
-/** 狭めすぎると入力欄が潰れ、広げすぎるとキャンバスが無くなるので、画面の半分までに収める */
-function clampWidth(width: number): number {
-  return Math.round(
-    Math.min(Math.max(width, MIN_WIDTH), Math.max(MIN_WIDTH, window.innerWidth / 2)),
-  )
+const MIN_CONTENT_WIDTH = 320
+
+/** 狭めすぎると入力欄が潰れ、広げすぎるとキャンバスが無くなるので、`max`（既定は画面の半分）までに収める */
+function clampWidth(width: number, max = window.innerWidth / 2): number {
+  return Math.round(Math.min(Math.max(width, MIN_WIDTH), Math.max(MIN_WIDTH, max)))
+}
+
+/** 画面の半分、かつ反対側のサイドバーを除いた残りにメインの領域が最小幅だけ残る幅 */
+function maxWidthFor(handle: HTMLElement): number {
+  const aside = handle.parentElement
+  const row = aside?.parentElement
+  const half = window.innerWidth / 2
+  if (!aside || !row) return half
+  let others = 0
+  for (const child of Array.from(row.children)) {
+    if (child !== aside && child.tagName === 'ASIDE') others += child.getBoundingClientRect().width
+  }
+  return Math.min(half, row.getBoundingClientRect().width - others - MIN_CONTENT_WIDTH)
 }
 
 /** サイドバーの内側の縁に重ねる、幅を変えるつまみ */
@@ -122,7 +135,12 @@ function ResizeHandle({
   }
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag.current) return
-    onWidthChange(clampWidth(drag.current.width + (e.clientX - drag.current.x) * outward))
+    onWidthChange(
+      clampWidth(
+        drag.current.width + (e.clientX - drag.current.x) * outward,
+        maxWidthFor(e.currentTarget),
+      ),
+    )
   }
   const onPointerEnd = () => {
     drag.current = null
@@ -131,7 +149,12 @@ function ResizeHandle({
     const direction = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
     if (direction === 0) return
     e.preventDefault()
-    onWidthChange(clampWidth(currentWidth(e.currentTarget) + direction * outward * KEY_STEP))
+    onWidthChange(
+      clampWidth(
+        currentWidth(e.currentTarget) + direction * outward * KEY_STEP,
+        maxWidthFor(e.currentTarget),
+      ),
+    )
   }
 
   return (
