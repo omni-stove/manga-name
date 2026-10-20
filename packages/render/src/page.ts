@@ -338,6 +338,29 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-typefaces', png)
   })
 
+  test('モノローグ枠は角を丸めた白地の四角をしっぽ無しで描き、ナレーションの角は丸めない', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const shapes = ['narration', 'monologue'] as const
+    const bubbles: Bubble[] = shapes.map((shape, i) => ({
+      id: `bb_${shape}`,
+      order: i + 1,
+      text: '心の声の見本',
+      shape,
+      pos: { x: 0.7 - i * 0.4, y: 0.5 },
+      size: { w: 0.25, h: 0.8 },
+      // しっぽの付かない形なので描かれない
+      tail: { x: 0.5, y: 0.95 },
+    }))
+    const panel: Panel = { ...pn1, note: undefined, camera: undefined, bubbles }
+    const page: Page = { ...emptyPage, panels: [panel, ...rest] }
+    const png = await renderPage(page, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-monologue', png)
+  })
+
   test('黒塗りのコマは輪郭の内側を黒で塗り、地の無いフキダシのセリフを白で描く', async () => {
     const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
     const bubble = {

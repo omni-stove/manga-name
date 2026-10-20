@@ -12,6 +12,7 @@ const SHAPE_TYPEFACE: Record<Bubble['shape'], Typeface> = {
   electronic: 'rounded',
   urchin: 'bold',
   narration: 'mincho',
+  monologue: 'gothic',
   none: 'gothic',
 }
 
@@ -29,6 +30,7 @@ if (import.meta.vitest) {
   test('bubbleTypeface follows the shape unless the bubble names a typeface', () => {
     expect(bubbleTypeface({ shape: 'normal' })).toBe('gothic')
     expect(bubbleTypeface({ shape: 'narration' })).toBe('mincho')
+    expect(bubbleTypeface({ shape: 'monologue' })).toBe('gothic')
     expect(bubbleTypeface({ shape: 'shout' })).toBe('bold')
     expect(bubbleTypeface({ shape: 'electronic' })).toBe('rounded')
     expect(bubbleTypeface({ shape: 'narration', typeface: 'gothic' })).toBe('gothic')
