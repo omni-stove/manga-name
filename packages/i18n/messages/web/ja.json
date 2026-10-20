@@ -152,6 +152,7 @@
   "web_canvas_menu_bubble_earlier": "順番を前へ",
   "web_canvas_menu_bubble_later": "順番を後へ",
   "web_canvas_menu_bubble_shape": "形（{shape}）…",
+  "web_canvas_menu_bubble_remove_tail": "しっぽを消す",
   "web_canvas_menu_history_change_focus_kind": "焦点の種別を変更",
   "web_canvas_menu_history_change_bubble_shape": "フキダシの形を変更",
   "web_canvas_menu_lock": "位置をロック",
