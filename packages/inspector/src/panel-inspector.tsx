@@ -9,6 +9,7 @@ import {
   type ID,
   type Panel,
   type PanelArt,
+  PanelFrameSchema,
   PanelSchema,
   type Patch,
   panelCharacterIds,
@@ -36,6 +37,11 @@ import type { PanelInspectorProps } from './types'
 const CAMERAS: readonly { value: Camera | ''; label: string }[] = [
   option('', m.none),
   ...CameraSchema.options.map((camera) => option(camera, m[`panel_camera_${camera}` as const])),
+]
+
+const FRAMES: readonly { value: NonNullable<Panel['frame']> | ''; label: string }[] = [
+  option('', m.panel_frame_solid),
+  ...PanelFrameSchema.options.map((frame) => option(frame, m[`panel_frame_${frame}` as const])),
 ]
 
 const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
@@ -112,16 +118,11 @@ export function PanelInspector({
           )
         }
       />
-      <Checkbox
-        label={m.panel_frame_none()}
-        checked={panel.frame === 'none'}
-        onChange={(e) =>
-          onChange(
-            e.target.checked
-              ? [{ op: 'add', path: '/frame', value: 'none' }]
-              : [{ op: 'remove', path: '/frame' }],
-          )
-        }
+      <SelectField
+        label={m.panel_frame()}
+        value={panel.frame ?? ''}
+        options={FRAMES}
+        onCommit={(v) => onChange(optionalString('/frame', panel.frame, v))}
       />
       <CastSection panel={panel} characters={characters} onChange={onChange} />
       {diagnosis && !diagnosis.bubbleOrderOk && (
@@ -401,8 +402,17 @@ function ArtImage({ url, alt }: { url: Promise<string | null>; alt: string }) {
 if (import.meta.vitest) {
   const { describe, expect, test, vi } = import.meta.vitest
   const { act } = await import('react')
-  const { inputLabelled, must, project, render, resolveAsset, samplePanel, setValue } =
-    await import('./dom-harness')
+  const {
+    choose,
+    inputLabelled,
+    must,
+    project,
+    render,
+    resolveAsset,
+    samplePanel,
+    selectLabelled,
+    setValue,
+  } = await import('./dom-harness')
 
   test('selectArtPatch adds when nothing is selected, replaces otherwise, and skips the same art', () => {
     expect(selectArtPatch(undefined, 'a')).toEqual([{ op: 'add', path: '/artId', value: 'a' }])
@@ -582,7 +592,7 @@ if (import.meta.vitest) {
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/fill' }])
     })
 
-    test('the borderless checkbox adds and removes frame', async () => {
+    test('the frame select adds, replaces and removes frame', async () => {
       const onChange = vi.fn<(patch: Patch) => void>()
       const props = {
         characters: project.characters,
@@ -590,22 +600,19 @@ if (import.meta.vitest) {
         onGenerate: () => {},
         resolveAsset,
       }
-      const checkboxIn = (container: HTMLElement) =>
-        must(
-          [...container.querySelectorAll('label')]
-            .find((el) => el.textContent === m.panel_frame_none())
-            ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
-        )
       const { container, root } = await render(<PanelInspector panel={samplePanel} {...props} />)
-      expect(checkboxIn(container).checked).toBe(false)
-      await act(async () => checkboxIn(container).click())
+      const select = () => selectLabelled(container, m.panel_frame())
+      expect(select().value).toBe('')
+      await choose(select(), 'none')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/frame', value: 'none' }])
 
       await act(async () =>
         root.render(<PanelInspector panel={{ ...samplePanel, frame: 'none' }} {...props} />),
       )
-      expect(checkboxIn(container).checked).toBe(true)
-      await act(async () => checkboxIn(container).click())
+      expect(select().value).toBe('none')
+      await choose(select(), 'wavy')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/frame', value: 'wavy' }])
+      await choose(select(), '')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/frame' }])
     })
 

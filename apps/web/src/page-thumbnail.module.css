@@ -11,6 +11,11 @@
   stroke: var(--paper-edge);
 }
 
+.blackPaper {
+  fill: var(--ink);
+  stroke: var(--paper-edge);
+}
+
 .panel {
   fill: none;
   stroke: var(--ink);

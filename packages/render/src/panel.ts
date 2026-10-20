@@ -1,5 +1,5 @@
 import { m } from '@manga/i18n'
-import { type Camera, cornerAnchor } from '@manga/schema'
+import { type Camera, cornerAnchor, type Panel, softEdgeStrokes } from '@manga/schema'
 import { FONT_FAMILY } from './backend'
 import type { PxPoint, PxRect } from './geometry'
 import { alphabeticY, wrapHorizontal } from './text'
@@ -54,14 +54,65 @@ export function fillOutline(ctx: Ctx, outline: readonly PxPoint[], color: string
   ctx.restore()
 }
 
-export function drawFrame(ctx: Ctx, outline: readonly PxPoint[], lineWidth: number): void {
+/**
+ * 輪郭 outline に枠線を引く。dashed は破線、double は太い黒線の中央を白で抜いた二重線にし、
+ * 他は実線。枠線を引かない枠（hasFrameLine が false）かは呼び出し側が見る
+ */
+export function drawFrame(
+  ctx: Ctx,
+  outline: readonly PxPoint[],
+  lineWidth: number,
+  frame: Panel['frame'],
+): void {
+  const stroke = (width: number, color: string) => {
+    ctx.lineWidth = width
+    ctx.strokeStyle = color
+    tracePolygon(ctx, outline)
+    ctx.stroke()
+  }
   ctx.save()
-  ctx.lineWidth = lineWidth
-  ctx.strokeStyle = '#000'
   ctx.lineJoin = 'miter'
-  tracePolygon(ctx, outline)
-  ctx.stroke()
+  if (frame === 'dashed') ctx.setLineDash([lineWidth * 4, lineWidth * 3])
+  if (frame === 'double') {
+    stroke(lineWidth * 4, '#000')
+    stroke(lineWidth * 2, '#fff')
+  } else stroke(lineWidth, '#000')
   ctx.restore()
+}
+
+/** ぼかし枠。輪郭 outline の内側の縁を、softEdgeStrokes の線で地の色 color へぼかす */
+export function drawSoftEdge(
+  ctx: Ctx,
+  outline: readonly PxPoint[],
+  unit: number,
+  color: string,
+): void {
+  withClip(ctx, outline, () => {
+    ctx.strokeStyle = color
+    ctx.lineJoin = 'round'
+    for (const { width, alpha } of softEdgeStrokes(unit)) {
+      ctx.globalAlpha = alpha
+      ctx.lineWidth = width
+      tracePolygon(ctx, outline)
+      ctx.stroke()
+    }
+  })
+}
+
+/** 画素 data（RGBA）を、TONE_MATRICES と同じ並びの色の行列 matrix で書き換える */
+export function applyColorMatrix(data: Uint8ClampedArray, matrix: readonly number[]): void {
+  const k = (i: number) => matrix[i] ?? 0
+  for (let i = 0; i < data.length; i += 4) {
+    const r = (data[i] ?? 0) / 255
+    const g = (data[i + 1] ?? 0) / 255
+    const b = (data[i + 2] ?? 0) / 255
+    const a = (data[i + 3] ?? 0) / 255
+    for (let row = 0; row < 4; row++) {
+      const o = row * 5
+      const v = k(o) * r + k(o + 1) * g + k(o + 2) * b + k(o + 3) * a + k(o + 4)
+      data[i + row] = Math.round(v * 255)
+    }
+  }
 }
 
 /**
@@ -168,6 +219,7 @@ export function drawNotesMargin(
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
   const { getBackend, loadFonts } = await import('./backend')
+  const { TONE_MATRICES } = await import('@manga/schema')
 
   const GREY = [128, 128, 128]
   const WHITE = [255, 255, 255]
@@ -213,11 +265,40 @@ if (import.meta.vitest) {
   const inTriangle = (x: number, y: number) => x + y <= 101
 
   test('drawFrame strokes the outline in black and leaves the inside alone', async () => {
-    const { at } = await paint(100, 100, (ctx) => drawFrame(ctx, square(20, 20, 60), 4))
+    const { at } = await paint(100, 100, (ctx) => drawFrame(ctx, square(20, 20, 60), 4, undefined))
     expect(at(20, 50)).toEqual([0, 0, 0])
     expect(at(80, 50)).toEqual([0, 0, 0])
     expect(at(50, 50)).toEqual(GREY)
     expect(at(10, 50)).toEqual(GREY)
+  })
+
+  test('drawFrame dashes the dashed frame and hollows the double frame with white', async () => {
+    const dashed = await paint(100, 100, (ctx) => drawFrame(ctx, square(20, 20, 60), 2, 'dashed'))
+    const column = Array.from({ length: 60 }, (_, i) => dashed.at(20, 20 + i)[0])
+    expect(column).toContain(0)
+    expect(column).toContain(128)
+
+    const double = await paint(100, 100, (ctx) => drawFrame(ctx, square(20, 20, 60), 2, 'double'))
+    expect(double.at(20, 50)).toEqual(WHITE)
+    expect(double.at(17, 50)).toEqual([0, 0, 0])
+    expect(double.at(23, 50)).toEqual([0, 0, 0])
+    expect(double.at(50, 50)).toEqual(GREY)
+  })
+
+  test('drawSoftEdge fades the inside edge to the colour and leaves the centre and outside alone', async () => {
+    const { at } = await paint(100, 100, (ctx) => drawSoftEdge(ctx, square(0, 0, 100), 100, '#fff'))
+    // 縁の画素の中心は輪郭から 0.5px 内側なので、ほぼ白
+    expect(at(0, 50)[0]).toBeGreaterThan(240)
+    const [mid] = at(2, 50)
+    expect(mid).toBeGreaterThan(128)
+    expect(mid).toBeLessThan(255)
+    expect(at(50, 50)).toEqual(GREY)
+  })
+
+  test('applyColorMatrix maps each pixel through the matrix', () => {
+    const data = new Uint8ClampedArray([255, 255, 255, 255, 0, 0, 0, 255])
+    applyColorMatrix(data, TONE_MATRICES.faded)
+    expect([...data]).toEqual([255, 255, 255, 255, 102, 102, 102, 255])
   })
 
   test('fillOutline paints the inside of the outline and leaves the outside alone', async () => {

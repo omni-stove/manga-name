@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 14 as const
+export const SCHEMA_VERSION = 15 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -93,6 +93,15 @@ export const FocusPointSchema = z.object({
   locked: z.boolean().optional(),
 })
 
+/**
+ * コマの枠線。none は枠線を引かず、他のコマを上に重ねる下敷きの大ゴマにもなる。
+ * round（角丸）、wavy（波線）、soft（ぼかし）は回想・夢、dashed（破線）、double（二重線）は過去や画面の中に使う。
+ * soft は枠線を引かず、絵の縁を紙の地の色へぼかす。画面には messages/schema の `panel_frame_<値>` で出す
+ */
+export const PanelFrameSchema = z.enum(['none', 'round', 'wavy', 'dashed', 'double', 'soft'])
+/** コマの絵に掛ける色調。sepia は茶色、faded は色を抜いて薄くし、回想に使う。画面には `page_tone_<値>` で出す */
+export const PageToneSchema = z.enum(['sepia', 'faded'])
+
 export const VectorKindSchema = z.enum(['gaze', 'motion', 'speed'])
 /** コマの画面の切り取り方。画面には messages/schema の `panel_camera_<値>` で出す */
 export const CameraSchema = z.enum([
@@ -152,8 +161,8 @@ const PanelBaseSchema = z.object({
   shape: z.array(PointSchema).min(3).optional(),
   /** コマの地の色。黒は暗転や無音の間に使う。絵があれば絵が上に乗る */
   fill: z.enum(['black']).optional(),
-  /** 枠線。none は枠線を引かず、他のコマを上に重ねる下敷きの大ゴマにもなる。省略は枠あり */
-  frame: z.enum(['none']).optional(),
+  /** 枠線。省略は実線の枠 */
+  frame: PanelFrameSchema.optional(),
   bubbles: z.array(BubbleSchema),
   note: z.string().optional(),
   camera: CameraSchema.optional(),
@@ -204,6 +213,10 @@ const PageBaseSchema = z.object({
    * 左右のページに分けないのは、ノドをまたぐコマを 1 つのコマのまま持つため
    */
   spread: z.literal(true).optional(),
+  /** 紙の地の色。黒は間白とタチキリの外を黒ベタにし、回想のページに使う。省略は白 */
+  ground: z.enum(['black']).optional(),
+  /** コマの絵に掛ける色調。フキダシと枠には掛けない。省略は生成したままの色 */
+  tone: PageToneSchema.optional(),
   panels: z.array(PanelSchema),
   reference: ReferenceImageSchema.optional(),
   scribbles: z.array(StrokeSchema),

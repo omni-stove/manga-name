@@ -6,6 +6,9 @@ import {
   clipTextBox,
   cornerAnchor,
   currentArt,
+  frameOutline,
+  groundColor,
+  hasFrameLine,
   type ID,
   innerFrameOf,
   type Page,
@@ -14,6 +17,8 @@ import {
   paintOrder,
   type Rect,
   type ReferenceImage,
+  softEdgeStrokes,
+  TONE_MATRICES,
 } from '@manga/schema'
 import { memo, Suspense, use, useState } from 'react'
 import { type AssetState, loadAsset } from './asset'
@@ -62,16 +67,25 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
   const { page, width, height } = props
   const frame = innerFrameOf(page)
   const panels = paintOrder(page.panels)
-  // 参考画像を未生成のコマ越しに見せたいので、白い地は下敷きのあるページの枠ありのコマにだけ塗る
-  const underlay = page.panels.some((p) => p.frame === 'none')
+  // 参考画像を未生成のコマ越しに見せたいので、白い地は下敷きのあるページか黒い地のページの枠ありのコマにだけ塗る
+  const opaque = page.ground === 'black' || page.panels.some((p) => p.frame === 'none')
+  const ground = groundColor(page)
+  const unit = page.spread ? width / 2 : width
+  const toneId = page.tone && `${props.idPrefix}-tone`
   return (
     <g data-layer="page">
+      {page.tone && (
+        <filter id={toneId} colorInterpolationFilters="sRGB" data-tone={page.tone}>
+          <feColorMatrix type="matrix" values={TONE_MATRICES[page.tone].join(' ')} />
+        </filter>
+      )}
       <rect
         x={0}
         y={0}
         width={width}
         height={height}
-        fill="#fff"
+        fill={ground}
+        data-ground={page.ground ?? 'white'}
         style={{ stroke: 'var(--paper-edge)' }}
         strokeWidth={1}
         vectorEffect="non-scaling-stroke"
@@ -105,7 +119,10 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
                 : undefined
             }
             clipId={`${props.idPrefix}-clip-${i}`}
-            opaque={underlay && panel.frame !== 'none'}
+            opaque={opaque && panel.frame !== 'none'}
+            unit={unit}
+            ground={ground}
+            toneId={toneId}
           />
         )
       })}
@@ -147,6 +164,13 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
   )
 })
 
+/** 枠線の点線。破線の枠は黒の破線、線を引かない枠は作業用の細かい点線。選択中は実線 */
+function frameDash(frame: Panel['frame'], selected: boolean): string | undefined {
+  if (selected) return undefined
+  if (frame === 'dashed') return '6 3'
+  return hasFrameLine(frame) ? undefined : '4 3'
+}
+
 const isSelected = (selection: Selection, kind: 'panel' | 'bubble', id: ID) =>
   selection?.kind === kind && selection.id === id
 
@@ -164,6 +188,9 @@ const PanelView = memo(function PanelView({
   selectedBubble,
   clipId,
   opaque,
+  unit,
+  ground,
+  toneId,
 }: {
   panel: Panel
   width: number
@@ -175,12 +202,19 @@ const PanelView = memo(function PanelView({
   selected: boolean
   selectedBubble: ID | undefined
   clipId: string
-  /** 下に敷いた枠なしのコマを隠す白い地を塗るか */
+  /** 下に敷いた枠なしのコマか黒い紙の地を隠す白い地を塗るか */
   opaque: boolean
+  /** 1 ページの幅（mm）。枠の形の大きさを決める */
+  unit: number
+  /** 紙の地の色。ぼかし枠はこの色へぼかす */
+  ground: string
+  /** 絵に掛ける色調の filter の id。色調が無ければ undefined */
+  toneId: string | undefined
 }) {
   const rect = panelBox(panel, width, height)
-  const outline = panelPolygon(panel, width, height)
+  const outline = frameOutline(panelPolygon(panel, width, height), panel.frame, unit)
   const points = polygonPoints(outline)
+  const line = hasFrameLine(panel.frame)
   const placeholder = (
     <g clipPath={`url(#${clipId})`}>
       <Placeholder panel={panel} rect={rect} error={false} />
@@ -205,9 +239,25 @@ const PanelView = memo(function PanelView({
             panel={panel}
             rect={rect}
             clipId={clipId}
+            toneId={toneId}
             loaded={loadAsset(resolveAsset, artRef)}
           />
         </Suspense>
+      )}
+      {panel.frame === 'soft' && (
+        <g clipPath={`url(#${clipId})`} data-soft-edge="">
+          {softEdgeStrokes(unit).map(({ width: w, alpha }) => (
+            <polygon
+              key={w}
+              points={points}
+              fill="none"
+              stroke={ground}
+              strokeOpacity={alpha}
+              strokeWidth={w}
+              strokeLinejoin="round"
+            />
+          ))}
+        </g>
       )}
       <PanelNumber order={panel.order} outline={outline} locked={panel.locked === true} />
       {/* 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く */}
@@ -224,19 +274,30 @@ const PanelView = memo(function PanelView({
           onBlack={panel.fill === 'black'}
         />
       ))}
-      {/* 枠なしのコマは出力に枠線が出ないが、選んで動かせるよう作業用の点線で輪郭を見せる */}
+      {/* 枠線を引かないコマは出力に枠線が出ないが、選んで動かせるよう作業用の点線で輪郭を見せる */}
       <polygon
         data-panel-frame={panel.frame ?? ''}
         points={points}
         fill="none"
         stroke="#000"
-        strokeDasharray={panel.frame === 'none' && !selected ? '4 3' : undefined}
-        style={selected || panel.frame === 'none' ? { stroke: GUIDE } : undefined}
+        strokeDasharray={frameDash(panel.frame, selected)}
+        style={selected || !line ? { stroke: GUIDE } : undefined}
         data-selected={selected || undefined}
-        strokeWidth={selected ? 2 : 1}
+        strokeWidth={selected ? 2 : panel.frame === 'double' ? 3 : 1}
         strokeLinejoin="miter"
         vectorEffect="non-scaling-stroke"
       />
+      {/* 二重線は太い線の中央を白で抜く。選択中は選択色の 1 本にする */}
+      {panel.frame === 'double' && !selected && (
+        <polygon
+          points={points}
+          fill="none"
+          stroke="#fff"
+          strokeWidth={1}
+          strokeLinejoin="miter"
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
     </g>
   )
 })
@@ -246,11 +307,13 @@ function PanelArt({
   panel,
   rect,
   clipId,
+  toneId,
   loaded,
 }: {
   panel: Panel
   rect: Box
   clipId: string
+  toneId: string | undefined
   loaded: Promise<AssetState>
 }) {
   const asset = use(loaded)
@@ -270,6 +333,7 @@ function PanelArt({
       height={rect.h}
       preserveAspectRatio="xMidYMid slice"
       clipPath={`url(#${clipId})`}
+      filter={toneId && `url(#${toneId})`}
       onError={() => setBroken(true)}
     />
   )
