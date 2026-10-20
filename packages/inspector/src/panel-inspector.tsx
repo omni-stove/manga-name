@@ -50,7 +50,7 @@ const TONES: readonly { value: NonNullable<Panel['tone']> | ''; label: string }[
   ...PanelToneSchema.options.map((tone) => option(tone, m[`panel_tone_${tone}` as const])),
 ]
 
-const isOrder =(n: number) => PanelSchema.shape.order.safeParse(n).success
+const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
 
 /** `arts` の中から選ぶ。`artId` が無ければ add、あれば replace */
 function selectArtPatch(artId: ID | undefined, next: ID): Patch {

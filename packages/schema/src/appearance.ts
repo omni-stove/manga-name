@@ -161,10 +161,7 @@ export function softEdgeStrokes(unit: number): { width: number; alpha: number }[
  * コマの絵に掛ける色調。コマの tone があればそれを、無ければページの tone をとり、none と省略は undefined（掛けない）を返す。
  * 色調を掛けた絵を描く所は、どれもこの関数で色調を決める
  */
-export const panelTone = (
-  page: Pick<Page, 'tone'>,
-  panel: Pick<Panel, 'tone'>,
-): Page['tone'] => {
+export const panelTone = (page: Pick<Page, 'tone'>, panel: Pick<Panel, 'tone'>): Page['tone'] => {
   const tone = panel.tone ?? page.tone
   return tone === 'none' ? undefined : tone
 }

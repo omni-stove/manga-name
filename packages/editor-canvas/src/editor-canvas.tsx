@@ -849,7 +849,9 @@ if (import.meta.vitest) {
       })
       const filter = must(svg.querySelector('filter[data-tone="sepia"]'))
       const images = [...svg.querySelectorAll('[data-panel-id] image[filter]')]
-      const panelIds = images.map((i) => i.closest('[data-panel-id]')?.getAttribute('data-panel-id'))
+      const panelIds = images.map((i) =>
+        i.closest('[data-panel-id]')?.getAttribute('data-panel-id'),
+      )
       expect(panelIds).toEqual(['pn_1'])
       expect(images[0]?.getAttribute('filter')).toBe(`url(#${filter.id})`)
     })

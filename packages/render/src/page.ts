@@ -102,9 +102,7 @@ export async function drawPage(
 
   const innerRect = rectToPx(innerFrameOf(page), pageRect)
   const panels = paintOrder(page.panels)
-  const arts = await Promise.all(
-    panels.map((panel) => loadArt(panel, ctx, panelTone(page, panel))),
-  )
+  const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx, panelTone(page, panel))))
   // 黒塗りのコマと、黒い地の上の枠なしのコマは、中が黒い
   const blackInside = (panel: Panel) =>
     panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')
