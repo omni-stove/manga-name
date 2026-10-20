@@ -335,6 +335,30 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-typefaces', png)
   })
 
+  test('しっぽの複数あるフキダシは、しっぽごとに本体から先端へ描く', async () => {
+    const panels = emptyPage.panels.map((panel) => ({
+      ...panel,
+      bubbles: panel.bubbles.map((b, i) =>
+        i === 0
+          ? {
+              ...b,
+              tails: [
+                ...(b.tails ?? []),
+                { x: 0.95, y: 0.9 },
+                { x: 0.5, y: 0.05 },
+              ],
+            }
+          : b,
+      ),
+    }))
+    const png = await renderPage({ ...emptyPage, panels }, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-tails', png)
+  })
+
   test('黒塗りのコマは輪郭の内側を黒で塗り、地の無いフキダシのセリフを白で描く', async () => {
     const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
     const bubble = {

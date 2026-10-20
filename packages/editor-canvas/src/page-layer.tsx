@@ -669,7 +669,7 @@ const BubbleView = memo(function BubbleView({
   const ink = onBlack && !paths.fill ? '#fff' : '#000'
   const typeface = bubbleTypeface(bubble)
   const font = TYPEFACES[typeface]
-  const shapes = paths.tail === null ? [paths.body] : [paths.tail, paths.body]
+  const shapes = [...paths.tails, paths.body]
   const illegible =
     layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
@@ -681,9 +681,10 @@ const BubbleView = memo(function BubbleView({
     >
       <g clipPath={clipId && `url(#${clipId})`}>
         {paths.line !== 'none' &&
-          shapes.map((d) => (
+          shapes.map((d, i) => (
             <path
-              key={`stroke-${d}`}
+              // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
+              key={`stroke-${i}`}
               d={d}
               fill="#fff"
               stroke="#000"
@@ -697,7 +698,11 @@ const BubbleView = memo(function BubbleView({
               vectorEffect="non-scaling-stroke"
             />
           ))}
-        {paths.fill && shapes.map((d) => <path key={`fill-${d}`} d={d} fill="#fff" />)}
+        {paths.fill &&
+          shapes.map((d, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
+            <path key={`fill-${i}`} d={d} fill="#fff" />
+          ))}
         {paths.ink !== null && <path d={paths.ink} fill="#000" />}
         {layout.columns.length > 0 && (
           <>

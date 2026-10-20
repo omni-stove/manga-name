@@ -71,7 +71,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * 頂点をドラッグで動かし、矩形のコマも Alt + 隅のドラッグで頂点を動かせる。
  * 端は他のコマとページの端に 0.01 以内で吸い付き、頂点は他のコマの頂点にも吸い付く。
  * `bubble` ツールではコマのクリックでフキダシを作り、ドラッグで移動、隅のハンドルでリサイズ、
- * しっぽの先端のドラッグでしっぽを動かす。セリフは縦書きで、収まらなければ末尾を省略記号にする。
+ * しっぽごとの先端のドラッグでそのしっぽを動かし、しっぽを足すハンドルのドラッグでしっぽを増やす。セリフは縦書きで、収まらなければ末尾を省略記号にする。
  * Patch はページ root 基準で `onChange` に 1 操作 1 回出し、Undo / Redo は持たない。
  * `focus` ツールではクリックで焦点を置き、ドラッグで動かす。`vector` ツールではドラッグでベクトルを作り、
  * 終点（と始点）が焦点かフキダシの上なら `targetFocusId`（と `sourceFocusId`）を付ける。
@@ -688,7 +688,7 @@ if (import.meta.vitest) {
     })
 
     test('dialogue of a bubble cut by the panel edge sits in the visible part', async () => {
-      const svg = await render({ page: withBubble3({ pos: { x: 1, y: 0.5 }, tail: undefined }) })
+      const svg = await render({ page: withBubble3({ pos: { x: 1, y: 0.5 }, tails: undefined }) })
       const panel = must(samplePage.panels.find((p) => p.id === 'pn_3'))
       const edge = (panel.rect.x + panel.rect.w) * project.settings.pageSize.w
       const columns = [...svg.querySelectorAll('[data-bubble-id="bb_3"] tspan')]
@@ -1098,7 +1098,7 @@ if (import.meta.vitest) {
       key(svg, { key: 'ArrowUp' })
       expect(onChange).toHaveBeenCalledWith([
         { op: 'replace', path: '/panels/2/bubbles/0/pos/y', value: 0.24 },
-        { op: 'replace', path: '/panels/2/bubbles/0/tail/y', value: 0.37 },
+        { op: 'replace', path: '/panels/2/bubbles/0/tails/0/y', value: 0.37 },
       ])
     })
 
@@ -2144,7 +2144,7 @@ if (import.meta.vitest) {
       expect(svg.querySelector('[data-layer="bubble-tool"][data-draft]')).toBeNull()
       expect(patchOf(onChange)).toEqual([
         { op: 'replace', path: '/panels/2/bubbles/0/pos', value: { x: 0.75, y: 0.25 } },
-        { op: 'replace', path: '/panels/2/bubbles/0/tail', value: { x: 0.54, y: 0.38 } },
+        { op: 'replace', path: '/panels/2/bubbles/0/tails', value: [{ x: 0.54, y: 0.38 }] },
       ])
       expect(onSelect).toHaveBeenCalledTimes(1)
       expect(onSelect).toHaveBeenCalledWith({ kind: 'bubble', id: 'bb_3' })
@@ -2184,15 +2184,17 @@ if (import.meta.vitest) {
       expect(onChange).not.toHaveBeenCalled()
     })
 
-    test('the selected bubble shows four corner handles and its tail handle', async () => {
+    test('the selected bubble shows four corner handles, its tail handle and one to add a tail', async () => {
       const svg = await render({ tool: 'bubble', selection: { kind: 'bubble', id: 'bb_3' } })
       const layer = must(svg.querySelector('[data-layer="bubble-tool"]'))
       expect(
         [...layer.querySelectorAll('[data-handle]')].map((h) => h.getAttribute('data-handle')),
       ).toEqual(['nw', 'ne', 'se', 'sw'])
-      expect(must(layer.querySelector('[data-tail-handle]')).getAttribute('data-tail-handle')).toBe(
-        'set',
-      )
+      expect(
+        [...layer.querySelectorAll('[data-tail-handle]')].map((h) =>
+          h.getAttribute('data-tail-handle'),
+        ),
+      ).toEqual(['set', 'unset'])
       const select = await render({ tool: 'select', selection: { kind: 'bubble', id: 'bb_3' } })
       expect(select.querySelector('[data-layer="bubble-tool"]')).toBeNull()
     })
@@ -2246,8 +2248,109 @@ if (import.meta.vitest) {
       const handle = inPanel('pn_1', 0.92, 0.22 + 0.275 * 1.5)
       drag(svg, handle, inPanel('pn_1', 0.7, 0.9))
       expect(patchOf(onChange)).toEqual([
-        { op: 'add', path: '/panels/0/bubbles/0/tail', value: { x: 0.7, y: 0.9 } },
+        { op: 'add', path: '/panels/0/bubbles/0/tails', value: [{ x: 0.7, y: 0.9 }] },
       ])
+    })
+
+    // bb_3 は中心 (0.85, 0.25)、半径 (0.11, 0.2) で、しっぽの先端は (0.64, 0.38)
+    const withTails = (tails: { x: number; y: number }[]): Page => ({
+      ...samplePage,
+      panels: samplePage.panels.map((p) => ({
+        ...p,
+        bubbles: p.bubbles.map((b) => (b.id === 'bb_3' ? { ...b, tails } : b)),
+      })),
+    })
+
+    test('dragging the add handle of a tailed bubble adds a second tail, drawn with the first', async () => {
+      const onChange = vi.fn()
+      const svg = await render({
+        tool: 'bubble',
+        onChange,
+        selection: { kind: 'bubble', id: 'bb_3' },
+      })
+      layout(svg)
+      // 既存のしっぽは左下なので、足すハンドルは真下の中心から縦の半径の 1.5 倍に出る
+      drag(svg, inPanel('pn_3', 0.85, 0.25 + 0.2 * 1.5), inPanel('pn_3', 0.9, 0.9))
+      expect(patchOf(onChange)).toEqual([
+        {
+          op: 'replace',
+          path: '/panels/2/bubbles/0/tails',
+          value: [
+            { x: 0.64, y: 0.38 },
+            { x: 0.9, y: 0.9 },
+          ],
+        },
+      ])
+
+      const two = await render({
+        page: withTails([
+          { x: 0.64, y: 0.38 },
+          { x: 0.9, y: 0.9 },
+        ]),
+        tool: 'bubble',
+        selection: { kind: 'bubble', id: 'bb_3' },
+      })
+      const bubble = must(two.querySelector('.ec-bubble[data-bubble-id="bb_3"]'))
+      // しっぽ 2 本と本体を、線と塗りで 2 回ずつ描く
+      expect(bubble.querySelectorAll('path[fill="#fff"]:not([stroke])')).toHaveLength(3)
+      expect(two.querySelectorAll('[data-tail-handle="set"]')).toHaveLength(2)
+    })
+
+    test('dragging one of two tails moves only that tail and makes it the last', async () => {
+      const onChange = vi.fn()
+      const svg = await render({
+        page: withTails([
+          { x: 0.64, y: 0.38 },
+          { x: 0.95, y: 0.6 },
+        ]),
+        tool: 'bubble',
+        onChange,
+        selection: { kind: 'bubble', id: 'bb_3' },
+      })
+      layout(svg)
+      drag(svg, inPanel('pn_3', 0.64, 0.38), inPanel('pn_3', 0.6, 0.5))
+      expect(patchOf(onChange)).toEqual([
+        {
+          op: 'replace',
+          path: '/panels/2/bubbles/0/tails',
+          value: [
+            { x: 0.95, y: 0.6 },
+            { x: 0.6, y: 0.5 },
+          ],
+        },
+      ])
+    })
+
+    test('pressing a tail without moving makes it the last touched one', async () => {
+      const onChange = vi.fn()
+      const onSelect = vi.fn()
+      const svg = await render({
+        page: withTails([
+          { x: 0.64, y: 0.38 },
+          { x: 0.95, y: 0.6 },
+        ]),
+        tool: 'bubble',
+        onChange,
+        onSelect,
+        selection: { kind: 'bubble', id: 'bb_3' },
+      })
+      layout(svg)
+      click(svg, inPanel('pn_3', 0.64, 0.38))
+      expect(patchOf(onChange)).toEqual([
+        {
+          op: 'replace',
+          path: '/panels/2/bubbles/0/tails',
+          value: [
+            { x: 0.95, y: 0.6 },
+            { x: 0.64, y: 0.38 },
+          ],
+        },
+      ])
+      onChange.mockClear()
+      // 最後のしっぽを押しても並びは変わらない
+      click(svg, inPanel('pn_3', 0.95, 0.6))
+      expect(onChange).not.toHaveBeenCalled()
+      expect(onSelect).not.toHaveBeenCalled()
     })
 
     test('Escape cancels a bubble drag without a patch or a deselect', async () => {
@@ -2301,7 +2404,7 @@ if (import.meta.vitest) {
       fire(svg, pointer('pointerup', { id: 1, ...to }))
       expect(patchOf(onChange)).toEqual([
         { op: 'replace', path: '/panels/2/bubbles/0/pos', value: { x: 0.75, y: 0.25 } },
-        { op: 'replace', path: '/panels/2/bubbles/0/tail', value: { x: 0.54, y: 0.38 } },
+        { op: 'replace', path: '/panels/2/bubbles/0/tails', value: [{ x: 0.54, y: 0.38 }] },
       ])
     })
 
@@ -2592,7 +2695,7 @@ if (import.meta.vitest) {
                   shape: SHAPES[i % SHAPES.length] ?? 'normal',
                   pos: { x: 0.5, y: 0.5 },
                   size: { w: 0.5, h: 0.6 },
-                  tail: { x: 0.2, y: 0.95 },
+                  tails: [{ x: 0.2, y: 0.95 }],
                 },
               ]
             : []

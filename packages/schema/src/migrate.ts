@@ -34,6 +34,23 @@ function cameraToEnum(panel: Json): Json {
   return { ...rest, note }
 }
 
+/** v17 の 1 本だけの Bubble.tail を v18 の Bubble.tails の 1 本目にする */
+function tailToTails(bubble: Json): Json {
+  if (!Object.hasOwn(bubble, 'tail')) return bubble
+  const { tail, ...rest } = bubble
+  return tail === undefined || tail === null ? rest : { ...rest, tails: [tail] }
+}
+
+/** 全ページの全コマに fn を当てる */
+const mapPanels = (json: Json, fn: (panel: Json) => Json): unknown =>
+  mapObjects(json.episodes, (episode) => ({
+    ...episode,
+    pages: mapObjects(episode.pages, (page) => ({
+      ...page,
+      panels: mapObjects(page.panels, fn),
+    })),
+  }))
+
 /** 版 N の JSON を版 N+1 に上げる関数。キーは元の版 */
 const migrations: Record<number, (json: Record<string, unknown>) => Record<string, unknown>> = {
   // v2 は Panel.shape を足しただけで、v1 の JSON はそのまま v2 として読める。版を上げるのは、
@@ -61,17 +78,7 @@ const migrations: Record<number, (json: Record<string, unknown>) => Record<strin
   // v12 は Panel.frame を足しただけ。版を上げる理由は v2 と同じ
   11: (json) => ({ ...json, schemaVersion: 12 }),
   // v13 は Panel.camera を自由記述から CameraSchema の値にした
-  12: (json) => ({
-    ...json,
-    schemaVersion: 13,
-    episodes: mapObjects(json.episodes, (episode) => ({
-      ...episode,
-      pages: mapObjects(episode.pages, (page) => ({
-        ...page,
-        panels: mapObjects(page.panels, cameraToEnum),
-      })),
-    })),
-  }),
+  12: (json) => ({ ...json, schemaVersion: 13, episodes: mapPanels(json, cameraToEnum) }),
   // v14 は Page.side を除き、Page.spread と Episode.startsRight を足した。残った side は ProjectSchema が読み捨てる。
   // 版を上げる理由は v6 と同じ
   13: (json) => ({ ...json, schemaVersion: 14 }),
@@ -81,6 +88,15 @@ const migrations: Record<number, (json: Record<string, unknown>) => Record<strin
   15: (json) => ({ ...json, schemaVersion: 16 }),
   // v17 は Page.overlay と Panel.frame の cloud を足しただけ。版を上げる理由は v6 と同じ
   16: (json) => ({ ...json, schemaVersion: 17 }),
+  // v18 は Bubble.tail を、しっぽを何本も持てる Bubble.tails にした
+  17: (json) => ({
+    ...json,
+    schemaVersion: 18,
+    episodes: mapPanels(json, (panel) => ({
+      ...panel,
+      bubbles: mapObjects(panel.bubbles, tailToTails),
+    })),
+  }),
 }
 
 /**
@@ -109,16 +125,53 @@ export function migrate(json: unknown): unknown {
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('migrate v17 → v17 is a no-op', () => {
-    const json = { schemaVersion: 17, title: 't' }
+  test('migrate v18 → v18 is a no-op', () => {
+    const json = { schemaVersion: 18, title: 't' }
     expect(migrate(json)).toBe(json)
   })
 
-  test('migrate v1 → v17 only bumps the version of a project without cameras', () => {
-    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 17, title: 't' })
+  test('migrate v1 → v18 only bumps the version of a project without cameras', () => {
+    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 18, title: 't' })
   })
 
-  test('migrate v12 → v17 turns the suggested camera names into values and moves the rest to the note', () => {
+  test('migrate v17 → v18 turns the single tail into the first of the tails', () => {
+    const bubbles = [
+      { id: 'a', tail: { x: 0.1, y: 0.9 } },
+      { id: 'b' },
+      { id: 'c', tail: null },
+      'broken',
+    ]
+    const panels = [{ id: 'p', bubbles }]
+    const json = { schemaVersion: 17, episodes: [{ pages: [{ panels }] }] }
+    const migrated = migrate(json)
+    expect(migrated).toEqual({
+      schemaVersion: 18,
+      episodes: [
+        {
+          pages: [
+            {
+              panels: [
+                {
+                  id: 'p',
+                  bubbles: [
+                    { id: 'a', tails: [{ x: 0.1, y: 0.9 }] },
+                    { id: 'b' },
+                    { id: 'c' },
+                    'broken',
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    const first = ['episodes', 0, 'pages', 0, 'panels', 0, 'bubbles', 0]
+    expect(migrated).toHaveProperty([...first, 'tails'])
+    expect(migrated).not.toHaveProperty([...first, 'tail'])
+  })
+
+  test('migrate v12 → v18 turns the suggested camera names into values and moves the rest to the note', () => {
     const panels = [
       { id: 'a', camera: 'ロング' },
       { id: 'b', camera: ' あおり ' },
@@ -129,7 +182,7 @@ if (import.meta.vitest) {
     ]
     const json = { schemaVersion: 12, episodes: [{ pages: [{ panels }] }] }
     expect(migrate(json)).toEqual({
-      schemaVersion: 17,
+      schemaVersion: 18,
       episodes: [
         {
           pages: [
@@ -150,7 +203,7 @@ if (import.meta.vitest) {
   })
 
   test('migrate rejects unknown, newer or missing versions and non-objects', () => {
-    expect(() => migrate({ schemaVersion: 18 })).toThrow()
+    expect(() => migrate({ schemaVersion: 19 })).toThrow()
     expect(() => migrate({ schemaVersion: 0 })).toThrow()
     expect(() => migrate({})).toThrow()
     expect(() => migrate(null)).toThrow()

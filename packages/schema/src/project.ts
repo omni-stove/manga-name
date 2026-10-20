@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 17 as const
+export const SCHEMA_VERSION = 18 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -67,7 +67,8 @@ export const BubbleSchema = z.object({
   ]),
   pos: PointSchema,
   size: SizeSchema,
-  tail: PointSchema.optional(),
+  /** しっぽの先端。1 本ずつ描く。最後の要素を最後に触ったしっぽとして「しっぽを消す」が消す */
+  tails: z.array(PointSchema).optional(),
   /** 省略は形に合わせる（bubbleTypeface） */
   typeface: BubbleTypefaceSchema.optional(),
   overflow: z.boolean().optional(),

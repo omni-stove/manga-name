@@ -19,7 +19,7 @@ export function bubbleGeometry(bubble: Bubble, panel: PxRect): BubbleGeometry {
     cy,
     rx: w / 2,
     ry: h / 2,
-    tail: bubble.tail && pointToPx(bubble.tail, panel),
+    tails: bubble.tails?.map((tail) => pointToPx(tail, panel)),
   }
 }
 
@@ -46,9 +46,9 @@ function fillEach(ctx: Ctx, ...parts: readonly PathCommand[][]): void {
 
 /** 本体としっぽの領域を color で塗る。枠なしの形も塗る。配置図はこれだけを使う */
 export function fillBubble(ctx: Ctx, shape: Shape, g: BubbleGeometry, color: string): void {
-  const { body, tail } = bubbleOutline(shape, g)
+  const { body, tails } = bubbleOutline(shape, g)
   ctx.fillStyle = color
-  fillEach(ctx, body, tail)
+  fillEach(ctx, body, ...tails)
 }
 
 /** 命令列の点と制御点を囲む矩形。クリップ用 */
@@ -73,18 +73,21 @@ function bounds(cmds: readonly PathCommand[], margin: number): PxRect {
   return { x, y, w: Math.max(...xs) + margin - x, h: Math.max(...ys) + margin - y }
 }
 
-/** cmds の輪郭を、other の内側を除いて引く */
+/** cmds の輪郭を、others のどれかの内側を除いて引く */
 function strokeOutside(
   ctx: Ctx,
   cmds: readonly PathCommand[],
-  other: readonly PathCommand[],
+  others: readonly (readonly PathCommand[])[],
   box: PxRect,
 ): void {
   ctx.save()
-  ctx.beginPath()
-  ctx.rect(box.x, box.y, box.w, box.h)
-  trace(ctx, other)
-  ctx.clip('evenodd')
+  // 重なったしっぽを 1 つのパスで evenodd に切ると重なりが切り抜きに残るので、1 つずつ切り重ねる
+  for (const other of others) {
+    ctx.beginPath()
+    ctx.rect(box.x, box.y, box.w, box.h)
+    trace(ctx, other)
+    ctx.clip('evenodd')
+  }
   ctx.beginPath()
   trace(ctx, cmds)
   ctx.stroke()
@@ -100,18 +103,20 @@ export function drawBubble(ctx: Ctx, shape: Shape, g: BubbleGeometry, lineWidth:
   ctx.lineJoin = 'round'
   if (o.fill) {
     ctx.fillStyle = '#fff'
-    fillEach(ctx, o.body, o.tail)
+    fillEach(ctx, o.body, ...o.tails)
   }
   if (o.line !== 'none') {
     ctx.setLineDash(o.line === 'dashed' ? BUBBLE_DASH.map((d) => d * lineWidth) : [])
-    if (o.tail.length === 0) {
+    if (o.tails.length === 0) {
       ctx.beginPath()
       trace(ctx, o.body)
       ctx.stroke()
     } else {
-      const box = bounds([...o.body, ...o.tail], lineWidth * 4)
-      strokeOutside(ctx, o.body, o.tail, box)
-      strokeOutside(ctx, o.tail, o.body, box)
+      const parts = [o.body, ...o.tails]
+      const box = bounds(parts.flat(), lineWidth * 4)
+      for (const part of parts) {
+        strokeOutside(ctx, part, parts.filter((p) => p !== part), box)
+      }
     }
   }
   if (o.ink.length > 0) {
@@ -141,9 +146,9 @@ if (import.meta.vitest) {
   const dark = (rgb: number[]) => rgb.every((c) => c < 100)
 
   const body = { cx: 100, cy: 100, rx: 60, ry: 40 }
-  const tailed = { ...body, tail: { x: 100, y: 190 } }
+  const tailed = { ...body, tails: [{ x: 100, y: 190 }] }
 
-  test('bubbleGeometry maps pos, size and tail into the panel in px', () => {
+  test('bubbleGeometry maps pos, size and tails into the panel in px', () => {
     const bubble: Bubble = {
       id: 'bb',
       order: 1,
@@ -151,7 +156,10 @@ if (import.meta.vitest) {
       shape: 'normal',
       pos: { x: 0.5, y: 0.25 },
       size: { w: 0.2, h: 0.4 },
-      tail: { x: 0, y: 1 },
+      tails: [
+        { x: 0, y: 1 },
+        { x: 1, y: 0 },
+      ],
     }
     const panel = { x: 100, y: 0, w: 200, h: 100 }
     expect(bubbleGeometry(bubble, panel)).toEqual({
@@ -159,9 +167,12 @@ if (import.meta.vitest) {
       cy: 25,
       rx: 20,
       ry: 20,
-      tail: { x: 100, y: 100 },
+      tails: [
+        { x: 100, y: 100 },
+        { x: 300, y: 0 },
+      ],
     })
-    expect(bubbleGeometry({ ...bubble, tail: undefined }, panel).tail).toBeUndefined()
+    expect(bubbleGeometry({ ...bubble, tails: undefined }, panel).tails).toBeUndefined()
   })
 
   describe('drawBubble', () => {
@@ -183,6 +194,30 @@ if (import.meta.vitest) {
       expect(dark(at(96, 162))).toBe(true)
       expect(dark(at(100, 60))).toBe(true)
       expect(at(130, 170)).toEqual(GREY)
+    })
+
+    test('each of two tails joins the body without an outline across its base', async () => {
+      const tails = [
+        { x: 100, y: 190 },
+        { x: 190, y: 100 },
+      ]
+      const at = await paint((ctx) => drawBubble(ctx, 'normal', { ...body, tails }, 4))
+      expect(at(100, 170)).toEqual([255, 255, 255])
+      // 2 本目の付け根は (137, 95.3) と (137, 104.7) あたりで、本体の輪郭は x = 160 を通る
+      expect(at(158, 100)).toEqual([255, 255, 255])
+      expect(dark(at(180, 100))).toBe(true)
+      expect(dark(at(100, 60))).toBe(true)
+    })
+
+    test('overlapping tails draw no outline inside each other', async () => {
+      const tails = [
+        { x: 90, y: 190 },
+        { x: 110, y: 190 },
+      ]
+      const at = await paint((ctx) => drawBubble(ctx, 'normal', { ...body, tails }, 4))
+      // 2 本の向かい合う辺は (100, 152) で交わる。その上は重なりで、下では辺が離れていく
+      expect(at(100, 145)).toEqual([255, 255, 255])
+      expect(dark(at(100, 156))).toBe(true)
     })
 
     test('a shout bubble is spiky: the gaps between spikes stay outside', async () => {
