@@ -216,7 +216,7 @@ export function pastePatch(
       id: newId(),
       order: Math.max(0, ...panel.bubbles.map((b) => b.order)) + 1,
       pos: shifted(source.pos, dx, dy),
-      ...(source.tail && { tail: shifted(source.tail, dx, dy) }),
+      ...(source.tails && { tails: source.tails.map((t) => shifted(t, dx, dy)) }),
     }
     const samePanel = copied.panelId === panel.id
     const bubble = samePanel

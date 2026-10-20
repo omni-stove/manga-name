@@ -17,6 +17,28 @@ if (import.meta.vitest) {
     expect(parseProject(fixture.project).id).toBe('prj_sample')
   })
 
+  test('parseProject opens a v17 project with one tail per bubble', async () => {
+    const { default: fixture } = await import('../../../fixtures/sample-page-01.json')
+    const project = parseProject(fixture.project)
+    const v17 = {
+      ...project,
+      schemaVersion: 17,
+      episodes: project.episodes.map((episode) => ({
+        ...episode,
+        pages: episode.pages.map((page) => ({
+          ...page,
+          panels: page.panels.map((panel) => ({
+            ...panel,
+            bubbles: panel.bubbles.map(({ tails, ...bubble }) =>
+              tails ? { ...bubble, tail: tails[0] } : bubble,
+            ),
+          })),
+        })),
+      })),
+    }
+    expect(parseProject(v17)).toEqual(project)
+  })
+
   test('parseProject rejects invalid JSON', () => {
     expect(() => parseProject({ schemaVersion: 1 })).toThrow()
     expect(() => parseProject('x')).toThrow()

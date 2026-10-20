@@ -64,32 +64,70 @@ type Gesture =
       client: Pos
       dragging: boolean
     }
-  | { kind: 'tail'; pointerId: number; start: Bubble; client: Pos; dragging: boolean }
+  | {
+      kind: 'tail'
+      pointerId: number
+      start: Bubble
+      /** 動かすしっぽの添字。tails の長さなら新しいしっぽ */
+      index: number
+      client: Pos
+      dragging: boolean
+    }
+
+const DIAGONAL = Math.SQRT1_2
+/**
+ * 新しいしっぽのハンドルを置く向き（y 下向き）。真下から順に、既存のしっぽと離れた向きを選ぶ。
+ * 角度から三角関数で求めると真下でも x に誤差が乗るので、単位ベクトルで持つ
+ */
+const NEW_TAIL_DIRECTIONS = [
+  { x: 0, y: 1 },
+  { x: -DIAGONAL, y: DIAGONAL },
+  { x: DIAGONAL, y: DIAGONAL },
+  { x: -1, y: 0 },
+  { x: 1, y: 0 },
+  { x: -DIAGONAL, y: -DIAGONAL },
+  { x: DIAGONAL, y: -DIAGONAL },
+  { x: 0, y: -1 },
+] as const
+/** 新しいしっぽのハンドルを既存のしっぽから離す角度（ラジアン） */
+const NEW_TAIL_CLEARANCE = Math.PI / 6
+
+const angleBetween = (a: number, b: number) => {
+  const d = Math.abs(a - b) % (Math.PI * 2)
+  return Math.min(d, Math.PI * 2 - d)
+}
 
 /**
- * 選択中のフキダシのハンドル（ページ座標、mm）。しっぽが無ければ下に未設定の先端を置き、
- * しっぽの付かない形なら tail は null
+ * 選択中のフキダシのハンドル（ページ座標、mm）。tails はしっぽごとの先端で、index は Bubble.tails の添字。
+ * add はドラッグで新しいしっぽを足すハンドルで、既存のしっぽと重ならない向きに置く。
+ * しっぽの付かない形なら tails は空で add は null
  */
 export function bubbleHandles(
   bubble: Bubble,
   panel: Box,
 ): {
   corners: { handle: BubbleHandle; x: number; y: number }[]
-  tail: (PagePoint & { set: boolean }) | null
+  tails: (PagePoint & { index: number })[]
+  add: PagePoint | null
 } {
   const g = bubbleGeometry(bubble, panel)
+  const corners: { handle: BubbleHandle; x: number; y: number }[] = [
+    { handle: 'nw', x: g.cx - g.rx, y: g.cy - g.ry },
+    { handle: 'ne', x: g.cx + g.rx, y: g.cy - g.ry },
+    { handle: 'se', x: g.cx + g.rx, y: g.cy + g.ry },
+    { handle: 'sw', x: g.cx - g.rx, y: g.cy + g.ry },
+  ]
+  if (!hasTail(bubble.shape)) return { corners, tails: [], add: null }
+  const tails = (g.tails ?? []).map((t, index) => ({ ...t, index }))
+  // 楕円を半径で割って円に直した向きで比べる
+  const taken = tails.map((t) => Math.atan2((t.y - g.cy) / (g.ry || 1), (t.x - g.cx) / (g.rx || 1)))
+  const free = (d: { x: number; y: number }) =>
+    taken.every((t) => angleBetween(Math.atan2(d.y, d.x), t) > NEW_TAIL_CLEARANCE)
+  const d = NEW_TAIL_DIRECTIONS.find(free) ?? NEW_TAIL_DIRECTIONS[0]
   return {
-    corners: [
-      { handle: 'nw', x: g.cx - g.rx, y: g.cy - g.ry },
-      { handle: 'ne', x: g.cx + g.rx, y: g.cy - g.ry },
-      { handle: 'se', x: g.cx + g.rx, y: g.cy + g.ry },
-      { handle: 'sw', x: g.cx - g.rx, y: g.cy + g.ry },
-    ],
-    tail: !hasTail(bubble.shape)
-      ? null
-      : g.tail
-        ? { ...g.tail, set: true }
-        : { x: g.cx, y: g.cy + g.ry * 1.5, set: false },
+    corners,
+    tails,
+    add: { x: g.cx + g.rx * 1.5 * d.x, y: g.cy + g.ry * 1.5 * d.y },
   }
 }
 
@@ -106,8 +144,9 @@ const toPanel = (box: Box, p: PagePoint): Pos => ({
 /**
  * `bubble` ツールの操作。コマの何も無いところをクリックすると既定の大きさのフキダシを、ドラッグすると
  * 押した点と離した点を対角にした大きさのフキダシを作って選ぶ。大きさを決める点は押したコマに収める。
- * フキダシのドラッグで移動、選択中のフキダシの隅のハンドルでリサイズ、しっぽの先端のドラッグで
- * しっぽを動かす（無ければ作る）。位置をロックしたフキダシは動かさず、ハンドルも出さない。作成では本体をコマの枠に収め、移動とリサイズでは収めない。
+ * フキダシのドラッグで移動、選択中のフキダシの隅のハンドルでリサイズ、しっぽごとの先端のドラッグで
+ * そのしっぽを動かし、しっぽを足すハンドルのドラッグで新しいしっぽを作る。動かしたり押したりしたしっぽは
+ * 最後に触ったしっぽとして tails の末尾に回す。位置をロックしたフキダシは動かさず、ハンドルも出さない。作成では本体をコマの枠に収め、移動とリサイズでは収めない。
  * ドラッグ中は `draft` を描くだけで、Patch は pointerup で 1 回だけ出す。
  * フキダシを動かさずに離したときの選択は useSelection に任せる。Escape でドラッグを取り消す
  */
@@ -154,7 +193,7 @@ export function useBubbleTool(opts: Options) {
       return movedBubble(g.start, (p.x - g.from.x) / box.w, (p.y - g.from.y) / box.h)
     }
     if (g.kind === 'resize') return resizedBubble(g.start, g.handle, toPanel(box, p))
-    return tailedBubble(g.start, toPanel(box, p))
+    return tailedBubble(g.start, g.index, toPanel(box, p))
   }
   const near = (a: PagePoint, b: PagePoint) =>
     Math.abs(a.x - b.x) <= handleSize && Math.abs(a.y - b.y) <= handleSize
@@ -167,13 +206,16 @@ export function useBubbleTool(opts: Options) {
       if (at === null) return
       const client = { x: e.clientX, y: e.clientY }
       if (selected) {
-        const { corners, tail } = bubbleHandles(selected.bubble, selected.panel)
-        // しっぽの先端は本体の隅と重なりうるので先に見る
-        if (tail && near(at, tail)) {
+        const { corners, tails, add } = bubbleHandles(selected.bubble, selected.panel)
+        // しっぽの先端は本体の隅と重なりうるので先に見る。重なったしっぽは上に描く最後に触ったものを取る
+        const tail = tails.findLast((t) => near(at, t))
+        const index = tail ? tail.index : add && near(at, add) ? tails.length : undefined
+        if (index !== undefined) {
           take(e, {
             kind: 'tail',
             pointerId: e.pointerId,
             start: selected.bubble,
+            index,
             client,
             dragging: false,
           })
@@ -266,7 +308,15 @@ export function useBubbleTool(opts: Options) {
         opts.onSelect({ kind: 'bubble', id: created.id })
         return
       }
-      if (!g.dragging) return
+      if (!g.dragging) {
+        // 押しただけのしっぽも、右クリックの「しっぽを消す」が消す最後に触ったしっぽにする
+        const tip = g.kind === 'tail' ? g.start.tails?.[g.index] : undefined
+        if (tip && g.kind === 'tail') {
+          const patch = updateBubblePatch(opts.page, tailedBubble(g.start, g.index, tip))
+          if (patch.length > 0) opts.onChange(patch)
+        }
+        return
+      }
       const box = panelOf(g.start.id)
       const at = pointAt(e)
       if (!box || at === null) return

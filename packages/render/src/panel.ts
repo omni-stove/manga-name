@@ -106,6 +106,28 @@ export function drawSoftEdge(
   })
 }
 
+/** 効果線の多角形 lines を color で塗り、輪郭 outline の外に出た部分を切る */
+export function drawEffectLines(
+  ctx: Ctx,
+  outline: readonly PxPoint[],
+  lines: readonly (readonly PxPoint[])[],
+  color: string,
+): void {
+  if (lines.length === 0) return
+  withClip(ctx, outline, () => {
+    ctx.fillStyle = color
+    ctx.beginPath()
+    for (const line of lines) {
+      line.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(p.x, p.y)
+        else ctx.lineTo(p.x, p.y)
+      })
+      ctx.closePath()
+    }
+    ctx.fill()
+  })
+}
+
 /** 画素 data（RGBA）を、TONE_MATRICES と同じ並びの色の行列 matrix で書き換える */
 export function applyColorMatrix(data: Uint8ClampedArray, matrix: readonly number[]): void {
   const k = (i: number) => matrix[i] ?? 0

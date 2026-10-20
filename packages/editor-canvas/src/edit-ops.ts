@@ -116,9 +116,9 @@ export function nudgePatch(page: Page, selection: Selection, dx: number, dy: num
     if (!bubble) return []
     move('/pos/x', bubble.pos.x, dx, 1)
     move('/pos/y', bubble.pos.y, dy, 1)
-    if (bubble.tail) {
-      move('/tail/x', bubble.tail.x, dx, 1)
-      move('/tail/y', bubble.tail.y, dy, 1)
+    for (const [i, tail] of (bubble.tails ?? []).entries()) {
+      move(`/tails/${i}/x`, tail.x, dx, 1)
+      move(`/tails/${i}/y`, tail.y, dy, 1)
     }
     return patch
   }
@@ -186,11 +186,11 @@ if (import.meta.vitest) {
     test('moves a bubble with its tail inside the panel', () => {
       expect(nudgePatch(page, { kind: 'bubble', id: 'bb_3' }, 0.01, 0)).toEqual([
         { op: 'replace', path: '/panels/2/bubbles/0/pos/x', value: 0.86 },
-        { op: 'replace', path: '/panels/2/bubbles/0/tail/x', value: 0.65 },
+        { op: 'replace', path: '/panels/2/bubbles/0/tails/0/x', value: 0.65 },
       ])
       expect(nudgePatch(page, { kind: 'bubble', id: 'bb_3' }, 0.2, 0)).toEqual([
         { op: 'replace', path: '/panels/2/bubbles/0/pos/x', value: 1 },
-        { op: 'replace', path: '/panels/2/bubbles/0/tail/x', value: 0.84 },
+        { op: 'replace', path: '/panels/2/bubbles/0/tails/0/x', value: 0.84 },
       ])
     })
 

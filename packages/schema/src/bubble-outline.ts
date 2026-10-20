@@ -2,13 +2,13 @@ import type { Bubble, Point } from './project'
 
 type Shape = Bubble['shape']
 
-/** 単位を問わない座標のフキダシ。rx, ry は本体の楕円の半径、tail はしっぽの先端 */
+/** 単位を問わない座標のフキダシ。rx, ry は本体の楕円の半径、tails はしっぽごとの先端 */
 export interface BubbleGeometry {
   cx: number
   cy: number
   rx: number
   ry: number
-  tail?: Point
+  tails?: readonly Point[]
 }
 
 /** 輪郭の描画命令。SVG の path 命令と Canvas の moveTo などに 1 対 1 で写せる */
@@ -22,8 +22,8 @@ export type PathCommand =
 export interface BubbleOutline {
   /** 本体 */
   body: PathCommand[]
-  /** しっぽ。付かない形やしっぽが無いときは空 */
-  tail: PathCommand[]
+  /** しっぽごとの命令列。並びは BubbleGeometry.tails と同じ。付かない形やしっぽが無いときは空 */
+  tails: PathCommand[][]
   /** 黒で塗る形（ウニフラの放射線）。無ければ空 */
   ink: PathCommand[]
   /** 本体としっぽを白で塗るか。枠なしは塗らない */
@@ -240,9 +240,7 @@ function tailBase(g: BubbleGeometry, tail: Point) {
   return { angle, a: foot(angle - TAIL_SPREAD), b: foot(angle + TAIL_SPREAD) }
 }
 
-function tailOf(shape: Shape, g: BubbleGeometry): PathCommand[] {
-  const tail = g.tail
-  if (!tail || !hasTail(shape)) return []
+function tailOf(shape: Shape, g: BubbleGeometry, tail: Point): PathCommand[] {
   const { angle, a, b } = tailBase(g, tail)
   if (shape === 'thought') {
     const edge = ellipseAt(g, angle).p
@@ -296,7 +294,7 @@ function tailOf(shape: Shape, g: BubbleGeometry): PathCommand[] {
 export function bubbleOutline(shape: Shape, g: BubbleGeometry): BubbleOutline {
   return {
     body: body(shape, g),
-    tail: tailOf(shape, g),
+    tails: hasTail(shape) ? (g.tails ?? []).map((tail) => tailOf(shape, g, tail)) : [],
     ink: shape === 'urchin' ? urchinRays(g) : [],
     fill: shape !== 'none',
     line:
@@ -346,7 +344,7 @@ export function bubbleReach(shape: Shape, rx: number, ry: number, n: Point): num
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
 
-  const g = { cx: 100, cy: 100, rx: 60, ry: 40, tail: { x: 100, y: 190 } }
+  const g = { cx: 100, cy: 100, rx: 60, ry: 40, tails: [{ x: 100, y: 190 }] }
   const points = (cmds: PathCommand[]) =>
     cmds.flatMap((c) => (c.op === 'Z' ? [] : [{ x: c.x, y: c.y }]))
   const SHAPES = [
@@ -364,7 +362,7 @@ if (import.meta.vitest) {
   test('every outline is made of closed subpaths', () => {
     for (const shape of SHAPES) {
       const o = bubbleOutline(shape, g)
-      for (const cmds of [o.body, o.tail, o.ink]) {
+      for (const cmds of [o.body, ...o.tails, o.ink]) {
         if (cmds.length === 0) continue
         expect(cmds[0]?.op).toBe('M')
         expect(cmds.at(-1)?.op).toBe('Z')
@@ -380,12 +378,12 @@ if (import.meta.vitest) {
       { x: 160, y: 140 },
       { x: 40, y: 140 },
     ])
-    expect(o.tail).toEqual([])
+    expect(o.tails).toEqual([])
   })
 
   test('narration, none and urchin take no tail; the rest do', () => {
     for (const shape of SHAPES) {
-      expect(bubbleOutline(shape, g).tail.length > 0).toBe(hasTail(shape))
+      expect(bubbleOutline(shape, g).tails.length > 0).toBe(hasTail(shape))
     }
     expect(SHAPES.filter((s) => !hasTail(s))).toEqual(['urchin', 'narration', 'none'])
   })
@@ -439,11 +437,29 @@ if (import.meta.vitest) {
 
   test('the tail reaches the tip, and its base sits inside the body', () => {
     for (const shape of ['normal', 'shout', 'electronic', 'tremble'] as const) {
-      const ps = points(bubbleOutline(shape, g).tail)
+      const ps = points(bubbleOutline(shape, g).tails[0] ?? [])
       expect(ps).toContainEqual({ x: 100, y: 190 })
       const r = ps.map((p) => Math.hypot((p.x - 100) / 60, (p.y - 100) / 40)).sort((a, b) => a - b)
       expect(r[1]).toBeLessThan(0.8)
     }
+  })
+
+  test('each tail runs from the body to its own tip, in the order of the tips', () => {
+    const tips = [
+      { x: 100, y: 190 },
+      { x: 10, y: 20 },
+    ]
+    const alone = (shape: Shape, tip: Point) => bubbleOutline(shape, { ...g, tails: [tip] }).tails
+    for (const shape of SHAPES.filter(hasTail)) {
+      expect(bubbleOutline(shape, { ...g, tails: tips }).tails).toEqual(
+        tips.flatMap((tip) => alone(shape, tip)),
+      )
+    }
+    const [down, up] = bubbleOutline('normal', { ...g, tails: tips }).tails.map(points)
+    expect(down).toContainEqual({ x: 100, y: 190 })
+    expect(up).toContainEqual({ x: 10, y: 20 })
+    expect(bubbleOutline('normal', { ...g, tails: [] }).tails).toEqual([])
+    expect(bubbleOutline('narration', { ...g, tails: tips }).tails).toEqual([])
   })
 
   test('bubbleTextBox keeps more of a box-shaped body', () => {
@@ -466,7 +482,7 @@ if (import.meta.vitest) {
 
   test('bubbleReach covers the drawn outline in every direction', () => {
     for (const shape of SHAPES) {
-      const o = bubbleOutline(shape, { ...g, tail: undefined })
+      const o = bubbleOutline(shape, { ...g, tails: undefined })
       for (const p of points([...o.body, ...o.ink])) {
         const d = Math.hypot(p.x - 100, p.y - 100)
         if (d === 0) continue

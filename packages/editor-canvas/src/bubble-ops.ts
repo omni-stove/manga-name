@@ -102,7 +102,9 @@ export function movedBubble(bubble: Bubble, dx: number, dy: number): Bubble {
     ...bubble,
     pos: roundPoint({ x: bubble.pos.x + dx, y: bubble.pos.y + dy }),
   }
-  if (bubble.tail) moved.tail = roundPoint({ x: bubble.tail.x + dx, y: bubble.tail.y + dy })
+  if (bubble.tails) {
+    moved.tails = bubble.tails.map((t) => roundPoint({ x: t.x + dx, y: t.y + dy }))
+  }
   return moved
 }
 
@@ -128,14 +130,30 @@ export function resizedBubble(bubble: Bubble, handle: BubbleHandle, p: Point): B
   }
 }
 
-/** しっぽの先端を p（コマ内座標）に置いた姿。先端はコマ内座標の 0..1 に収める */
-export function tailedBubble(bubble: Bubble, p: Point): Bubble {
-  return { ...bubble, tail: roundPoint(p) }
+/**
+ * index 番目のしっぽの先端を p（コマ内座標）に置き、最後に触ったしっぽとして tails の末尾に回した姿。
+ * index が無い（tails の長さ以上）ときは新しいしっぽを末尾に足す。先端はコマ内座標の 0..1 に収める
+ */
+export function tailedBubble(bubble: Bubble, index: number, p: Point): Bubble {
+  const rest = (bubble.tails ?? []).filter((_, i) => i !== index)
+  return { ...bubble, tails: [...rest, roundPoint(p)] }
 }
 
+/** 最後に触ったしっぽ（tails の末尾）を消す Patch。フキダシの root 基準。しっぽが無ければ空 */
+export function removeLastTailPatch(bubble: Bubble): Patch {
+  const count = bubble.tails?.length ?? 0
+  if (count === 0) return []
+  // 空の配列を残さず、しっぽの無いフキダシを最初から tails を持たないものと同じ形にする
+  return [{ op: 'remove', path: count === 1 ? '/tails' : `/tails/${count - 1}` }]
+}
+
+const samePoints = (a: readonly Point[] | undefined, b: readonly Point[] | undefined) =>
+  (a?.length ?? 0) === (b?.length ?? 0) &&
+  (a ?? []).every((p, i) => p.x === b?.[i]?.x && p.y === b?.[i]?.y)
+
 /**
- * フキダシを next の pos、size、tail に置き換える Patch。変わった値だけ出し、変わらなければ空。
- * しっぽが無かったときは add にする
+ * フキダシを next の pos、size、tails に置き換える Patch。変わった値だけ出し、変わらなければ空。
+ * しっぽは並びも意味を持つので、どれかが変われば tails をまとめて置き換え、無かったときは add にする
  */
 export function updateBubblePatch(page: Page, next: Bubble): Patch {
   const found = findBubble(page, next.id)
@@ -149,8 +167,8 @@ export function updateBubblePatch(page: Page, next: Bubble): Patch {
   if (prev.size.w !== next.size.w || prev.size.h !== next.size.h) {
     patch.push({ op: 'replace', path: `${base}/size`, value: next.size })
   }
-  if (next.tail && (prev.tail?.x !== next.tail.x || prev.tail?.y !== next.tail.y)) {
-    patch.push({ op: prev.tail ? 'replace' : 'add', path: `${base}/tail`, value: next.tail })
+  if (next.tails && !samePoints(prev.tails, next.tails)) {
+    patch.push({ op: prev.tails ? 'replace' : 'add', path: `${base}/tails`, value: next.tails })
   }
   return patch
 }
@@ -193,12 +211,54 @@ if (import.meta.vitest) {
     expect(createBubblePatch(page, 'nope', { x: 0, y: 0 })).toBeNull()
   })
 
-  test('movedBubble moves the tail along and clamps to the panel', () => {
-    const tailed = { ...bubble, tail: { x: 0.5, y: 0.9 } }
+  test('movedBubble moves every tail along and clamps to the panel', () => {
+    const tailed = {
+      ...bubble,
+      tails: [
+        { x: 0.5, y: 0.9 },
+        { x: 0.2, y: 0.1 },
+      ],
+    }
     expect(movedBubble(tailed, 0.1, 0.2)).toMatchObject({
       pos: { x: 0.6, y: 0.7 },
-      tail: { x: 0.6, y: 1 },
+      tails: [
+        { x: 0.6, y: 1 },
+        { x: 0.3, y: 0.3 },
+      ],
     })
+    expect(movedBubble(bubble, 0.1, 0)).not.toHaveProperty('tails')
+  })
+
+  test('tailedBubble moves the touched tail to the end, or adds a new one there', () => {
+    const tailed = {
+      ...bubble,
+      tails: [
+        { x: 0.1, y: 0.9 },
+        { x: 0.9, y: 0.9 },
+      ],
+    }
+    expect(tailedBubble(tailed, 0, { x: 0.2, y: 1.5 }).tails).toEqual([
+      { x: 0.9, y: 0.9 },
+      { x: 0.2, y: 1 },
+    ])
+    expect(tailedBubble(tailed, 2, { x: 0.5, y: 0 }).tails).toEqual([
+      { x: 0.1, y: 0.9 },
+      { x: 0.9, y: 0.9 },
+      { x: 0.5, y: 0 },
+    ])
+    expect(tailedBubble(bubble, 0, { x: 0.5, y: 0.9 }).tails).toEqual([{ x: 0.5, y: 0.9 }])
+  })
+
+  test('removeLastTailPatch removes the last tail, and the field with the only one', () => {
+    const one = { x: 0.1, y: 0.9 }
+    expect(removeLastTailPatch({ ...bubble, tails: [one, one] })).toEqual([
+      { op: 'remove', path: '/tails/1' },
+    ])
+    expect(removeLastTailPatch({ ...bubble, tails: [one] })).toEqual([
+      { op: 'remove', path: '/tails' },
+    ])
+    expect(removeLastTailPatch(bubble)).toEqual([])
+    expect(removeLastTailPatch({ ...bubble, tails: [] })).toEqual([])
   })
 
   test('movedBubble and resizedBubble go past the frame', () => {
@@ -266,13 +326,20 @@ if (import.meta.vitest) {
     expect(updateBubblePatch(page, { ...target, size: { w: 0.5, h: 0.5 } })).toEqual([
       { op: 'replace', path: '/panels/2/bubbles/0/size', value: { w: 0.5, h: 0.5 } },
     ])
-    const { tail: _, ...untailed } = target
+    const { tails: _, ...untailed } = target
     const without: Page = {
       ...page,
       panels: page.panels.map((p, i) => (i === 2 ? { ...p, bubbles: [untailed] } : p)),
     }
-    expect(updateBubblePatch(without, tailedBubble(untailed, { x: 0.1, y: 1.5 }))).toEqual([
-      { op: 'add', path: '/panels/2/bubbles/0/tail', value: { x: 0.1, y: 1 } },
+    expect(updateBubblePatch(without, tailedBubble(untailed, 0, { x: 0.1, y: 1.5 }))).toEqual([
+      { op: 'add', path: '/panels/2/bubbles/0/tails', value: [{ x: 0.1, y: 1 }] },
+    ])
+    expect(updateBubblePatch(page, tailedBubble(target, 1, { x: 0.1, y: 1 }))).toEqual([
+      {
+        op: 'replace',
+        path: '/panels/2/bubbles/0/tails',
+        value: [...(target.tails ?? []), { x: 0.1, y: 1 }],
+      },
     ])
   })
 }
