@@ -586,6 +586,7 @@ export function mergePanelsPatch(
     ...(camera !== undefined && { camera }),
     ...(sweep && { sweep }),
     ...(keep.frame && { frame: keep.frame }),
+    ...(keep.effect && { effect: keep.effect }),
   }
   const before = page.panels
     .map((p) => (p.id === keepId ? merged : p))

@@ -807,6 +807,40 @@ if (import.meta.vitest) {
       expect(corners('pn_6')).toBeGreaterThan(4)
     })
 
+    test('effect lines are clipped to the panel, drawn above the art and below the bubbles and the frame', async () => {
+      expect((await render({})).querySelector('[data-panel-effect]')).toBeNull()
+      const page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_1'
+            ? { ...p, effect: 'focus_lines' as const }
+            : p.id === 'pn_2'
+              ? { ...p, effect: 'speed_lines' as const, fill: 'black' as const }
+              : p,
+        ),
+      }
+      const svg = await render({ page })
+      const focus = must(svg.querySelector<SVGPathElement>('[data-panel-effect="focus_lines"]'))
+      expect(focus.closest('[data-panel-id]')?.getAttribute('data-panel-id')).toBe('pn_1')
+      expect(focus.getAttribute('fill')).toBe('#000')
+      expect(focus.getAttribute('clip-path')).toMatch(/^url\(#.+-clip-\d+\)$/)
+      expect(focus.getAttribute('d')?.match(/M/g)?.length).toBeGreaterThan(20)
+      const following = (a: Element, b: Element) =>
+        a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
+      const bubble = must(svg.querySelector('[data-panel-id="pn_1"] [data-bubble-id]'))
+      expect(following(focus, bubble)).toBeTruthy()
+      const frame = must(svg.querySelector('[data-panel-id="pn_1"] > [data-panel-frame]'))
+      expect(following(focus, frame)).toBeTruthy()
+
+      const speed = must(svg.querySelector('[data-panel-effect="speed_lines"]'))
+      expect(speed.getAttribute('fill')).toBe('#fff')
+      // 同じコマからは同じ線が出る
+      const again = await render({ page })
+      expect(must(again.querySelector('[data-panel-effect="speed_lines"]')).getAttribute('d')).toBe(
+        speed.getAttribute('d'),
+      )
+    })
+
     test('a page overlay multiplies a gray rect over the whole page above the bubbles', async () => {
       expect((await render({})).querySelector('[data-overlay]')).toBeNull()
       const svg = await render({ page: { ...samplePage, overlay: 'gray' } })
