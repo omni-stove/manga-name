@@ -1,4 +1,4 @@
-import type { Page, Panel, Point } from './project'
+import type { Fill, Page, Panel, Point } from './project'
 
 /** 1 ページの幅に対する比率。見開きでも 1 ページ分の幅に対してとり、1 ページのときと同じ見た目にする */
 const ROUND_RADIUS = 0.025
@@ -20,6 +20,14 @@ export const groundColor = (page: Pick<Page, 'ground'>): string =>
 
 /** 紙面全体に重ねるトーンの色。乗算で重ねるので、白は灰色になり黒ベタは黒のまま */
 export const OVERLAY_COLORS: Record<NonNullable<Page['overlay']>, string> = { gray: '#bfbfbf' }
+
+/**
+ * 手描きの塗りの色。灰色は紙面全体のトーンと同じ色を乗算で重ね、下の絵の線を残す。黒はベタで、下を隠す
+ */
+export const FILL_COLORS: Record<Fill['color'], string> = {
+  black: '#000',
+  gray: OVERLAY_COLORS.gray,
+}
 
 /** 枠線を引くか。none と soft は引かない */
 export const hasFrameLine = (frame: Frame): boolean => frame !== 'none' && frame !== 'soft'

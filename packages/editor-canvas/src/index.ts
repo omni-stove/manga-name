@@ -11,6 +11,7 @@ export { convertSketchPatch, type SketchConversion } from './sketch-ops'
 export type {
   CanvasMenuRequest,
   EditorCanvasProps,
+  FillTool,
   Layers,
   ScribbleTool,
   Selection,

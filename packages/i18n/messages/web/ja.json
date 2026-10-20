@@ -103,6 +103,7 @@
   "web_editor_sketch_converted": "コマを {panels} 個、フキダシを {bubbles} 個作りました",
   "web_editor_sketch_nothing": "コマやフキダシにできる閉じた線がありません",
   "web_editor_pen_eraser": "消しゴム",
+  "web_editor_fill_color": "塗る色",
   "web_editor_layer_reference": "参考",
   "web_editor_layer_art": "絵",
   "web_editor_layer_hints": "ヒント",

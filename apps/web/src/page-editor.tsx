@@ -4,6 +4,7 @@ import {
   convertSketchPatch,
   copyElement,
   EditorCanvas,
+  type FillTool,
   isLocked,
   type Layers,
   pastePatch,
@@ -137,6 +138,7 @@ const toolOptions = (): readonly SegmentedOption<Tool>[] => [
   { value: 'vector', label: m.vector(), shortcut: 'a' },
   { value: 'scribble', label: m.page_scribbles(), shortcut: 'd' },
   { value: 'sketch', label: m.page_sketch(), shortcut: 'n' },
+  { value: 'fill', label: m.page_fills(), shortcut: 'g' },
 ]
 
 const scribbleToolOptions = (): readonly SegmentedOption<ScribbleTool>[] => [
@@ -149,6 +151,11 @@ const scribbleToolOptions = (): readonly SegmentedOption<ScribbleTool>[] => [
 const sketchToolOptions = (): readonly SegmentedOption<SketchTool>[] => [
   { value: 'pen', label: m.web_editor_sketch_pen(), shortcut: '1' },
   { value: 'eraser', label: m.web_editor_pen_eraser(), shortcut: '2' },
+]
+
+const fillToolOptions = (): readonly SegmentedOption<FillTool>[] => [
+  { value: 'black', label: m.fill_color_black(), shortcut: '1' },
+  { value: 'gray', label: m.fill_color_gray(), shortcut: '2' },
 ]
 
 const focusKindOptions = (): readonly SegmentedOption<FocusKind>[] =>
@@ -345,6 +352,7 @@ export function PageEditor({
   const [tool, setTool] = useState<Tool>('select')
   const [scribbleTool, setScribbleTool] = useState<ScribbleTool>('ink')
   const [sketchTool, setSketchTool] = useState<SketchTool>('pen')
+  const [fillTool, setFillTool] = useState<FillTool>('black')
   const [focusKind, setFocusKind] = useState<FocusKind>('face')
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
   const [selected, setSelection] = useState<Selection>(null)
@@ -365,6 +373,7 @@ export function PageEditor({
   const navigate = useNavigate()
   const scribbleTools = scribbleToolOptions()
   const sketchTools = sketchToolOptions()
+  const fillTools = fillToolOptions()
   const importReference = (file: Blob) => {
     toReferenceImage(file)
       .then((blob) => library.putAsset(projectId, blob, `reference-${pageId}`))
@@ -406,6 +415,7 @@ export function PageEditor({
     ...(can('tools') ? shortcutsOf(tools, setTool) : {}),
     ...(tool === 'scribble' ? shortcutsOf(scribbleTools, setScribbleTool) : {}),
     ...(tool === 'sketch' ? shortcutsOf(sketchTools, setSketchTool) : {}),
+    ...(tool === 'fill' ? shortcutsOf(fillTools, setFillTool) : {}),
     ...(tool === 'focus' ? shortcutsOf(focusKindOptions(), setFocusKind) : {}),
     ...(can('navigation')
       ? {
@@ -762,6 +772,14 @@ export function PageEditor({
                 </Button>
               </>
             )}
+            {tool === 'fill' && (
+              <SegmentedControl
+                label={m.web_editor_fill_color()}
+                value={fillTool}
+                options={fillTools}
+                onChange={(t) => setFillTool(t)}
+              />
+            )}
             {tool === 'focus' && (
               <SegmentedControl
                 label={m.web_editor_focus_kind()}
@@ -917,6 +935,7 @@ export function PageEditor({
             tool={tool}
             scribbleTool={scribbleTool}
             sketchTool={sketchTool}
+            fillTool={fillTool}
             focusKind={focusKind}
             layers={layers}
             generating={generating}

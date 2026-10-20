@@ -1,5 +1,6 @@
 import type {
   Character,
+  Fill,
   FocusKind,
   ID,
   Page,
@@ -10,13 +11,24 @@ import type {
 
 export type Selection = { kind: 'panel' | 'bubble' | 'focus' | 'vector'; id: ID } | null
 
-export type Tool = 'select' | 'panel' | 'bubble' | 'focus' | 'vector' | 'scribble' | 'sketch'
+export type Tool =
+  | 'select'
+  | 'panel'
+  | 'bubble'
+  | 'focus'
+  | 'vector'
+  | 'scribble'
+  | 'sketch'
+  | 'fill'
 
 /** `scribble` ツールで使うペンの色か消しゴム */
 export type ScribbleTool = 'ink' | 'red' | 'blue' | 'eraser'
 
 /** `sketch` ツールで使うペンか消しゴム */
 export type SketchTool = 'pen' | 'eraser'
+
+/** `fill` ツールで塗る色。black はベタ、gray はトーン */
+export type FillTool = Fill['color']
 
 export interface Layers {
   reference: boolean
@@ -58,6 +70,8 @@ export interface EditorCanvasProps {
   scribbleTool?: ScribbleTool
   /** `tool === 'sketch'` のときのペンか消しゴム。既定は pen */
   sketchTool?: SketchTool
+  /** `tool === 'fill'` のときの色。既定は black */
+  fillTool?: FillTool
   /** `focus` ツールで置く焦点の種別。ツールバーで選ぶ。既定は face */
   focusKind?: FocusKind
   layers: Layers

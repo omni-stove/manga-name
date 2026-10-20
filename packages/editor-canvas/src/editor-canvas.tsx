@@ -2,6 +2,7 @@
 import { m } from '@manga/i18n'
 import {
   type Bubble,
+  FILL_COLORS,
   type ID,
   type Page,
   type Panel,
@@ -26,10 +27,11 @@ import { GhostLayer } from './ghost-layer'
 import { findFocus, findVector, focusRadius, toPagePoint } from './hint-ops'
 import { HintsLayer } from './hints-layer'
 import { panelBox, panelPolygon, polygonPoints } from './hit-test'
-import { PageLayer } from './page-layer'
+import { GUIDE, PageLayer } from './page-layer'
 import { PanelToolLayer } from './panel-tool-layer'
 import type { EditorCanvasProps, Selection } from './types'
 import { useBubbleTool } from './use-bubble-tool'
+import { fillPoints, useFill } from './use-fill'
 import { useHintTool } from './use-hint-tool'
 import { useLongPress } from './use-long-press'
 import { useMove } from './use-move'
@@ -80,6 +82,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * `layers.hints` を切ると描画も選択も操作もしない。
  * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
  * `sketch` ツールも同じ操作で、線は `Page.sketch` に足す。下描きのレイヤーが非表示なら何もしない。
+ * `fill` ツールではなぞった線を閉じた多角形にして `fillTool` の色で `Page.fills` に足し、クリックで選んだ塗りを Delete で消す。
  * `diagnosis` があり `layers.diagnosis` が立っていれば、視線経路、bubble chain、焦点ごとの診断ラベル、
  * ページ下の集計行と凡例を重ねる。そのとき焦点の素のラベルは診断ラベルに譲る。
  * `ghostPage` があれば、AI の提案で動く焦点とフキダシ、増えるベクトルを元の位置と提案の位置の両方で重ねる。
@@ -173,14 +176,32 @@ export function EditorCanvas(props: EditorCanvasProps) {
     liveRef: sketchLiveRef,
     onChange: props.onChange,
   })
-  const scribbleSelected = props.tool === 'scribble' || props.tool === 'sketch'
+  const fillLiveRef = useRef<SVGPolygonElement>(null)
+  const fillTool = props.fillTool ?? 'black'
+  const fill = useFill({
+    page,
+    width: pageW,
+    height: pageH,
+    view,
+    active: props.tool === 'fill',
+    tool: fillTool,
+    liveRef: fillLiveRef,
+    onChange: props.onChange,
+  })
+  // 塗りも手描きと同じく、どこからでもなぞり始められるよう要素の選択とパンに回さない
+  const scribbleSelected =
+    props.tool === 'scribble' || props.tool === 'sketch' || props.tool === 'fill'
   const diagnosis = layers.diagnosis ? props.diagnosis : null
   const scribbling =
-    (props.tool === 'scribble' && layers.scribble) || (props.tool === 'sketch' && layers.sketch)
+    (props.tool === 'scribble' && layers.scribble) ||
+    (props.tool === 'sketch' && layers.sketch) ||
+    props.tool === 'fill'
   const pointer = scribbling
-    ? props.tool === 'sketch'
-      ? sketch.handlers
-      : scribble.handlers
+    ? props.tool === 'fill'
+      ? fill.handlers
+      : props.tool === 'sketch'
+        ? sketch.handlers
+        : scribble.handlers
     : scribbleSelected
       ? IDLE_POINTER
       : selection.handlers
@@ -222,6 +243,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
     selection.handlers.onPointerCancel()
     scribble.handlers.onPointerCancel(e)
     sketch.handlers.onPointerCancel(e)
+    fill.handlers.onPointerCancel(e)
   }
 
   const cursor = panning
@@ -312,6 +334,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         selection.handlers.onPointerUp(e)
         scribble.handlers.onPointerUp(e)
         sketch.handlers.onPointerUp(e)
+        fill.handlers.onPointerUp(e)
       }}
       onPointerCancel={(e) => {
         longPress.end(e)
@@ -324,6 +347,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
       }}
       onKeyDown={(e) => {
         if (
+          fill.handlers.onKeyDown(e) ||
           panelTool.handlers.onKeyDown(e) ||
           bubbleTool.handlers.onKeyDown(e) ||
           hintTool.handlers.onKeyDown(e) ||
@@ -383,6 +407,30 @@ export function EditorCanvas(props: EditorCanvasProps) {
               strokeWidth={SCRIBBLE_WIDTH * pageW}
               strokeLinecap="round"
               strokeLinejoin="round"
+            />
+          )}
+        </g>
+      )}
+      {props.tool === 'fill' && (
+        <g data-layer="fill-tool" pointerEvents="none">
+          <polygon
+            ref={fillLiveRef}
+            data-live-fill
+            fill={FILL_COLORS[fillTool]}
+            fillOpacity={0.6}
+            stroke={GUIDE}
+            strokeWidth={1}
+            vectorEffect="non-scaling-stroke"
+          />
+          {fill.selected && (
+            <polygon
+              data-selected-fill-id={fill.selected.id}
+              points={fillPoints(fill.selected.points, pageW, pageH)}
+              fill="none"
+              style={{ stroke: GUIDE }}
+              strokeWidth={2}
+              strokeDasharray="4 2"
+              vectorEffect="non-scaling-stroke"
             />
           )}
         </g>
@@ -2579,6 +2627,87 @@ if (import.meta.vitest) {
       expect(svg.querySelector('[data-layer="sketch"]')).toBeNull()
       drag(svg, clientAt(0.2, 0.2), clientAt(0.3, 0.2))
       expect(onChange).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('fill', () => {
+    // pn_2 と pn_3 の間白をまたぐ三角形
+    const triangle = [
+      { x: 0.4, y: 0.3 },
+      { x: 0.6, y: 0.3 },
+      { x: 0.5, y: 0.45 },
+    ]
+    const withFills = (...colors: ('black' | 'gray')[]): Page => ({
+      ...samplePage,
+      fills: colors.map((color, i) => ({ id: `fl_${i}`, points: triangle, color })),
+    })
+
+    /** 画面座標を順になぞる */
+    function trace(svg: SVGSVGElement, points: { x: number; y: number }[]) {
+      const [first, ...rest] = points.map((p) => clientAt(p.x, p.y))
+      fire(svg, pointer('pointerdown', { id: 1, ...must(first) }))
+      for (const p of rest) fire(svg, pointer('pointermove', { id: 1, ...p }))
+      fire(svg, pointer('pointerup', { id: 1, ...must(rest.at(-1)) }))
+    }
+
+    test('tracing a closed shape adds a fill in the chosen colour without selecting anything', async () => {
+      const onChange = vi.fn()
+      const onSelect = vi.fn()
+      const svg = await render({ tool: 'fill', fillTool: 'gray', onChange, onSelect })
+      layout(svg)
+      trace(svg, triangle)
+      expect(patchOf(onChange)).toEqual([
+        {
+          op: 'add',
+          path: '/fills',
+          value: [expect.objectContaining({ color: 'gray', points: triangle })],
+        },
+      ])
+      expect(onSelect).not.toHaveBeenCalled()
+
+      const appended = vi.fn()
+      const again = await render({ page: withFills('black'), tool: 'fill', onChange: appended })
+      layout(again)
+      trace(again, triangle)
+      expect(patchOf(appended)).toEqual([
+        { op: 'add', path: '/fills/-', value: expect.objectContaining({ color: 'black' }) },
+      ])
+    })
+
+    test('fills are drawn over the panel art and under the bubbles and frames, unclipped', async () => {
+      const svg = await render({ page: withFills('black', 'gray') })
+      const black = must(svg.querySelector<SVGElement>('[data-fill-id="fl_0"]'))
+      const gray = must(svg.querySelector<SVGElement>('[data-fill-id="fl_1"]'))
+      expect(black.getAttribute('fill')).toBe('#000')
+      expect(gray.style.mixBlendMode).toBe('multiply')
+      expect(black.closest('[clip-path]')).toBeNull()
+      const after = (a: Element, b: Element) =>
+        (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+      const art = must(svg.querySelector('[data-panel-id="pn_3"][data-panel-part="art"]'))
+      expect(after(art, black)).toBe(true)
+      expect(after(black, must(svg.querySelector('[data-bubble-id="bb_3"]')))).toBe(true)
+      expect(after(black, must(svg.querySelector('[data-panel-frame]')))).toBe(true)
+      // 塗りの無いページはコマを分けずに描く
+      const plain = await render({})
+      expect(plain.querySelector('[data-panel-part]')).toBeNull()
+    })
+
+    test('a click selects the fill under it and Delete removes it', async () => {
+      const onChange = vi.fn()
+      const svg = await render({ page: withFills('black', 'gray'), tool: 'fill', onChange })
+      layout(svg)
+      const selected = () =>
+        svg.querySelector('[data-selected-fill-id]')?.getAttribute('data-selected-fill-id')
+      click(svg, clientAt(0.5, 0.35))
+      expect(selected()).toBe('fl_1')
+      expect(onChange).not.toHaveBeenCalled()
+      key(svg, { key: 'Delete' })
+      expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/fills/1' }])
+
+      click(svg, clientAt(0.5, 0.35))
+      expect(selected()).toBe('fl_1')
+      click(svg, clientAt(0.1, 0.9))
+      expect(selected()).toBeUndefined()
     })
   })
 
