@@ -1,4 +1,4 @@
-import type { Page, Panel, Point } from './project'
+import type { FocusPoint, Page, Panel, Point, Rect } from './project'
 
 /** 1 ページの幅に対する比率。見開きでも 1 ページ分の幅に対してとり、1 ページのときと同じ見た目にする */
 const ROUND_RADIUS = 0.025
@@ -11,6 +11,15 @@ const SOFT_STEPS = 12
 const ROUND_SEGMENTS = 8
 const WAVE_SEGMENTS = 12
 const CLOUD_SEGMENTS = 10
+/** 集中線を入れない楕円の半径の、コマの幅と高さに対する比。短い方の半径が短辺の 0.3 倍になる */
+const FOCUS_CLEAR = 0.3
+/** 集中線の根元が楕円から外へずれる最大の量。楕円の半径に対する比で、内側の端をそろえず揃いすぎて見えないようにする */
+const FOCUS_RAGGED = 0.4
+const FOCUS_SPACING = 0.012
+const FOCUS_WIDTH = 0.005
+const SPEED_SPACING = 0.009
+const SPEED_WIDTH = 0.003
+const MIN_EFFECT_LINES = 24
 
 type Frame = Panel['frame']
 
@@ -157,6 +166,126 @@ export function softEdgeStrokes(unit: number): { width: number; alpha: number }[
   }))
 }
 
+/** 効果線の色。黒塗りのコマでは黒い線が見えないので白にする */
+export const effectInk = (panel: Pick<Panel, 'fill'>): string =>
+  panel.fill === 'black' ? '#fff' : '#000'
+
+/**
+ * コマの効果線を、塗りつぶす多角形の列で返す。box はコマの rect を描く先の単位にした矩形、unit は 1 ページの幅で、
+ * 返す頂点も同じ単位。線はコマの輪郭の外まで伸びるので、呼び出し側が輪郭で切る。effect が無ければ空。
+ * 線のばらつきは Math.random ではなくコマの id を種にした擬似乱数でとるので、同じ Panel と同じ box からは同じ線が出る。
+ *
+ * - focus_lines: 焦点（weight が最大のもの、無ければコマの中心）へ向かう、外が太く中心で尖る三角形。
+ *   中心のまわりの楕円（FOCUS_CLEAR）には入れない
+ * - speed_lines: 両端が尖る細長い菱形を平行に並べる。向きは speed か motion のベクトルのうち strong のもの
+ *   （無ければ最初のもの）の from から to、ベクトルが無ければ横
+ */
+export function effectLines(
+  panel: Pick<Panel, 'id' | 'effect' | 'focusPoints' | 'vectors'>,
+  box: Rect,
+  unit: number,
+): Point[][] {
+  if (box.w <= 0 || box.h <= 0) return []
+  const random = seededRandom(panel.id)
+  if (panel.effect === 'focus_lines') return focusLines(panel, box, unit, random)
+  if (panel.effect === 'speed_lines') return speedLines(panel, box, unit, random)
+  return []
+}
+
+function focusLines(
+  panel: Pick<Panel, 'focusPoints'>,
+  box: Rect,
+  unit: number,
+  random: () => number,
+): Point[][] {
+  const focus = panel.focusPoints.reduce<FocusPoint | undefined>(
+    (best, f) => (best === undefined || f.weight > best.weight ? f : best),
+    undefined,
+  )
+  const pos = focus?.pos ?? { x: 0.5, y: 0.5 }
+  const c = { x: box.x + pos.x * box.w, y: box.y + pos.y * box.h }
+  const rx = box.w * FOCUS_CLEAR
+  const ry = box.h * FOCUS_CLEAR
+  // 焦点がコマの端にあっても反対側の角まで届く長さ
+  const reach =
+    Math.max(
+      ...[box.x, box.x + box.w].flatMap((x) =>
+        [box.y, box.y + box.h].map((y) => Math.hypot(x - c.x, y - c.y)),
+      ),
+    ) * 1.05
+  const count = Math.max(
+    MIN_EFFECT_LINES,
+    Math.round((2 * (box.w + box.h)) / (unit * FOCUS_SPACING)),
+  )
+  const lines: Point[][] = []
+  for (let i = 0; i < count; i++) {
+    const angle = (2 * Math.PI * (i + (random() - 0.5) * 0.8)) / count
+    const ragged = 1 + FOCUS_RAGGED * random()
+    const half = (unit * FOCUS_WIDTH * (0.4 + random())) / 2
+    const dx = Math.cos(angle)
+    const dy = Math.sin(angle)
+    const inner = ragged / Math.hypot(dx / rx, dy / ry)
+    if (inner >= reach) continue
+    const outer = { x: c.x + dx * reach, y: c.y + dy * reach }
+    lines.push([
+      { x: c.x + dx * inner, y: c.y + dy * inner },
+      { x: outer.x - dy * half, y: outer.y + dx * half },
+      { x: outer.x + dy * half, y: outer.y - dx * half },
+    ])
+  }
+  return lines
+}
+
+function speedLines(
+  panel: Pick<Panel, 'vectors'>,
+  box: Rect,
+  unit: number,
+  random: () => number,
+): Point[][] {
+  const moves = panel.vectors.filter((v) => v.kind === 'speed' || v.kind === 'motion')
+  const vector = moves.find((v) => v.strength === 'strong') ?? moves[0]
+  const vx = vector ? (vector.to.x - vector.from.x) * box.w : 1
+  const vy = vector ? (vector.to.y - vector.from.y) * box.h : 0
+  const len = Math.hypot(vx, vy)
+  const u = len > 0 ? { x: vx / len, y: vy / len } : { x: 1, y: 0 }
+  const n = { x: -u.y, y: u.x }
+  const corners = [box.x, box.x + box.w].flatMap((x) =>
+    [box.y, box.y + box.h].map((y) => ({ x, y })),
+  )
+  const along = corners.map((p) => p.x * u.x + p.y * u.y)
+  const across = corners.map((p) => p.x * n.x + p.y * n.y)
+  const [aMin, aMax] = [Math.min(...along), Math.max(...along)]
+  const [nMin, nMax] = [Math.min(...across), Math.max(...across)]
+  const span = aMax - aMin
+  const spacing = unit * SPEED_SPACING
+  const lines: Point[][] = []
+  for (let offset = nMin + spacing * random(); offset < nMax; ) {
+    const length = span * (0.35 + 0.6 * random())
+    const start = aMin + (span - length) * random()
+    const half = (unit * SPEED_WIDTH * (0.4 + random())) / 2
+    const at = (a: number, side: number) => ({
+      x: u.x * a + n.x * (offset + side),
+      y: u.y * a + n.y * (offset + side),
+    })
+    const middle = start + length / 2
+    lines.push([at(start, 0), at(middle, half), at(start + length, 0), at(middle, -half)])
+    offset += spacing * (0.5 + random())
+  }
+  return lines
+}
+
+/** 文字列から種を作る 0 以上 1 未満の擬似乱数列（FNV-1a で種を作り mulberry32 で回す）。どの環境でも同じ列になる */
+function seededRandom(seed: string): () => number {
+  let state = 2166136261
+  for (let i = 0; i < seed.length; i++) state = Math.imul(state ^ seed.charCodeAt(i), 16777619)
+  return () => {
+    state = (state + 0x6d2b79f5) | 0
+    let t = Math.imul(state ^ (state >>> 15), 1 | state)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 /**
  * 色調ごとの色の行列。SVG の feColorMatrix と同じ 4×5 の並びで、オフセットは 0〜1 の値。
  * エディタは feColorMatrix に、レンダラは画素ごとの計算にこの行列を渡し、同じ色にする
@@ -244,6 +373,113 @@ if (import.meta.vitest) {
     expect(opacityAt(SOFT_STEPS)).toBeCloseTo(1)
     expect(opacityAt(SOFT_STEPS / 2)).toBeCloseTo(0.5)
     expect(strokes.at(-1)?.width).toBeCloseTo(2 * SOFT_DEPTH)
+  })
+
+  const effectPanel = (
+    effect: Panel['effect'],
+    rest: Partial<Pick<Panel, 'focusPoints' | 'vectors'>> = {},
+  ): Pick<Panel, 'id' | 'effect' | 'focusPoints' | 'vectors'> => ({
+    id: 'pn_fx',
+    effect,
+    focusPoints: [],
+    vectors: [],
+    ...rest,
+  })
+  const focus = (id: string, x: number, y: number, weight: number): FocusPoint => ({
+    id,
+    kind: 'face',
+    label: id,
+    pos: { x, y },
+    weight,
+  })
+  const vector = (
+    kind: Panel['vectors'][number]['kind'],
+    strength: 'strong' | 'weak',
+    to: Point,
+  ): Panel['vectors'][number] => ({ id: `v_${kind}`, kind, from: { x: 0, y: 0 }, to, strength })
+  const box: Rect = { x: 10, y: 20, w: 100, h: 50 }
+
+  test('effectLines draws nothing without an effect or with an empty box', () => {
+    expect(effectLines(effectPanel(undefined), box, 100)).toEqual([])
+    expect(effectLines(effectPanel('focus_lines'), { ...box, w: 0 }, 100)).toEqual([])
+  })
+
+  test('effectLines gives the same lines for the same panel and different lines for another id', () => {
+    for (const effect of ['focus_lines', 'speed_lines'] as const) {
+      const a = effectLines(effectPanel(effect), box, 100)
+      expect(a.length).toBeGreaterThanOrEqual(MIN_EFFECT_LINES / 2)
+      expect(effectLines(effectPanel(effect), box, 100)).toEqual(a)
+      expect(effectLines({ ...effectPanel(effect), id: 'pn_other' }, box, 100)).not.toEqual(a)
+    }
+  })
+
+  test('focus lines point at the heaviest focus and keep out of the ellipse around it', () => {
+    const panel = effectPanel('focus_lines', {
+      focusPoints: [focus('light', 0.2, 0.2, 0.3), focus('heavy', 0.7, 0.6, 0.9)],
+    })
+    const c = { x: box.x + 0.7 * box.w, y: box.y + 0.6 * box.h }
+    const lines = effectLines(panel, box, 100)
+    expect(lines.length).toBeGreaterThanOrEqual(MIN_EFFECT_LINES)
+    for (const [tip, a, b] of lines as [Point, Point, Point][]) {
+      // 根元の 2 点の中点と先端を結ぶ線は中心を通る
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+      const cross = (tip.x - c.x) * (mid.y - c.y) - (tip.y - c.y) * (mid.x - c.x)
+      expect(Math.abs(cross)).toBeLessThan(1e-6)
+      const ex = (tip.x - c.x) / (box.w * FOCUS_CLEAR)
+      const ey = (tip.y - c.y) / (box.h * FOCUS_CLEAR)
+      expect(ex * ex + ey * ey).toBeGreaterThanOrEqual(1 - 1e-9)
+    }
+  })
+
+  test('focus lines centre on the panel when it has no focus', () => {
+    const lines = effectLines(effectPanel('focus_lines'), box, 100)
+    const c = { x: box.x + box.w / 2, y: box.y + box.h / 2 }
+    const [tip, a, b] = lines[0] as [Point, Point, Point]
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+    expect((tip.x - c.x) * (mid.y - c.y) - (tip.y - c.y) * (mid.x - c.x)).toBeCloseTo(0, 6)
+  })
+
+  const directionOf = (line: Point[]) => {
+    const [start, , end] = line as [Point, Point, Point]
+    return Math.atan2(end.y - start.y, end.x - start.x)
+  }
+
+  test('speed lines run along the strong speed or motion vector, then the first, then sideways', () => {
+    const strong = effectPanel('speed_lines', {
+      vectors: [
+        vector('gaze', 'strong', { x: 0, y: 1 }),
+        vector('speed', 'weak', { x: 1, y: 0 }),
+        vector('motion', 'strong', { x: 1, y: 1 }),
+      ],
+    })
+    // box の中の正規化座標なので、(1, 1) は box の対角の向き
+    const diagonal = Math.atan2(box.h, box.w)
+    for (const line of effectLines(strong, box, 100)) {
+      expect(directionOf(line)).toBeCloseTo(diagonal, 6)
+    }
+    const first = effectPanel('speed_lines', {
+      vectors: [vector('speed', 'weak', { x: 0, y: 1 }), vector('motion', 'weak', { x: 1, y: 0 })],
+    })
+    for (const line of effectLines(first, box, 100)) {
+      expect(directionOf(line)).toBeCloseTo(Math.PI / 2, 6)
+    }
+    const gazeOnly = effectPanel('speed_lines', {
+      vectors: [vector('gaze', 'strong', { x: 0, y: 1 })],
+    })
+    const sideways = effectLines(gazeOnly, box, 100)
+    expect(sideways.length).toBeGreaterThan(0)
+    for (const line of sideways) expect(directionOf(line)).toBeCloseTo(0, 6)
+  })
+
+  test('speed lines spread across the whole box', () => {
+    const ys = effectLines(effectPanel('speed_lines'), box, 100).map((l) => (l[0] as Point).y)
+    expect(Math.min(...ys)).toBeLessThan(box.y + box.h * 0.1)
+    expect(Math.max(...ys)).toBeGreaterThan(box.y + box.h * 0.9)
+  })
+
+  test('effectInk is white only on a black panel', () => {
+    expect(effectInk({})).toBe('#000')
+    expect(effectInk({ fill: 'black' })).toBe('#fff')
   })
 
   test('hasFrameLine is false only for none and soft', () => {

@@ -5,6 +5,8 @@ import {
   bubbleTypeface,
   clipTextBox,
   currentArt,
+  effectInk,
+  effectLines,
   frameOutline,
   groundColor,
   hasFrameLine,
@@ -22,6 +24,7 @@ import { type PxRect, pagePixelSize, pointToPx, rectToPx } from './geometry'
 import {
   applyColorMatrix,
   drawCover,
+  drawEffectLines,
   drawFrame,
   drawNotesMargin,
   drawPanelNumber,
@@ -139,6 +142,7 @@ export async function drawPage(
       const ink = blackInside(panel) ? '#fff' : '#000'
       drawPlaceholder(c, panel, rect, outline, unit.w * NOTE_FONT, ink)
     }
+    drawEffectLines(c, outline, effectLines(panel, rect, unit.w), effectInk(panel))
     // フキダシまでぼかさないよう、絵の直後にぼかす
     if (panel.frame === 'soft') drawSoftEdge(c, outline, unit.w, ground)
     if (opts.panelNumbers) {
@@ -526,6 +530,65 @@ if (import.meta.vitest) {
       panelNumbers: false,
     })
     await matchPngSnapshot('page-frames', png)
+  })
+
+  test('効果線: 集中線、スピード線、黒塗りのコマの白い集中線を絵の上に描く', async () => {
+    const { page, ctx } = withArts()
+    const effects: Partial<Panel>[] = [
+      { effect: 'focus_lines' },
+      { effect: 'speed_lines' },
+      { effect: 'focus_lines', fill: 'black' },
+      { effect: 'speed_lines', vectors: [] },
+    ]
+    const withEffects: Page = {
+      ...page,
+      panels: page.panels.map((panel, i) => ({ ...panel, ...effects[i] })),
+    }
+    const png = await renderPage(withEffects, ctx, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-effects', png)
+  })
+
+  test('集中線は焦点のまわりの楕円を空けて描き、黒塗りのコマでは白い線にする', async () => {
+    const pn5 = emptyPage.panels.find((p) => p.id === 'pn_5') as Panel
+    const bare: Panel = { ...pn5, bubbles: [], focusPoints: [], vectors: [] }
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const draw = async (panel: Panel) => {
+      const others = emptyPage.panels.filter((p) => p.id !== pn5.id)
+      const { width, data } = await pixels(
+        await renderPage({ ...emptyPage, panels: [...others, panel] }, noAssets, opts),
+      )
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      const rect = rectToPx(panel.rect, { x: 0, y: 0, w: width, h: pageH })
+      // コマの中の画素を、中心からの楕円の距離（集中線を入れない楕円の縁が 1）ごとに数える
+      return (hit: (r: number) => boolean, from: number, to: number) => {
+        let n = 0
+        const cx = rect.x + rect.w / 2
+        const cy = rect.y + rect.h / 2
+        for (let y = Math.ceil(rect.y + 2); y < rect.y + rect.h - 2; y++) {
+          for (let x = Math.ceil(rect.x + 2); x < rect.x + rect.w - 2; x++) {
+            const e = Math.hypot((x - cx) / (rect.w * 0.3), (y - cy) / (rect.h * 0.3))
+            if (e >= from && e < to && hit(data[(y * width + x) * 4] ?? 0)) n++
+          }
+        }
+        return n
+      }
+    }
+    const dark = (r: number) => r < 128
+    const plain = await draw(bare)
+    const focused = await draw({ ...bare, effect: 'focus_lines' })
+    expect(focused(dark, 0, 0.95)).toBe(plain(dark, 0, 0.95))
+    expect(focused(dark, 1.5, Infinity)).toBeGreaterThan(plain(dark, 1.5, Infinity))
+
+    const light = (r: number) => r > 128
+    const black = await draw({ ...bare, fill: 'black' })
+    const blackFocused = await draw({ ...bare, fill: 'black', effect: 'focus_lines' })
+    expect(black(light, 0, Infinity)).toBe(0)
+    expect(blackFocused(light, 0, 0.95)).toBe(0)
+    expect(blackFocused(light, 1.5, Infinity)).toBeGreaterThan(0)
   })
 
   test('同じ入力で 2 回描くとバイト一致する', async () => {

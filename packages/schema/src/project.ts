@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 18 as const
+export const SCHEMA_VERSION = 19 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -117,6 +117,11 @@ export const PanelFrameSchema = z.enum([
   'soft',
   'cloud',
 ])
+/**
+ * コマに描く効果線。focus_lines（集中線）は焦点へ向かう放射状の線、speed_lines（スピード線）は動きの向きに平行な線。
+ * 画面には messages/schema の `panel_effect_<値>` で出す
+ */
+export const PanelEffectSchema = z.enum(['focus_lines', 'speed_lines'])
 /** コマの絵に掛ける色調。sepia は茶色、faded は色を抜いて薄くし、回想に使う。画面には `page_tone_<値>` で出す */
 export const PageToneSchema = z.enum(['sepia', 'faded'])
 
@@ -181,6 +186,8 @@ const PanelBaseSchema = z.object({
   fill: z.enum(['black']).optional(),
   /** 枠線。省略は実線の枠 */
   frame: PanelFrameSchema.optional(),
+  /** 絵の上、フキダシと枠線の下に描く効果線。省略は描かない */
+  effect: PanelEffectSchema.optional(),
   bubbles: z.array(BubbleSchema),
   note: z.string().optional(),
   camera: CameraSchema.optional(),
