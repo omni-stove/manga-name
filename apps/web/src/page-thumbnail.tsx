@@ -1,6 +1,7 @@
 import { m } from '@manga/i18n'
 import {
   currentArt,
+  hasFrameLine,
   type Page,
   type Panel,
   type ProjectSettings,
@@ -105,7 +106,7 @@ const outlinePoints = (panel: Panel, w: number, h: number) =>
     .map((p) => `${p.x * w},${p.y * h}`)
     .join(' ')
 
-/** ページのコマ割りを紙面（見開きなら 2 ページ分）の縦横比で描く。絵が選ばれたコマは、`resolveAsset` で読めればその絵を、読めなければ塗りを描く */
+/** ページのコマ割りを紙面（見開きなら 2 ページ分）の縦横比で描き、黒い地のページは紙を黒くする。絵が選ばれたコマは、`resolveAsset` で読めればその絵を、読めなければ塗りを描く */
 export function PageThumbnail({
   page,
   pageSize,
@@ -123,7 +124,11 @@ export function PageThumbnail({
       role="img"
       aria-label={m.web_thumbnail_layout()}
     >
-      <rect width={w} height={h} className={styles.paper} />
+      <rect
+        width={w}
+        height={h}
+        className={page.ground === 'black' ? styles.blackPaper : styles.paper}
+      />
       {/* 枠なしのコマは下に敷くので先に描き、枠ありのコマは紙の地でその絵を隠す */}
       {paintOrder(page.panels).map((panel) => (
         <g key={panel.id}>
@@ -135,7 +140,13 @@ export function PageThumbnail({
           )}
           <polygon
             points={outlinePoints(panel, w, h)}
-            className={panel.frame === 'none' ? styles.borderless : styles.panel}
+            className={
+              hasFrameLine(panel.frame)
+                ? styles.panel
+                : page.ground === 'black'
+                  ? styles.borderlessOnBlack
+                  : styles.borderless
+            }
           />
         </g>
       ))}

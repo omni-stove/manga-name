@@ -271,7 +271,7 @@ if (import.meta.vitest) {
 
       const writer = createYjsProjectStore(createEmptyProject('x'), { ...options(), doc: old() })
       expect(writer.get().episodes[0]?.pages[0]?.panels[0]?.camera).toBe('long')
-      expect(writer.doc.getMap(PROJECT_ROOT).get('schemaVersion')).toBe(14)
+      expect(writer.doc.getMap(PROJECT_ROOT).get('schemaVersion')).toBe(15)
       expect(panelOf(writer.doc)?.camera).toBe('long')
 
       const reader = createYjsProjectStore(createEmptyProject('x'), {

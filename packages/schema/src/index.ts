@@ -1,6 +1,7 @@
 export * from './account'
 export * from './ai'
 export * from './api-error'
+export * from './appearance'
 export * from './bubble-fit'
 export * from './bubble-outline'
 export * from './diagnosis'

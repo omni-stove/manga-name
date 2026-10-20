@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
 import { m } from '@manga/i18n'
-import type { Page, PageDiagnosis, Patch } from '@manga/schema'
+import { type Page, type PageDiagnosis, PageToneSchema, type Patch } from '@manga/schema'
 import { Button, Checkbox, Field, RemoveButton, Typography, XStack } from '@manga/ui'
-import { DEBOUNCE_MS, TextField } from './fields'
+import { DEBOUNCE_MS, option, SelectField, TextField } from './fields'
 import { SEVERITY_LABELS } from './issue-list'
 import styles from './page-inspector.module.css'
 import { optionalString, replace } from './patch'
 import section from './section.module.css'
 import type { PageInspectorProps } from './types'
+
+const TONES: readonly { value: NonNullable<Page['tone']> | ''; label: string }[] = [
+  option('', m.page_tone_none),
+  ...PageToneSchema.options.map((tone) => option(tone, m[`page_tone_${tone}` as const])),
+]
 
 export function PageInspector({
   page,
@@ -31,6 +36,23 @@ export function PageInspector({
           rows={4}
           delayMs={DEBOUNCE_MS}
           onCommit={(v) => onChange(optionalString('/note', page.note, v))}
+        />
+        <Checkbox
+          label={m.page_ground_black()}
+          checked={page.ground === 'black'}
+          onChange={(e) =>
+            onChange(
+              e.target.checked
+                ? [{ op: 'add', path: '/ground', value: 'black' }]
+                : [{ op: 'remove', path: '/ground' }],
+            )
+          }
+        />
+        <SelectField
+          label={m.page_tone()}
+          value={page.tone ?? ''}
+          options={TONES}
+          onCommit={(v) => onChange(optionalString('/tone', page.tone, v))}
         />
         <Typography variant="label" tone="muted" className={section.heading}>
           {m.page_reference()}
@@ -126,9 +148,14 @@ export function PageInspector({
 if (import.meta.vitest) {
   const { describe, expect, test, vi } = import.meta.vitest
   const { act } = await import('react')
-  const { buttonNamed, inputLabelled, must, render, samplePage, setValue } = await import(
-    './dom-harness'
-  )
+  const { buttonNamed, choose, inputLabelled, must, render, samplePage, selectLabelled, setValue } =
+    await import('./dom-harness')
+
+  /** 文字が `label` のチェックボックス */
+  const checkboxNamed = (container: HTMLElement, label: string) =>
+    [...container.querySelectorAll('label')]
+      .find((el) => el.textContent === label)
+      ?.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? undefined
 
   describe('PageInspector', () => {
     const page = samplePage
@@ -167,7 +194,7 @@ if (import.meta.vitest) {
         />,
       )
       expect(container.querySelector('input[type="range"]')).toBeNull()
-      expect(container.querySelector('input[type="checkbox"]')).toBeNull()
+      expect(checkboxNamed(container, m.reference_image_visible())).toBeUndefined()
       expect(
         [...container.querySelectorAll('button')].some(
           (b) => b.getAttribute('aria-label') === m.remove(),
@@ -196,7 +223,7 @@ if (import.meta.vitest) {
         { op: 'replace', path: '/reference/opacity', value: 0.25 },
       ])
 
-      const visible = must(container.querySelector<HTMLInputElement>('input[type="checkbox"]'))
+      const visible = must(checkboxNamed(container, m.reference_image_visible()))
       expect(visible.checked).toBe(true)
       await act(async () => visible.click())
       expect(onChange).toHaveBeenLastCalledWith([
@@ -207,6 +234,29 @@ if (import.meta.vitest) {
       expect(onPickReference).toHaveBeenCalledTimes(1)
       await act(async () => buttonNamed(container, m.remove()).click())
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/reference' }])
+    })
+
+    test('the ground checkbox and the tone select patch ground and tone', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = { onChange, onGenerateAll: () => {}, onPickReference: () => {} }
+      const { container, root } = await render(<PageInspector page={page} {...props} />)
+      const ground = () => must(checkboxNamed(container, m.page_ground_black()))
+      expect(ground().checked).toBe(false)
+      await act(async () => ground().click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/ground', value: 'black' }])
+      await choose(selectLabelled(container, m.page_tone()), 'sepia')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/tone', value: 'sepia' }])
+
+      await act(async () =>
+        root.render(
+          <PageInspector page={{ ...page, ground: 'black', tone: 'sepia' }} {...props} />,
+        ),
+      )
+      expect(ground().checked).toBe(true)
+      await act(async () => ground().click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/ground' }])
+      await choose(selectLabelled(container, m.page_tone()), '')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/tone' }])
     })
 
     test('generate all is disabled while generating and for a page without panels', async () => {

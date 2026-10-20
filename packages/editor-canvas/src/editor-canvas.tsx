@@ -752,6 +752,33 @@ if (import.meta.vitest) {
       expect(plain.querySelector('[data-panel-fill="white"]')).toBeNull()
     })
 
+    test('a black-ground page paints the paper black and gives framed panels a white ground', async () => {
+      const svg = await render({ page: { ...samplePage, ground: 'black' } })
+      expect(must(svg.querySelector('[data-ground]')).getAttribute('fill')).toBe('#000')
+      expect(svg.querySelectorAll('[data-panel-fill="white"]')).toHaveLength(
+        samplePage.panels.length,
+      )
+    })
+
+    test('frame styles shape the outline, dash or double the line, and soften the edge', async () => {
+      const frames = ['round', 'wavy', 'dashed', 'double', 'soft'] as const
+      const page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p, i) => (frames[i] ? { ...p, frame: frames[i] } : p)),
+      }
+      const svg = await render({ page })
+      const frameOf = (id: string) =>
+        must(svg.querySelector<SVGElement>(`[data-panel-id="${id}"] > [data-panel-frame]`))
+      const corners = (id: string) => frameOf(id).getAttribute('points')?.split(' ').length
+      expect(corners('pn_1')).toBeGreaterThan(4)
+      expect(corners('pn_2')).toBeGreaterThan(4)
+      expect(corners('pn_6')).toBe(4)
+      expect(frameOf('pn_3').getAttribute('stroke-dasharray')).toBe('6 3')
+      expect(frameOf('pn_4').getAttribute('stroke-width')).toBe('3')
+      expect(frameOf('pn_5').style.stroke).toBe('var(--guide)')
+      expect(svg.querySelector('[data-panel-id="pn_5"] [data-soft-edge]')).not.toBeNull()
+    })
+
     test('the selected panel gets a guide-coloured frame', async () => {
       const svg = await render({ selection: { kind: 'panel', id: 'pn_2' } })
       const frame = must(
@@ -762,6 +789,13 @@ if (import.meta.vitest) {
   })
 
   describe('art', () => {
+    test('the page tone filters the arts through the tone matrix', async () => {
+      const svg = await render({ page: { ...pageWithArts, tone: 'sepia' } })
+      const filter = must(svg.querySelector('filter[data-tone="sepia"]'))
+      const image = must(svg.querySelector('[data-panel-id="pn_1"] image'))
+      expect(image.getAttribute('filter')).toBe(`url(#${filter.id})`)
+    })
+
     test('arts are drawn as <image> clipped to the panel', async () => {
       const resolveAsset = vi.fn(resolveFixture)
       const svg = await render({ page: pageWithArts, resolveAsset })

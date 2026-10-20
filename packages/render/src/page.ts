@@ -3,21 +3,27 @@ import {
   bubbleTextBox,
   clipTextBox,
   currentArt,
+  frameOutline,
+  groundColor,
+  hasFrameLine,
   innerFrameOf,
   type Page,
   type Panel,
   paintOrder,
   panelOutline,
+  TONE_MATRICES,
 } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
 import { bubbleGeometry, drawBubble } from './bubble'
 import { type PxRect, pagePixelSize, pointToPx, rectToPx } from './geometry'
 import {
+  applyColorMatrix,
   drawCover,
   drawFrame,
   drawNotesMargin,
   drawPanelNumber,
   drawPlaceholder,
+  drawSoftEdge,
   fillOutline,
   withClip,
 } from './panel'
@@ -36,12 +42,24 @@ function byOrder<T extends { order: number }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.order - b.order)
 }
 
-/** 採用中の生成画像を読んでデコードする。無ければ undefined */
-async function loadArt(panel: Panel, ctx: RenderContext): Promise<CanvasImageSource | undefined> {
+/** 採用中の生成画像を読んでデコードし、ページの色調 tone を掛ける。無ければ undefined */
+async function loadArt(
+  panel: Panel,
+  ctx: RenderContext,
+  tone: Page['tone'],
+): Promise<CanvasImageSource | undefined> {
   const art = currentArt(panel)
   if (!art) return undefined
   const backend = await getBackend()
-  return backend.decodeImage(await ctx.loadAsset(art.ref))
+  const image = await backend.decodeImage(await ctx.loadAsset(art.ref))
+  if (tone === undefined) return image
+  const { width, height } = image as { width: number; height: number }
+  const toned = backend.createSurface(width, height)
+  toned.ctx.drawImage(image, 0, 0)
+  const pixels = toned.ctx.getImageData(0, 0, width, height)
+  applyColorMatrix(pixels.data, TONE_MATRICES[tone])
+  toned.ctx.putImageData(pixels, 0, 0)
+  return toned.ctx.canvas as CanvasImageSource
 }
 
 /**
@@ -71,12 +89,19 @@ export async function drawPage(
   const c = surface.ctx
   const pageRect: PxRect = { x: marginOnLeft ? margin : 0, y: 0, w: pageSize.w, h: pageSize.h }
 
+  // 指示メモの余白は紙の地によらず白
   c.fillStyle = '#fff'
   c.fillRect(0, 0, surface.width, surface.height)
+  const ground = groundColor(page)
+  c.fillStyle = ground
+  c.fillRect(pageRect.x, pageRect.y, pageRect.w, pageRect.h)
 
   const innerRect = rectToPx(innerFrameOf(page), pageRect)
   const panels = paintOrder(page.panels)
-  const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx)))
+  const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx, page.tone)))
+  // 黒塗りのコマと、黒い地の上の枠なしのコマは、中が黒い
+  const blackInside = (panel: Panel) =>
+    panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')
   const drawBubbles = (panel: Panel, overflow: boolean) => {
     const rect = rectToPx(panel.rect, pageRect)
     for (const bubble of byOrder(panel.bubbles)) {
@@ -87,28 +112,35 @@ export async function drawPage(
       const box = clipTextBox(overflow ? text : clipTextBox(text, rect), innerRect)
       const { lines, fontPx } = layoutBubbleText(bubble.text, box, unit.w * MIN_FONT)
       // 白い地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
-      const onBlack = !overflow && panel.fill === 'black' && !bubbleOutline(bubble.shape, g).fill
+      const onBlack = !overflow && blackInside(panel) && !bubbleOutline(bubble.shape, g).fill
       drawVerticalText(c, lines, fontPx, box, onBlack ? '#fff' : '#000')
     }
   }
 
   panels.forEach((panel, i) => {
     const rect = rectToPx(panel.rect, pageRect)
-    const outline = panelOutline(panel).map((p) => pointToPx(p, pageRect))
+    const outline = frameOutline(
+      panelOutline(panel).map((p) => pointToPx(p, pageRect)),
+      panel.frame,
+      unit.w,
+    )
     const image = arts[i]
     // 枠ありのコマは、下に敷いた枠なしのコマの絵を隠すよう白い地を持つ
     if (panel.fill === 'black') fillOutline(c, outline, '#000')
     else if (panel.frame !== 'none') fillOutline(c, outline, '#fff')
     if (image) drawCover(c, image, rect, outline)
     else if (panel.fill === undefined) {
-      drawPlaceholder(c, panel, rect, outline, unit.w * NOTE_FONT)
+      const ink = blackInside(panel) ? '#fff' : '#000'
+      drawPlaceholder(c, panel, rect, outline, unit.w * NOTE_FONT, ink)
     }
+    // フキダシまでぼかさないよう、絵の直後にぼかす
+    if (panel.frame === 'soft') drawSoftEdge(c, outline, unit.w, ground)
     if (opts.panelNumbers) {
       drawPanelNumber(c, panel.order, outline, unit.w * NOTE_FONT * 1.5)
     }
     // 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く
     withClip(c, outline, () => drawBubbles(panel, false))
-    if (panel.frame !== 'none') drawFrame(c, outline, unit.w * FRAME_WIDTH)
+    if (hasFrameLine(panel.frame)) drawFrame(c, outline, unit.w * FRAME_WIDTH, panel.frame)
   })
 
   // はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く
@@ -340,6 +372,65 @@ if (import.meta.vitest) {
     expect(laid(0.49, 0.4)).toBe(0)
     const inside = { x: pn2.rect.x + pn2.rect.w * 0.9, y: pn2.rect.y + pn2.rect.h * 0.9 }
     expect(laid(inside.x, inside.y)).toBe(255)
+  })
+
+  test('黒い地のページは間白を黒くし、コマの中は白いまま', async () => {
+    const [pn1, pn2] = emptyPage.panels as [Panel, Panel]
+    const png = await renderPage({ ...emptyPage, ground: 'black' }, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'margin',
+      panelNumbers: false,
+    })
+    const { width, data } = await pixels(png)
+    const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+    const pageW = SNAPSHOT_WIDTH
+    const at = (x: number, y: number) =>
+      data[(Math.round(y * pageH) * width + Math.round(x * pageW)) * 4]
+    // pn_2 と pn_3 の隙間
+    expect(at(0.49, 0.4)).toBe(0)
+    expect(at(pn1.rect.x + pn1.rect.w * 0.6, pn1.rect.y + pn1.rect.h * 0.8)).toBe(255)
+    expect(at(pn2.rect.x + pn2.rect.w * 0.9, pn2.rect.y + pn2.rect.h * 0.9)).toBe(255)
+    // 指示メモの余白は白のまま
+    expect(data[(Math.round(pageH / 2) * width + width - 2) * 4]).toBe(255)
+  })
+
+  test('色調はコマの絵にだけ掛かる', async () => {
+    const { page, ctx } = withArts()
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const plain = await pixels(await renderPage(page, ctx, opts))
+    const faded = await pixels(await renderPage({ ...page, tone: 'faded' }, ctx, opts))
+    const sepia = await pixels(await renderPage({ ...page, tone: 'sepia' }, ctx, opts))
+    const count = (data: Uint8ClampedArray, hit: (r: number, b: number) => boolean) => {
+      let n = 0
+      for (let i = 0; i < data.length; i += 4) if (hit(data[i] ?? 0, data[i + 2] ?? 0)) n++
+      return n
+    }
+    // 薄墨は絵を 0.4 より暗くしないので暗い画素が減る。残る暗い画素は色調を掛けない枠線とセリフ
+    const dark = (r: number) => r < 100
+    expect(count(faded.data, dark)).toBeLessThan(count(plain.data, dark))
+    expect(count(faded.data, dark)).toBeGreaterThan(0)
+    const warm = (r: number, b: number) => r > b + 10
+    expect(count(sepia.data, warm)).toBeGreaterThan(count(plain.data, warm))
+  })
+
+  test('枠の種類: 角丸、波線、破線、二重線、ぼかしを黒い地とセピアのページで描く', async () => {
+    const { page, ctx } = withArts()
+    const frames = ['round', 'wavy', 'dashed', 'double', 'soft'] as const
+    const styled: Page = {
+      ...page,
+      ground: 'black',
+      tone: 'sepia',
+      panels: page.panels.map((panel, i) => {
+        const frame = frames[i]
+        return frame ? { ...panel, frame } : panel
+      }),
+    }
+    const png = await renderPage(styled, ctx, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-frames', png)
   })
 
   test('同じ入力で 2 回描くとバイト一致する', async () => {
