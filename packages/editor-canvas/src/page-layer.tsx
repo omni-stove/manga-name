@@ -27,7 +27,7 @@ import { type AssetState, loadAsset } from './asset'
 import { type Box, bubbleGeometry, bubblePaths } from './bubble-shape'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
-import { layoutVertical, RUBY_SCALE } from './vertical-text'
+import { layoutText, RUBY_SCALE } from './bubble-text'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
 /**
@@ -629,7 +629,7 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
 
 /**
  * フキダシ。太線で輪郭を描いてから同じ形を地の色（黒フキダシは黒、他は白）で塗り重ね、本体としっぽの継ぎ目の線を消す。
- * 黒フキダシのセリフは白で描く。
+ * 黒フキダシのセリフは白で描く。セリフは縦書きで、writing が horizontal なら横書きでルビを上に振る。
  * 外側に残る線は太線の半分になる。枠なしは何も描かない代わりに、選択していなくても薄い破線で範囲を示す。
  * clipId を渡すと、輪郭と文字をその clipPath で切る。フキダシは内枠の外に出てよいが、セリフは断裁で
  * 切れないよう内枠の内側に寄せる
@@ -663,8 +663,10 @@ const BubbleView = memo(function BubbleView({
     clipId ? clipTextBox(text, panel) : text,
     panelBox({ rect: frame }, width, height),
   )
-  const layout = layoutVertical(bubble.text, box)
-  const right = box.x + box.w / 2 + layout.width / 2
+  const horizontal = bubble.writing === 'horizontal'
+  const layout = layoutText(bubble.text, box, bubble.writing)
+  const right = box.x + box.w / 2 + layout.thickness / 2
+  const top = box.y + box.h / 2 - layout.thickness / 2
   const fs = layout.fontSize
   const rubySize = fs * RUBY_SCALE
   const black = paths.fill && bubble.fill === 'black'
@@ -673,8 +675,7 @@ const BubbleView = memo(function BubbleView({
   const typeface = bubbleTypeface(bubble)
   const font = TYPEFACES[typeface]
   const shapes = paths.tail === null ? [paths.body] : [paths.tail, paths.body]
-  const illegible =
-    layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
+  const illegible = layout.lines.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
     <g
       className="ec-bubble"
@@ -682,6 +683,7 @@ const BubbleView = memo(function BubbleView({
       data-shape={bubble.shape}
       data-typeface={typeface}
       data-bubble-fill={black ? 'black' : undefined}
+      data-writing={horizontal ? 'horizontal' : undefined}
     >
       <g clipPath={clipId && `url(#${clipId})`}>
         {paths.line !== 'none' &&
@@ -703,7 +705,49 @@ const BubbleView = memo(function BubbleView({
           ))}
         {paths.fill && shapes.map((d) => <path key={`fill-${d}`} d={d} fill={paper} />)}
         {paths.ink !== null && <path d={paths.ink} fill="#000" />}
-        {layout.columns.length > 0 && (
+        {layout.lines.length > 0 && horizontal && (
+          <>
+            <text
+              fontFamily={font.family}
+              fontWeight={font.weight}
+              fontSize={fs}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill={ink}
+              data-dialogue
+              data-truncated={layout.truncated || undefined}
+            >
+              {layout.lines.map((line, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: 行は位置で決まり、同じ文字列の行も並びうる
+                <tspan key={i} x={box.x + box.w / 2} y={top + line.offset}>
+                  {line.text}
+                </tspan>
+              ))}
+            </text>
+            {layout.lines.flatMap((line, i) => {
+              // 行は中央揃えで、行の長さは layoutText の見積もった字の幅の和とみなす
+              const left = box.x + box.w / 2 - (line.length * fs) / 2
+              return line.rubies.map((ruby) => (
+                <text
+                  // biome-ignore lint/suspicious/noArrayIndexKey: ルビは行と行の中の位置で決まる
+                  key={`${i}-${ruby.start}`}
+                  fontFamily={font.family}
+                  fontWeight={font.weight}
+                  fontSize={rubySize}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill={ink}
+                  x={left + (ruby.start + ruby.length / 2) * fs}
+                  y={top + line.offset - (fs + rubySize) / 2}
+                  data-ruby
+                >
+                  {ruby.text}
+                </text>
+              ))
+            })}
+          </>
+        )}
+        {layout.lines.length > 0 && !horizontal && (
           <>
             <text
               writingMode="vertical-rl"
@@ -712,16 +756,17 @@ const BubbleView = memo(function BubbleView({
               fontSize={fs}
               textAnchor="middle"
               fill={ink}
+              data-dialogue
               data-truncated={layout.truncated || undefined}
             >
-              {layout.columns.map((column, i) => (
+              {layout.lines.map((column, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
                 <tspan key={i} x={right - column.offset} y={box.y + box.h / 2}>
                   {column.text}
                 </tspan>
               ))}
             </text>
-            {layout.columns.flatMap((column, i) => {
+            {layout.lines.flatMap((column, i) => {
               // 列は中央揃えで、字は 1 字が文字サイズ 1 つぶんの高さとみなす
               const top = box.y + box.h / 2 - (column.length * fs) / 2
               return column.rubies.map((ruby) => (

@@ -74,6 +74,7 @@
   "bubble_typeface_mincho": "明朝",
   "bubble_typeface_rounded": "丸ゴシック",
   "bubble_fill_black": "黒フキダシ",
+  "bubble_writing_horizontal": "横書き",
   "bubble_overflow": "枠からはみ出す",
   "bubble_order": "順番",
   "focus_point": "焦点",

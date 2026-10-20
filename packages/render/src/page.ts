@@ -30,7 +30,12 @@ import {
   fillOutline,
   withClip,
 } from './panel'
-import { drawVerticalText, layoutBubbleText } from './text'
+import {
+  drawHorizontalText,
+  drawVerticalText,
+  layoutBubbleText,
+  measuredAdvance,
+} from './text'
 import type { RenderContext, RenderOptions, Surface } from './types'
 
 /** 1 ページの幅に対する比率。見開きでも 1 ページ分の幅に対してとり、線と文字を 1 ページのときと同じ太さにする */
@@ -114,12 +119,21 @@ export async function drawPage(
       drawBubble(c, bubble.shape, g, unit.w * BUBBLE_LINE_WIDTH, bubble.fill)
       const text = bubbleTextBox(bubble.shape, g)
       const box = clipTextBox(overflow ? text : clipTextBox(text, rect), innerRect)
-      const { lines, fontPx } = layoutBubbleText(bubble.text, box, unit.w * MIN_FONT)
       // 地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
       const white = bubbleOutline(bubble.shape, g).fill
         ? bubble.fill === 'black'
         : !overflow && blackInside(panel)
-      drawVerticalText(c, lines, fontPx, box, white ? '#fff' : '#000', bubbleTypeface(bubble))
+      const color = white ? '#fff' : '#000'
+      const typeface = bubbleTypeface(bubble)
+      const minPx = unit.w * MIN_FONT
+      if (bubble.writing === 'horizontal') {
+        const advance = measuredAdvance(c, typeface)
+        const laid = layoutBubbleText(bubble.text, box, minPx, 'horizontal', advance)
+        drawHorizontalText(c, laid.lines, laid.fontPx, box, color, typeface, advance)
+      } else {
+        const { lines, fontPx } = layoutBubbleText(bubble.text, box, minPx)
+        drawVerticalText(c, lines, fontPx, box, color, typeface)
+      }
     }
   }
 
@@ -411,6 +425,68 @@ if (import.meta.vitest) {
     const none = await draw('none')
     expect(none.corner).toBe(255)
     expect(none.column.some((v) => v < 100)).toBe(true)
+  })
+
+  test('横書き: ルビ、英文、黒フキダシのセリフを左から右へ書き、上から下へ行を送る', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const bubble = (id: string, text: string, x: number, extra: Partial<Bubble> = {}): Bubble => ({
+      id,
+      order: 1,
+      text,
+      shape: 'narration',
+      writing: 'horizontal',
+      pos: { x, y: 0.5 },
+      size: { w: 0.3, h: 0.5 },
+      ...extra,
+    })
+    const bubbles = [
+      bubble('bb_ruby', 'あの|魔法陣《まほうじん》が、光った。', 0.8),
+      bubble('bb_english', 'Hello, world! This is a sign.', 0.5, { shape: 'electronic' }),
+      bubble('bb_black', '画面の中の文字', 0.2, { fill: 'black' }),
+    ]
+    const panel: Panel = { ...pn1, note: undefined, camera: undefined, bubbles }
+    const png = await renderPage({ ...emptyPage, panels: [panel, ...rest] }, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-horizontal', png)
+  })
+
+  test('横書きの長音は回さず、箱の中央を横に貫く 1 行に並べる', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const draw = async (writing?: Bubble['writing']) => {
+      const bubble: Bubble = {
+        id: 'bb_line',
+        order: 1,
+        text: 'ーーーーーー',
+        shape: 'none',
+        ...(writing && { writing }),
+        pos: { x: 0.5, y: 0.5 },
+        size: { w: 0.8, h: 0.3 },
+      }
+      // 指示メモが紙面に出て画素の判定にかからないよう消す
+      const panel: Panel = { ...pn1, note: undefined, camera: undefined, bubbles: [bubble] }
+      const png = await renderPage({ ...emptyPage, panels: [panel, ...rest] }, noAssets, {
+        width: SNAPSHOT_WIDTH,
+        notes: 'none',
+        panelNumbers: false,
+      })
+      const { width, data } = await pixels(png)
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      const at = (x: number, y: number) => {
+        const row = Math.round((pn1.rect.y + pn1.rect.h * y) * pageH)
+        const col = Math.round((pn1.rect.x + pn1.rect.w * x) * width)
+        return data[(row * width + col) * 4] ?? 0
+      }
+      // コマの幅の 3 割から 7 割の列のうち、中央の帯に文字の画素がある列の数
+      return Array.from({ length: 40 }, (_, i) => 0.3 + (0.4 * i) / 40).filter((x) =>
+        Array.from({ length: 40 }, (_, j) => at(x, 0.4 + (0.2 * j) / 40)).some((v) => v < 100),
+      ).length
+    }
+    expect(await draw('horizontal')).toBeGreaterThanOrEqual(25)
+    // 縦書きでは長音を回して縦棒にするので、帯を横に貫かない
+    expect(await draw()).toBeLessThan(15)
   })
 
   test('枠なしのコマは枠線を引かず、order に関わらず枠ありのコマの下に敷く', async () => {
