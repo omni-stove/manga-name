@@ -115,8 +115,13 @@ if (platform === 'desktop') {
       isMainWindow() ? startDesktopShell({ router, library }) : listenEdit(),
     )
     .catch((e: unknown) => toasts.push(m.web_menu_build_failed({ reason: errorMessage(e) })))
-  import('./desktop/deep-link')
-    .then(({ startDeepLinks }) => startDeepLinks({ router, auth }))
+  // deep link のトークンは一度しか使えず、起動時の link も読み直すので、脚本のウィンドウでは受けない
+  import('./desktop/windows')
+    .then(({ isMainWindow }) =>
+      isMainWindow()
+        ? import('./desktop/deep-link').then(({ startDeepLinks }) => startDeepLinks({ router, auth }))
+        : undefined,
+    )
     .catch((e: unknown) => toasts.push(m.web_desktop_start_failed({ reason: errorMessage(e) })))
 }
 
