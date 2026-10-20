@@ -216,6 +216,22 @@ if (import.meta.vitest) {
     }
   })
 
+  test('frameOutline cloud tolerates a collinear vertex and a repeated vertex', () => {
+    const outline: Point[] = [
+      { x: 0, y: 0 },
+      { x: 0.5, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      { x: 1, y: 1 },
+      { x: 0, y: 1 },
+    ]
+    const cloud = frameOutline(outline, 'cloud', 1)
+    expect(cloud.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true)
+    expect(
+      cloud.every((p) => p.x >= -1e-9 && p.x <= 1 + 1e-9 && p.y >= -1e-9 && p.y <= 1 + 1e-9),
+    ).toBe(true)
+  })
+
   test('softEdgeStrokes stack to an opacity that falls linearly inward', () => {
     const strokes = softEdgeStrokes(1)
     const opacityAt = (covered: number) =>
