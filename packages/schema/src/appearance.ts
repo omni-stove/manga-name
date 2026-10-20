@@ -207,10 +207,7 @@ export function effectLines(
 }
 
 /** 放射状の効果線の中心（weight が最大の焦点、無ければコマの中心）と、そこから最も遠い角まで届く長さ */
-function radialCenter(
-  panel: Pick<Panel, 'focusPoints'>,
-  box: Rect,
-): { c: Point; reach: number } {
+function radialCenter(panel: Pick<Panel, 'focusPoints'>, box: Rect): { c: Point; reach: number } {
   const focus = panel.focusPoints.reduce<FocusPoint | undefined>(
     (best, f) => (best === undefined || f.weight > best.weight ? f : best),
     undefined,

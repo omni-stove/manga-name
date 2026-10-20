@@ -808,6 +808,39 @@ if (import.meta.vitest) {
       expect(hand.getAttribute('font-family')).toContain('Yomogi')
     })
 
+    test('horizontal dialogue goes left to right in lines down the bubble, with ruby above', async () => {
+      const svg = await render({
+        page: withBubble3({
+          writing: 'horizontal',
+          text: '|魔法《まほう》\nHello',
+          pos: { x: 0.5, y: 0.5 },
+          size: { w: 0.6, h: 0.4 },
+        }),
+      })
+      const bubble = must(svg.querySelector('[data-bubble-id="bb_3"]'))
+      expect(bubble.getAttribute('data-writing')).toBe('horizontal')
+      expect(bubble.querySelector('text[writing-mode]')).toBeNull()
+      const text = must(bubble.querySelector('text[data-dialogue]'))
+      expect(text.getAttribute('dominant-baseline')).toBe('central')
+      const lines = [...text.querySelectorAll('tspan')]
+      expect(lines.map((l) => l.textContent)).toEqual(['魔法', 'Hello'])
+      const [first, second] = lines.map((l) => ({
+        x: Number(l.getAttribute('x')),
+        y: Number(l.getAttribute('y')),
+      }))
+      expect(second?.x).toBeCloseTo(first?.x ?? 0)
+      expect(second?.y).toBeGreaterThan(first?.y ?? 0)
+      const ruby = must(bubble.querySelector('[data-ruby]'))
+      expect(ruby.textContent).toBe('まほう')
+      expect(Number(ruby.getAttribute('x'))).toBeCloseTo(first?.x ?? 0)
+      expect(Number(ruby.getAttribute('y'))).toBeLessThan(first?.y ?? 0)
+
+      const vertical = await render({ page: withBubble3({ text: 'Hello' }) })
+      const unset = must(vertical.querySelector('[data-bubble-id="bb_3"]'))
+      expect(unset.getAttribute('data-writing')).toBeNull()
+      expect(unset.querySelector('text[writing-mode]')).not.toBeNull()
+    })
+
     test('a borderless panel is drawn first with a dashed guide outline, and framed panels get a white ground', async () => {
       const [pn1, ...rest] = samplePage.panels as [Panel, ...Panel[]]
       const background = { ...pn1, id: 'pn_bg', order: 99, frame: 'none' as const }
