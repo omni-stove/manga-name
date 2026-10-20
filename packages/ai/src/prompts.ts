@@ -39,6 +39,7 @@ import {
 import { suggestLayoutSystem } from './layout.prompt'
 import { lineFields } from './lines.prompt'
 import { transcribeNameSystem } from './name.prompt'
+import { MAX_PAGE_COUNT } from './page-plan'
 import { planPagesSystem } from './plan-pages.prompt'
 import {
   type CharacterArtRequest,
@@ -50,9 +51,6 @@ import {
   type PagePlanRequest,
   type PanelArtRequest,
 } from './provider'
-
-/** ページ割りで割り振らせるページ数の上限。Workers が受け付けるページ数の上限と揃える */
-const MAX_PLANNED_PAGES = 64
 
 /** コマ割りの提案で出させる案の数。LayoutSuggestionResponseSchema の上限と揃える */
 const LAYOUT_OPTIONS = 3
@@ -242,7 +240,7 @@ function planPages(req: PagePlanRequest): LlmPrompt<PagePlanResponse> {
   const user = [
     ...characterList(req.project.characters),
     req.pageCount === undefined
-      ? `Pages: as many as the script needs, at most ${MAX_PLANNED_PAGES}.`
+      ? `Pages: as many as the script needs, at most ${MAX_PAGE_COUNT}.`
       : `Pages: exactly ${req.pageCount}.`,
     'Script:',
     req.script,
@@ -616,7 +614,7 @@ if (import.meta.vitest) {
     )
     expect(
       prompts.planPages({ project: { ...project, characters: [] }, script: 's' }).user,
-    ).toContain(`- (none)\nPages: as many as the script needs, at most ${MAX_PLANNED_PAGES}.`)
+    ).toContain(`- (none)\nPages: as many as the script needs, at most ${MAX_PAGE_COUNT}.`)
   })
 
   test('transcribeName embeds the name JSON Schema and lists characters and the page script', () => {
