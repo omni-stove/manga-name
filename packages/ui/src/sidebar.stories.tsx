@@ -59,3 +59,29 @@ export const ToggleHidesContent: Story = {
     await expect(canvas.getByText('選んだ要素のフォーム')).toBeVisible()
   },
 }
+
+// 幅も親が持つ部品なので、つまみの操作で幅が変わるよう状態を持たせる
+export const Resizable: Story = {
+  render: function Render(args) {
+    const [width, setWidth] = useState<number | undefined>(undefined)
+    return (
+      <div style={{ display: 'flex', justifyContent: 'flex-end', height: '20rem' }}>
+        <Sidebar {...args} width={width} onWidthChange={setWidth} />
+      </div>
+    )
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const sidebar = canvas.getByRole('complementary', { name: args.title })
+    const handle = canvas.getByRole('separator', {
+      name: m.ui_sidebar_resize({ title: args.title }),
+    })
+    const before = sidebar.getBoundingClientRect().width
+
+    handle.focus()
+    await userEvent.keyboard('{ArrowLeft}')
+    await expect(sidebar.getBoundingClientRect().width).toBeCloseTo(before + 16)
+
+    await userEvent.dblClick(handle)
+    await expect(sidebar.getBoundingClientRect().width).toBeCloseTo(before)
+  },
+}
