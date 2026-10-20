@@ -1,5 +1,6 @@
 import { m } from '@manga/i18n'
 import type { ID, Project } from '@manga/schema'
+import { emit } from '@tauri-apps/api/event'
 import { Menu, type MenuItemOptions, type PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
@@ -13,7 +14,6 @@ import type { ProjectLibrary } from '../project-library'
 import { errorMessage } from '../route-error'
 import type { createAppRouter } from '../router'
 import { toasts } from '../toasts'
-import { isEditable } from '../use-undo-shortcuts'
 import { startFileDrop } from './file-drop'
 import {
   loadRecentFiles,
@@ -22,6 +22,7 @@ import {
   recentLabel,
   saveRecentFiles,
 } from './recent-files'
+import { applyEdit, EDIT_EVENT, openScriptWindow } from './windows'
 
 export interface DesktopShellOptions {
   router: ReturnType<typeof createAppRouter>
@@ -39,6 +40,7 @@ const separator = predefined('Separator')
  * 開くは `.manga.json` をライブラリに読み込んで開き、保存は開いているプロジェクトを JSON でそのファイルに書く。
  * ウィンドウに落とした `.manga.json` も開くと同じく開く（startFileDrop）。
  * 編集の Undo / Redo はページの編集画面のときだけ、そのプロジェクトの store に送る。
+ * 表示の「脚本を別ウィンドウで開く」は、開いているエピソード（ページの編集画面ならそのページを含むエピソード）の脚本の画面を別のウィンドウで開く。
  * ウィンドウの位置と大きさは Rust 側の window-state プラグインが戻す
  */
 export async function startDesktopShell({ router, library }: DesktopShellOptions): Promise<void> {
@@ -49,6 +51,11 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
     task().catch((e: unknown) => toasts.push(failure(errorMessage(e))))
   }
 
+  // メニューは別ウィンドウ（脚本）にも付くが、ここの router と library はこのウィンドウのもの。フォーカスのないときの操作で、このウィンドウの状態を書いたり開いたりしない
+  const whenFocused = (task: () => Promise<void>) => async () => {
+    if (document.hasFocus()) await task()
+  }
+
   const currentProjectId = (): ID | undefined => {
     for (const match of router.state.matches) {
       const { projectId } = match.params as { projectId?: ID }
@@ -57,19 +64,12 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
   }
 
   const command = async (name: 'undo' | 'redo') => {
-    // メニューの accelerator が Cmd+Z を取るので、入力欄の中では入力欄自身の取り消しを呼び直す
-    if (isEditable(document.activeElement)) {
-      document.execCommand(name)
+    // アプリメニューは別ウィンドウ（脚本）にも付き、accelerator はここに届く。フォーカスのないこのウィンドウの store は触らず、フォーカスのあるウィンドウへ event で渡す
+    if (!document.hasFocus()) {
+      await emit(EDIT_EVENT, name)
       return
     }
-    // Undo はページの編集画面だけのもの。他の画面では削除を確認ダイアログで確かめる
-    const page = router.state.matches.find(
-      (match) => match.routeId === '/p/$projectId_/pages/$pageId',
-    )
-    const id = (page?.params as { projectId?: ID } | undefined)?.projectId
-    const store = id ? await library.open(id) : undefined
-    if (name === 'undo') store?.undo()
-    else store?.redo()
+    await applyEdit({ router, library }, name)
   }
 
   const remember = async (file: RecentFile) => {
@@ -130,7 +130,7 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
         text: recentLabel(f.path),
         action: run(
           (reason) => m.web_menu_open_failed({ reason }),
-          () => openPath(f.path),
+          whenFocused(() => openPath(f.path)),
         ),
       })),
       separator,
@@ -146,6 +146,31 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
         ),
       },
     ]
+  }
+
+  // ページの編集画面からはそのページを含むエピソードの脚本を開き、横に並べて書ける
+  const currentEpisodeId = async (): Promise<ID | undefined> => {
+    for (const match of router.state.matches) {
+      const { episodeId, pageId } = match.params as { episodeId?: ID; pageId?: ID }
+      if (episodeId) return episodeId
+      if (!pageId) continue
+      const project = await currentProject()
+      return project?.episodes.find((e) => e.pages.some((p) => p.id === pageId))?.id
+    }
+  }
+
+  const openScript = async () => {
+    const projectId = currentProjectId()
+    const episodeId = await currentEpisodeId()
+    if (!projectId || !episodeId) {
+      toasts.push(m.web_menu_script_window_no_episode())
+      return
+    }
+    const { href } = router.buildLocation({
+      to: '/p/$projectId/episodes/$episodeId/draft',
+      params: { projectId, episodeId },
+    })
+    await openScriptWindow({ projectId, episodeId, url: href, title: m.web_draft_title() })
   }
 
   const openSettings = () =>
@@ -183,19 +208,19 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
             {
               text: m.web_menu_open(),
               accelerator: 'CmdOrCtrl+O',
-              action: run((reason) => m.web_menu_open_failed({ reason }), openDialog),
+              action: run((reason) => m.web_menu_open_failed({ reason }), whenFocused(openDialog)),
             },
             { text: m.web_menu_recent(), items: recentItems() },
             separator,
             {
               text: m.save(),
               accelerator: 'CmdOrCtrl+S',
-              action: run((reason) => m.web_menu_save_failed({ reason }), saveCurrent),
+              action: run((reason) => m.web_menu_save_failed({ reason }), whenFocused(saveCurrent)),
             },
             {
               text: m.web_menu_save_as(),
               accelerator: 'CmdOrCtrl+Shift+S',
-              action: run((reason) => m.web_menu_save_failed({ reason }), saveAs),
+              action: run((reason) => m.web_menu_save_failed({ reason }), whenFocused(saveAs)),
             },
             separator,
             isMac ? predefined('CloseWindow') : predefined('Quit'),
@@ -230,8 +255,27 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
         {
           text: m.web_menu_view(),
           items: [
-            { text: m.web_project_list(), action: () => void router.navigate({ to: '/' }) },
-            { text: m.web_app_settings(), accelerator: 'CmdOrCtrl+,', action: openSettings },
+            {
+              text: m.web_project_list(),
+              action: () => {
+                if (document.hasFocus()) void router.navigate({ to: '/' })
+              },
+            },
+            {
+              text: m.web_app_settings(),
+              accelerator: 'CmdOrCtrl+,',
+              action: () => {
+                if (document.hasFocus()) openSettings()
+              },
+            },
+            separator,
+            {
+              text: m.web_menu_script_window(),
+              action: run(
+                (reason) => m.web_menu_script_window_failed({ reason }),
+                whenFocused(openScript),
+              ),
+            },
             ...(isMac ? [separator, predefined('Fullscreen'), predefined('Minimize')] : []),
           ],
         },
@@ -277,20 +321,31 @@ if (import.meta.vitest) {
     libraryProjects = [] as Project[],
     currentId = undefined as ID | undefined,
     onPage = false,
+    pageId = 'page' as ID,
   } = {}) => {
     const store = createFakeStoreIpc({ recentFiles: recent })
     const written = new Map<string, string>()
     let menu: SentItem[] = []
     const dialogs: { cmd: string; options: unknown }[] = []
+    const createdWindows: unknown[] = []
     const listeners = new Map<string, number>()
     const tauri = installFakeTauri(vi.stubGlobal, (cmd, args, options) => {
       if (cmd.startsWith('plugin:store|')) return store.handle(cmd, args)
       switch (cmd) {
+        case 'plugin:window|get_all_windows':
+        case 'plugin:webview|get_all_webviews':
+          return []
+        case 'plugin:webview|create_webview_window':
+          createdWindows.push((args as { options: unknown }).options)
+          return null
         case 'plugin:event|listen': {
           const { event, handler } = args as { event: string; handler: number }
           listeners.set(event, handler)
           return handler
         }
+        case 'plugin:event|emit':
+        case 'plugin:event|unlisten':
+          return null
         case 'plugin:menu|new':
           menu = (args as { options: { items: SentItem[] } }).options.items
           return [1, 'menu']
@@ -318,7 +373,7 @@ if (import.meta.vitest) {
     vi.stubGlobal('navigator', { userAgent })
     vi.stubGlobal('HTMLElement', FakeElement)
     const execCommand = vi.fn()
-    vi.stubGlobal('document', { activeElement: null, execCommand })
+    vi.stubGlobal('document', { activeElement: null, execCommand, hasFocus: () => true })
 
     const stores = new Map(
       libraryProjects.map((p) => [p.id, { get: () => p, undo: vi.fn(), redo: vi.fn() }]),
@@ -334,11 +389,14 @@ if (import.meta.vitest) {
           { routeId: '__root__', params: {} },
           {
             routeId: onPage ? '/p/$projectId_/pages/$pageId' : '/p/$projectId',
-            params: { projectId: currentId },
+            params: { projectId: currentId, ...(onPage && { pageId }) },
           },
         ],
       },
       navigate: vi.fn(async () => {}),
+      buildLocation: ({ params }: { params: { projectId: ID; episodeId: ID } }) => ({
+        href: `/p/${params.projectId}/episodes/${params.episodeId}/draft`,
+      }),
     }
     await startDesktopShell({
       router: router as unknown as DesktopShellOptions['router'],
@@ -362,6 +420,7 @@ if (import.meta.vitest) {
       store,
       written,
       dialogs,
+      createdWindows,
       library,
       router,
       stores,
@@ -529,6 +588,7 @@ if (import.meta.vitest) {
       vi.stubGlobal('document', {
         activeElement: new FakeElement('INPUT'),
         execCommand: shell.execCommand,
+        hasFocus: () => true,
       })
       shell.click(m.web_menu_edit(), m.web_menu_undo())
       await vi.waitFor(() => expect(shell.execCommand).toHaveBeenCalledWith('undo'))
@@ -564,6 +624,27 @@ if (import.meta.vitest) {
       expect(list).toEqual({ to: '/' })
       expect(settings).toMatchObject({ to: '.', replace: true })
       expect(settings.search({ q: 1 })).toEqual({ q: 1, settings: 'app' })
+    })
+
+    test('from the page editor the View menu opens the script of the episode of that page in a new window', async () => {
+      const project = {
+        ...fileProject,
+        episodes: [{ id: 'ep', pages: [{ id: 'page' }] }],
+      } as unknown as Project
+      const shell = await setup({ libraryProjects: [project], currentId: project.id, onPage: true })
+      shell.click(m.web_menu_view(), m.web_menu_script_window())
+      await vi.waitFor(() => expect(shell.createdWindows).toHaveLength(1))
+      expect(shell.createdWindows[0]).toMatchObject({
+        label: `script-${project.id}-ep`,
+        url: `/p/${project.id}/episodes/ep/draft`,
+      })
+    })
+
+    test('the script window needs an open episode', async () => {
+      const shell = await setup({ libraryProjects: [fileProject], currentId: fileProject.id })
+      shell.click(m.web_menu_view(), m.web_menu_script_window())
+      await vi.waitFor(() => expect(toasts.state.getState().toasts).toHaveLength(1))
+      expect(shell.createdWindows).toEqual([])
     })
   })
 }
