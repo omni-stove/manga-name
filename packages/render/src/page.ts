@@ -1,5 +1,6 @@
 import {
   type Bubble,
+  blackPanel,
   bubbleOutline,
   bubbleTextBox,
   bubbleTypeface,
@@ -124,9 +125,9 @@ export async function drawPage(
   const innerRect = rectToPx(innerFrameOf(page), pageRect)
   const panels = paintOrder(page.panels)
   const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx, panelTone(page, panel))))
-  // 黒塗りのコマと、黒い地の上の枠なしのコマは、中が黒い
+  // 黒い地のコマと、黒い紙の上の枠なしのコマは、中が黒い
   const blackInside = (panel: Panel) =>
-    panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')
+    blackPanel(panel) || (panel.frame === 'none' && ground === '#000')
   const drawBubbles = (panel: Panel, overflow: boolean) => {
     const rect = rectToPx(panel.rect, pageRect)
     for (const bubble of byOrder(panel.bubbles)) {
@@ -179,7 +180,7 @@ export async function drawPage(
     )
     const image = arts[i]
     // 枠ありのコマは、下に敷いた枠なしのコマの絵を隠すよう白い地を持つ
-    if (panel.fill === 'black') fillOutline(c, outline, '#000')
+    if (blackPanel(panel)) fillOutline(c, outline, '#000')
     else if (panel.frame !== 'none') fillOutline(c, outline, '#fff')
     if (image) drawCover(c, image, rect, outline)
     else if (panel.fill === undefined) {
@@ -913,6 +914,85 @@ if (import.meta.vitest) {
     expect(black(light, 0, Infinity)).toBe(0)
     expect(blackFocused(light, 0, 0.95)).toBe(0)
     expect(blackFocused(light, 1.5, Infinity)).toBeGreaterThan(0)
+  })
+
+  test('ベタフラ: コマの地を黒で塗り、焦点から白い線を描き、フキダシのセリフを白抜きにする', async () => {
+    const { page, ctx } = withArts()
+    const [pn1, pn2, pn3, ...rest] = page.panels as [Panel, Panel, Panel, ...Panel[]]
+    const bubble: Bubble = {
+      id: 'bb_flash',
+      order: 9,
+      text: 'ーーーー',
+      shape: 'none',
+      pos: { x: 0.2, y: 0.5 },
+      size: { w: 0.2, h: 0.6 },
+    }
+    const withFlash: Page = {
+      ...page,
+      panels: [
+        { ...pn1, artId: undefined, arts: [], effect: 'beta_flash' },
+        { ...pn2, artId: undefined, arts: [], effect: 'beta_flash', bubbles: [bubble] },
+        { ...pn3, effect: 'beta_flash' },
+        ...rest,
+      ],
+    }
+    const png = await renderPage(withFlash, ctx, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-beta-flash', png)
+  })
+
+  test('ベタフラは中心のまわりを白く抜いて外を黒く残し、地の無いフキダシのセリフを白で描く', async () => {
+    const pn5 = emptyPage.panels.find((p) => p.id === 'pn_5') as Panel
+    const bare: Panel = {
+      ...pn5,
+      note: undefined,
+      camera: undefined,
+      bubbles: [],
+      focusPoints: [],
+      vectors: [],
+      effect: 'beta_flash',
+    }
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const draw = async (panel: Panel) => {
+      const others = emptyPage.panels.filter((p) => p.id !== pn5.id)
+      const { width, data } = await pixels(
+        await renderPage({ ...emptyPage, panels: [...others, panel] }, noAssets, opts),
+      )
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      const rect = rectToPx(panel.rect, { x: 0, y: 0, w: width, h: pageH })
+      // コマの中の box（コマの rect に対する比）にある画素のうち、白い画素の割合
+      return (box: { x: number; y: number; w: number; h: number }) => {
+        const px = rectToPx(box, rect)
+        let light = 0
+        let all = 0
+        for (let y = Math.ceil(px.y); y < px.y + px.h; y++) {
+          for (let x = Math.ceil(px.x); x < px.x + px.w; x++) {
+            all++
+            if ((data[(y * width + x) * 4] ?? 0) > 128) light++
+          }
+        }
+        return light / all
+      }
+    }
+    const flash = await draw(bare)
+    expect(flash({ x: 0.47, y: 0.47, w: 0.06, h: 0.06 })).toBeGreaterThan(0.8)
+    const corner = { x: 0.02, y: 0.02, w: 0.1, h: 0.1 }
+    expect(flash(corner)).toBeLessThan(0.5)
+
+    const bubbleBox = { x: 0.02, y: 0.1, w: 0.16, h: 0.8 }
+    const bubble: Bubble = {
+      id: 'bb_flash',
+      order: 1,
+      text: 'ーーーーーー',
+      shape: 'none',
+      pos: { x: bubbleBox.x + bubbleBox.w / 2, y: 0.5 },
+      size: { w: bubbleBox.w, h: bubbleBox.h },
+    }
+    const withBubble = await draw({ ...bare, bubbles: [bubble] })
+    expect(withBubble(bubbleBox)).toBeGreaterThan(flash(bubbleBox))
   })
 
   test('同じ入力で 2 回描くとバイト一致する', async () => {

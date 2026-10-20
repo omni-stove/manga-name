@@ -2,6 +2,7 @@ import { m } from '@manga/i18n'
 import {
   BUBBLE_DASH,
   type Bubble,
+  blackPanel,
   bubbleTextBox,
   bubbleTypeface,
   clipTextBox,
@@ -287,7 +288,7 @@ const PanelView = memo(function PanelView({
       <clipPath id={clipId}>
         <polygon points={points} />
       </clipPath>
-      {panel.fill === 'black' ? (
+      {blackPanel(panel) ? (
         <polygon points={points} fill="#000" data-panel-fill="black" />
       ) : (
         opaque && <polygon points={points} fill="#fff" data-panel-fill="white" />
@@ -353,7 +354,7 @@ const PanelView = memo(function PanelView({
           frame={frame}
           selected={bubble.id === selectedBubble}
           clipId={clipId}
-          onBlack={panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')}
+          onBlack={blackPanel(panel) || (panel.frame === 'none' && ground === '#000')}
         />
       ))}
       {/* 枠線を引かないコマは出力に枠線が出ないが、選んで動かせるよう作業用の点線で輪郭を見せる */}
@@ -748,7 +749,7 @@ const BubbleView = memo(function BubbleView({
   frame: Rect
   selected: boolean
   clipId?: string
-  /** 黒塗りのコマの中。白い地を持たないフキダシのセリフを白で描く */
+  /** 黒い地のコマの中。白い地を持たないフキダシのセリフを白で描く */
   onBlack?: boolean
 }) {
   const panel = panelBox({ rect: panelRect }, width, height)

@@ -920,6 +920,34 @@ if (import.meta.vitest) {
       )
     })
 
+    test('a beta flash paints the panel black, radiates white wedges and whitens unpainted dialogue', async () => {
+      const [pn1, ...rest] = samplePage.panels as [Panel, ...Panel[]]
+      const bubble = BubbleSchema.parse({
+        id: 'bb_flash',
+        order: 9,
+        text: '……',
+        shape: 'none',
+        pos: { x: 0.5, y: 0.5 },
+        size: { w: 0.3, h: 0.5 },
+      })
+      const page = {
+        ...samplePage,
+        panels: [{ ...pn1, effect: 'beta_flash' as const, bubbles: [bubble] }, ...rest],
+      }
+      const svg = await render({ page })
+      expect(svg.querySelector('[data-panel-id="pn_1"] [data-panel-fill="black"]')).not.toBeNull()
+      const flash = must(svg.querySelector('[data-panel-effect="beta_flash"]'))
+      expect(flash.closest('[data-panel-id]')?.getAttribute('data-panel-id')).toBe('pn_1')
+      expect(flash.getAttribute('fill')).toBe('#fff')
+      expect(flash.getAttribute('d')?.match(/M/g)?.length).toBeGreaterThan(20)
+      const text = must(svg.querySelector('[data-bubble-id="bb_flash"] text[writing-mode]'))
+      expect(text.getAttribute('fill')).toBe('#fff')
+      const again = await render({ page })
+      expect(must(again.querySelector('[data-panel-effect="beta_flash"]')).getAttribute('d')).toBe(
+        flash.getAttribute('d'),
+      )
+    })
+
     test('a page overlay multiplies a gray rect over the whole page above the bubbles', async () => {
       expect((await render({})).querySelector('[data-overlay]')).toBeNull()
       const svg = await render({ page: { ...samplePage, overlay: 'gray' } })

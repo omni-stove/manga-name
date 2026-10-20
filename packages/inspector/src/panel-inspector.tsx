@@ -861,6 +861,10 @@ if (import.meta.vitest) {
       expect(onChange).toHaveBeenLastCalledWith([
         { op: 'add', path: '/effect', value: 'speed_lines' },
       ])
+      await choose(select(), 'beta_flash')
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'add', path: '/effect', value: 'beta_flash' },
+      ])
       await choose(select(), '')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/effect' }])
     })
