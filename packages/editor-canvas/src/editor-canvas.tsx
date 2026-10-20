@@ -791,6 +791,43 @@ if (import.meta.vitest) {
       expect(must(unpainted.querySelector('text[writing-mode]')).getAttribute('fill')).toBe('#000')
     })
 
+    test('joined bubbles share one outline with a neck in the line of the holder, and each keeps its dialogue', async () => {
+      const panel3 = must(samplePage.panels.find((p) => p.id === 'pn_3'))
+      const bb3 = must(panel3.bubbles[0])
+      const page: Page = {
+        ...samplePage,
+        panels: samplePage.panels.map((panel) =>
+          panel.id === 'pn_3'
+            ? {
+                ...panel,
+                bubbles: [
+                  { ...bb3, shape: 'whisper', joinedTo: 'bj_1' },
+                  { ...bb3, id: 'bj_1', order: 2, shape: 'urchin', pos: { x: 0.2, y: 0.6 } },
+                ],
+              }
+            : panel,
+        ),
+      }
+      const props = { ...defaults, page }
+      const { svg, root } = await mount({ ...props, selection: { kind: 'bubble', id: 'bj_1' } })
+      // 選択を移して描き直しても、組は 1 つの輪郭のまま
+      await act(async () =>
+        root.render(<EditorCanvas {...props} selection={{ kind: 'bubble', id: 'bb_3' }} />),
+      )
+      const group = must(svg.querySelector('[data-bubble-group="bb_3 bj_1"]'))
+      expect(
+        must(group.querySelector('[data-bubble-id="bb_3"]')).getAttribute('data-joined-to'),
+      ).toBe('bj_1')
+      expect(group.querySelectorAll('[data-bubble-id] text[writing-mode]')).toHaveLength(2)
+      // 輪郭は組でまとめて描き、フキダシごとには描かない。線を持たないウニには太線を引かず、
+      // ささやきの本体としっぽと首にだけ破線を引く
+      expect(group.querySelector('[data-bubble-id] path[stroke]')).toBeNull()
+      const strokes = [...group.querySelectorAll(':scope > g > path[stroke="#000"]')]
+      expect(strokes).toHaveLength(1 + (bb3.tails?.length ?? 0) + 1)
+      for (const stroke of strokes) expect(stroke.getAttribute('stroke-dasharray')).not.toBeNull()
+      expect(group.querySelectorAll(':scope > g > path[fill="#000"]:not([stroke])')).toHaveLength(1)
+    })
+
     test('dialogue is set in the typeface of the shape unless the bubble names one', async () => {
       const textOf = (svg: SVGSVGElement) =>
         must(svg.querySelector('[data-bubble-id="bb_3"] text[writing-mode]'))
@@ -2543,6 +2580,85 @@ if (import.meta.vitest) {
       // しっぽ 2 本と本体を、線と塗りで 2 回ずつ描く
       expect(bubble.querySelectorAll('path[fill="#fff"]:not([stroke])')).toHaveLength(3)
       expect(two.querySelectorAll('[data-tail-handle="set"]')).toHaveLength(2)
+    })
+
+    test('joined bubbles draw one outline with a neck, and each keeps its own text', async () => {
+      const joined: Page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_3'
+            ? {
+                ...p,
+                bubbles: [
+                  ...p.bubbles,
+                  {
+                    id: 'bb_3b',
+                    order: 2,
+                    text: 'まさか',
+                    shape: 'normal',
+                    pos: { x: 0.6, y: 0.7 },
+                    size: { w: 0.18, h: 0.4 },
+                    joinedTo: 'bb_3',
+                  },
+                ],
+              }
+            : p,
+        ),
+      }
+      const svg = await render({ page: joined })
+      const group = must(svg.querySelector('[data-bubble-group="bb_3 bb_3b"]'))
+      // bb_3 の本体としっぽ、bb_3b の本体と bb_3 への首を、線と塗りで 2 回ずつ描く
+      expect(group.querySelectorAll('path[fill="#fff"][stroke]')).toHaveLength(4)
+      expect(group.querySelectorAll('path[fill="#fff"]:not([stroke])')).toHaveLength(4)
+      const second = must(group.querySelector('.ec-bubble[data-bubble-id="bb_3b"]'))
+      expect(second.getAttribute('data-joined-to')).toBe('bb_3')
+      expect(second.querySelectorAll('path[fill="#fff"]')).toHaveLength(0)
+      expect(second.textContent).toContain('ま')
+
+      const apart = await render({
+        page: {
+          ...joined,
+          panels: joined.panels.map((p) => ({
+            ...p,
+            bubbles: p.bubbles.map(({ joinedTo: _, ...b }) => b),
+          })),
+        },
+      })
+      expect(apart.querySelector('[data-bubble-group]')).toBeNull()
+      expect(
+        must(apart.querySelector('.ec-bubble[data-bubble-id="bb_3b"]')).querySelectorAll(
+          'path[fill="#fff"]:not([stroke])',
+        ),
+      ).toHaveLength(1)
+    })
+
+    test('a joined group follows the overflow of its first bubble, whatever the line style', async () => {
+      const joined: Page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_3'
+            ? {
+                ...p,
+                bubbles: [
+                  ...p.bubbles.map((b) => ({ ...b, overflow: true, shape: 'whisper' as const })),
+                  {
+                    id: 'bb_3b',
+                    order: 2,
+                    text: 'まさか',
+                    shape: 'none' as const,
+                    pos: { x: 0.6, y: 0.7 },
+                    size: { w: 0.18, h: 0.4 },
+                    joinedTo: 'bb_3',
+                  },
+                ],
+              }
+            : p,
+        ),
+      }
+      const svg = await render({ page: joined, selection: { kind: 'bubble', id: 'bb_3b' } })
+      const group = must(svg.querySelector('[data-bubble-group="bb_3 bb_3b"]'))
+      expect(group.querySelectorAll('path[stroke-dasharray]').length).toBeGreaterThan(0)
+      expect(svg.querySelectorAll('[data-bubble-group]')).toHaveLength(1)
     })
 
     test('dragging one of two tails moves only that tail and makes it the last', async () => {

@@ -2,7 +2,9 @@ import { m } from '@manga/i18n'
 import {
   BUBBLE_DASH,
   type Bubble,
+  type BubbleGeometry,
   blackPanel,
+  bubbleGroups,
   bubbleTextBox,
   bubbleTypeface,
   clipTextBox,
@@ -35,7 +37,7 @@ import {
 } from '@manga/schema'
 import { memo, Suspense, use, useState } from 'react'
 import { type AssetState, loadAsset } from './asset'
-import { type Box, bubbleGeometry, bubblePaths } from './bubble-shape'
+import { type Box, type BubblePaths, bubbleGeometry, bubblePaths, neckPath } from './bubble-shape'
 import {
   EMPHASIS_MARK,
   layoutText,
@@ -172,15 +174,15 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
       })}
       {/* はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く。重なりの前後はレンダラと同じくコマの重なり順 */}
       {panels.map((panel) =>
-        byOrder(panel.bubbles.filter((b) => b.overflow)).map((bubble) => (
-          <BubbleView
-            key={bubble.id}
-            bubble={bubble}
+        overflowGroups(panel, true).map((group) => (
+          <BubbleGroupView
+            key={group[0]?.id}
+            group={group}
             panelRect={panel.rect}
             width={width}
             height={height}
             frame={frame}
-            selected={isSelected(props.selection, 'bubble', bubble.id)}
+            selectedId={props.selection?.kind === 'bubble' ? props.selection.id : undefined}
           />
         )),
       )}
@@ -233,7 +235,12 @@ const effectPath = (lines: readonly (readonly PagePoint[])[]): string =>
 const isSelected = (selection: Selection, kind: 'panel' | 'bubble', id: ID) =>
   selection?.kind === kind && selection.id === id
 
-const byOrder = (bubbles: Bubble[]) => [...bubbles].sort((a, b) => a.order - b.order)
+/**
+ * コマのフキダシの組（bubbleGroups）のうち、overflow が合うもの。つないだ組は 1 つの輪郭なので、
+ * 先頭のフキダシの overflow に従って組ごとに振り分ける（書き出しと同じ）
+ */
+const overflowGroups = (panel: Panel, overflow: boolean) =>
+  bubbleGroups(panel.bubbles).filter((group) => (group[0]?.overflow === true) === overflow)
 
 const PanelView = memo(function PanelView({
   panel,
@@ -344,15 +351,15 @@ const PanelView = memo(function PanelView({
         </g>
       )}
       {/* 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く */}
-      {byOrder(panel.bubbles.filter((b) => !b.overflow)).map((bubble) => (
-        <BubbleView
-          key={bubble.id}
-          bubble={bubble}
+      {overflowGroups(panel, false).map((group) => (
+        <BubbleGroupView
+          key={group[0]?.id}
+          group={group}
           panelRect={panel.rect}
           width={width}
           height={height}
           frame={frame}
-          selected={bubble.id === selectedBubble}
+          selectedId={selectedBubble}
           clipId={clipId}
           onBlack={blackPanel(panel) || (panel.frame === 'none' && ground === '#000')}
         />
@@ -724,6 +731,121 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
   )
 }
 
+/** 1 つのフキダシの輪郭の描き方。shapes はしっぽ、本体、首の path */
+interface OutlineItem {
+  shapes: string[]
+  paper: string
+  line: BubblePaths['line']
+  fill: boolean
+  ink: string | null
+}
+
+/** フキダシの path と地の色から輪郭の描き方を作る。neck は首の path で、無ければ null */
+function outlineItem(paths: BubblePaths, fill: Bubble['fill'], neck: string | null): OutlineItem {
+  return {
+    shapes: [...paths.tails, paths.body, ...(neck === null ? [] : [neck])],
+    paper: paths.fill && fill === 'black' ? '#000' : '#fff',
+    line: paths.line,
+    fill: paths.fill,
+    ink: paths.ink,
+  }
+}
+
+/**
+ * フキダシの輪郭。全部の線を太線で引いてから同じ形を地の色で塗り重ね、本体、しっぽ、首の継ぎ目の線を消す。
+ * items を並べると、どのフキダシの塗りも他のフキダシの継ぎ目の線を消し、1 つの輪郭に見せる
+ */
+function BubbleOutlines({ items }: { items: readonly OutlineItem[] }) {
+  return (
+    <>
+      {items.flatMap((item, i) =>
+        item.line === 'none'
+          ? []
+          : item.shapes.map((d, j) => (
+              <path
+                // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
+                key={`stroke-${i}-${j}`}
+                d={d}
+                fill={item.paper}
+                stroke="#000"
+                strokeWidth={BUBBLE_STROKE}
+                strokeDasharray={
+                  item.line === 'dashed'
+                    ? BUBBLE_DASH.map((n) => n * BUBBLE_STROKE).join(' ')
+                    : undefined
+                }
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+              />
+            )),
+      )}
+      {items.flatMap((item, i) =>
+        item.fill
+          ? item.shapes.map((d, j) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
+              <path key={`fill-${i}-${j}`} d={d} fill={item.paper} />
+            ))
+          : [],
+      )}
+      {items.map(
+        (item, i) =>
+          item.ink !== null && (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 組の中の並びは order 順で変わらない
+            <path key={`ink-${i}`} d={item.ink} fill="#000" />
+          ),
+      )}
+    </>
+  )
+}
+
+/**
+ * bubbleGroups の 1 組のフキダシ。1 つだけなら BubbleView のまま描き、つないだ組は輪郭をまとめて
+ * 1 つに描いてから、フキダシごとのセリフと印を重ねる
+ */
+function BubbleGroupView({
+  group,
+  selectedId,
+  ...rest
+}: {
+  group: readonly Bubble[]
+  selectedId: ID | undefined
+  panelRect: Rect
+  width: number
+  height: number
+  frame: Rect
+  clipId?: string
+  onBlack?: boolean
+}) {
+  const [first] = group
+  if (!first) return null
+  if (group.length === 1) {
+    return <BubbleView bubble={first} selected={first.id === selectedId} {...rest} />
+  }
+  const panel = panelBox({ rect: rest.panelRect }, rest.width, rest.height)
+  const geometries = new Map(group.map((b) => [b.id, bubbleGeometry(b, panel)]))
+  const items = group.map((b) => {
+    const g = geometries.get(b.id) as BubbleGeometry
+    const to = b.joinedTo === undefined ? undefined : geometries.get(b.joinedTo)
+    return outlineItem(bubblePaths(b.shape, g), b.fill, to ? neckPath(g, to) : null)
+  })
+  return (
+    <g data-bubble-group={group.map((b) => b.id).join(' ')}>
+      <g clipPath={rest.clipId && `url(#${rest.clipId})`}>
+        <BubbleOutlines items={items} />
+      </g>
+      {group.map((b) => (
+        <BubbleView
+          key={b.id}
+          bubble={b}
+          selected={b.id === selectedId}
+          outlined={false}
+          {...rest}
+        />
+      ))}
+    </g>
+  )
+}
+
 /**
  * フキダシ。太線で輪郭を描いてから同じ形を地の色（黒フキダシは黒、他は白）で塗り重ね、本体としっぽの継ぎ目の線を消す。
  * 黒フキダシのセリフは白で描く。セリフは縦書きで、writing が horizontal なら横書きでルビを上に振る。
@@ -740,6 +862,7 @@ const BubbleView = memo(function BubbleView({
   selected,
   clipId,
   onBlack = false,
+  outlined = true,
 }: {
   bubble: Bubble
   panelRect: Rect
@@ -751,6 +874,8 @@ const BubbleView = memo(function BubbleView({
   clipId?: string
   /** 黒い地のコマの中。白い地を持たないフキダシのセリフを白で描く */
   onBlack?: boolean
+  /** 輪郭を描くか。連結フキダシは BubbleGroupView が組の輪郭をまとめて描くので false にする */
+  outlined?: boolean
 }) {
   const panel = panelBox({ rect: panelRect }, width, height)
   const g = bubbleGeometry(bubble, panel)
@@ -763,10 +888,8 @@ const BubbleView = memo(function BubbleView({
   const horizontal = bubble.writing === 'horizontal'
   const layout = layoutText(bubble.text, box, bubble.writing)
   const black = paths.fill && bubble.fill === 'black'
-  const paper = black ? '#000' : '#fff'
   const ink = black || (onBlack && !paths.fill) ? '#fff' : '#000'
   const typeface = bubbleTypeface(bubble)
-  const shapes = [...paths.tails, paths.body]
   const illegible = layout.lines.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
     <g
@@ -776,32 +899,10 @@ const BubbleView = memo(function BubbleView({
       data-typeface={typeface}
       data-bubble-fill={black ? 'black' : undefined}
       data-writing={horizontal ? 'horizontal' : undefined}
+      data-joined-to={bubble.joinedTo}
     >
       <g clipPath={clipId && `url(#${clipId})`}>
-        {paths.line !== 'none' &&
-          shapes.map((d, i) => (
-            <path
-              // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
-              key={`stroke-${i}`}
-              d={d}
-              fill={paper}
-              stroke="#000"
-              strokeWidth={BUBBLE_STROKE}
-              strokeDasharray={
-                paths.line === 'dashed'
-                  ? BUBBLE_DASH.map((n) => n * BUBBLE_STROKE).join(' ')
-                  : undefined
-              }
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-        {paths.fill &&
-          shapes.map((d, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
-            <path key={`fill-${i}`} d={d} fill={paper} />
-          ))}
-        {paths.ink !== null && <path d={paths.ink} fill="#000" />}
+        {outlined && <BubbleOutlines items={[outlineItem(paths, bubble.fill, null)]} />}
         <TextBlock
           layout={layout}
           cx={box.x + box.w / 2}

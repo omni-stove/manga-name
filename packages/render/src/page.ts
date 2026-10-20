@@ -1,6 +1,7 @@
 import {
   type Bubble,
   blackPanel,
+  bubbleGroups,
   bubbleOutline,
   bubbleTextBox,
   bubbleTypeface,
@@ -26,7 +27,7 @@ import {
   TONE_MATRICES,
 } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
-import { bubbleGeometry, drawBubble } from './bubble'
+import { bubbleGeometry, drawJoinedBubbles, joinedGeometry } from './bubble'
 import { type PxRect, pagePixelSize, pointToPx, rectToPx } from './geometry'
 import {
   actingNotes,
@@ -128,28 +129,37 @@ export async function drawPage(
   // 黒い地のコマと、黒い紙の上の枠なしのコマは、中が黒い
   const blackInside = (panel: Panel) =>
     blackPanel(panel) || (panel.frame === 'none' && ground === '#000')
+  // つないだフキダシは 1 つの輪郭なので、組の先頭のフキダシの overflow に従って組ごと描く
   const drawBubbles = (panel: Panel, overflow: boolean) => {
     const rect = rectToPx(panel.rect, pageRect)
-    for (const bubble of byOrder(panel.bubbles)) {
-      if ((bubble.overflow === true) !== overflow) continue
-      const g = bubbleGeometry(bubble, rect)
-      drawBubble(c, bubble.shape, g, unit.w * BUBBLE_LINE_WIDTH, bubble.fill)
-      const text = bubbleTextBox(bubble.shape, g)
-      const box = clipTextBox(overflow ? text : clipTextBox(text, rect), innerRect)
-      // 地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
-      const white = bubbleOutline(bubble.shape, g).fill
-        ? bubble.fill === 'black'
-        : !overflow && blackInside(panel)
-      const color = white ? '#fff' : '#000'
-      const typeface = bubbleTypeface(bubble)
-      const minPx = unit.w * MIN_FONT
-      if (bubble.writing === 'horizontal') {
-        const advance = measuredAdvance(c, typeface)
-        const laid = layoutBubbleText(bubble.text, box, minPx, 'horizontal', advance)
-        drawHorizontalText(c, laid.lines, laid.fontPx, box, color, typeface, advance)
-      } else {
-        const { lines, fontPx } = layoutBubbleText(bubble.text, box, minPx)
-        drawVerticalText(c, lines, fontPx, box, color, typeface)
+    for (const group of bubbleGroups(panel.bubbles)) {
+      if ((group[0]?.overflow === true) !== overflow) continue
+      const members = group.map((bubble) => ({
+        bubble,
+        shape: bubble.shape,
+        g: bubbleGeometry(bubble, rect),
+        fill: bubble.fill,
+        joined: joinedGeometry(bubble, group, rect),
+      }))
+      drawJoinedBubbles(c, members, unit.w * BUBBLE_LINE_WIDTH)
+      for (const { bubble, g } of members) {
+        const text = bubbleTextBox(bubble.shape, g)
+        const box = clipTextBox(overflow ? text : clipTextBox(text, rect), innerRect)
+        // 地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
+        const white = bubbleOutline(bubble.shape, g).fill
+          ? bubble.fill === 'black'
+          : !overflow && blackInside(panel)
+        const color = white ? '#fff' : '#000'
+        const typeface = bubbleTypeface(bubble)
+        const minPx = unit.w * MIN_FONT
+        if (bubble.writing === 'horizontal') {
+          const advance = measuredAdvance(c, typeface)
+          const laid = layoutBubbleText(bubble.text, box, minPx, 'horizontal', advance)
+          drawHorizontalText(c, laid.lines, laid.fontPx, box, color, typeface, advance)
+        } else {
+          const { lines, fontPx } = layoutBubbleText(bubble.text, box, minPx)
+          drawVerticalText(c, lines, fontPx, box, color, typeface)
+        }
       }
     }
   }
@@ -437,6 +447,36 @@ if (import.meta.vitest) {
       panelNumbers: false,
     })
     await matchPngSnapshot('page-tails', png)
+  })
+
+  test('連結フキダシ: つないだ 2 つの輪郭を細い首で結び、境に線を引かない', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const bubble = (
+      id: string,
+      order: number,
+      shape: Bubble['shape'],
+      pos: { x: number; y: number },
+      more: Partial<Bubble> = {},
+    ): Bubble => ({ id, order, text: 'つないだ', shape, pos, size: { w: 0.11, h: 0.42 }, ...more })
+    const bubbles = [
+      bubble('bb_a', 1, 'normal', { x: 0.86, y: 0.3 }),
+      bubble(
+        'bb_b',
+        2,
+        'normal',
+        { x: 0.68, y: 0.62 },
+        { joinedTo: 'bb_a', tails: [{ x: 0.62, y: 0.98 }] },
+      ),
+      bubble('bb_c', 3, 'whisper', { x: 0.44, y: 0.3 }),
+      bubble('bb_d', 4, 'whisper', { x: 0.26, y: 0.6 }, { joinedTo: 'bb_c' }),
+    ]
+    const page: Page = { ...emptyPage, panels: [{ ...pn1, bubbles }, ...rest] }
+    const png = await renderPage(page, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-joined', png)
   })
 
   test('ルビと傍点: 傍点の中のルビ付きの語には傍点を打たず、対の無い《《は字のまま描く', async () => {
