@@ -1,5 +1,5 @@
 import { m } from '@manga/i18n'
-import { type Camera, cornerAnchor, type Panel, softEdgeStrokes } from '@manga/schema'
+import { cornerAnchor, type Panel, sceneHeading, softEdgeStrokes } from '@manga/schema'
 import { FONT_FAMILY } from './backend'
 import type { PxPoint, PxRect } from './geometry'
 import { alphabeticY, wrapHorizontal } from './text'
@@ -115,13 +115,16 @@ export function applyColorMatrix(data: Uint8ClampedArray, matrix: readonly numbe
   }
 }
 
+/** 指示メモに載せるコマの項目 */
+type PanelNotes = Pick<Panel, 'order' | 'camera' | 'note' | 'scene' | 'beat'>
+
 /**
- * 未生成コマの中身。rect の左上にコマ番号、その下に camera と note を横書きで小さく。
+ * 未生成コマの中身。rect の左上にコマ番号、その下に「間」の印、camera と note を横書きで小さく。
  * 輪郭 outline の外に出る部分は切る
  */
 export function drawPlaceholder(
   ctx: Ctx,
-  panel: { order: number; camera?: Camera; note?: string },
+  panel: Omit<PanelNotes, 'scene'>,
   rect: PxRect,
   outline: readonly PxPoint[],
   fontPx: number,
@@ -142,7 +145,11 @@ export function drawPlaceholder(
   const lineHeight = fontPx * 1.4
   let y = rect.y + pad + numberPx * 1.3
   const bottom = rect.y + rect.h - pad
-  const text = [panel.camera && `[${m[`panel_camera_${panel.camera}` as const]()}]`, panel.note]
+  const text = [
+    panel.beat && m.panel_beat_mark(),
+    panel.camera && `[${m[`panel_camera_${panel.camera}` as const]()}]`,
+    panel.note,
+  ]
     .filter(Boolean)
     .join('\n')
   for (const line of wrapHorizontal(ctx, text, rect.w - pad * 2)) {
@@ -179,10 +186,12 @@ export function drawPanelNumber(
   ctx.restore()
 }
 
-/** 余白のメモ。コマ番号と camera の行、続けて note を横書きで列挙する */
+/**
+ * 余白のメモ。シーンの始まるコマではまず見出しの行、続けてコマ番号と camera と「間」の印の行、note を横書きで列挙する
+ */
 export function drawNotesMargin(
   ctx: Ctx,
-  panels: { order: number; camera?: Camera; note?: string }[],
+  panels: PanelNotes[],
   area: PxRect,
   fontPx: number,
 ): void {
@@ -199,10 +208,16 @@ export function drawNotesMargin(
   let y = area.y + pad
   for (const panel of panels) {
     ctx.font = `bold ${fontPx}px "${FONT_FAMILY}"`
-    const head = [String(panel.order), panel.camera && m[`panel_camera_${panel.camera}` as const]()]
+    const scene = sceneHeading(panel)
+    const head = [
+      String(panel.order),
+      panel.camera && m[`panel_camera_${panel.camera}` as const](),
+      panel.beat && m.panel_beat_mark(),
+    ]
       .filter(Boolean)
       .join(' ')
-    for (const line of wrapHorizontal(ctx, head, area.w - pad * 2)) {
+    const heads = scene === undefined ? [head] : [m.panel_scene_heading({ scene }), head]
+    for (const line of heads.flatMap((h) => wrapHorizontal(ctx, h, area.w - pad * 2))) {
       ctx.fillText(line, area.x + pad, alphabeticY(y, fontPx, 'top'))
       y += lineHeight
     }
@@ -364,6 +379,18 @@ if (import.meta.vitest) {
       expect(count.outside).toBe(0)
     })
 
+    test('marks a beat panel under the order number', async () => {
+      const rect = { x: 0, y: 0, w: 100, h: 100 }
+      // 余白 8px、数字は 14.4px なので、数字の下の行は y 26.72 から
+      const below = (x: number, y: number) => y >= 26
+      const draw = (beat?: true) =>
+        paint(100, 100, (ctx) =>
+          drawPlaceholder(ctx, { order: 1, beat }, rect, square(0, 0, 100), 8),
+        )
+      expect((await draw()).darkPixels(below).inside).toBe(0)
+      expect((await draw(true)).darkPixels(below).inside).toBeGreaterThan(0)
+    })
+
     test('stops writing lines before the bottom padding', async () => {
       const rect = { x: 0, y: 0, w: 100, h: 60 }
       const { darkPixels } = await paint(100, 100, (ctx) =>
@@ -394,5 +421,16 @@ if (import.meta.vitest) {
     const count = darkPixels((x, y) => x >= 100 && x < 160 && y < 120)
     expect(count.inside).toBeGreaterThan(0)
     expect(count.outside).toBe(0)
+  })
+
+  test('drawNotesMargin puts the scene heading on its own line before the panel', async () => {
+    const area = { x: 0, y: 0, w: 100, h: 100 }
+    // 余白 8px、行送り 12px なので、2 行目は y 20 から
+    const second = (_: number, y: number) => y >= 20
+    const draw = (panel: PanelNotes) =>
+      paint(100, 100, (ctx) => drawNotesMargin(ctx, [panel], area, 8))
+    expect((await draw({ order: 1, beat: true })).darkPixels(second).inside).toBe(0)
+    const scened = await draw({ order: 1, scene: '放課後・屋上', beat: true })
+    expect(scened.darkPixels(second).inside).toBeGreaterThan(0)
   })
 }

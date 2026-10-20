@@ -21,6 +21,9 @@ export const CAMERA_SHOTS: Record<Camera, string> = {
   high_angle: 'high-angle shot',
 }
 
+/** Panel.beat のコマの行。セリフも動きも無い「間」なので、芝居をさせず止まった絵にさせる */
+export const BEAT_PANEL = 'a silent beat with no dialogue and no action: a still, quiet moment'
+
 /** 画像生成の固定の末尾。配置図の白い領域（フキダシ）を空けさせる */
 export const PANEL_ART_TAIL =
   'leave the white areas of the layout image empty, with no text, letters or speech bubbles'

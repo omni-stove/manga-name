@@ -94,6 +94,13 @@ export function PanelInspector({
         commitOnBlur
         onCommit={(n) => onChange(replace('/order', n))}
       />
+      <TextField
+        label={m.panel_scene()}
+        value={panel.scene ?? ''}
+        placeholder={m.inspector_panel_scene_placeholder()}
+        delayMs={DEBOUNCE_MS}
+        onCommit={(v) => onChange(optionalString('/scene', panel.scene, v))}
+      />
       <SelectField
         label={m.panel_camera()}
         value={panel.camera ?? ''}
@@ -106,6 +113,17 @@ export function PanelInspector({
         rows={4}
         delayMs={DEBOUNCE_MS}
         onCommit={(v) => onChange(optionalString('/note', panel.note, v))}
+      />
+      <Checkbox
+        label={m.panel_beat()}
+        checked={panel.beat === true}
+        onChange={(e) =>
+          onChange(
+            e.target.checked
+              ? [{ op: 'add', path: '/beat', value: true }]
+              : [{ op: 'remove', path: '/beat' }],
+          )
+        }
       />
       <Checkbox
         label={m.panel_fill_black()}
@@ -590,6 +608,56 @@ if (import.meta.vitest) {
       expect(checkboxIn(container).checked).toBe(true)
       await act(async () => checkboxIn(container).click())
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/fill' }])
+    })
+
+    test('the scene field is debounced and an emptied scene is removed', async () => {
+      vi.useFakeTimers()
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const { container } = await render(
+        <PanelInspector
+          panel={{ ...samplePanel, scene: '放課後・屋上' }}
+          characters={project.characters}
+          onChange={onChange}
+          onGenerate={() => {}}
+          resolveAsset={resolveAsset}
+        />,
+      )
+      const scene = inputLabelled(container, m.panel_scene())
+      expect(scene.value).toBe('放課後・屋上')
+      await act(async () => setValue(scene, '夜・帰り道'))
+      expect(onChange).not.toHaveBeenCalled()
+      await act(async () => vi.advanceTimersByTime(DEBOUNCE_MS))
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/scene', value: '夜・帰り道' }])
+      await act(async () => setValue(scene, ''))
+      await act(async () => vi.advanceTimersByTime(DEBOUNCE_MS))
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/scene' }])
+    })
+
+    test('the beat checkbox adds and removes beat', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = {
+        characters: project.characters,
+        onChange,
+        onGenerate: () => {},
+        resolveAsset,
+      }
+      const checkboxIn = (container: HTMLElement) =>
+        must(
+          [...container.querySelectorAll('label')]
+            .find((el) => el.textContent === m.panel_beat())
+            ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+        )
+      const { container, root } = await render(<PanelInspector panel={samplePanel} {...props} />)
+      expect(checkboxIn(container).checked).toBe(false)
+      await act(async () => checkboxIn(container).click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/beat', value: true }])
+
+      await act(async () =>
+        root.render(<PanelInspector panel={{ ...samplePanel, beat: true }} {...props} />),
+      )
+      expect(checkboxIn(container).checked).toBe(true)
+      await act(async () => checkboxIn(container).click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/beat' }])
     })
 
     test('the frame select adds, replaces and removes frame', async () => {

@@ -76,6 +76,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * `focus` ツールではクリックで焦点を置き、ドラッグで動かす。`vector` ツールではドラッグでベクトルを作り、
  * 終点（と始点）が焦点かフキダシの上なら `targetFocusId`（と `sourceFocusId`）を付ける。
  * `layers.frames` が立っていれば、タチキリ枠、外枠、内枠をコマの上に重ねる。
+ * シーンの見出しを持つコマには、右綴じは左上、左綴じは右上に出力に出ない見出しを出す。
  * 参考画像はページの白地の上、コマの下に描く。焦点とベクトルはフキダシの上に描き、
  * `layers.hints` を切ると描画も選択も操作もしない。
  * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
@@ -340,6 +341,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         page={page}
         width={pageW}
         height={pageH}
+        direction={settings.direction}
         showArt={layers.art}
         showReference={layers.reference}
         resolveAsset={props.resolveAsset}
@@ -711,6 +713,49 @@ if (import.meta.vitest) {
       const first = must(svg.querySelector('[data-panel-id="pn_1"] [data-placeholder]'))
       expect(first.textContent).toContain('[ロング]')
       expect(first.textContent).toContain('ガラス結晶の森')
+    })
+
+    test('a panel with a scene shows the heading at the top-left, or at the top-right left of the number in ltr', async () => {
+      const [pn1, pn2, ...rest] = samplePage.panels as [Panel, Panel, ...Panel[]]
+      const page = { ...samplePage, panels: [{ ...pn1, scene: '放課後・屋上' }, pn2, ...rest] }
+      const labelIn = (svg: SVGSVGElement) =>
+        must(svg.querySelector('[data-panel-id="pn_1"] [data-scene-label]'))
+      const { w } = project.settings.pageSize
+
+      const rtl = labelIn(await render({ page }))
+      expect(rtl.textContent).toBe(m.panel_scene_heading({ scene: '放課後・屋上' }))
+      expect(rtl.getAttribute('text-anchor')).toBe('start')
+      expect(Number(rtl.getAttribute('x'))).toBeLessThan((pn1.rect.x + pn1.rect.w / 2) * w)
+
+      const ltr = labelIn(
+        await render({ page, settings: { ...project.settings, direction: 'ltr' } }),
+      )
+      expect(ltr.getAttribute('text-anchor')).toBe('end')
+      expect(Number(ltr.getAttribute('x'))).toBeGreaterThan((pn1.rect.x + pn1.rect.w / 2) * w)
+      const number = must(
+        ltr.ownerSVGElement?.querySelector('[data-panel-id="pn_1"] [data-panel-number] circle'),
+      )
+      expect(Number(ltr.getAttribute('x'))).toBeLessThan(
+        Number(number.getAttribute('cx')) - Number(number.getAttribute('r')),
+      )
+
+      const plain = await render()
+      expect(plain.querySelector('[data-scene-label]')).toBeNull()
+    })
+
+    test('a beat panel without art shows the beat mark in its placeholder', async () => {
+      const [pn1, ...rest] = samplePage.panels as [Panel, ...Panel[]]
+      const bare = { ...pn1, camera: undefined, note: undefined }
+      expect(
+        (await render({ page: { ...samplePage, panels: [bare, ...rest] } })).querySelector(
+          '[data-panel-id="pn_1"] [data-placeholder]',
+        ),
+      ).toBeNull()
+      const svg = await render({
+        page: { ...samplePage, panels: [{ ...bare, beat: true as const }, ...rest] },
+      })
+      const placeholder = must(svg.querySelector('[data-panel-id="pn_1"] [data-placeholder]'))
+      expect(placeholder.textContent).toBe(m.panel_beat_mark())
     })
 
     test('a black panel is filled black and the dialogue of an unpainted bubble in it is white', async () => {

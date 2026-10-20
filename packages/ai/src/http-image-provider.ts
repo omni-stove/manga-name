@@ -74,6 +74,7 @@ export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvide
           page: req.page,
           panelId: req.panelId,
           hint: req.hint,
+          scene: req.scene,
           previous: req.previous && { instruction: req.previous.instruction },
         },
         req,
@@ -89,7 +90,10 @@ export function createHttpImageProvider(opts: HttpProviderOptions): ImageProvide
       }
     },
     async generatePageArt(req) {
-      const form = imageForm({ project: req.project, page: req.page, hints: req.hints }, req)
+      const form = imageForm(
+        { project: req.project, page: req.page, hints: req.hints, scenes: req.scenes },
+        req,
+      )
       const res = await post('/v1/ai/page-art', { body: form })
       return { ...res, prompt: res.prompt ?? prompts.pageArt(req).prompt }
     },
@@ -131,6 +135,7 @@ if (import.meta.vitest) {
       const json = JSON.parse(form.get('json') as string)
       expect(json.panelId).toBe(panel.id)
       expect(json.previous).toEqual({ instruction: 'darker' })
+      expect(json.scene).toBe('屋上')
       expect(await fileText(form.get('layout'))).toBe('l')
       expect(await fileText(form.get('previous'))).toBe('p')
       expect((init.headers as Record<string, string>).authorization).toBe('Bearer tok')
@@ -149,6 +154,7 @@ if (import.meta.vitest) {
       referencePng: new Blob(['r']),
       characterRefs: [{ characterId: 'c1', image: new Blob(['c']) }],
       previous: { art: new Blob(['p']), instruction: 'darker' },
+      scene: '屋上',
     })
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example/v1/ai/panel-art')
@@ -157,12 +163,17 @@ if (import.meta.vitest) {
     expect(new Uint8Array(await res.image.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
   })
 
-  test('generatePageArt posts the page, hints and images without a previous art', async () => {
+  test('generatePageArt posts the page, hints, scenes and images without a previous art', async () => {
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
       const form = init.body as FormData
       expect([...form.keys()].sort()).toEqual(['character_c1', 'json', 'layout', 'reference'])
       const json = JSON.parse(form.get('json') as string)
-      expect(json).toEqual({ project: req.project, page, hints: { [panel.id]: 'h' } })
+      expect(json).toEqual({
+        project: req.project,
+        page,
+        hints: { [panel.id]: 'h' },
+        scenes: { [panel.id]: '屋上' },
+      })
       expect(await fileText(form.get('layout'))).toBe('l')
       return new Response(new Uint8Array([4]), { headers: { [PROVIDER_HEADER]: 'real' } })
     })
@@ -173,6 +184,7 @@ if (import.meta.vitest) {
       page,
       layoutPng: new Blob(['l']),
       hints: { [panel.id]: 'h' },
+      scenes: { [panel.id]: '屋上' },
       referencePng: new Blob(['r']),
       characterRefs: [{ characterId: 'c1', image: new Blob(['c']) }],
     }
