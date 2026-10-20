@@ -212,5 +212,18 @@ if (import.meta.vitest) {
       await choose(select(), '')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/typeface' }])
     })
+
+    test('the typeface select offers the hand-written typeface', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const bubble = { ...must(samplePanel.bubbles[0]), shape: 'whisper' as const }
+      const { container } = await render(
+        <BubbleInspector bubble={bubble} characters={project.characters} onChange={onChange} />,
+      )
+      const select = selectLabelled(container, m.bubble_typeface())
+      const hand = Array.from(select.options).find((o) => o.value === 'hand')
+      expect(hand?.textContent).toBe(m.bubble_typeface_hand())
+      await choose(select, 'hand')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/typeface', value: 'hand' }])
+    })
   })
 }

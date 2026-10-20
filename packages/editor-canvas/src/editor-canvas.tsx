@@ -760,6 +760,10 @@ if (import.meta.vitest) {
         await render({ page: withBubble3({ shape: 'narration', typeface: 'rounded' }) }),
       )
       expect(named.getAttribute('font-family')).toContain('M PLUS Rounded 1c')
+      const hand = textOf(
+        await render({ page: withBubble3({ shape: 'whisper', typeface: 'hand' }) }),
+      )
+      expect(hand.getAttribute('font-family')).toContain('Yomogi')
     })
 
     test('a borderless panel is drawn first with a dashed guide outline, and framed panels get a white ground', async () => {
