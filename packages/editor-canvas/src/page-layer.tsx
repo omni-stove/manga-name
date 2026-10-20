@@ -7,6 +7,8 @@ import {
   clipTextBox,
   cornerAnchor,
   currentArt,
+  effectInk,
+  effectLines,
   frameOutline,
   groundColor,
   hasFrameLine,
@@ -17,6 +19,7 @@ import {
   type Panel,
   type Point,
   paintOrder,
+  panelTone,
   type Rect,
   type ReferenceImage,
   softEdgeStrokes,
@@ -27,7 +30,7 @@ import { type AssetState, loadAsset } from './asset'
 import { type Box, bubbleGeometry, bubblePaths } from './bubble-shape'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
-import { layoutVertical, RUBY_SCALE } from './vertical-text'
+import { EMPHASIS_MARK, layoutVertical, RUBY_SCALE } from './vertical-text'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
 /**
@@ -89,14 +92,15 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
   const opaque = page.ground === 'black' || page.panels.some((p) => p.frame === 'none')
   const ground = groundColor(page)
   const unit = page.spread ? width / 2 : width
-  const toneId = page.tone && `${props.idPrefix}-tone`
+  const toneIdOf = (tone: Page['tone']) => tone && `${props.idPrefix}-tone-${tone}`
+  const tones = [...new Set(page.panels.flatMap((panel) => panelTone(page, panel) ?? []))]
   return (
     <g data-layer="page">
-      {page.tone && (
-        <filter id={toneId} colorInterpolationFilters="sRGB" data-tone={page.tone}>
-          <feColorMatrix type="matrix" values={TONE_MATRICES[page.tone].join(' ')} />
+      {tones.map((tone) => (
+        <filter key={tone} id={toneIdOf(tone)} colorInterpolationFilters="sRGB" data-tone={tone}>
+          <feColorMatrix type="matrix" values={TONE_MATRICES[tone].join(' ')} />
         </filter>
-      )}
+      ))}
       <rect
         x={0}
         y={0}
@@ -140,7 +144,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
             opaque={opaque && panel.frame !== 'none'}
             unit={unit}
             ground={ground}
-            toneId={toneId}
+            toneId={toneIdOf(panelTone(page, panel))}
           />
         )
       })}
@@ -199,6 +203,10 @@ function frameDash(frame: Panel['frame'], selected: boolean): string | undefined
   if (frame === 'dashed') return '6 3'
   return hasFrameLine(frame) ? undefined : '4 3'
 }
+
+/** 効果線の多角形の列を、1 つの path の d 属性にする */
+const effectPath = (lines: readonly (readonly PagePoint[])[]): string =>
+  lines.map((line) => `M${line.map((p) => `${p.x},${p.y}`).join('L')}Z`).join('')
 
 const isSelected = (selection: Selection, kind: 'panel' | 'bubble', id: ID) =>
   selection?.kind === kind && selection.id === id
@@ -272,6 +280,14 @@ const PanelView = memo(function PanelView({
             loaded={loadAsset(resolveAsset, artRef)}
           />
         </Suspense>
+      )}
+      {panel.effect && (
+        <path
+          d={effectPath(effectLines(panel, rect, unit))}
+          fill={effectInk(panel)}
+          clipPath={`url(#${clipId})`}
+          data-panel-effect={panel.effect}
+        />
       )}
       {panel.frame === 'soft' && (
         <g clipPath={`url(#${clipId})`} data-soft-edge="">
@@ -672,7 +688,7 @@ const BubbleView = memo(function BubbleView({
   const ink = black || (onBlack && !paths.fill) ? '#fff' : '#000'
   const typeface = bubbleTypeface(bubble)
   const font = TYPEFACES[typeface]
-  const shapes = paths.tail === null ? [paths.body] : [paths.tail, paths.body]
+  const shapes = [...paths.tails, paths.body]
   const illegible =
     layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
@@ -685,9 +701,10 @@ const BubbleView = memo(function BubbleView({
     >
       <g clipPath={clipId && `url(#${clipId})`}>
         {paths.line !== 'none' &&
-          shapes.map((d) => (
+          shapes.map((d, i) => (
             <path
-              key={`stroke-${d}`}
+              // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
+              key={`stroke-${i}`}
               d={d}
               fill={paper}
               stroke="#000"
@@ -701,7 +718,11 @@ const BubbleView = memo(function BubbleView({
               vectorEffect="non-scaling-stroke"
             />
           ))}
-        {paths.fill && shapes.map((d) => <path key={`fill-${d}`} d={d} fill={paper} />)}
+        {paths.fill &&
+          shapes.map((d, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
+            <path key={`fill-${i}`} d={d} fill={paper} />
+          ))}
         {paths.ink !== null && <path d={paths.ink} fill="#000" />}
         {layout.columns.length > 0 && (
           <>
@@ -739,6 +760,29 @@ const BubbleView = memo(function BubbleView({
                   data-ruby
                 >
                   {ruby.text}
+                </text>
+              ))
+            })}
+            {layout.columns.flatMap((column, i) => {
+              const top = box.y + box.h / 2 - (column.length * fs) / 2
+              const rows = column.emphases.flatMap(({ start, length }) =>
+                Array.from({ length }, (_, k) => start + k),
+              )
+              return rows.map((row) => (
+                <text
+                  // biome-ignore lint/suspicious/noArrayIndexKey: 傍点は列と列の中の位置で決まる
+                  key={`${i}-${row}`}
+                  writingMode="vertical-rl"
+                  fontFamily={font.family}
+                  fontWeight={font.weight}
+                  fontSize={rubySize}
+                  textAnchor="middle"
+                  fill={ink}
+                  x={right - column.offset + (fs + rubySize) / 2}
+                  y={top + (row + 0.5) * fs}
+                  data-emphasis
+                >
+                  {EMPHASIS_MARK}
                 </text>
               ))
             })}

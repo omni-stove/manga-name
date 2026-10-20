@@ -5,6 +5,8 @@ import {
   bubbleTypeface,
   clipTextBox,
   currentArt,
+  effectInk,
+  effectLines,
   frameOutline,
   groundColor,
   hasFrameLine,
@@ -14,14 +16,17 @@ import {
   type Panel,
   paintOrder,
   panelOutline,
+  panelTone,
   TONE_MATRICES,
 } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
 import { bubbleGeometry, drawBubble } from './bubble'
 import { type PxRect, pagePixelSize, pointToPx, rectToPx } from './geometry'
 import {
+  actingNotes,
   applyColorMatrix,
   drawCover,
+  drawEffectLines,
   drawFrame,
   drawNotesMargin,
   drawPanelNumber,
@@ -45,7 +50,7 @@ function byOrder<T extends { order: number }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.order - b.order)
 }
 
-/** 採用中の生成画像を読んでデコードし、ページの色調 tone を掛ける。無ければ undefined */
+/** 採用中の生成画像を読んでデコードし、コマの色調 tone（panelTone で決めたもの）を掛ける。無ければ undefined */
 async function loadArt(
   panel: Panel,
   ctx: RenderContext,
@@ -102,7 +107,7 @@ export async function drawPage(
 
   const innerRect = rectToPx(innerFrameOf(page), pageRect)
   const panels = paintOrder(page.panels)
-  const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx, page.tone)))
+  const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx, panelTone(page, panel))))
   // 黒塗りのコマと、黒い地の上の枠なしのコマは、中が黒い
   const blackInside = (panel: Panel) =>
     panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')
@@ -139,6 +144,7 @@ export async function drawPage(
       const ink = blackInside(panel) ? '#fff' : '#000'
       drawPlaceholder(c, panel, rect, outline, unit.w * NOTE_FONT, ink)
     }
+    drawEffectLines(c, outline, effectLines(panel, rect, unit.w), effectInk(panel))
     // フキダシまでぼかさないよう、絵の直後にぼかす
     if (panel.frame === 'soft') drawSoftEdge(c, outline, unit.w, ground)
     if (opts.panelNumbers) {
@@ -162,7 +168,11 @@ export async function drawPage(
 
   if (margin > 0) {
     const area: PxRect = { x: marginOnLeft ? 0 : pageSize.w, y: 0, w: margin, h: pageSize.h }
-    drawNotesMargin(c, byOrder(page.panels), area, unit.w * MARGIN_FONT)
+    const notes = byOrder(page.panels).map((panel) => ({
+      ...panel,
+      acting: actingNotes(panel, ctx.characters),
+    }))
+    drawNotesMargin(c, notes, area, unit.w * MARGIN_FONT)
   }
 
   return surface
@@ -274,6 +284,33 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-margin', png)
   })
 
+  test("notes: 'margin' の余白にコマの芝居も書き、紙面は変えない", async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'margin', panelNumbers: false }
+    const acted: Page = {
+      ...emptyPage,
+      panels: emptyPage.panels.map((panel) =>
+        panel.id === 'pn_1'
+          ? { ...panel, acting: [{ characterId: 'chr_e', text: '振り向いて驚く' }] }
+          : panel,
+      ),
+    }
+    const pixels = async (page: Page) => {
+      const { ctx, width, height } = await drawPage(page, noAssets, opts)
+      return ctx.getImageData(0, 0, width, height)
+    }
+    const before = await pixels(emptyPage)
+    const after = await pixels(acted)
+    // 右綴じなので余白は紙面の右
+    const pageWidth = pagePixelSize(project.settings, SNAPSHOT_WIDTH).w
+    const changed = new Set<string>()
+    for (let i = 0; i < before.data.length; i += 4) {
+      if (before.data[i] !== after.data[i]) {
+        changed.add((i / 4) % before.width < pageWidth ? 'page' : 'margin')
+      }
+    }
+    expect([...changed]).toEqual(['margin'])
+  })
+
   test('多角形のコマは輪郭で絵を切り、枠も輪郭に沿って引く', async () => {
     const { page, ctx } = withArts()
     const [pn1, ...rest] = page.panels as [Panel, ...Panel[]]
@@ -336,6 +373,46 @@ if (import.meta.vitest) {
       panelNumbers: false,
     })
     await matchPngSnapshot('page-typefaces', png)
+  })
+
+  test('しっぽの複数あるフキダシは、しっぽごとに本体から先端へ描く', async () => {
+    const panels = emptyPage.panels.map((panel) => ({
+      ...panel,
+      bubbles: panel.bubbles.map((b, i) =>
+        i === 0
+          ? {
+              ...b,
+              tails: [...(b.tails ?? []), { x: 0.95, y: 0.9 }, { x: 0.5, y: 0.05 }],
+            }
+          : b,
+      ),
+    }))
+    const png = await renderPage({ ...emptyPage, panels }, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-tails', png)
+  })
+
+  test('ルビと傍点: 傍点の中のルビ付きの語には傍点を打たず、対の無い《《は字のまま描く', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const texts = ['それは《《本当》》だ', '《《この|魔法《まほう》だ》》', '《《まだ']
+    const bubbles = texts.map((text, i) => ({
+      id: `bb_emphasis_${i}`,
+      order: i + 1,
+      text,
+      shape: 'none' as const,
+      pos: { x: 0.8 - i * 0.3, y: 0.5 },
+      size: { w: 0.2, h: 0.9 },
+    }))
+    const page: Page = { ...emptyPage, panels: [{ ...pn1, bubbles }, ...rest] }
+    const png = await renderPage(page, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-emphasis', png)
   })
 
   test('黒塗りのコマは輪郭の内側を黒で塗り、地の無いフキダシのセリフを白で描く', async () => {
@@ -487,6 +564,59 @@ if (import.meta.vitest) {
     expect(count(sepia.data, warm)).toBeGreaterThan(count(plain.data, warm))
   })
 
+  test('コマの色調はページの色調を上書きし、none のコマには掛けず、他のコマはページの色調のまま', async () => {
+    const { page, ctx } = withArts()
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const [pn1, pn2] = page.panels as [Panel, Panel]
+    const withTone = (tone: Panel['tone']) =>
+      page.panels.map((panel) => (panel.id === pn1.id ? { ...panel, tone } : panel))
+    const plain = await pixels(await renderPage(page, ctx, opts))
+    const sepia = await pixels(await renderPage({ ...page, tone: 'sepia' }, ctx, opts))
+    const sepiaButOne = await pixels(
+      await renderPage({ ...page, tone: 'sepia', panels: withTone('none') }, ctx, opts),
+    )
+    const oneSepia = await pixels(
+      await renderPage({ ...page, panels: withTone('sepia') }, ctx, opts),
+    )
+    const { width } = plain
+    const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+    /** コマの rect から縁を 1 割ずつ除いた範囲の画素。枠線を避ける */
+    const region = (data: Uint8ClampedArray, panel: Panel) => {
+      const { x, y, w, h } = panel.rect
+      const out: number[] = []
+      for (let py = Math.ceil((y + h * 0.1) * pageH); py < (y + h * 0.9) * pageH; py += 3) {
+        for (let px = Math.ceil((x + w * 0.1) * width); px < (x + w * 0.9) * width; px += 3) {
+          const i = (py * width + px) * 4
+          out.push(data[i] ?? 0, data[i + 1] ?? 0, data[i + 2] ?? 0)
+        }
+      }
+      return out
+    }
+    expect(region(sepia.data, pn1)).not.toEqual(region(plain.data, pn1))
+    expect(region(sepiaButOne.data, pn1)).toEqual(region(plain.data, pn1))
+    expect(region(sepiaButOne.data, pn2)).toEqual(region(sepia.data, pn2))
+    expect(region(oneSepia.data, pn1)).toEqual(region(sepia.data, pn1))
+    expect(region(oneSepia.data, pn2)).toEqual(region(plain.data, pn2))
+  })
+
+  test('コマの色調: セピアのページで 1 コマを生の色に、1 コマを色あせにして描く', async () => {
+    const { page, ctx } = withArts()
+    const tones: Record<string, Panel['tone']> = { pn_1: 'none', pn_2: 'faded' }
+    const png = await renderPage(
+      {
+        ...page,
+        tone: 'sepia',
+        panels: page.panels.map((panel) => {
+          const tone = tones[panel.id]
+          return tone ? { ...panel, tone } : panel
+        }),
+      },
+      ctx,
+      { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false },
+    )
+    await matchPngSnapshot('page-panel-tones', png)
+  })
+
   test('紙面全体のトーンはフキダシと間白を含む紙面の全画素に乗算で掛かり、指示メモの余白には掛からない', async () => {
     const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'margin', panelNumbers: false }
     const plain = await pixels(await renderPage(emptyPage, noAssets, opts))
@@ -526,6 +656,65 @@ if (import.meta.vitest) {
       panelNumbers: false,
     })
     await matchPngSnapshot('page-frames', png)
+  })
+
+  test('効果線: 集中線、スピード線、黒塗りのコマの白い集中線を絵の上に描く', async () => {
+    const { page, ctx } = withArts()
+    const effects: Partial<Panel>[] = [
+      { effect: 'focus_lines' },
+      { effect: 'speed_lines' },
+      { effect: 'focus_lines', fill: 'black' },
+      { effect: 'speed_lines', vectors: [] },
+    ]
+    const withEffects: Page = {
+      ...page,
+      panels: page.panels.map((panel, i) => ({ ...panel, ...effects[i] })),
+    }
+    const png = await renderPage(withEffects, ctx, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-effects', png)
+  })
+
+  test('集中線は焦点のまわりの楕円を空けて描き、黒塗りのコマでは白い線にする', async () => {
+    const pn5 = emptyPage.panels.find((p) => p.id === 'pn_5') as Panel
+    const bare: Panel = { ...pn5, bubbles: [], focusPoints: [], vectors: [] }
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const draw = async (panel: Panel) => {
+      const others = emptyPage.panels.filter((p) => p.id !== pn5.id)
+      const { width, data } = await pixels(
+        await renderPage({ ...emptyPage, panels: [...others, panel] }, noAssets, opts),
+      )
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      const rect = rectToPx(panel.rect, { x: 0, y: 0, w: width, h: pageH })
+      // コマの中の画素を、中心からの楕円の距離（集中線を入れない楕円の縁が 1）ごとに数える
+      return (hit: (r: number) => boolean, from: number, to: number) => {
+        let n = 0
+        const cx = rect.x + rect.w / 2
+        const cy = rect.y + rect.h / 2
+        for (let y = Math.ceil(rect.y + 2); y < rect.y + rect.h - 2; y++) {
+          for (let x = Math.ceil(rect.x + 2); x < rect.x + rect.w - 2; x++) {
+            const e = Math.hypot((x - cx) / (rect.w * 0.3), (y - cy) / (rect.h * 0.3))
+            if (e >= from && e < to && hit(data[(y * width + x) * 4] ?? 0)) n++
+          }
+        }
+        return n
+      }
+    }
+    const dark = (r: number) => r < 128
+    const plain = await draw(bare)
+    const focused = await draw({ ...bare, effect: 'focus_lines' })
+    expect(focused(dark, 0, 0.95)).toBe(plain(dark, 0, 0.95))
+    expect(focused(dark, 1.5, Infinity)).toBeGreaterThan(plain(dark, 1.5, Infinity))
+
+    const light = (r: number) => r > 128
+    const black = await draw({ ...bare, fill: 'black' })
+    const blackFocused = await draw({ ...bare, fill: 'black', effect: 'focus_lines' })
+    expect(black(light, 0, Infinity)).toBe(0)
+    expect(blackFocused(light, 0, 0.95)).toBe(0)
+    expect(blackFocused(light, 1.5, Infinity)).toBeGreaterThan(0)
   })
 
   test('同じ入力で 2 回描くとバイト一致する', async () => {

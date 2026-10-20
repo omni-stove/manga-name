@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 19 as const
+export const SCHEMA_VERSION = 23 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -67,7 +67,8 @@ export const BubbleSchema = z.object({
   ]),
   pos: PointSchema,
   size: SizeSchema,
-  tail: PointSchema.optional(),
+  /** しっぽの先端。1 本ずつ描く。最後の要素を最後に触ったしっぽとして「しっぽを消す」が消す */
+  tails: z.array(PointSchema).optional(),
   /** 省略は形に合わせる（bubbleTypeface） */
   typeface: BubbleTypefaceSchema.optional(),
   /** フキダシの地の色。黒は体としっぽを黒で塗り、セリフを白で描く。地を持たない形（none）では無視する。省略は白 */
@@ -117,8 +118,15 @@ export const PanelFrameSchema = z.enum([
   'soft',
   'cloud',
 ])
+/**
+ * コマに描く効果線。focus_lines（集中線）は焦点へ向かう放射状の線、speed_lines（スピード線）は動きの向きに平行な線。
+ * 画面には messages/schema の `panel_effect_<値>` で出す
+ */
+export const PanelEffectSchema = z.enum(['focus_lines', 'speed_lines'])
 /** コマの絵に掛ける色調。sepia は茶色、faded は色を抜いて薄くし、回想に使う。画面には `page_tone_<値>` で出す */
 export const PageToneSchema = z.enum(['sepia', 'faded'])
+/** コマの絵に掛ける色調。none はページに色調があってもそのコマには掛けない。画面には `panel_tone_<値>` で出す */
+export const PanelToneSchema = z.enum([...PageToneSchema.options, 'none'])
 
 export const VectorKindSchema = z.enum(['gaze', 'motion', 'speed'])
 /** コマの画面の切り取り方。画面には messages/schema の `panel_camera_<値>` で出す */
@@ -161,6 +169,12 @@ export const StrokeSchema = z.object({
   pressure: z.array(unit).optional(),
 })
 
+/** コマの中のキャラの芝居（表情・動き）。例「振り向いて驚く」 */
+export const PanelActingSchema = z.object({
+  characterId: IdSchema,
+  text: z.string(),
+})
+
 type RefineCtx = z.RefinementCtx
 type Path = (string | number)[]
 
@@ -186,6 +200,10 @@ const PanelBaseSchema = z.object({
   fill: z.enum(['black']).optional(),
   /** 枠線。省略は実線の枠 */
   frame: PanelFrameSchema.optional(),
+  /** 絵の上、フキダシと枠線の下に描く効果線。省略は描かない */
+  effect: PanelEffectSchema.optional(),
+  /** 絵に掛ける色調。ページの tone を上書きし、ページの一部のコマだけを回想にする。省略はページの tone に従う */
+  tone: PanelToneSchema.optional(),
   bubbles: z.array(BubbleSchema),
   note: z.string().optional(),
   camera: CameraSchema.optional(),
@@ -195,6 +213,8 @@ const PanelBaseSchema = z.object({
   vectors: z.array(VectorSchema),
   sweep: SweepSchema.optional(),
   cast: z.array(IdSchema).optional(),
+  /** 登場キャラごとの芝居。空の芝居は要素ごと持たない */
+  acting: z.array(PanelActingSchema).optional(),
   locked: z.boolean().optional(),
 })
 
@@ -326,6 +346,15 @@ export const ProjectSchema = ProjectBaseSchema.superRefine((project, ctx) => {
             addIssue(ctx, [...base, 'cast', ci], `cast ${id} is not in characters`)
           }
         })
+        panel.acting?.forEach((a, ai) => {
+          if (!characterIds.has(a.characterId)) {
+            addIssue(
+              ctx,
+              [...base, 'acting', ai, 'characterId'],
+              `characterId ${a.characterId} is not in characters`,
+            )
+          }
+        })
       })
     })
   })
@@ -351,6 +380,7 @@ export type Strength = z.infer<typeof StrengthSchema>
 export type Vector = z.infer<typeof VectorSchema>
 export type ReferenceImage = z.infer<typeof ReferenceImageSchema>
 export type Stroke = z.infer<typeof StrokeSchema>
+export type PanelActing = z.infer<typeof PanelActingSchema>
 export type Panel = z.infer<typeof PanelSchema>
 export type Page = z.infer<typeof PageSchema>
 export type LayoutTemplate = z.infer<typeof LayoutTemplateSchema>
@@ -412,7 +442,7 @@ if (import.meta.vitest) {
       expect(issuePaths(project)).toContain(panelPath(0, 'vectors.0.targetFocusId'))
     })
 
-    test('Bubble.speakerId, FocusPoint.characterId, Panel.cast and Page.cast must be in characters', async () => {
+    test('Bubble.speakerId, FocusPoint.characterId, Panel.cast, Panel.acting and Page.cast must be in characters', async () => {
       const project = await loadFixture()
       const bubble = panel(project, 5).bubbles[0]
       const focus = panel(project, 0).focusPoints[1]
@@ -420,6 +450,10 @@ if (import.meta.vitest) {
       bubble.speakerId = 'chr_missing'
       focus.characterId = 'chr_missing'
       panel(project, 2).cast = ['chr_missing']
+      panel(project, 3).acting = [
+        { characterId: 'chr_e', text: '振り向く' },
+        { characterId: 'chr_missing', text: '驚く' },
+      ]
       const page = project.episodes[0]?.pages[0]
       if (!page) throw new Error('fixture has no page')
       page.cast = ['chr_e', 'chr_missing']
@@ -427,6 +461,8 @@ if (import.meta.vitest) {
       expect(paths).toContain(panelPath(5, 'bubbles.0.speakerId'))
       expect(paths).toContain(panelPath(0, 'focusPoints.1.characterId'))
       expect(paths).toContain(panelPath(2, 'cast.0'))
+      expect(paths).toContain(panelPath(3, 'acting.1.characterId'))
+      expect(paths).not.toContain(panelPath(3, 'acting.0.characterId'))
       expect(paths).toContain('episodes.0.pages.0.cast.1')
       expect(paths).not.toContain('episodes.0.pages.0.cast.0')
     })
