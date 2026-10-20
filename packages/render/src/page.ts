@@ -7,12 +7,17 @@ import {
   frameOutline,
   groundColor,
   hasFrameLine,
+  type FocusPoint,
   innerFrameOf,
   OVERLAY_COLORS,
   type Page,
   type Panel,
   paintOrder,
   panelOutline,
+  SFX_OUTLINE,
+  SFX_TYPEFACE,
+  sfxFontSize,
+  sfxLetterings,
   TONE_MATRICES,
 } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
@@ -29,7 +34,7 @@ import {
   fillOutline,
   withClip,
 } from './panel'
-import { drawVerticalText, layoutBubbleText } from './text'
+import { drawVerticalText, layoutBubbleText, unbrokenLines } from './text'
 import type { RenderContext, RenderOptions, Surface } from './types'
 
 /** 1 ページの幅に対する比率。見開きでも 1 ページ分の幅に対してとり、線と文字を 1 ページのときと同じ太さにする */
@@ -66,7 +71,9 @@ async function loadArt(
 
 /**
  * ページ 1 枚を PNG に合成する。同じ Page と同じアセットからは同じバイト列が出る。
- * 紙面全体に重ねるトーンは、フキダシと間白まで描いた後に乗算で重ねる。焦点、ベクトル、診断、参考画像、手描きは描かない。
+ * sfx の焦点の label は、絵の上、フキダシと枠線の下に、コマの輪郭で切った描き文字として描く。
+ * 紙面全体に重ねるトーンは、フキダシと間白まで描いた後に乗算で重ねる。
+ * face と keyObject の焦点、ベクトル、診断、参考画像、手描きは描かない。
  */
 export async function renderPage(
   page: Page,
@@ -82,7 +89,10 @@ export async function drawPage(
   ctx: RenderContext,
   opts: RenderOptions,
 ): Promise<Surface> {
-  const typefaces = page.panels.flatMap((panel) => panel.bubbles.map(bubbleTypeface))
+  const typefaces = page.panels.flatMap((panel) => [
+    ...panel.bubbles.map(bubbleTypeface),
+    ...sfxLetterings(panel).map(() => SFX_TYPEFACE),
+  ])
   const [backend] = await Promise.all([getBackend(), loadFonts(typefaces)])
   const unit = pagePixelSize(ctx.settings, opts.width)
   const pageSize = page.spread ? { w: unit.w * 2, h: unit.h } : unit
@@ -120,6 +130,23 @@ export async function drawPage(
     }
   }
 
+  const drawSfx = (panel: Panel) => {
+    const rect = rectToPx(panel.rect, pageRect)
+    for (const focus of sfxLetterings(panel)) {
+      const fontPx = sfxFontSize(focus.weight, rect.w, rect.h)
+      const center = pointToPx(focus.pos, rect)
+      drawVerticalText(
+        c,
+        unbrokenLines(focus.label),
+        fontPx,
+        { ...center, w: 0, h: 0 },
+        '#000',
+        SFX_TYPEFACE,
+        { color: '#fff', width: fontPx * SFX_OUTLINE },
+      )
+    }
+  }
+
   panels.forEach((panel, i) => {
     const rect = rectToPx(panel.rect, pageRect)
     const outline = frameOutline(
@@ -138,6 +165,7 @@ export async function drawPage(
     }
     // フキダシまでぼかさないよう、絵の直後にぼかす
     if (panel.frame === 'soft') drawSoftEdge(c, outline, unit.w, ground)
+    withClip(c, outline, () => drawSfx(panel))
     if (opts.panelNumbers) {
       drawPanelNumber(c, panel.order, outline, unit.w * NOTE_FONT * 1.5)
     }
@@ -484,6 +512,76 @@ if (import.meta.vitest) {
       panelNumbers: false,
     })
     await matchPngSnapshot('page-frames', png)
+  })
+
+  const sfxFocus = (id: string, patch: Partial<FocusPoint>): FocusPoint => ({
+    id,
+    kind: 'sfx',
+    label: 'ドン',
+    pos: { x: 0.5, y: 0.5 },
+    weight: 0.5,
+    ...patch,
+  })
+
+  test('描き文字: sfx の焦点の label を太ゴシックの縦書きで白いふち付きに描き、コマの輪郭で切ってフキダシの下に置く', async () => {
+    const { page, ctx } = withArts()
+    const [pn1, pn2, ...rest] = page.panels as [Panel, Panel, ...Panel[]]
+    const styled: Page = {
+      ...page,
+      panels: [
+        {
+          ...pn1,
+          focusPoints: [
+            // pn_1 のフキダシ bb_1 の下に潜る
+            sfxFocus('fp_sfx_1', { label: 'ゴゴゴ', pos: { x: 0.85, y: 0.4 }, weight: 1 }),
+            // コマの左端からはみ出して切れる
+            sfxFocus('fp_sfx_2', { label: 'ザッ\nザッ', pos: { x: 0.02, y: 0.6 }, weight: 0 }),
+          ],
+        },
+        { ...pn2, focusPoints: [sfxFocus('fp_sfx_3', { label: 'ドンッ!!', weight: 0.5 })] },
+        ...rest,
+      ],
+    }
+    const png = await renderPage(styled, ctx, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-sfx', png)
+  })
+
+  test('描き文字は sfx の焦点にだけ、label があるときだけ描く', async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const [pn1, pn2, ...rest] = emptyPage.panels as [Panel, Panel, ...Panel[]]
+    const withFocus = (focusPoints: FocusPoint[]): Page => ({
+      ...emptyPage,
+      panels: [pn1, { ...pn2, focusPoints }, ...rest],
+    })
+    const draw = async (page: Page) => (await pixels(await renderPage(page, noAssets, opts))).data
+    const plain = await draw(withFocus([]))
+    const differs = (data: Uint8ClampedArray) => data.some((v, i) => v !== plain[i])
+
+    expect(differs(await draw(withFocus([sfxFocus('fp_a', { label: '' })])))).toBe(false)
+    expect(differs(await draw(withFocus([sfxFocus('fp_b', { kind: 'face' })])))).toBe(false)
+    expect(differs(await draw(withFocus([sfxFocus('fp_c', { kind: 'keyObject' })])))).toBe(false)
+
+    const drawn = await draw(withFocus([sfxFocus('fp_d', {})]))
+    const width = SNAPSHOT_WIDTH
+    const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+    // 焦点の位置を中心に、字の高さの 2 字ぶんの範囲で黒い画素が増える
+    const cx = Math.round((pn2.rect.x + pn2.rect.w * 0.5) * width)
+    const cy = Math.round((pn2.rect.y + pn2.rect.h * 0.5) * pageH)
+    const size = Math.round(sfxFontSize(0.5, pn2.rect.w * width, pn2.rect.h * pageH))
+    const darkAround = (data: Uint8ClampedArray) => {
+      let n = 0
+      for (let y = cy - size; y < cy + size; y++) {
+        for (let x = cx - size; x < cx + size; x++) {
+          if ((data[(y * width + x) * 4] ?? 255) < 64) n++
+        }
+      }
+      return n
+    }
+    expect(darkAround(drawn)).toBeGreaterThan(darkAround(plain))
   })
 
   test('同じ入力で 2 回描くとバイト一致する', async () => {

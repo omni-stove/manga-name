@@ -803,6 +803,63 @@ if (import.meta.vitest) {
       ).toBeTruthy()
     })
 
+    test('the label of an sfx focus point is lettered in bold with a white outline, under the bubbles and the frame', async () => {
+      const panel = must(samplePage.panels.find((p) => p.id === 'pn_3'))
+      const sfx = (id: string, patch: Partial<Panel['focusPoints'][number]>) => ({
+        id,
+        kind: 'sfx' as const,
+        label: 'ドン',
+        pos: { x: 0.25, y: 0.5 },
+        weight: 1,
+        ...patch,
+      })
+      const page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_3'
+            ? {
+                ...p,
+                focusPoints: [
+                  ...p.focusPoints,
+                  sfx('fp_sfx', {}),
+                  sfx('fp_empty', { label: '' }),
+                  sfx('fp_face', { kind: 'face' }),
+                ],
+              }
+            : p,
+        ),
+      }
+      const svg = await render({ page })
+      const lettered = [...svg.querySelectorAll('[data-sfx-id]')]
+      expect(lettered.map((g) => g.getAttribute('data-sfx-id'))).toEqual(['fp_sfx'])
+      const text = must(svg.querySelector('[data-sfx-id="fp_sfx"] text[writing-mode]'))
+      expect(text.textContent).toBe('ドン')
+      expect(text.getAttribute('font-weight')).toBe('700')
+      expect(text.getAttribute('fill')).toBe('#000')
+      expect(text.getAttribute('stroke')).toBe('#fff')
+      expect(text.getAttribute('paint-order')).toBe('stroke')
+      const { w, h } = project.settings.pageSize
+      const size = Math.min(panel.rect.w * w, panel.rect.h * h) * 0.25
+      expect(Number(text.getAttribute('font-size'))).toBeCloseTo(size)
+      const column = must(text.querySelector('tspan'))
+      const center = {
+        x: (panel.rect.x + panel.rect.w * 0.25) * w,
+        y: (panel.rect.y + panel.rect.h * 0.5) * h,
+      }
+      expect(Number(column.getAttribute('x'))).toBeCloseTo(center.x)
+      expect(Number(column.getAttribute('y'))).toBeCloseTo(center.y)
+
+      const lettering = must(svg.querySelector('[data-sfx-id="fp_sfx"]'))
+      expect(lettering.parentElement?.getAttribute('clip-path')).toMatch(/^url\(#/)
+      const later = (selector: string) =>
+        lettering.compareDocumentPosition(must(svg.querySelector(selector))) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+      expect(later('[data-bubble-id="bb_3"]')).toBeTruthy()
+      expect(later('[data-panel-id="pn_3"] > [data-panel-frame]')).toBeTruthy()
+      // 焦点の印はヒントのレイヤーに残る
+      expect(svg.querySelector('[data-focus-id="fp_sfx"]')).not.toBeNull()
+    })
+
     test('the selected panel gets a guide-coloured frame', async () => {
       const svg = await render({ selection: { kind: 'panel', id: 'pn_2' } })
       const frame = must(

@@ -91,6 +91,10 @@ export const SweepSchema = z.discriminatedUnion('kind', [
 
 export const FocusKindSchema = z.enum(['face', 'keyObject', 'sfx'])
 
+/**
+ * コマの中で目を引く点。pos はコマ内座標、weight は目の引き具合。
+ * sfx の label は描き文字として紙面に描く（sfxLetterings）。face と keyObject は紙面に描かない
+ */
 export const FocusPointSchema = z.object({
   id: IdSchema,
   kind: FocusKindSchema,
