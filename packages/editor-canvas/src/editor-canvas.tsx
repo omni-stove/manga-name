@@ -19,6 +19,7 @@ import {
 } from 'react'
 import type { Root } from 'react-dom/client'
 import { bodyPath, bubbleGeometry } from './bubble-shape'
+import { BreakoutToolLayer } from './breakout-tool-layer'
 import { BubbleToolLayer } from './bubble-tool-layer'
 import { DiagnosisLayer } from './diagnosis-layer'
 import { FrameLayer } from './frame-layer'
@@ -29,6 +30,7 @@ import { panelBox, panelPolygon, polygonPoints } from './hit-test'
 import { PageLayer } from './page-layer'
 import { PanelToolLayer } from './panel-tool-layer'
 import type { EditorCanvasProps, Selection } from './types'
+import { useBreakoutTool } from './use-breakout-tool'
 import { useBubbleTool } from './use-bubble-tool'
 import { useHintTool } from './use-hint-tool'
 import { useLongPress } from './use-long-press'
@@ -80,6 +82,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * `layers.hints` を切ると描画も選択も操作もしない。
  * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
  * `sketch` ツールも同じ操作で、線は `Page.sketch` に足す。下描きのレイヤーが非表示なら何もしない。
+ * `breakoutPanelId` を渡すと、ツールによらずクリックでそのコマのはみ出しの頂点を置き、最初の頂点のクリックか Enter で閉じる。
  * `diagnosis` があり `layers.diagnosis` が立っていれば、視線経路、bubble chain、焦点ごとの診断ラベル、
  * ページ下の集計行と凡例を重ねる。そのとき焦点の素のラベルは診断ラベルに譲る。
  * `ghostPage` があれば、AI の提案で動く焦点とフキダシ、増えるベクトルを元の位置と提案の位置の両方で重ねる。
@@ -138,6 +141,16 @@ export function EditorCanvas(props: EditorCanvasProps) {
     selection: props.selection,
     onChange: props.onChange,
     onSelect: props.onSelect,
+  })
+  const breakoutTool = useBreakoutTool({
+    page,
+    width: pageW,
+    height: pageH,
+    view,
+    panning,
+    panelId: props.breakoutPanelId ?? null,
+    onChange: props.onChange,
+    onEnd: () => props.onBreakoutEnd?.(),
   })
   const move = useMove({
     page,
@@ -228,7 +241,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
     ? 'grabbing'
     : spaceHeld
       ? 'grab'
-      : props.tool === 'panel' || hintTool.active || scribbling
+      : breakoutTool.draft || props.tool === 'panel' || hintTool.active || scribbling
         ? 'crosshair'
         : props.tool === 'bubble'
           ? selection.hovered?.kind === 'bubble'
@@ -272,6 +285,8 @@ export function EditorCanvas(props: EditorCanvasProps) {
       }}
       onPointerDown={(e) => {
         if (props.onContextMenu && !scribbling) longPress.onPointerDown(e)
+        // 頂点を置くクリックを、パンや他のツールより先に取る
+        breakoutTool.handlers.onPointerDown(e)
         viewport.handlers.onPointerDown(e)
         panelTool.handlers.onPointerDown(e)
         bubbleTool.handlers.onPointerDown(e)
@@ -290,6 +305,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
           return
         }
         longPress.onPointerMove(e)
+        breakoutTool.handlers.onPointerMove(e)
         viewport.handlers.onPointerMove(e)
         panelTool.handlers.onPointerMove(e)
         bubbleTool.handlers.onPointerMove(e)
@@ -324,6 +340,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
       }}
       onKeyDown={(e) => {
         if (
+          breakoutTool.handlers.onKeyDown(e) ||
           panelTool.handlers.onKeyDown(e) ||
           bubbleTool.handlers.onKeyDown(e) ||
           hintTool.handlers.onKeyDown(e) ||
@@ -421,6 +438,14 @@ export function EditorCanvas(props: EditorCanvasProps) {
         draft={bubbleTool.draft ?? move.bubbleDraft}
         handleSize={bubbleTool.handleSize}
       />
+      {breakoutTool.draft && (
+        <BreakoutToolLayer
+          draft={breakoutTool.draft}
+          width={pageW}
+          height={pageH}
+          closeSize={breakoutTool.closeSize}
+        />
+      )}
     </svg>
   )
 }

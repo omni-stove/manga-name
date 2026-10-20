@@ -7,7 +7,14 @@ import {
 } from '@manga/editor-canvas'
 import { m } from '@manga/i18n'
 import { BUBBLE_SHAPES, FOCUS_KINDS } from '@manga/inspector'
-import { type Bubble, type Page, type Patch, type ProjectSettings, pageSizeOf } from '@manga/schema'
+import {
+  type Bubble,
+  type ID,
+  type Page,
+  type Patch,
+  type ProjectSettings,
+  pageSizeOf,
+} from '@manga/schema'
 import type { ContextMenuItem, SegmentedOption } from '@manga/ui'
 import { findBubble, findFocus, findPanel, findVector } from './inspector-ops'
 
@@ -27,6 +34,8 @@ export interface ElementMenuContext {
   setTool(tool: Tool): void
   /** フキダシの形を選ぶメニューに切り替える */
   openShapes(): void
+  /** コマ panelId のはみ出しの頂点をキャンバスのクリックで置き始める */
+  drawBreakout(panelId: ID): void
 }
 
 /** 並びの中で、order が `order` のすぐ前とすぐ後の要素の order。端なら undefined */
@@ -131,6 +140,26 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
       split('vertical', m.web_canvas_menu_panel_split_vertical()),
       split('horizontal', m.web_canvas_menu_panel_split_horizontal()),
       'separator',
+      {
+        label: found.panel.breakout
+          ? m.web_canvas_menu_panel_redraw_breakout()
+          : m.web_canvas_menu_panel_draw_breakout(),
+        disabled: found.panel.locked === true,
+        onSelect: () => ctx.drawBreakout(target.id),
+      },
+      ...(found.panel.breakout
+        ? [
+            {
+              label: m.web_canvas_menu_panel_remove_breakout(),
+              disabled: found.panel.locked === true,
+              onSelect: () =>
+                ctx.edit(m.web_canvas_menu_panel_remove_breakout(), target, [
+                  { op: 'remove', path: '/breakout' },
+                ]),
+            },
+          ]
+        : []),
+      'separator',
       ...toolItem('bubble', m.web_canvas_menu_place_bubble()),
       ...toolItem('focus', m.web_canvas_menu_place_focus()),
       'separator',
@@ -224,6 +253,7 @@ if (import.meta.vitest) {
     remove: vi.fn(),
     setTool: vi.fn(),
     openShapes: vi.fn(),
+    drawBreakout: vi.fn(),
     ...overrides,
   })
   const item = (items: MenuItems, label: string) => {
@@ -240,6 +270,33 @@ if (import.meta.vitest) {
   })
 
   describe('elementMenuItems', () => {
+    test('a panel starts drawing its breakout, and one that has a breakout can remove it', () => {
+      const panel = page.panels[0]
+      if (!panel) throw new Error('fixture にコマがない')
+      const ctx = contextOf()
+      const target = { kind: 'panel', id: panel.id } as const
+      const items = elementMenuItems(target, ctx)
+      item(items, m.web_canvas_menu_panel_draw_breakout()).onSelect()
+      expect(ctx.drawBreakout).toHaveBeenCalledWith(panel.id)
+      expect(() => item(items, m.web_canvas_menu_panel_remove_breakout())).toThrow()
+
+      const breakout = [
+        { x: 0.1, y: 0.1 },
+        { x: 0.2, y: 0.1 },
+        { x: 0.2, y: 0.3 },
+      ]
+      const drawn = {
+        ...page,
+        panels: page.panels.map((p, i) => (i === 0 ? { ...p, breakout } : p)),
+      }
+      const withBreakout = elementMenuItems(target, contextOf({ page: drawn, edit: ctx.edit }))
+      expect(() => item(withBreakout, m.web_canvas_menu_panel_redraw_breakout())).not.toThrow()
+      item(withBreakout, m.web_canvas_menu_panel_remove_breakout()).onSelect()
+      expect(ctx.edit).toHaveBeenCalledWith(m.web_canvas_menu_panel_remove_breakout(), target, [
+        { op: 'remove', path: '/breakout' },
+      ])
+    })
+
     test('a panel offers the tools it may switch to, reading order and removal', () => {
       const panel = page.panels.find((p) => p.order === 1)
       if (!panel) throw new Error('fixture に読み順 1 のコマがない')

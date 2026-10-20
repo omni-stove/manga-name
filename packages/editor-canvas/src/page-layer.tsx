@@ -327,9 +327,101 @@ const PanelView = memo(function PanelView({
           vectorEffect="non-scaling-stroke"
         />
       )}
+      {panel.breakout && (
+        <Breakout
+          breakout={panel.breakout}
+          width={width}
+          height={height}
+          rect={rect}
+          clipId={`${clipId}-breakout`}
+          toneId={toneId}
+          loaded={artRef === undefined ? undefined : loadAsset(resolveAsset, artRef)}
+        />
+      )}
     </g>
   )
 })
+
+/**
+ * はみ出しの多角形。絵を枠線の上に、多角形の中だけ描き、出力に出ない破線で範囲を示す。
+ * 絵はレンダラの drawCover と同じく rect に cover で置き、rect の外へ出た部分も多角形の中なら見せる
+ */
+function Breakout({
+  breakout,
+  width,
+  height,
+  rect,
+  clipId,
+  toneId,
+  loaded,
+}: {
+  breakout: Point[]
+  width: number
+  height: number
+  rect: Box
+  clipId: string
+  toneId: string | undefined
+  loaded: Promise<AssetState> | undefined
+}) {
+  const points = polygonPoints(breakout.map((p) => ({ x: p.x * width, y: p.y * height })))
+  return (
+    <g data-breakout="">
+      <clipPath id={clipId}>
+        <polygon points={points} />
+      </clipPath>
+      {loaded && (
+        <Suspense>
+          <BreakoutArt rect={rect} clipId={clipId} toneId={toneId} loaded={loaded} />
+        </Suspense>
+      )}
+      <polygon
+        data-breakout-guide=""
+        points={points}
+        fill="none"
+        style={{ stroke: GUIDE }}
+        strokeWidth={1}
+        strokeDasharray="2 2"
+        strokeOpacity={0.6}
+        vectorEffect="non-scaling-stroke"
+        pointerEvents="none"
+      />
+    </g>
+  )
+}
+
+function BreakoutArt({
+  rect,
+  clipId,
+  toneId,
+  loaded,
+}: {
+  rect: Box
+  clipId: string
+  toneId: string | undefined
+  loaded: Promise<AssetState>
+}) {
+  const asset = use(loaded)
+  if ('error' in asset) return null
+  const { width: iw, height: ih } = asset
+  // 画素の大きさが分からなければ cover の範囲を出せないので、rect の外へは広げない
+  const scale = iw && ih ? Math.max(rect.w / iw, rect.h / ih) : 1
+  const w = iw ? iw * scale : rect.w
+  const h = ih ? ih * scale : rect.h
+  return (
+    <image
+      data-breakout-art=""
+      href={asset.url}
+      x={rect.x + (rect.w - w) / 2}
+      y={rect.y + (rect.h - h) / 2}
+      width={w}
+      height={h}
+      preserveAspectRatio="xMidYMid slice"
+      clipPath={`url(#${clipId})`}
+      filter={toneId && `url(#${toneId})`}
+      pointerEvents="none"
+    />
+  )
+}
 
 /** コマの絵。解決か読み込みに失敗したら、エラーを添えたプレースホルダーに戻す */
 function PanelArt({
