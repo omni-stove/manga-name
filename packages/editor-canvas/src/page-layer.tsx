@@ -825,8 +825,7 @@ function BubbleGroupView({
   const geometries = new Map(group.map((b) => [b.id, bubbleGeometry(b, panel)]))
   const items = group.map((b) => {
     const g = geometries.get(b.id) as BubbleGeometry
-    const to =
-      b.joinedTo !== undefined && b.joinedTo !== b.id ? geometries.get(b.joinedTo) : undefined
+    const to = b.joinedTo === undefined ? undefined : geometries.get(b.joinedTo)
     return outlineItem(bubblePaths(b.shape, g), b.fill, to ? neckPath(g, to) : null)
   })
   return (
