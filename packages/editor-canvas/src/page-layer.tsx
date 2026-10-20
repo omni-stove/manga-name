@@ -952,9 +952,11 @@ const BubbleView = memo(function BubbleView({
   )
 })
 
+const MARKS = /^[!?！？]+$/
+
 /**
  * 組んだセリフを中心 (cx, cy) に置く。縦書きは右の列から左へ、horizontal なら上の行から下へ、行を中央に揃えて置く。
- * ルビと傍点は親文字の右（横書きでは上）に置く。halo を渡すと、その色と太さ（mm）のふちを字の下に敷く
+ * ルビと傍点は親文字の右（横書きでは上）に置く。縦中横の組は横書きの字として 1 字分の幅に置く。halo を渡すと、その色と太さ（mm）のふちを字の下に敷く
  */
 function TextBlock({
   layout,
@@ -1001,16 +1003,73 @@ function TextBlock({
     return horizontal ? { x: c.x + from, y: c.y - aside } : { x: c.x + aside, y: c.y + from }
   }
   const besideBase = (fs + rubySize) / 2
+  // 字ごとに縁取って塗ると隣の字のふちが字に掛かるので、halo があるときは全部のふちを先に敷いてから塗る
+  const body = (layer: 'stroke' | 'fill' | 'both') => {
+    const layerPaint =
+      layer === 'stroke'
+        ? { ...paint, fill: 'none' }
+        : layer === 'fill'
+          ? { ...paint, stroke: undefined, strokeWidth: undefined }
+          : paint
+    const main = layer !== 'stroke'
+    return (
+      <>
+        <text
+          {...layerPaint}
+          fontSize={fs}
+          aria-hidden={main ? undefined : true}
+          data-dialogue={main || undefined}
+          data-truncated={(main && layout.truncated) || undefined}
+        >
+          {layout.lines.flatMap((line, i) =>
+            line.runs
+              .filter((run) => !run.upright)
+              .map((run) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: 行は位置で決まり、同じ文字列の行も並びうる
+                <tspan key={`${i}-${run.start}`} {...at(line, run.start + run.length / 2, 0)}>
+                  {run.text}
+                </tspan>
+              )),
+          )}
+        </text>
+        {layout.lines.flatMap((line, i) =>
+          line.runs
+            .filter((run) => run.upright)
+            .map((run) => (
+              <text
+                // biome-ignore lint/suspicious/noArrayIndexKey: 縦中横の組は行と行の中の位置で決まる
+                key={`${i}-${run.start}`}
+                {...layerPaint}
+                writingMode={undefined}
+                dominantBaseline="central"
+                fontSize={fs}
+                {...at(line, run.start + run.length / 2, 0)}
+                // 感嘆符と疑問符は半角なら 2 字でも 1 字分の幅に収まるので、引き伸ばさないよう詰めない
+                {...(!MARKS.test(run.text) && {
+                  textLength: fs,
+                  lengthAdjust: 'spacingAndGlyphs',
+                })}
+                aria-hidden={main ? undefined : true}
+                data-upright={main || undefined}
+              >
+                {/* 全角の組は字の両脇のあきごと 1 字分に詰めると間が空くので、半角に直す */}
+                {run.text.normalize('NFKC')}
+              </text>
+            )),
+        )}
+      </>
+    )
+  }
   return (
     <>
-      <text {...paint} fontSize={fs} data-dialogue data-truncated={layout.truncated || undefined}>
-        {layout.lines.map((line, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: 行は位置で決まり、同じ文字列の行も並びうる
-          <tspan key={i} {...center(line)}>
-            {line.text}
-          </tspan>
-        ))}
-      </text>
+      {halo ? (
+        <>
+          {body('stroke')}
+          {body('fill')}
+        </>
+      ) : (
+        body('both')
+      )}
       {layout.lines.flatMap((line, i) =>
         line.rubies.map((ruby) => (
           <text

@@ -878,6 +878,31 @@ if (import.meta.vitest) {
       expect(unset.querySelector('text[writing-mode]')).not.toBeNull()
     })
 
+    test('vertical dialogue sets !? and two-digit numbers upright, one glyph wide, between the vertical runs, with full-width marks made half-width', async () => {
+      const svg = await render({
+        page: withBubble3({
+          text: 'え!?12月！？',
+          pos: { x: 0.5, y: 0.5 },
+          size: { w: 0.3, h: 0.9 },
+        }),
+      })
+      const bubble = must(svg.querySelector('[data-bubble-id="bb_3"]'))
+      const runs = [...must(bubble.querySelector('text[data-dialogue]')).querySelectorAll('tspan')]
+      expect(runs.map((r) => r.textContent)).toEqual(['え', '月'])
+      const uprights = [...bubble.querySelectorAll('text[data-upright]')]
+      expect(uprights.map((u) => u.textContent)).toEqual(['!?', '12', '!?'])
+      for (const u of uprights) expect(u.getAttribute('writing-mode')).toBeNull()
+      const [marks, digits, wide] = uprights
+      expect(marks?.getAttribute('textLength')).toBeNull()
+      expect(wide?.getAttribute('textLength')).toBeNull()
+      expect(Number(digits?.getAttribute('textLength'))).toBeCloseTo(
+        Number(digits?.getAttribute('font-size')),
+      )
+      const ys = [runs[0], marks, digits, runs[1], wide].map((e) => Number(e?.getAttribute('y')))
+      expect(ys).toEqual([...ys].sort((p, q) => p - q))
+      expect(new Set([runs[0], marks, digits].map((e) => e?.getAttribute('x'))).size).toBe(1)
+    })
+
     test('a borderless panel is drawn first with a dashed guide outline, and framed panels get a white ground', async () => {
       const [pn1, ...rest] = samplePage.panels as [Panel, ...Panel[]]
       const background = { ...pn1, id: 'pn_bg', order: 99, frame: 'none' as const }
@@ -1025,12 +1050,13 @@ if (import.meta.vitest) {
       const svg = await render({ page })
       const lettered = [...svg.querySelectorAll('[data-sfx-id]')]
       expect(lettered.map((g) => g.getAttribute('data-sfx-id'))).toEqual(['fp_sfx'])
-      const text = must(svg.querySelector('[data-sfx-id="fp_sfx"] text[writing-mode]'))
+      const text = must(svg.querySelector('[data-sfx-id="fp_sfx"] text[data-dialogue]'))
+      const outline = must(svg.querySelector('[data-sfx-id="fp_sfx"] text[aria-hidden]'))
       expect(text.textContent).toBe('ドン')
       expect(text.getAttribute('font-weight')).toBe('700')
       expect(text.getAttribute('fill')).toBe('#000')
-      expect(text.getAttribute('stroke')).toBe('#fff')
-      expect(text.getAttribute('paint-order')).toBe('stroke')
+      expect(outline.getAttribute('stroke')).toBe('#fff')
+      expect(outline.getAttribute('paint-order')).toBe('stroke')
       const { w, h } = project.settings.pageSize
       const size = Math.min(panel.rect.w * w, panel.rect.h * h) * 0.25
       expect(Number(text.getAttribute('font-size'))).toBeCloseTo(size)

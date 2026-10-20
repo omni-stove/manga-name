@@ -1,4 +1,4 @@
-import { type Bubble, parseRuby } from '@manga/schema'
+import { type Bubble, combineUpright, isUpright, parseRuby } from '@manga/schema'
 
 /** 行（縦書きの 1 列、横書きの 1 行）の間隔。文字サイズに対する比率 */
 const COLUMN_PITCH = 1.2
@@ -24,8 +24,21 @@ interface LineRuby {
   text: string
 }
 
+/**
+ * 行の中で、行頭から start の位置の length の長さを占める字の並び。upright なら縦書きで縦中横に組む 2 字の組で、
+ * length は 1
+ */
+interface LineRun {
+  start: number
+  length: number
+  text: string
+  upright?: true
+}
+
 interface TextLine {
   text: string
+  /** 行を、縦中横の組とそれ以外の字の並びに分けたもの。横書きと縦中横の無い行は行全体の 1 つ */
+  runs: LineRun[]
   /** 行の向きの長さ（文字サイズ単位）。縦書きでは字数 */
   length: number
   rubies: LineRuby[]
@@ -47,7 +60,8 @@ export interface TextLayout {
 }
 
 /**
- * 行の中で割らない一続き。ルビを振った語は語ごと、横書きでは英単語も語ごとにまとめ、傍点を打った語は 1 字ずつにする
+ * 行の中で割らない一続き。ルビを振った語は語ごと、横書きでは英単語も語ごとにまとめ、傍点を打った語は 1 字ずつにする。
+ * 縦書きで縦中横に組む 2 字の組は glyphs の 1 つの字として持つ
  */
 interface Unit {
   glyphs: string[]
@@ -82,10 +96,11 @@ function joinWords(glyphs: string[]): Unit[] {
 }
 
 function toParagraphs(text: string, horizontal: boolean): Unit[][] {
+  const split = (base: string) => (horizontal ? graphemes(base) : combineUpright(graphemes(base)))
   return text.split('\n').map((p) =>
     parseRuby(p).flatMap(({ base, ruby, emphasis }): Unit[] => {
-      if (ruby !== undefined) return [{ glyphs: graphemes(base), ruby }]
-      const glyphs = graphemes(base)
+      if (ruby !== undefined) return [{ glyphs: split(base), ruby }]
+      const glyphs = split(base)
       if (emphasis) return glyphs.map((glyph) => ({ glyphs: [glyph], emphasis }))
       return horizontal ? joinWords(glyphs) : glyphs.map((glyph) => ({ glyphs: [glyph] }))
     }),
@@ -162,15 +177,28 @@ function toLayout(
     edge += thickness + fontSize * (COLUMN_PITCH - 1)
     const rubies: LineRuby[] = []
     const marks: number[] = []
+    const runs: LineRun[] = []
     let start = 0
     for (const u of units) {
       const length = unitLength(u, advance)
       if (u.ruby) rubies.push({ start, length, text: u.ruby })
       if (u.emphasis) marks.push(start + length / 2)
+      let at = start
+      for (const glyph of u.glyphs) {
+        const step = advance(glyph)
+        const last = runs[runs.length - 1]
+        if (isUpright(glyph)) runs.push({ start: at, length: step, text: glyph, upright: true })
+        else if (last && !last.upright) {
+          last.text += glyph
+          last.length += step
+        } else runs.push({ start: at, length: step, text: glyph })
+        at += step
+      }
       start += length
     }
     return {
       text: units.flatMap((u) => u.glyphs).join(''),
+      runs,
       length: start,
       rubies,
       marks,
@@ -237,7 +265,16 @@ if (import.meta.vitest) {
 
   test('short text fits in one column at the largest size', () => {
     expect(layoutText('……芽が', { w: 10, h: 40 })).toEqual({
-      lines: [{ text: '……芽が', length: 4, rubies: [], marks: [], offset: 3 }],
+      lines: [
+        {
+          text: '……芽が',
+          runs: [{ start: 0, length: 4, text: '……芽が' }],
+          length: 4,
+          rubies: [],
+          marks: [],
+          offset: 3,
+        },
+      ],
       thickness: 6,
       fontSize: 6,
       truncated: false,
@@ -273,12 +310,20 @@ if (import.meta.vitest) {
     expect(layout.lines).toEqual([
       {
         text: 'あ魔法',
+        runs: [{ start: 0, length: 3, text: 'あ魔法' }],
         length: 3,
         rubies: [{ start: 1, length: 2, text: 'まほう' }],
         marks: [],
         offset: 6,
       },
-      { text: 'い', length: 1, rubies: [], marks: [], offset: 9 + 1.2 + 3 },
+      {
+        text: 'い',
+        runs: [{ start: 0, length: 1, text: 'い' }],
+        length: 1,
+        rubies: [],
+        marks: [],
+        offset: 9 + 1.2 + 3,
+      },
     ])
     expect(layout.thickness).toBeCloseTo(9 + 1.2 + 6)
   })
@@ -318,6 +363,7 @@ if (import.meta.vitest) {
       lines: [
         {
           text: 'あ魔法',
+          runs: [{ start: 0, length: 3, text: 'あ魔法' }],
           length: 3,
           rubies: [{ start: 1, length: 2, text: 'まほう' }],
           marks: [],
@@ -336,12 +382,20 @@ if (import.meta.vitest) {
     expect(layout.lines).toEqual([
       {
         text: 'あ本当魔法だ',
+        runs: [{ start: 0, length: 6, text: 'あ本当魔法だ' }],
         length: 6,
         rubies: [{ start: 3, length: 2, text: 'まほう' }],
         marks: [1.5, 2.5, 5.5],
         offset: 6,
       },
-      { text: 'い', length: 1, rubies: [], marks: [], offset: 9 + 1.2 + 3 },
+      {
+        text: 'い',
+        runs: [{ start: 0, length: 1, text: 'い' }],
+        length: 1,
+        rubies: [],
+        marks: [],
+        offset: 9 + 1.2 + 3,
+      },
     ])
   })
 
@@ -357,6 +411,32 @@ if (import.meta.vitest) {
   test('horizontal emphasis marks sit over each glyph, half-width ones included', () => {
     expect(layoutText('《《本A》》', { w: 30, h: 30 }, 'horizontal').lines).toMatchObject([
       { text: '本A', length: 1.5, marks: [0.5, 1.25] },
+    ])
+  })
+
+  test('vertical marks and two-digit numbers run upright, in ruby and emphasis too', () => {
+    const layout = layoutText('え!?|12月《じゅうにがつ》《《！？》》100', { w: 30, h: 60 })
+    expect(layout.lines).toMatchObject([
+      {
+        text: 'え!?12月！？100',
+        length: 8,
+        runs: [
+          { start: 0, length: 1, text: 'え' },
+          { start: 1, length: 1, text: '!?', upright: true },
+          { start: 2, length: 1, text: '12', upright: true },
+          { start: 3, length: 1, text: '月' },
+          { start: 4, length: 1, text: '！？', upright: true },
+          { start: 5, length: 3, text: '100' },
+        ],
+        rubies: [{ start: 2, length: 2, text: 'じゅうにがつ' }],
+        marks: [4.5],
+      },
+    ])
+  })
+
+  test('horizontal text has no upright runs', () => {
+    expect(layoutText('え!?12', { w: 30, h: 30 }, 'horizontal').lines).toMatchObject([
+      { runs: [{ start: 0, length: 3, text: 'え!?12' }] },
     ])
   })
 }
