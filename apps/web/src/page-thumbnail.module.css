@@ -40,6 +40,10 @@
   stroke-dasharray: 3 2;
 }
 
+.overlay {
+  mix-blend-mode: multiply;
+}
+
 .art {
   fill: color-mix(in srgb, var(--ink) 25%, transparent);
 }
