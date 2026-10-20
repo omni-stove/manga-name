@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { m } from '@manga/i18n'
 import {
   type CSSProperties,
@@ -174,4 +175,41 @@ function ToggleIcon({ side, pointsOut }: { side: 'left' | 'right'; pointsOut: bo
       <path d={`M${divider} 4v16M${tail} 10L${tip} 12L${tail} 14`} />
     </svg>
   )
+}
+
+if (import.meta.vitest) {
+  const { expect, test } = import.meta.vitest
+
+  test('clampWidth keeps the width between the minimum and half the screen', () => {
+    window.innerWidth = 1000
+    expect(clampWidth(100)).toBe(MIN_WIDTH)
+    expect(clampWidth(300.4)).toBe(300)
+    expect(clampWidth(900)).toBe(500)
+  })
+
+  test('clampWidth never goes below the minimum on a narrow screen', () => {
+    window.innerWidth = 200
+    expect(clampWidth(400)).toBe(MIN_WIDTH)
+  })
+
+  test('the resize handle shows only when expanded and onWidthChange is given', async () => {
+    const { renderToStaticMarkup } = await import('react-dom/server')
+    const render = (expanded: boolean, resizable: boolean) =>
+      renderToStaticMarkup(
+        <Sidebar
+          title="t"
+          side="left"
+          expanded={expanded}
+          onExpandedChange={() => {}}
+          width={240}
+          onWidthChange={resizable ? () => {} : undefined}
+        >
+          x
+        </Sidebar>,
+      )
+    expect(render(true, true)).toContain('role="separator"')
+    expect(render(true, true)).toContain('--sidebar-width:240px')
+    expect(render(true, false)).not.toContain('role="separator"')
+    expect(render(false, true)).not.toContain('role="separator"')
+  })
 }
