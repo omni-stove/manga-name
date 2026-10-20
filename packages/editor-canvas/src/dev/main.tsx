@@ -5,6 +5,8 @@ import {
   type Page,
   PageDiagnosisSchema,
   type Patch,
+  pageTurns,
+  type ReadingDirection,
 } from '@manga/schema'
 import '@manga/ui/tokens.css'
 import '@manga/ui/base.css'
@@ -84,6 +86,17 @@ function Playground() {
     frames: true,
   })
 
+  // めくりの印を確かめるため、表示中のページを 4 ページのエピソードのうち slot 番目に置いたことにする
+  const [direction, setDirection] = useState<ReadingDirection>(project.settings.direction)
+  const [startsRight, setStartsRight] = useState(false)
+  const [slot, setSlot] = useState(0)
+  const { spread: _spread, ...single } = page
+  const episodePages = [0, 1, 2, 3].map((i) => (i === slot ? page : { ...single, id: `turn_${i}` }))
+  const turn = pageTurns(
+    { pages: episodePages, ...(startsRight ? { startsRight } : {}) },
+    direction,
+  ).get(page.id)
+
   const toggleGenerating = (id: ID) =>
     setGenerating((prev) => {
       const next = new Set(prev)
@@ -132,6 +145,36 @@ function Playground() {
           />
           hints
         </label>
+        <select
+          value={direction}
+          onChange={(e) => setDirection(e.target.value as ReadingDirection)}
+        >
+          <option value="rtl">右綴じ</option>
+          <option value="ltr">左綴じ</option>
+        </select>
+        <label>
+          <input
+            type="checkbox"
+            checked={startsRight}
+            onChange={(e) => setStartsRight(e.target.checked)}
+          />
+          startsRight
+        </label>
+        <select value={slot} onChange={(e) => setSlot(Number(e.target.value))}>
+          {[0, 1, 2, 3].map((i) => (
+            <option key={i} value={i}>
+              {i + 1} ページ目
+            </option>
+          ))}
+        </select>
+        <label>
+          <input
+            type="checkbox"
+            checked={page.spread === true}
+            onChange={(e) => setPage(e.target.checked ? { ...single, spread: true } : single)}
+          />
+          見開き
+        </label>
         <span>
           ホイールでズーム、Space + ドラッグでパン。クリックで選択、Delete で削除、矢印キーで移動。
           panel ツールはドラッグで作成、ハンドルでリサイズ、ボタンで分割、「結合」ボタンか Shift +
@@ -143,9 +186,10 @@ function Playground() {
       <div style={{ flex: 1, minHeight: 0 }}>
         <EditorCanvas
           page={page}
-          settings={project.settings}
+          settings={{ ...project.settings, direction }}
           characters={project.characters}
           diagnosis={page === samplePage ? sampleDiagnosis : null}
+          turn={turn}
           selection={selection}
           tool={tool}
           focusKind={focusKind}
