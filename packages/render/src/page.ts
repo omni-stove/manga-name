@@ -317,17 +317,17 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-shaped', png)
   })
 
-  test('書体: ゴシック、太ゴシック、明朝、丸ゴシックのセリフを並べて描く', async () => {
+  test('書体: ゴシック、太ゴシック、明朝、丸ゴシック、手書き風のセリフを並べて描く', async () => {
     const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
-    const typefaces = ['gothic', 'bold', 'mincho', 'rounded'] as const
+    const typefaces = ['gothic', 'bold', 'mincho', 'rounded', 'hand'] as const
     const bubbles = typefaces.map((typeface, i) => ({
       id: `bb_${typeface}`,
       order: i + 1,
       text: '書体の見本',
       shape: 'none' as const,
       typeface,
-      pos: { x: 0.85 - i * 0.2, y: 0.5 },
-      size: { w: 0.15, h: 0.9 },
+      pos: { x: 0.86 - i * 0.17, y: 0.5 },
+      size: { w: 0.13, h: 0.9 },
     }))
     const page: Page = { ...emptyPage, panels: [{ ...pn1, bubbles }, ...rest] }
     const png = await renderPage(page, noAssets, {

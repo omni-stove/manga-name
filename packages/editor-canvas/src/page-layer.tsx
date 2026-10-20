@@ -32,7 +32,8 @@ import { layoutVertical, RUBY_SCALE } from './vertical-text'
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
 /**
  * セリフの書体ごとの字族と太さ。太さは書き出しの @manga/render と揃える。書き出しは同梱のフォントで描く。
- * エディタは数 MB のフォントを読み込まずに開けるよう、入っていなければ OS の同じ系統の書体で代える
+ * エディタは数 MB のフォントを読み込まずに開けるよう、入っていなければ OS の同じ系統の書体で代える。
+ * 手書き風は OS にほぼ入っていないので、使うページを開いたときに apps/web が同じフォントを読み込む
  */
 const TYPEFACES: Record<NonNullable<Bubble['typeface']>, { family: string; weight: number }> = {
   gothic: { family: FONT_FAMILY, weight: 400 },
@@ -45,6 +46,7 @@ const TYPEFACES: Record<NonNullable<Bubble['typeface']>, { family: string; weigh
     family: '"M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", sans-serif',
     weight: 400,
   },
+  hand: { family: '"Yomogi", Klee, sans-serif', weight: 400 },
 }
 /** 選択やコマ番号など、出力に出ない作業用の色。値は @manga/ui の tokens.css が持つ */
 export const GUIDE = 'var(--guide)'

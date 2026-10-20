@@ -126,6 +126,7 @@ import { useAssetResolver } from './use-asset-resolver'
 import { useKeyShortcuts } from './use-key-shortcuts'
 import { useApplyPatch, useProject } from './use-project'
 import { useStoredFlag } from './use-stored-flag'
+import { useTypefaceFonts } from './use-typeface-fonts'
 import { useUndoShortcuts } from './use-undo-shortcuts'
 
 // 数字キーはペンと焦点の種別に使うので、ツールは英字にする
@@ -392,6 +393,7 @@ export function PageEditor({
   // presence は早期 return より前に送るので、page を待たずに今ある要素の選択だけを選ぶ
   const selectedId = found && hasElement(found.page, selected) ? selected?.id : undefined
   const foundPage = found?.page
+  useTypefaceFonts(foundPage)
   const diagnosis = foundPage ? diagnosePage(foundPage, project.settings) : null
   // 提案の Patch だけを持ち、ゴーストは今のページに当てて作る。ホバー中に編集されても古いページを描かない
   const [preview, setPreview] = useState<Patch | null>(null)

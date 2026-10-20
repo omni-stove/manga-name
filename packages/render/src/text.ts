@@ -381,6 +381,11 @@ if (import.meta.vitest) {
       'mincho',
     )
     drawVerticalText(ctx, [[{ glyphs: ['あ'] }]], 10, { x: 0, y: 0, w: 30, h: 30 }, '#000', 'bold')
-    expect(fonts).toEqual(['400 10px "Noto Serif JP"', '700 10px "Noto Sans JP"'])
+    drawVerticalText(ctx, [[{ glyphs: ['あ'] }]], 10, { x: 0, y: 0, w: 30, h: 30 }, '#000', 'hand')
+    expect(fonts).toEqual([
+      '400 10px "Noto Serif JP"',
+      '700 10px "Noto Sans JP"',
+      '400 10px "Yomogi"',
+    ])
   })
 }

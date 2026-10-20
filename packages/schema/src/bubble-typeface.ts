@@ -2,7 +2,7 @@ import type { Bubble } from './project'
 
 type Typeface = NonNullable<Bubble['typeface']>
 
-/** 書体を指定しないフキダシの、形ごとの書体 */
+/** 書体を指定しないフキダシの、形ごとの書体。手書き風は指定したときだけ使う */
 const SHAPE_TYPEFACE: Record<Bubble['shape'], Typeface> = {
   normal: 'gothic',
   shout: 'bold',
@@ -32,5 +32,6 @@ if (import.meta.vitest) {
     expect(bubbleTypeface({ shape: 'shout' })).toBe('bold')
     expect(bubbleTypeface({ shape: 'electronic' })).toBe('rounded')
     expect(bubbleTypeface({ shape: 'narration', typeface: 'gothic' })).toBe('gothic')
+    expect(bubbleTypeface({ shape: 'whisper', typeface: 'hand' })).toBe('hand')
   })
 }
