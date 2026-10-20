@@ -8,6 +8,7 @@ import {
   type Page,
   PageSchema,
   type Panel,
+  type PanelActing,
   type PanelArt,
   type Project,
   ProjectSchema,
@@ -208,6 +209,16 @@ export function panelCharacterIds(panel: Panel): ID[] {
   return [...new Set(ids)]
 }
 
+/**
+ * コマの芝居。panelCharacterIds の順に並べ、空白だけの芝居と登場キャラに居ないキャラの芝居は落とす。
+ * フキダシの話者や焦点を外すと登場キャラから抜けても芝居は残るので、抜けたキャラの芝居を生成や指示メモに出さないため
+ */
+export function panelActing(panel: Panel): PanelActing[] {
+  return panelCharacterIds(panel).flatMap((id) =>
+    (panel.acting ?? []).filter((a) => a.characterId === id && a.text.trim() !== ''),
+  )
+}
+
 /** ページに登場するキャラの id。ページの `cast`、各コマの panelCharacterIds の順に、重複なく集める */
 export function pageCharacterIds(page: Page): ID[] {
   return [...new Set([...(page.cast ?? []), ...page.panels.flatMap(panelCharacterIds)])]
@@ -379,6 +390,23 @@ if (import.meta.vitest) {
     })
     panel.cast = ['c', 'a']
     expect(panelCharacterIds(panel)).toEqual(['c', 'a', 'b'])
+  })
+
+  test('panelActing follows panelCharacterIds and drops blank acting and characters not in the panel', () => {
+    const panel = emptyPanel(1, { x: 0, y: 0, w: 1, h: 1 })
+    expect(panelActing(panel)).toEqual([])
+    panel.bubbles.push(createBubble({ pos: { x: 0, y: 0 }, speakerId: 'b' }))
+    panel.cast = ['a', 'c']
+    panel.acting = [
+      { characterId: 'b', text: '叫ぶ' },
+      { characterId: 'x', text: '去る' },
+      { characterId: 'c', text: ' ' },
+      { characterId: 'a', text: '振り向いて驚く' },
+    ]
+    expect(panelActing(panel)).toEqual([
+      { characterId: 'a', text: '振り向いて驚く' },
+      { characterId: 'b', text: '叫ぶ' },
+    ])
   })
 
   test('pageCharacterIds lists the page cast, then the characters of each panel, once', () => {
