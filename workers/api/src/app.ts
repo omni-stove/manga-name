@@ -11,11 +11,11 @@ import {
 import {
   CharacterArtRequestSchema,
   MAX_NAME_PANELS,
+  type NamePanel,
   NamePanelSchema,
   PageArtRequestSchema,
   PageDiagnosisSchema,
   PageSchema,
-  type NamePanel,
   PanelActingSchema,
   PanelArtRequestSchema,
   type PlanLine,

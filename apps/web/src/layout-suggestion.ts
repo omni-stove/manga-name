@@ -16,9 +16,15 @@ import {
 import { pagePatch } from './project-ops'
 import { readStorage, writeStorage } from './use-stored-flag'
 
+/** Workers の書き起こしの要求が受ける上限（workers/api/src/app.ts）。超えると要求ごと 400 になるので、添える文脈はここまでに切る */
+const MAX_CURRENT_TEXT_LENGTH = 2_000
+const MAX_CURRENT_ACTING = 20
+const MAX_CURRENT_PANELS = 30
+
 /**
  * ネームの書き起こしの要求。ページの脚本は前後の空白を落として送る。
- * ページに今あるコマの芝居を読む順に添え、芝居のあるコマが無ければ添えない
+ * ページに今あるコマの芝居を読む順に添え、芝居のあるコマが無ければ添えない。
+ * 指示メモと芝居の文言、コマあたりの芝居、コマの数は Workers の上限で切る
  */
 export function nameRequest(
   project: Pick<Project, 'settings' | 'characters'>,
@@ -28,11 +34,14 @@ export function nameRequest(
   const current = [...(page?.panels ?? [])]
     .sort((a, b) => a.order - b.order)
     .flatMap((panel) => {
-      const acting = panelActing(panel).map((a) => ({ ...a, text: a.text.trim() }))
+      const acting = panelActing(panel)
+        .slice(0, MAX_CURRENT_ACTING)
+        .map((a) => ({ ...a, text: a.text.trim().slice(0, MAX_CURRENT_TEXT_LENGTH) }))
       if (acting.length === 0) return []
-      const note = panel.note?.trim()
+      const note = panel.note?.trim().slice(0, MAX_CURRENT_TEXT_LENGTH)
       return [note ? { note, acting } : { acting }]
     })
+    .slice(0, MAX_CURRENT_PANELS)
   return {
     project: { settings: project.settings, characters: project.characters },
     script: script.trim(),
