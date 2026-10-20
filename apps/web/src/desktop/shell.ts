@@ -183,7 +183,7 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
       to: '/p/$projectId/episodes/$episodeId/draft',
       params: { projectId, episodeId },
     })
-    await openScriptWindow({ episodeId, url: href, title: m.web_draft_title() })
+    await openScriptWindow({ projectId, episodeId, url: href, title: m.web_draft_title() })
   }
 
   const openSettings = () =>
@@ -645,7 +645,7 @@ if (import.meta.vitest) {
       shell.click(m.web_menu_view(), m.web_menu_script_window())
       await vi.waitFor(() => expect(shell.createdWindows).toHaveLength(1))
       expect(shell.createdWindows[0]).toMatchObject({
-        label: 'script-ep',
+        label: `script-${project.id}-ep`,
         url: `/p/${project.id}/episodes/ep/draft`,
       })
     })

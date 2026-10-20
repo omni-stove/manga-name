@@ -119,7 +119,9 @@ if (platform === 'desktop') {
   import('./desktop/windows')
     .then(({ isMainWindow }) =>
       isMainWindow()
-        ? import('./desktop/deep-link').then(({ startDeepLinks }) => startDeepLinks({ router, auth }))
+        ? import('./desktop/deep-link').then(({ startDeepLinks }) =>
+            startDeepLinks({ router, auth }),
+          )
         : undefined,
     )
     .catch((e: unknown) => toasts.push(m.web_desktop_start_failed({ reason: errorMessage(e) })))

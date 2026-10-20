@@ -9,8 +9,8 @@ export const MAIN_WINDOW = 'main'
  * エピソードの脚本を開くウィンドウのラベル。capabilities/default.json の `windows` が `script-*` で許すので、接頭辞を変えるときはそちらも直す。
  * ラベルに使えない文字は `_` にする
  */
-export const scriptWindowLabel = (episodeId: ID): string =>
-  `script-${episodeId.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+export const scriptWindowLabel = (projectId: ID, episodeId: ID): string =>
+  `script-${projectId.replace(/[^a-zA-Z0-9_-]/g, '_')}-${episodeId.replace(/[^a-zA-Z0-9_-]/g, '_')}`
 
 /** メインのウィンドウがフォーカスのないまま受けた Undo / Redo を、フォーカスのあるウィンドウへ渡す event。payload は `'undo' | 'redo'` */
 export const EDIT_EVENT = 'desktop-edit'
@@ -27,18 +27,20 @@ export const isMainWindow = (): boolean => getCurrentWebviewWindow().label === M
 
 /**
  * 同じアプリの `url`（ルーターの href）を、エピソードごとの別ウィンドウで開く。
- * 同じエピソードのウィンドウがもうあれば、作り直さず前に出す
+ * エピソードの ID はプロジェクトをまたいで重なりうるので、ラベルにはプロジェクトの ID も入れる。同じエピソードのウィンドウがもうあれば、作り直さず前に出す
  */
 export async function openScriptWindow({
+  projectId,
   episodeId,
   url,
   title,
 }: {
+  projectId: ID
   episodeId: ID
   url: string
   title: string
 }): Promise<void> {
-  const label = scriptWindowLabel(episodeId)
+  const label = scriptWindowLabel(projectId, episodeId)
   const existing = await WebviewWindow.getByLabel(label)
   if (existing) {
     await existing.setFocus()
@@ -56,8 +58,8 @@ if (import.meta.vitest) {
 
   describe('scriptWindowLabel', () => {
     test('keeps the characters a window label allows and replaces the others', () => {
-      expect(scriptWindowLabel('ep_1-a')).toBe('script-ep_1-a')
-      expect(scriptWindowLabel('ep.1 a')).toBe('script-ep_1_a')
+      expect(scriptWindowLabel('p', 'ep_1-a')).toBe('script-p-ep_1-a')
+      expect(scriptWindowLabel('p.1', 'ep.1 a')).toBe('script-p_1-ep_1_a')
     })
   })
 }
