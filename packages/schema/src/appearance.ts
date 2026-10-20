@@ -158,6 +158,18 @@ export function softEdgeStrokes(unit: number): { width: number; alpha: number }[
 }
 
 /**
+ * コマの絵に掛ける色調。コマの tone があればそれを、無ければページの tone をとり、none と省略は undefined（掛けない）を返す。
+ * 色調を掛けた絵を描く所は、どれもこの関数で色調を決める
+ */
+export const panelTone = (
+  page: Pick<Page, 'tone'>,
+  panel: Pick<Panel, 'tone'>,
+): Page['tone'] => {
+  const tone = panel.tone ?? page.tone
+  return tone === 'none' ? undefined : tone
+}
+
+/**
  * 色調ごとの色の行列。SVG の feColorMatrix と同じ 4×5 の並びで、オフセットは 0〜1 の値。
  * エディタは feColorMatrix に、レンダラは画素ごとの計算にこの行列を渡し、同じ色にする
  */
@@ -244,6 +256,15 @@ if (import.meta.vitest) {
     expect(opacityAt(SOFT_STEPS)).toBeCloseTo(1)
     expect(opacityAt(SOFT_STEPS / 2)).toBeCloseTo(0.5)
     expect(strokes.at(-1)?.width).toBeCloseTo(2 * SOFT_DEPTH)
+  })
+
+  test('panelTone overrides the page tone with the panel tone and none removes it', () => {
+    expect(panelTone({}, {})).toBeUndefined()
+    expect(panelTone({ tone: 'sepia' }, {})).toBe('sepia')
+    expect(panelTone({ tone: 'sepia' }, { tone: 'faded' })).toBe('faded')
+    expect(panelTone({ tone: 'sepia' }, { tone: 'none' })).toBeUndefined()
+    expect(panelTone({}, { tone: 'sepia' })).toBe('sepia')
+    expect(panelTone({}, { tone: 'none' })).toBeUndefined()
   })
 
   test('hasFrameLine is false only for none and soft', () => {

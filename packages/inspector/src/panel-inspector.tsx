@@ -11,6 +11,7 @@ import {
   type PanelArt,
   PanelFrameSchema,
   PanelSchema,
+  PanelToneSchema,
   type Patch,
   panelCharacterIds,
   stripRuby,
@@ -44,7 +45,12 @@ const FRAMES: readonly { value: NonNullable<Panel['frame']> | ''; label: string 
   ...PanelFrameSchema.options.map((frame) => option(frame, m[`panel_frame_${frame}` as const])),
 ]
 
-const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
+const TONES: readonly { value: NonNullable<Panel['tone']> | ''; label: string }[] = [
+  option('', m.panel_tone_page),
+  ...PanelToneSchema.options.map((tone) => option(tone, m[`panel_tone_${tone}` as const])),
+]
+
+const isOrder =(n: number) => PanelSchema.shape.order.safeParse(n).success
 
 /** `arts` の中から選ぶ。`artId` が無ければ add、あれば replace */
 function selectArtPatch(artId: ID | undefined, next: ID): Patch {
@@ -123,6 +129,12 @@ export function PanelInspector({
         value={panel.frame ?? ''}
         options={FRAMES}
         onCommit={(v) => onChange(optionalString('/frame', panel.frame, v))}
+      />
+      <SelectField
+        label={m.panel_tone()}
+        value={panel.tone ?? ''}
+        options={TONES}
+        onCommit={(v) => onChange(optionalString('/tone', panel.tone, v))}
       />
       <CastSection panel={panel} characters={characters} onChange={onChange} />
       {diagnosis && !diagnosis.bubbleOrderOk && (
@@ -614,6 +626,29 @@ if (import.meta.vitest) {
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/frame', value: 'wavy' }])
       await choose(select(), '')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/frame' }])
+    })
+
+    test('the tone select follows the page by default and adds or removes the panel tone', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = {
+        characters: project.characters,
+        onChange,
+        onGenerate: () => {},
+        resolveAsset,
+      }
+      const { container, root } = await render(<PanelInspector panel={samplePanel} {...props} />)
+      const select = () => selectLabelled(container, m.panel_tone())
+      expect(select().value).toBe('')
+      expect([...select().options].map((o) => o.value)).toEqual(['', 'sepia', 'faded', 'none'])
+      await choose(select(), 'none')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/tone', value: 'none' }])
+
+      await act(async () =>
+        root.render(<PanelInspector panel={{ ...samplePanel, tone: 'none' }} {...props} />),
+      )
+      expect(select().value).toBe('none')
+      await choose(select(), '')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/tone' }])
     })
 
     test('the generate buttons call onGenerate with and without an instruction', async () => {
