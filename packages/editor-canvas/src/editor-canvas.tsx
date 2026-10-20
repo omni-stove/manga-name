@@ -18,8 +18,8 @@ import {
   useRef,
 } from 'react'
 import type { Root } from 'react-dom/client'
-import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { BreakoutToolLayer } from './breakout-tool-layer'
+import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { BubbleToolLayer } from './bubble-tool-layer'
 import { DiagnosisLayer } from './diagnosis-layer'
 import { FrameLayer } from './frame-layer'
@@ -2307,6 +2307,71 @@ if (import.meta.vitest) {
       fire(svg, pointer('pointerup', { id: 1, ...to }))
       expect(onChange).not.toHaveBeenCalled()
       expect(onSelect).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('breakout tool', () => {
+    const triangle = [clientAt(0.1, 0.1), clientAt(0.4, 0.1), clientAt(0.25, 0.3)]
+    const expected = [
+      { x: 0.1, y: 0.1 },
+      { x: 0.4, y: 0.1 },
+      { x: 0.25, y: 0.3 },
+    ]
+
+    test('clicks place vertices, and a click on the first vertex closes the polygon with one patch', async () => {
+      const onChange = vi.fn()
+      const onBreakoutEnd = vi.fn()
+      const svg = await render({ breakoutPanelId: 'pn_2', onChange, onBreakoutEnd })
+      layout(svg)
+      for (const at of triangle) click(svg, at)
+      fire(svg, pointer('pointermove', { id: 1, ...clientAt(0.3, 0.4) }))
+      expect(svg.querySelectorAll('[data-breakout-vertex]')).toHaveLength(3)
+      expect(svg.querySelector('[data-breakout-close]')).not.toBeNull()
+      expect(onChange).not.toHaveBeenCalled()
+      click(svg, triangle[0] as { x: number; y: number })
+      expect(patchOf(onChange)).toEqual([
+        { op: 'add', path: '/panels/1/breakout', value: expected },
+      ])
+      expect(onBreakoutEnd).toHaveBeenCalledTimes(1)
+      expect(svg.querySelector('[data-layer="breakout-tool"]')).toBeNull()
+    })
+
+    test('Backspace removes the last vertex and Enter closes with three or more', async () => {
+      const onChange = vi.fn()
+      const onBreakoutEnd = vi.fn()
+      const svg = await render({ breakoutPanelId: 'pn_2', onChange, onBreakoutEnd })
+      layout(svg)
+      for (const at of triangle) click(svg, at)
+      key(svg, { key: 'Backspace' })
+      expect(svg.querySelectorAll('[data-breakout-vertex]')).toHaveLength(2)
+      key(svg, { key: 'Enter' })
+      expect(onChange).not.toHaveBeenCalled()
+      click(svg, triangle[2] as { x: number; y: number })
+      key(svg, { key: 'Enter' })
+      expect(patchOf(onChange)).toEqual([
+        { op: 'add', path: '/panels/1/breakout', value: expected },
+      ])
+      expect(onBreakoutEnd).toHaveBeenCalledTimes(1)
+    })
+
+    test('Escape cancels without a patch, and other keys are left to the canvas', async () => {
+      const onChange = vi.fn()
+      const onBreakoutEnd = vi.fn()
+      const svg = await render({ breakoutPanelId: 'pn_2', onChange, onBreakoutEnd })
+      layout(svg)
+      click(svg, triangle[0] as { x: number; y: number })
+      expect(key(svg, { key: 'a' }).defaultPrevented).toBe(false)
+      key(svg, { key: 'Escape' })
+      expect(onChange).not.toHaveBeenCalled()
+      expect(onBreakoutEnd).toHaveBeenCalledTimes(1)
+      expect(svg.querySelector('[data-layer="breakout-tool"]')).toBeNull()
+    })
+
+    test('a click outside the page places nothing', async () => {
+      const svg = await render({ breakoutPanelId: 'pn_2' })
+      layout(svg)
+      click(svg, { x: -10, y: -10 })
+      expect(svg.querySelector('[data-breakout-vertex]')).toBeNull()
     })
   })
 
