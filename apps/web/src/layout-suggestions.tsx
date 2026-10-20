@@ -61,7 +61,10 @@ interface LayoutSuggestionsProps {
 /**
  * 脚本からコマ割りまでを 2 段で提案する。
  * 「脚本からネームを書き起こす」でページの脚本を LlmProvider.transcribeName に送り、読む順のコマごとの描くもの、カメラ、
- * セリフを並べて、コマとセリフを足し引きし、セリフを隣のコマへ移して直せるようにする。直したネームはこのブラウザにページごとに残す。
+ * セリフを並べて、コマとセリフを足し引きし、セリフを隣のコマへ移して直せるようにする。
+ * 「ネームを自分で書く」で空のコマ 1 つから書き始めることもでき、脚本が無くてもネームから先へ進める。
+ * 直したネームはこのブラウザにページごとに残す。
+ * 「脚本からコマ割りまで提案」は書き起こしたネームを直さずにそのままコマ割りの提案へ送る。描くものの空いたコマがあれば提案は送らない。
  * 「このネームでコマ割りを提案」でネームを LlmProvider.suggestLayout に送り、案ごとにネームを当てたコマ割りの縮図と狙いを並べる。
  * コマを足し引きすると、数の合わなくなった案は消す。
  * 「このコマ割りにする」でページのコマを案の枠にネームを当てたコマ（指示メモ、カメラ、フキダシつき）に置き換え、`source: 'ai'` の 1 手として入れる。
@@ -105,19 +108,22 @@ export function LayoutSuggestions({
     saveName(pageId, next)
   }
 
-  const transcribe = async () => {
+  const transcribe = async (then: 'edit' | 'suggest') => {
     const id = ++requestId.current
     setTranscription({ status: 'loading' })
     setSuggestion({ status: 'idle' })
     setApplyError(undefined)
+    let panels: NamePanel[]
     try {
-      const response = await llmProvider.transcribeName(nameRequest(project, script))
-      if (requestId.current !== id) return
-      setTranscription({ status: 'done', response: undefined })
-      setName(response.panels)
+      panels = (await llmProvider.transcribeName(nameRequest(project, script))).panels
     } catch (e) {
       if (requestId.current === id) setTranscription({ status: 'error', error: e })
+      return
     }
+    if (requestId.current !== id) return
+    setTranscription({ status: 'done', response: undefined })
+    setName(panels)
+    if (then === 'suggest' && isNameReady(panels)) await ask(panels)
   }
 
   const ask = async (panels: NamePanel[]) => {
@@ -174,7 +180,7 @@ export function LayoutSuggestions({
           size="small"
           variant={name === undefined ? 'primary' : 'secondary'}
           disabled={!canEdit || busy || script === ''}
-          onClick={() => void transcribe()}
+          onClick={() => void transcribe('edit')}
         >
           {transcribing
             ? m.web_name_transcribing()
@@ -182,6 +188,24 @@ export function LayoutSuggestions({
               ? m.web_name_transcribe()
               : m.web_name_transcribe_again()}
         </Button>
+        <Button
+          size="small"
+          variant="secondary"
+          disabled={!canEdit || busy || script === ''}
+          onClick={() => void transcribe('suggest')}
+        >
+          {m.web_name_transcribe_and_suggest()}
+        </Button>
+        {name === undefined && (
+          <Button
+            size="small"
+            variant="secondary"
+            disabled={!canEdit || busy}
+            onClick={() => setName([{ note: '', lines: [] }])}
+          >
+            {m.web_name_write()}
+          </Button>
+        )}
       </XStack>
       {script === '' && (
         <Typography variant="caption" tone="muted">
@@ -456,6 +480,7 @@ if (import.meta.vitest) {
       expect(markup(undefined)).toContain(m.web_name_needs_script())
       expect(markup('E「……」')).not.toContain(m.web_name_needs_script())
       expect(markup('E「……」')).toContain(m.web_name_transcribe())
+      expect(markup(undefined)).toContain(m.web_name_write())
     })
 
     test('shows the name kept in this browser and asks for a note on every panel', () => {
