@@ -843,7 +843,11 @@ if (import.meta.vitest) {
 
     test('vertical dialogue sets !? and two-digit numbers upright, one glyph wide, between the vertical runs, with full-width marks made half-width', async () => {
       const svg = await render({
-        page: withBubble3({ text: 'え!?12月！？', pos: { x: 0.5, y: 0.5 }, size: { w: 0.3, h: 0.9 } }),
+        page: withBubble3({
+          text: 'え!?12月！？',
+          pos: { x: 0.5, y: 0.5 },
+          size: { w: 0.3, h: 0.9 },
+        }),
       })
       const bubble = must(svg.querySelector('[data-bubble-id="bb_3"]'))
       const runs = [...must(bubble.querySelector('text[data-dialogue]')).querySelectorAll('tspan')]

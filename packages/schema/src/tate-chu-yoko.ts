@@ -15,7 +15,13 @@ export function isUpright(glyph: string): boolean {
  */
 export function combineUpright(glyphs: readonly string[]): string[] {
   const kind = (glyph: string | undefined) =>
-    glyph === undefined ? undefined : MARK.test(glyph) ? 'mark' : DIGIT.test(glyph) ? 'digit' : undefined
+    glyph === undefined
+      ? undefined
+      : MARK.test(glyph)
+        ? 'mark'
+        : DIGIT.test(glyph)
+          ? 'digit'
+          : undefined
   const combined: string[] = []
   let i = 0
   while (i < glyphs.length) {

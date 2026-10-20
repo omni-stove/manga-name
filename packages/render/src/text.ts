@@ -674,7 +674,10 @@ if (import.meta.vitest) {
 
   test('縦中横の組は行頭に来ない', () => {
     const { lines } = layoutBubbleText('あいう!?', { w: 34, h: 30 }, 10)
-    expect(glyphs(lines)).toEqual([['あ', 'い'], ['う', '!?']])
+    expect(glyphs(lines)).toEqual([
+      ['あ', 'い'],
+      ['う', '!?'],
+    ])
   })
 
   test('縦中横の組は回さず、全角は半角に直して 1 字分の幅に詰めて置く', () => {
