@@ -1,4 +1,4 @@
-import type { LayoutSuggestionRequest, NameDraftRequest } from '@manga/ai'
+import { type LayoutSuggestionRequest, lineBubbles, type NameDraftRequest } from '@manga/ai'
 import {
   type Character,
   createRowPanels,
@@ -12,7 +12,6 @@ import {
   type Project,
   pageSizeOf,
 } from '@manga/schema'
-import { lineBubbles } from './page-plan'
 import { pagePatch } from './project-ops'
 import { readStorage, writeStorage } from './use-stored-flag'
 

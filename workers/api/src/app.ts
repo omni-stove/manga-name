@@ -3,6 +3,7 @@ import {
   createFakeLlmProvider,
   type ImageProvider,
   type LlmProvider,
+  MAX_PAGE_COUNT,
   type PanelArtResponse,
   PROMPT_HEADER,
   PROVIDER_HEADER,
@@ -50,8 +51,6 @@ const MAX_ATTEMPTS = 2
 const MAX_SCRIPT_LENGTH = 20_000
 const MAX_NAME_TEXT_LENGTH = 2_000
 const MAX_NAME_LINES = 50
-/** 脚本を割り振るページ数の上限。Web の MAX_PAGE_COUNT と @manga/ai のプロンプトの上限と揃える */
-const MAX_PAGE_COUNT = 64
 /**
  * critique の本文の上限。ページの JSON は手描きの線や絵の履歴で際限なく膨らむので、
  * LLM に渡すトークン数を抑えるため本文の大きさで切る。Web は線と絵を外して送る

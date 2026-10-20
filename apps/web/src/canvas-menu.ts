@@ -1,5 +1,6 @@
 import {
   fitBubblesPatch,
+  removeLastTailPatch,
   type Selection,
   type SplitAxis,
   splitPanelPatch,
@@ -7,7 +8,14 @@ import {
 } from '@manga/editor-canvas'
 import { m } from '@manga/i18n'
 import { BUBBLE_SHAPES, FOCUS_KINDS } from '@manga/inspector'
-import { type Bubble, type Page, type Patch, type ProjectSettings, pageSizeOf } from '@manga/schema'
+import {
+  type Bubble,
+  hasTail,
+  type Page,
+  type Patch,
+  type ProjectSettings,
+  pageSizeOf,
+} from '@manga/schema'
 import type { ContextMenuItem, SegmentedOption } from '@manga/ui'
 import { findBubble, findFocus, findPanel, findVector } from './inspector-ops'
 
@@ -19,6 +27,8 @@ export interface ElementMenuContext {
   settings: Pick<ProjectSettings, 'pageSize' | 'direction'>
   /** 出してよいツール。キーの表記もここから引く */
   tools: readonly SegmentedOption<Tool>[]
+  /** 今のツール */
+  tool: Tool
   /** `target` の要素 root の Patch を当てる */
   edit(label: string, target: Target, patch: Patch): void
   /** 当てる時点のページから page root の Patch を組んで当てる */
@@ -126,6 +136,10 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
       }
     }
     return [
+      // 他のツールではコマを押すとフキダシや焦点を置くことになり、コマをドラッグで動かせるのは select ツールだけなので、そこへ切り替える
+      ...(found.panel.locked || ctx.tool === 'select'
+        ? []
+        : toolItem('select', m.web_canvas_menu_panel_move())),
       // ハンドルでのリサイズと頂点の移動は panel ツールにしか無いので、そこへ切り替える
       ...(found.panel.locked ? [] : toolItem('panel', m.web_canvas_menu_panel_resize())),
       split('vertical', m.web_canvas_menu_panel_split_vertical()),
@@ -149,11 +163,22 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
     const found = findBubble(ctx.page, target.id)
     if (!found) return []
     const shape = BUBBLE_SHAPES.find((s) => s.value === found.bubble.shape)
+    const removeTail = removeLastTailPatch(found.bubble)
     return [
       {
         label: m.web_canvas_menu_bubble_shape({ shape: shape?.label ?? found.bubble.shape }),
         onSelect: ctx.openShapes,
       },
+      // しっぽを描かない形では、残っているしっぽを消しても見た目が変わらないので出さない
+      ...(hasTail(found.bubble.shape)
+        ? [
+            {
+              label: m.web_canvas_menu_bubble_remove_tail(),
+              disabled: removeTail.length === 0,
+              onSelect: () => move(m.web_canvas_menu_bubble_remove_tail(), removeTail),
+            },
+          ]
+        : []),
       'separator',
       ...orderItems(
         { earlier: m.web_canvas_menu_bubble_earlier(), later: m.web_canvas_menu_bubble_later() },
@@ -219,6 +244,7 @@ if (import.meta.vitest) {
       { value: 'panel', label: 'コマ', shortcut: 'p' },
       { value: 'bubble', label: 'フキダシ', shortcut: 'b' },
     ],
+    tool: 'select',
     edit: vi.fn(),
     editPage: vi.fn(),
     remove: vi.fn(),
@@ -261,6 +287,20 @@ if (import.meta.vitest) {
       expect(ctx.setTool).toHaveBeenCalledWith('panel')
     })
 
+    test('a panel offers the select tool to move it only from another tool', () => {
+      const panel = page.panels[0]
+      if (!panel) throw new Error('fixture にコマがない')
+      const target = { kind: 'panel', id: panel.id } as const
+      expect(() =>
+        item(elementMenuItems(target, contextOf()), m.web_canvas_menu_panel_move()),
+      ).toThrow()
+      const ctx = contextOf({ tool: 'bubble' })
+      const move = item(elementMenuItems(target, ctx), m.web_canvas_menu_panel_move())
+      expect(move.shortcut).toBe('v')
+      move.onSelect()
+      expect(ctx.setTool).toHaveBeenCalledWith('select')
+    })
+
     test('splitting a panel builds the patch from the page at the time it is applied', () => {
       const panel = page.panels[0]
       if (!panel) throw new Error('fixture にコマがない')
@@ -296,6 +336,52 @@ if (import.meta.vitest) {
       expect(shape.label).toBe(m.web_canvas_menu_bubble_shape({ shape: m.bubble_shape_normal() }))
       shape.onSelect()
       expect(ctx.openShapes).toHaveBeenCalled()
+    })
+
+    test('a bubble removes its last touched tail, and offers nothing to remove without tails', () => {
+      const ctx = contextOf()
+      item(
+        elementMenuItems({ kind: 'bubble', id: 'bb_3' }, ctx),
+        m.web_canvas_menu_bubble_remove_tail(),
+      ).onSelect()
+      expect(ctx.edit).toHaveBeenCalledWith(
+        m.web_canvas_menu_bubble_remove_tail(),
+        { kind: 'bubble', id: 'bb_3' },
+        [{ op: 'remove', path: '/tails' }],
+      )
+
+      const withBubble = (bubble: Partial<Bubble>) => ({
+        ...page,
+        panels: page.panels.map((p) => ({
+          ...p,
+          bubbles: p.bubbles.map((b) => (b.id === 'bb_3' ? { ...b, ...bubble } : b)),
+        })),
+      })
+      const two = [
+        { x: 0.1, y: 0.9 },
+        { x: 0.9, y: 0.9 },
+      ]
+      const twoCtx = contextOf({ page: withBubble({ tails: two }) })
+      item(
+        elementMenuItems({ kind: 'bubble', id: 'bb_3' }, twoCtx),
+        m.web_canvas_menu_bubble_remove_tail(),
+      ).onSelect()
+      expect(twoCtx.edit).toHaveBeenCalledWith(
+        m.web_canvas_menu_bubble_remove_tail(),
+        { kind: 'bubble', id: 'bb_3' },
+        [{ op: 'remove', path: '/tails/1' }],
+      )
+
+      const bare = elementMenuItems(
+        { kind: 'bubble', id: 'bb_3' },
+        contextOf({ page: withBubble({ tails: undefined }) }),
+      )
+      expect(item(bare, m.web_canvas_menu_bubble_remove_tail()).disabled).toBe(true)
+      const narration = elementMenuItems(
+        { kind: 'bubble', id: 'bb_3' },
+        contextOf({ page: withBubble({ shape: 'narration' }) }),
+      )
+      expect(() => item(narration, m.web_canvas_menu_bubble_remove_tail())).toThrow()
     })
 
     test('locking toggles the locked flag of the element', () => {

@@ -22,6 +22,7 @@ import {
 import { FONT_FAMILY, getBackend, loadFonts } from './backend'
 import { pagePixelSize } from './geometry'
 import { drawPage } from './page'
+import { actingNotes } from './panel'
 import { alphabeticY, wrapHorizontal } from './text'
 import type { RenderContext, RenderOptions, Surface } from './types'
 
@@ -255,7 +256,7 @@ function layoutSheets(
 }
 
 /**
- * ページ 1 枚分の指示メモ（シーンの見出し、コマ番号、camera、「間」の印、note、セリフ）を横書きで並べた Surface。収まらなければ複数枚。
+ * ページ 1 枚分の指示メモ（シーンの見出し、コマ番号、camera、「間」の印、note、芝居、セリフ）を横書きで並べた Surface。収まらなければ複数枚。
  * pdf-lib に Noto Sans JP を埋め込んで文字で書かないのは、@pdf-lib/fontkit のサブセット化で字が欠け、
  * サブセットしないと PDF ごとに約 6MB 増えるうえ可変フォントの既定の太さ（Thin）になるため
  */
@@ -311,7 +312,7 @@ interface NotesBlock {
 
 /**
  * 指示メモのページに並べる段落。ノンブルの見出しの後に、読み順のコマごとに空行、シーンの始まるコマならその見出し、
- * コマ番号と camera と「間」の印の行、note、話し手つきのセリフ
+ * コマ番号と camera と「間」の印の行、note、芝居（actingNotes）、話し手つきのセリフ
  */
 function notesBlocks(page: Page, number: number, characters: readonly Character[]): NotesBlock[] {
   const names = new Map(characters.map((c) => [c.id, c.name]))
@@ -334,6 +335,7 @@ function notesBlocks(page: Page, number: number, characters: readonly Character[
       bold: true,
     })
     if (panel.note) blocks.push({ text: panel.note, indent: 1 })
+    for (const text of actingNotes(panel, characters)) blocks.push({ text, indent: 1 })
     for (const bubble of [...panel.bubbles].sort((a, b) => a.order - b.order)) {
       const speaker = bubble.speakerId ? names.get(bubble.speakerId) : undefined
       blocks.push({ text: `${speaker ?? '—'}「${stripRuby(bubble.text)}」`, indent: 1 })

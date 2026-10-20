@@ -794,6 +794,20 @@ if (import.meta.vitest) {
       expect(seen[0]?.characterRefs?.map((r) => r.characterId)).toEqual([extra.id])
     })
 
+    test('the acting written on the panel goes into the prompt of the art', async () => {
+      const { generate, panelNow, store } = setup()
+      const characterId = panel.focusPoints.find((f) => f.characterId)?.characterId
+      const name = sample.characters.find((c) => c.id === characterId)?.name
+      if (!characterId || !name) throw new Error('fixture の最初のコマにキャラの焦点がない')
+      store.applyPatch(
+        panelPatch(store.get(), pageId, panelId, [
+          { op: 'add', path: '/acting', value: [{ characterId, text: '振り向いて驚く' }] },
+        ]),
+      )
+      expect(await generate()).toBe('done')
+      expect(panelNow().arts[0]?.prompt).toContain(`${name} acts: 振り向いて驚く`)
+    })
+
     test('sends the panel hint unless the panel opts out of it', async () => {
       const seen: PanelArtRequest[] = []
       const fake = createFakeImageProvider()

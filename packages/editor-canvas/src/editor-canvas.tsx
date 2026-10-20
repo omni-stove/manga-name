@@ -71,7 +71,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * 頂点をドラッグで動かし、矩形のコマも Alt + 隅のドラッグで頂点を動かせる。
  * 端は他のコマとページの端に 0.01 以内で吸い付き、頂点は他のコマの頂点にも吸い付く。
  * `bubble` ツールではコマのクリックでフキダシを作り、ドラッグで移動、隅のハンドルでリサイズ、
- * しっぽの先端のドラッグでしっぽを動かす。セリフは縦書きで、収まらなければ末尾を省略記号にする。
+ * しっぽごとの先端のドラッグでそのしっぽを動かし、しっぽを足すハンドルのドラッグでしっぽを増やす。セリフは縦書きで、収まらなければ末尾を省略記号にする。
  * Patch はページ root 基準で `onChange` に 1 操作 1 回出し、Undo / Redo は持たない。
  * `focus` ツールではクリックで焦点を置き、ドラッグで動かす。`vector` ツールではドラッグでベクトルを作り、
  * 終点（と始点）が焦点かフキダシの上なら `targetFocusId`（と `sourceFocusId`）を付ける。
@@ -690,7 +690,7 @@ if (import.meta.vitest) {
     })
 
     test('dialogue of a bubble cut by the panel edge sits in the visible part', async () => {
-      const svg = await render({ page: withBubble3({ pos: { x: 1, y: 0.5 }, tail: undefined }) })
+      const svg = await render({ page: withBubble3({ pos: { x: 1, y: 0.5 }, tails: undefined }) })
       const panel = must(samplePage.panels.find((p) => p.id === 'pn_3'))
       const edge = (panel.rect.x + panel.rect.w) * project.settings.pageSize.w
       const columns = [...svg.querySelectorAll('[data-bubble-id="bb_3"] tspan')]
@@ -727,13 +727,12 @@ if (import.meta.vitest) {
       expect(rtl.getAttribute('text-anchor')).toBe('start')
       expect(Number(rtl.getAttribute('x'))).toBeLessThan((pn1.rect.x + pn1.rect.w / 2) * w)
 
-      const ltr = labelIn(
-        await render({ page, settings: { ...project.settings, direction: 'ltr' } }),
-      )
+      const ltrSvg = await render({ page, settings: { ...project.settings, direction: 'ltr' } })
+      const ltr = labelIn(ltrSvg)
       expect(ltr.getAttribute('text-anchor')).toBe('end')
       expect(Number(ltr.getAttribute('x'))).toBeGreaterThan((pn1.rect.x + pn1.rect.w / 2) * w)
       const number = must(
-        ltr.ownerSVGElement?.querySelector('[data-panel-id="pn_1"] [data-panel-number] circle'),
+        ltrSvg.querySelector('[data-panel-id="pn_1"] [data-panel-number] circle'),
       )
       expect(Number(ltr.getAttribute('x'))).toBeLessThan(
         Number(number.getAttribute('cx')) - Number(number.getAttribute('r')),
@@ -805,6 +804,10 @@ if (import.meta.vitest) {
         await render({ page: withBubble3({ shape: 'narration', typeface: 'rounded' }) }),
       )
       expect(named.getAttribute('font-family')).toContain('M PLUS Rounded 1c')
+      const hand = textOf(
+        await render({ page: withBubble3({ shape: 'whisper', typeface: 'hand' }) }),
+      )
+      expect(hand.getAttribute('font-family')).toContain('Yomogi')
     })
 
     test('a borderless panel is drawn first with a dashed guide outline, and framed panels get a white ground', async () => {
@@ -852,6 +855,40 @@ if (import.meta.vitest) {
       expect(corners('pn_6')).toBeGreaterThan(4)
     })
 
+    test('effect lines are clipped to the panel, drawn above the art and below the bubbles and the frame', async () => {
+      expect((await render({})).querySelector('[data-panel-effect]')).toBeNull()
+      const page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_1'
+            ? { ...p, effect: 'focus_lines' as const }
+            : p.id === 'pn_2'
+              ? { ...p, effect: 'speed_lines' as const, fill: 'black' as const }
+              : p,
+        ),
+      }
+      const svg = await render({ page })
+      const focus = must(svg.querySelector<SVGPathElement>('[data-panel-effect="focus_lines"]'))
+      expect(focus.closest('[data-panel-id]')?.getAttribute('data-panel-id')).toBe('pn_1')
+      expect(focus.getAttribute('fill')).toBe('#000')
+      expect(focus.getAttribute('clip-path')).toMatch(/^url\(#.+-clip-\d+\)$/)
+      expect(focus.getAttribute('d')?.match(/M/g)?.length).toBeGreaterThan(20)
+      const following = (a: Element, b: Element) =>
+        a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
+      const bubble = must(svg.querySelector('[data-panel-id="pn_1"] [data-bubble-id]'))
+      expect(following(focus, bubble)).toBeTruthy()
+      const frame = must(svg.querySelector('[data-panel-id="pn_1"] > [data-panel-frame]'))
+      expect(following(focus, frame)).toBeTruthy()
+
+      const speed = must(svg.querySelector('[data-panel-effect="speed_lines"]'))
+      expect(speed.getAttribute('fill')).toBe('#fff')
+      // 同じコマからは同じ線が出る
+      const again = await render({ page })
+      expect(must(again.querySelector('[data-panel-effect="speed_lines"]')).getAttribute('d')).toBe(
+        speed.getAttribute('d'),
+      )
+    })
+
     test('a page overlay multiplies a gray rect over the whole page above the bubbles', async () => {
       expect((await render({})).querySelector('[data-overlay]')).toBeNull()
       const svg = await render({ page: { ...samplePage, overlay: 'gray' } })
@@ -861,6 +898,63 @@ if (import.meta.vitest) {
       expect(
         bubble.compareDocumentPosition(overlay) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy()
+    })
+
+    test('the label of an sfx focus point is lettered in bold with a white outline, under the bubbles and the frame', async () => {
+      const panel = must(samplePage.panels.find((p) => p.id === 'pn_3'))
+      const sfx = (id: string, patch: Partial<Panel['focusPoints'][number]>) => ({
+        id,
+        kind: 'sfx' as const,
+        label: 'ドン',
+        pos: { x: 0.25, y: 0.5 },
+        weight: 1,
+        ...patch,
+      })
+      const page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_3'
+            ? {
+                ...p,
+                focusPoints: [
+                  ...p.focusPoints,
+                  sfx('fp_sfx', {}),
+                  sfx('fp_empty', { label: '' }),
+                  sfx('fp_face', { kind: 'face' }),
+                ],
+              }
+            : p,
+        ),
+      }
+      const svg = await render({ page })
+      const lettered = [...svg.querySelectorAll('[data-sfx-id]')]
+      expect(lettered.map((g) => g.getAttribute('data-sfx-id'))).toEqual(['fp_sfx'])
+      const text = must(svg.querySelector('[data-sfx-id="fp_sfx"] text[writing-mode]'))
+      expect(text.textContent).toBe('ドン')
+      expect(text.getAttribute('font-weight')).toBe('700')
+      expect(text.getAttribute('fill')).toBe('#000')
+      expect(text.getAttribute('stroke')).toBe('#fff')
+      expect(text.getAttribute('paint-order')).toBe('stroke')
+      const { w, h } = project.settings.pageSize
+      const size = Math.min(panel.rect.w * w, panel.rect.h * h) * 0.25
+      expect(Number(text.getAttribute('font-size'))).toBeCloseTo(size)
+      const column = must(text.querySelector('tspan'))
+      const center = {
+        x: (panel.rect.x + panel.rect.w * 0.25) * w,
+        y: (panel.rect.y + panel.rect.h * 0.5) * h,
+      }
+      expect(Number(column.getAttribute('x'))).toBeCloseTo(center.x)
+      expect(Number(column.getAttribute('y'))).toBeCloseTo(center.y)
+
+      const lettering = must(svg.querySelector('[data-sfx-id="fp_sfx"]'))
+      expect(lettering.parentElement?.getAttribute('clip-path')).toMatch(/^url\(#/)
+      const later = (selector: string) =>
+        lettering.compareDocumentPosition(must(svg.querySelector(selector))) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+      expect(later('[data-bubble-id="bb_3"]')).toBeTruthy()
+      expect(later('[data-panel-id="pn_3"] > [data-panel-frame]')).toBeTruthy()
+      // 焦点の印はヒントのレイヤーに残る
+      expect(svg.querySelector('[data-focus-id="fp_sfx"]')).not.toBeNull()
     })
 
     test('the selected panel gets a guide-coloured frame', async () => {
@@ -878,6 +972,42 @@ if (import.meta.vitest) {
       const filter = must(svg.querySelector('filter[data-tone="sepia"]'))
       const image = must(svg.querySelector('[data-panel-id="pn_1"] image'))
       expect(image.getAttribute('filter')).toBe(`url(#${filter.id})`)
+    })
+
+    test('a panel tone overrides the page tone and none leaves the art unfiltered', async () => {
+      const tones: Record<string, Panel['tone']> = { pn_1: 'none', pn_2: 'faded' }
+      const svg = await render({
+        page: {
+          ...pageWithArts,
+          tone: 'sepia',
+          panels: pageWithArts.panels.map((p) => {
+            const tone = tones[p.id]
+            return tone ? { ...p, tone } : p
+          }),
+        },
+      })
+      const imageOf = (id: string) => must(svg.querySelector(`[data-panel-id="${id}"] image`))
+      const sepia = must(svg.querySelector('filter[data-tone="sepia"]'))
+      const faded = must(svg.querySelector('filter[data-tone="faded"]'))
+      expect(imageOf('pn_1').hasAttribute('filter')).toBe(false)
+      expect(imageOf('pn_2').getAttribute('filter')).toBe(`url(#${faded.id})`)
+      expect(imageOf('pn_3').getAttribute('filter')).toBe(`url(#${sepia.id})`)
+    })
+
+    test('a panel tone on a page without a tone filters only that panel', async () => {
+      const svg = await render({
+        page: {
+          ...pageWithArts,
+          panels: pageWithArts.panels.map((p) => (p.id === 'pn_1' ? { ...p, tone: 'sepia' } : p)),
+        },
+      })
+      const filter = must(svg.querySelector('filter[data-tone="sepia"]'))
+      const images = [...svg.querySelectorAll('[data-panel-id] image[filter]')]
+      const panelIds = images.map((i) =>
+        i.closest('[data-panel-id]')?.getAttribute('data-panel-id'),
+      )
+      expect(panelIds).toEqual(['pn_1'])
+      expect(images[0]?.getAttribute('filter')).toBe(`url(#${filter.id})`)
     })
 
     test('arts are drawn as <image> clipped to the panel', async () => {
@@ -1158,7 +1288,7 @@ if (import.meta.vitest) {
       key(svg, { key: 'ArrowUp' })
       expect(onChange).toHaveBeenCalledWith([
         { op: 'replace', path: '/panels/2/bubbles/0/pos/y', value: 0.24 },
-        { op: 'replace', path: '/panels/2/bubbles/0/tail/y', value: 0.37 },
+        { op: 'replace', path: '/panels/2/bubbles/0/tails/0/y', value: 0.37 },
       ])
     })
 
@@ -2204,7 +2334,7 @@ if (import.meta.vitest) {
       expect(svg.querySelector('[data-layer="bubble-tool"][data-draft]')).toBeNull()
       expect(patchOf(onChange)).toEqual([
         { op: 'replace', path: '/panels/2/bubbles/0/pos', value: { x: 0.75, y: 0.25 } },
-        { op: 'replace', path: '/panels/2/bubbles/0/tail', value: { x: 0.54, y: 0.38 } },
+        { op: 'replace', path: '/panels/2/bubbles/0/tails', value: [{ x: 0.54, y: 0.38 }] },
       ])
       expect(onSelect).toHaveBeenCalledTimes(1)
       expect(onSelect).toHaveBeenCalledWith({ kind: 'bubble', id: 'bb_3' })
@@ -2244,15 +2374,17 @@ if (import.meta.vitest) {
       expect(onChange).not.toHaveBeenCalled()
     })
 
-    test('the selected bubble shows four corner handles and its tail handle', async () => {
+    test('the selected bubble shows four corner handles, its tail handle and one to add a tail', async () => {
       const svg = await render({ tool: 'bubble', selection: { kind: 'bubble', id: 'bb_3' } })
       const layer = must(svg.querySelector('[data-layer="bubble-tool"]'))
       expect(
         [...layer.querySelectorAll('[data-handle]')].map((h) => h.getAttribute('data-handle')),
       ).toEqual(['nw', 'ne', 'se', 'sw'])
-      expect(must(layer.querySelector('[data-tail-handle]')).getAttribute('data-tail-handle')).toBe(
-        'set',
-      )
+      expect(
+        [...layer.querySelectorAll('[data-tail-handle]')].map((h) =>
+          h.getAttribute('data-tail-handle'),
+        ),
+      ).toEqual(['set', 'unset'])
       const select = await render({ tool: 'select', selection: { kind: 'bubble', id: 'bb_3' } })
       expect(select.querySelector('[data-layer="bubble-tool"]')).toBeNull()
     })
@@ -2306,8 +2438,109 @@ if (import.meta.vitest) {
       const handle = inPanel('pn_1', 0.92, 0.22 + 0.275 * 1.5)
       drag(svg, handle, inPanel('pn_1', 0.7, 0.9))
       expect(patchOf(onChange)).toEqual([
-        { op: 'add', path: '/panels/0/bubbles/0/tail', value: { x: 0.7, y: 0.9 } },
+        { op: 'add', path: '/panels/0/bubbles/0/tails', value: [{ x: 0.7, y: 0.9 }] },
       ])
+    })
+
+    // bb_3 は中心 (0.85, 0.25)、半径 (0.11, 0.2) で、しっぽの先端は (0.64, 0.38)
+    const withTails = (tails: { x: number; y: number }[]): Page => ({
+      ...samplePage,
+      panels: samplePage.panels.map((p) => ({
+        ...p,
+        bubbles: p.bubbles.map((b) => (b.id === 'bb_3' ? { ...b, tails } : b)),
+      })),
+    })
+
+    test('dragging the add handle of a tailed bubble adds a second tail, drawn with the first', async () => {
+      const onChange = vi.fn()
+      const svg = await render({
+        tool: 'bubble',
+        onChange,
+        selection: { kind: 'bubble', id: 'bb_3' },
+      })
+      layout(svg)
+      // 既存のしっぽは左下なので、足すハンドルは真下の中心から縦の半径の 1.5 倍に出る
+      drag(svg, inPanel('pn_3', 0.85, 0.25 + 0.2 * 1.5), inPanel('pn_3', 0.9, 0.9))
+      expect(patchOf(onChange)).toEqual([
+        {
+          op: 'replace',
+          path: '/panels/2/bubbles/0/tails',
+          value: [
+            { x: 0.64, y: 0.38 },
+            { x: 0.9, y: 0.9 },
+          ],
+        },
+      ])
+
+      const two = await render({
+        page: withTails([
+          { x: 0.64, y: 0.38 },
+          { x: 0.9, y: 0.9 },
+        ]),
+        tool: 'bubble',
+        selection: { kind: 'bubble', id: 'bb_3' },
+      })
+      const bubble = must(two.querySelector('.ec-bubble[data-bubble-id="bb_3"]'))
+      // しっぽ 2 本と本体を、線と塗りで 2 回ずつ描く
+      expect(bubble.querySelectorAll('path[fill="#fff"]:not([stroke])')).toHaveLength(3)
+      expect(two.querySelectorAll('[data-tail-handle="set"]')).toHaveLength(2)
+    })
+
+    test('dragging one of two tails moves only that tail and makes it the last', async () => {
+      const onChange = vi.fn()
+      const svg = await render({
+        page: withTails([
+          { x: 0.64, y: 0.38 },
+          { x: 0.95, y: 0.6 },
+        ]),
+        tool: 'bubble',
+        onChange,
+        selection: { kind: 'bubble', id: 'bb_3' },
+      })
+      layout(svg)
+      drag(svg, inPanel('pn_3', 0.64, 0.38), inPanel('pn_3', 0.6, 0.5))
+      expect(patchOf(onChange)).toEqual([
+        {
+          op: 'replace',
+          path: '/panels/2/bubbles/0/tails',
+          value: [
+            { x: 0.95, y: 0.6 },
+            { x: 0.6, y: 0.5 },
+          ],
+        },
+      ])
+    })
+
+    test('pressing a tail without moving makes it the last touched one', async () => {
+      const onChange = vi.fn()
+      const onSelect = vi.fn()
+      const svg = await render({
+        page: withTails([
+          { x: 0.64, y: 0.38 },
+          { x: 0.95, y: 0.6 },
+        ]),
+        tool: 'bubble',
+        onChange,
+        onSelect,
+        selection: { kind: 'bubble', id: 'bb_3' },
+      })
+      layout(svg)
+      click(svg, inPanel('pn_3', 0.64, 0.38))
+      expect(patchOf(onChange)).toEqual([
+        {
+          op: 'replace',
+          path: '/panels/2/bubbles/0/tails',
+          value: [
+            { x: 0.95, y: 0.6 },
+            { x: 0.64, y: 0.38 },
+          ],
+        },
+      ])
+      onChange.mockClear()
+      // 最後のしっぽを押しても並びは変わらない
+      click(svg, inPanel('pn_3', 0.95, 0.6))
+      expect(onChange).not.toHaveBeenCalled()
+      expect(onSelect).not.toHaveBeenCalled()
     })
 
     test('Escape cancels a bubble drag without a patch or a deselect', async () => {
@@ -2361,7 +2594,7 @@ if (import.meta.vitest) {
       fire(svg, pointer('pointerup', { id: 1, ...to }))
       expect(patchOf(onChange)).toEqual([
         { op: 'replace', path: '/panels/2/bubbles/0/pos', value: { x: 0.75, y: 0.25 } },
-        { op: 'replace', path: '/panels/2/bubbles/0/tail', value: { x: 0.54, y: 0.38 } },
+        { op: 'replace', path: '/panels/2/bubbles/0/tails', value: [{ x: 0.54, y: 0.38 }] },
       ])
     })
 
@@ -2652,7 +2885,7 @@ if (import.meta.vitest) {
                   shape: SHAPES[i % SHAPES.length] ?? 'normal',
                   pos: { x: 0.5, y: 0.5 },
                   size: { w: 0.5, h: 0.6 },
-                  tail: { x: 0.2, y: 0.95 },
+                  tails: [{ x: 0.2, y: 0.95 }],
                 },
               ]
             : []

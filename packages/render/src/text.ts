@@ -8,6 +8,9 @@ const COLUMN_PITCH = 1.2
 /** ルビの文字サイズ。親文字に対する比率 */
 const RUBY_SCALE = 0.5
 
+/** 傍点の字。大きさと位置はルビに揃える */
+const EMPHASIS_MARK = '﹅'
+
 /** 行数が少ない割り方を、最大の文字サイズに対してこの比率まで小さくなっても優先する */
 const FEWER_LINES_TOLERANCE = 0.8
 
@@ -56,16 +59,23 @@ export interface TextUnit {
   glyphs: string[]
   /** 親文字の右に振るルビの書記素 */
   ruby?: string[]
+  /** 親文字の右に傍点を打つ。ルビの無い 1 字の一続きにだけ付く */
+  emphasis?: true
 }
 
-/** ルビの書式（parseRuby）を解き、段落ごとの TextUnit の列にする。ルビの書式は段落をまたがない */
+/**
+ * ルビと傍点の書式（parseRuby）を解き、段落ごとの TextUnit の列にする。書式は段落をまたがない。
+ * 傍点を打った語は 1 字ずつの一続きにし、ルビと違って行をまたいで割れる
+ */
 function toUnitParagraphs(text: string): TextUnit[][] {
   return text
     .split('\n')
     .map((paragraph) =>
-      parseRuby(paragraph).flatMap(({ base, ruby }) =>
+      parseRuby(paragraph).flatMap(({ base, ruby, emphasis }): TextUnit[] =>
         ruby === undefined
-          ? graphemes(base).map((glyph) => ({ glyphs: [glyph] }))
+          ? graphemes(base).map((glyph) =>
+              emphasis ? { glyphs: [glyph], emphasis } : { glyphs: [glyph] },
+            )
           : [{ glyphs: graphemes(base), ruby: graphemes(ruby) }],
       ),
     )
@@ -113,9 +123,9 @@ function breakLines(paragraphs: TextUnit[][], maxHeight: number): TextUnit[][] {
   return lines
 }
 
-/** 行の幅。ルビのある行は親文字の右にルビの幅を足す */
+/** 行の幅。ルビか傍点のある行は親文字の右にルビの幅を足す */
 function lineWidth(line: TextUnit[], fontPx: number): number {
-  return line.some((unit) => unit.ruby) ? fontPx * (1 + RUBY_SCALE) : fontPx
+  return line.some((unit) => unit.ruby || unit.emphasis) ? fontPx * (1 + RUBY_SCALE) : fontPx
 }
 
 function blockWidth(lines: TextUnit[][], fontPx: number): number {
@@ -130,7 +140,7 @@ function fits(lines: TextUnit[][], fontPx: number, size: Size): boolean {
 }
 
 /**
- * 縦書きの行割り。`text` は `|単語《ルビ》` の書式でルビを振れる。`size` は px 単位の箱、`fontPx` は文字サイズの下限。
+ * 縦書きの行割り。`text` は `|単語《ルビ》` の書式でルビを振り、`《《語》》` の書式で傍点を打てる。`size` は px 単位の箱、`fontPx` は文字サイズの下限。
  * 箱に収まる整数 px の文字サイズのうち、最大のものか、それより少し小さくても行数が少なくなるものを選ぶ。
  * 下限でも収まらないときは下限のまま折り返して返す（はみ出す）。
  * `lines[i]` は右から i 番目の行の一続きの列。
@@ -158,20 +168,39 @@ export function layoutBubbleText(
   return { lines: breakLines(paragraphs, Math.max(1, size.h / min)), fontPx: min }
 }
 
-/** 縦書きの 1 字を、中心 (cx, cy) に現在の ctx.font の大きさ fontPx で置く */
+/** 折り返さずに、改行だけで行に分ける。描き文字のように文字サイズが先に決まっている文に使う */
+export function unbrokenLines(text: string): TextUnit[][] {
+  return toUnitParagraphs(text)
+}
+
+type Paint = 'fill' | 'stroke'
+
+function paintText(
+  ctx: CanvasRenderingContext2D,
+  paint: Paint,
+  glyph: string,
+  x: number,
+  y: number,
+): void {
+  if (paint === 'stroke') ctx.strokeText(glyph, x, y)
+  else ctx.fillText(glyph, x, y)
+}
+
+/** 縦書きの 1 字を、中心 (cx, cy) に現在の ctx.font の大きさ fontPx で塗るか縁取る */
 function drawGlyph(
   ctx: CanvasRenderingContext2D,
   glyph: string,
   cx: number,
   cy: number,
   fontPx: number,
+  paint: Paint,
 ): void {
   if (SIDEWAYS.test(glyph)) {
     // 英数字は字面の中心で回すと g や y が持ち上がって並びが揃わないので、ベースラインを保って回す
     ctx.save()
     ctx.translate(cx, cy)
     ctx.rotate(Math.PI / 2)
-    ctx.fillText(glyph, 0, alphabeticY(0, fontPx, 'middle'))
+    paintText(ctx, paint, glyph, 0, alphabeticY(0, fontPx, 'middle'))
     ctx.restore()
   } else if (rotatesInVertical(glyph)) {
     // 三点リーダや長音は仮想ボディの中で下や端に寄っているので、字面の中心を軸に回す
@@ -181,16 +210,17 @@ function drawGlyph(
     ctx.save()
     ctx.translate(cx, cy)
     ctx.rotate(Math.PI / 2)
-    ctx.fillText(glyph, dx, dy)
+    paintText(ctx, paint, glyph, dx, dy)
     ctx.restore()
   } else {
-    ctx.fillText(glyph, cx, alphabeticY(cy, fontPx, 'middle'))
+    paintText(ctx, paint, glyph, cx, alphabeticY(cy, fontPx, 'middle'))
   }
 }
 
 /**
  * 行割り済みの縦書きを、箱の中央に右の行から左へ color と typeface で描く。
- * ルビは親文字の右に、親文字の長さの中央に揃えて同じ書体で置く
+ * ルビは親文字の右に、親文字の長さの中央に揃えて同じ書体で置く。傍点はルビと同じ大きさで、親文字の右に 1 字ずつ置く。
+ * halo を渡すと、その色と太さ（px）のふちを全部の字の下に敷く。字ごとに縁取って塗ると、隣の字のふちが字に掛かる
  */
 export function drawVerticalText(
   ctx: CanvasRenderingContext2D,
@@ -199,42 +229,66 @@ export function drawVerticalText(
   box: PxRect,
   color = '#000',
   typeface: NonNullable<Bubble['typeface']> = 'gothic',
+  halo?: { color: string; width: number },
 ): void {
   ctx.save()
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
-  ctx.fillStyle = color
   const font = (px: number) => typefaceFont(typeface, px)
   const rubyPx = fontPx * RUBY_SCALE
-  let right = box.x + box.w / 2 + blockWidth(lines, fontPx) / 2
-  for (const line of lines) {
-    const width = lineWidth(line, fontPx)
-    const cx = right - width + fontPx / 2
-    let y = box.y + box.h / 2 - (lineHeight(line) * fontPx) / 2
-    for (const unit of line) {
-      const h = unitHeight(unit) * fontPx
-      const top = y + (h - unit.glyphs.length * fontPx) / 2
-      ctx.font = font(fontPx)
-      unit.glyphs.forEach((glyph, row) => {
-        drawGlyph(ctx, glyph, cx, top + row * fontPx + fontPx / 2, fontPx)
-      })
-      if (unit.ruby) {
-        const rubyTop = y + (h - unit.ruby.length * rubyPx) / 2
-        ctx.font = font(rubyPx)
-        unit.ruby.forEach((glyph, row) => {
-          drawGlyph(
-            ctx,
-            glyph,
-            cx + (fontPx + rubyPx) / 2,
-            rubyTop + row * rubyPx + rubyPx / 2,
-            rubyPx,
-          )
+  const place = (paint: Paint) => {
+    let right = box.x + box.w / 2 + blockWidth(lines, fontPx) / 2
+    for (const line of lines) {
+      const width = lineWidth(line, fontPx)
+      const cx = right - width + fontPx / 2
+      let y = box.y + box.h / 2 - (lineHeight(line) * fontPx) / 2
+      for (const unit of line) {
+        const h = unitHeight(unit) * fontPx
+        const top = y + (h - unit.glyphs.length * fontPx) / 2
+        ctx.font = font(fontPx)
+        unit.glyphs.forEach((glyph, row) => {
+          drawGlyph(ctx, glyph, cx, top + row * fontPx + fontPx / 2, fontPx, paint)
         })
+        if (unit.ruby) {
+          const rubyTop = y + (h - unit.ruby.length * rubyPx) / 2
+          ctx.font = font(rubyPx)
+          unit.ruby.forEach((glyph, row) => {
+            drawGlyph(
+              ctx,
+              glyph,
+              cx + (fontPx + rubyPx) / 2,
+              rubyTop + row * rubyPx + rubyPx / 2,
+              rubyPx,
+              paint,
+            )
+          })
+        }
+        if (unit.emphasis) {
+          ctx.font = font(rubyPx)
+          unit.glyphs.forEach((_, row) => {
+            drawGlyph(
+              ctx,
+              EMPHASIS_MARK,
+              cx + (fontPx + rubyPx) / 2,
+              top + row * fontPx + fontPx / 2,
+              rubyPx,
+              paint,
+            )
+          })
+        }
+        y += h
       }
-      y += h
+      right -= width + fontPx * (COLUMN_PITCH - 1)
     }
-    right -= width + fontPx * (COLUMN_PITCH - 1)
   }
+  if (halo) {
+    ctx.strokeStyle = halo.color
+    ctx.lineWidth = halo.width
+    ctx.lineJoin = 'round'
+    place('stroke')
+  }
+  ctx.fillStyle = color
+  place('fill')
   ctx.restore()
 }
 
@@ -362,6 +416,44 @@ if (import.meta.vitest) {
     expect(fonts.some((f) => f.startsWith('400 5px'))).toBe(true)
   })
 
+  test('傍点を打った語は 1 字ずつの一続きになり、行をまたいで割れ、書式の記号は描かない', () => {
+    expect(layoutBubbleText('あ《《本当》》', { w: 20, h: 200 }, 8).lines).toEqual([
+      [{ glyphs: ['あ'] }, { glyphs: ['本'], emphasis: true }, { glyphs: ['当'], emphasis: true }],
+    ])
+    const { lines } = layoutBubbleText('《《あいう》》', { w: 40, h: 20 }, 10)
+    expect(glyphs(lines)).toEqual([['あ', 'い'], ['う']])
+  })
+
+  test('傍点のある行はルビと同じ幅だけ広く取る', () => {
+    expect(layoutBubbleText('《《あい》》\nうえ', { w: 22, h: 20 }, 1).fontPx).toBe(8)
+  })
+
+  test('傍点は親文字の 1 字ずつの右に、ルビと同じ大きさで置く', () => {
+    const fonts: string[] = []
+    const placed: { text: string; x: number; y: number }[] = []
+    const ctx = {
+      save() {},
+      restore() {},
+      set font(value: string) {
+        fonts.push(value)
+      },
+      fillText(text: string, x: number, y: number) {
+        placed.push({ text, x, y })
+      },
+    } as unknown as CanvasRenderingContext2D
+    const lines: TextUnit[][] = [
+      [
+        { glyphs: ['本'], emphasis: true },
+        { glyphs: ['当'], emphasis: true },
+      ],
+    ]
+    drawVerticalText(ctx, lines, 10, { x: 0, y: 0, w: 30, h: 30 })
+    expect(placed.map((p) => p.text)).toEqual(['本', '﹅', '当', '﹅'])
+    expect(placed[1]?.x).toBeGreaterThan(placed[0]?.x ?? 0)
+    expect(placed[3]?.y).toBeCloseTo((placed[1]?.y ?? 0) + 10)
+    expect(fonts.some((f) => f.startsWith('400 5px'))).toBe(true)
+  })
+
   test('書体を渡すと、その字族と太さで描く', () => {
     const fonts: string[] = []
     const ctx = {
@@ -381,6 +473,38 @@ if (import.meta.vitest) {
       'mincho',
     )
     drawVerticalText(ctx, [[{ glyphs: ['あ'] }]], 10, { x: 0, y: 0, w: 30, h: 30 }, '#000', 'bold')
-    expect(fonts).toEqual(['400 10px "Noto Serif JP"', '700 10px "Noto Sans JP"'])
+    drawVerticalText(ctx, [[{ glyphs: ['あ'] }]], 10, { x: 0, y: 0, w: 30, h: 30 }, '#000', 'hand')
+    expect(fonts).toEqual([
+      '400 10px "Noto Serif JP"',
+      '700 10px "Noto Sans JP"',
+      '400 10px "Yomogi"',
+    ])
+  })
+
+  test('ふちを渡すと、全部の字を縁取ってから塗る', () => {
+    const calls: string[] = []
+    const ctx = {
+      save() {},
+      restore() {},
+      set font(_: string) {},
+      strokeText(text: string) {
+        calls.push(`stroke ${text}`)
+      },
+      fillText(text: string) {
+        calls.push(`fill ${text}`)
+      },
+    } as unknown as CanvasRenderingContext2D
+    drawVerticalText(ctx, unbrokenLines('ドン'), 10, { x: 0, y: 0, w: 0, h: 0 }, '#000', 'bold', {
+      color: '#fff',
+      width: 2,
+    })
+    expect(calls).toEqual(['stroke ド', 'stroke ン', 'fill ド', 'fill ン'])
+  })
+
+  test('unbrokenLines は折り返さず、改行でだけ行を分ける', () => {
+    expect(glyphs(unbrokenLines('ドドド\nゴゴ'))).toEqual([
+      ['ド', 'ド', 'ド'],
+      ['ゴ', 'ゴ'],
+    ])
   })
 }

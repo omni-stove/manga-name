@@ -1,4 +1,6 @@
-import type { ID, Page, Panel } from './project'
+import type { ID, Panel } from './project'
+
+type ScenePage = { id: ID; panels: readonly Pick<Panel, 'id' | 'order' | 'scene'>[] }
 
 /** コマが持つシーンの見出し。空白だけの見出しは持たないものとして undefined */
 export function sceneHeading(panel: Pick<Panel, 'scene'>): string | undefined {
@@ -12,7 +14,7 @@ export function sceneHeading(panel: Pick<Panel, 'scene'>): string | undefined {
  * pages は 1 話分を渡す。pageId が pages に無ければ空
  */
 export function pageScenes(
-  pages: readonly Pick<Page, 'id' | 'panels'>[],
+  pages: readonly ScenePage[],
   pageId: ID,
 ): Record<ID, string> {
   let current: string | undefined
@@ -29,7 +31,7 @@ export function pageScenes(
 
 /** コマ panelId が属するシーン（pageScenes）。どのシーンにも属さなければ undefined */
 export function sceneOf(
-  pages: readonly Pick<Page, 'id' | 'panels'>[],
+  pages: readonly ScenePage[],
   pageId: ID,
   panelId: ID,
 ): string | undefined {

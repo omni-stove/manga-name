@@ -1,3 +1,4 @@
+export { loadTypefaceFont } from './backend'
 export { renderLayoutPng } from './layout-png'
 export { renderPage } from './page'
 export { cropPanelArts, renderPageLayoutPng } from './page-art'

@@ -20,6 +20,7 @@ import {
   type ProjectSettings,
   pageCharacterIds,
   pagePlanJsonSchema,
+  panelActing,
   panelCharacterIds,
   StrengthSchema,
   VectorKindSchema,
@@ -39,6 +40,7 @@ import {
 import { suggestLayoutSystem } from './layout.prompt'
 import { lineFields } from './lines.prompt'
 import { transcribeNameSystem } from './name.prompt'
+import { MAX_PAGE_COUNT } from './page-plan'
 import { planPagesSystem } from './plan-pages.prompt'
 import {
   type CharacterArtRequest,
@@ -50,9 +52,6 @@ import {
   type PagePlanRequest,
   type PanelArtRequest,
 } from './provider'
-
-/** ページ割りで割り振らせるページ数の上限。Workers が受け付けるページ数の上限と揃える */
-const MAX_PLANNED_PAGES = 64
 
 /** コマ割りの提案で出させる案の数。LayoutSuggestionResponseSchema の上限と揃える */
 const LAYOUT_OPTIONS = 3
@@ -104,7 +103,18 @@ const characterDesign = (settings: ProjectSettings) =>
   `character design shared by every character: ${settings.characterDesign}`
 
 /**
- * コマの中身を表す行。舞台（コマが属するシーン）、カメラ、「間」、指示メモ、登場キャラ、焦点（重い順）、誘導線、ヒント。空の行も含む。
+ * 登場キャラの芝居。1 人ずつ名前を添えるのは、pageArt がコマの中身を `; ` でつなぐ中でも誰の芝居か読めるようにするため。
+ * 芝居は利用者の書いた言葉のまま渡す
+ */
+const actingOf = (panel: Panel, characters: Character[]) =>
+  panelActing(panel)
+    .flatMap(({ characterId, text }) =>
+      characters.filter((c) => c.id === characterId).map((c) => `${c.name} acts: ${text.trim()}`),
+    )
+    .join('; ')
+
+/**
+ * コマの中身を表す行。舞台（コマが属するシーン）、カメラ、「間」、指示メモ、登場キャラ、芝居、焦点（重い順）、誘導線、ヒント。空の行も含む。
  * `appearance` が false なら登場キャラは名前だけにする
  */
 function panelContent(
@@ -122,6 +132,7 @@ function panelContent(
     panelCharacters(panel, characters)
       .map((c) => (appearance ? describeCharacter(c) : c.name))
       .join('; '),
+    actingOf(panel, characters),
     focusByWeight.map((f) => f.label).join('; '),
     panel.vectors
       .map(
@@ -233,7 +244,7 @@ function planPages(req: PagePlanRequest): LlmPrompt<PagePlanResponse> {
   const user = [
     ...characterList(req.project.characters),
     req.pageCount === undefined
-      ? `Pages: as many as the script needs, at most ${MAX_PLANNED_PAGES}.`
+      ? `Pages: as many as the script needs, at most ${MAX_PAGE_COUNT}.`
       : `Pages: exactly ${req.pageCount}.`,
     'Script:',
     req.script,
@@ -586,6 +597,40 @@ if (import.meta.vitest) {
     ).not.toContain(design)
   })
 
+  test('the acting of the characters in a panel goes into panelArt and pageArt with their names', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const characters = [...project.characters, { id: 'chr_k', name: 'ケイ', shortName: 'K' }]
+    const acted: Page = {
+      ...page,
+      panels: page.panels.map((p) =>
+        p.id === 'pn_1'
+          ? {
+              ...p,
+              cast: ['chr_k'],
+              acting: [
+                { characterId: 'chr_e', text: '振り向いて驚く' },
+                { characterId: 'chr_k', text: ' 笑う ' },
+              ],
+            }
+          : p,
+      ),
+    }
+    const acting = 'ケイ acts: 笑う; E acts: 振り向いて驚く'
+    const panelLines = prompts
+      .panelArt({ project: { ...project, characters }, page: acted, panelId: 'pn_1' })
+      .prompt.split('\n')
+    const cast = `ケイ; E: ${project.characters[0]?.appearance}`
+    expect(panelLines.indexOf(acting)).toBe(panelLines.indexOf(cast) + 1)
+    const pageLine = prompts
+      .pageArt({ project: { ...project, characters }, page: acted })
+      .prompt.split('\n')
+      .find((l) => l.startsWith('panel 1 '))
+    expect(pageLine).toContain(`; ${acting}`)
+
+    const unacted = prompts.panelArt({ project: { ...project, characters }, page, panelId: 'pn_1' })
+    expect(unacted.prompt).not.toContain(' acts: ')
+  })
+
   test('planPages embeds the page plan JSON Schema and lists characters, the page count and the script', () => {
     const { system, user, schema, output } = prompts.planPages({
       project: {
@@ -611,7 +656,7 @@ if (import.meta.vitest) {
     )
     expect(
       prompts.planPages({ project: { ...project, characters: [] }, script: 's' }).user,
-    ).toContain(`- (none)\nPages: as many as the script needs, at most ${MAX_PLANNED_PAGES}.`)
+    ).toContain(`- (none)\nPages: as many as the script needs, at most ${MAX_PAGE_COUNT}.`)
   })
 
   test('transcribeName embeds the name JSON Schema and lists characters and the page script', () => {

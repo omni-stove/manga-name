@@ -9,8 +9,10 @@ import {
   type ID,
   type Panel,
   type PanelArt,
+  PanelEffectSchema,
   PanelFrameSchema,
   PanelSchema,
+  PanelToneSchema,
   type Patch,
   panelCharacterIds,
   stripRuby,
@@ -30,7 +32,14 @@ import { Suspense, use, useState } from 'react'
 import { assetUrl } from './asset-url'
 import { DEBOUNCE_MS, NumberField, option, SelectField, TextField } from './fields'
 import styles from './panel-inspector.module.css'
-import { addCastPatch, optionalString, removeCastPatch, replace, swapOrder } from './patch'
+import {
+  actingPatch,
+  addCastPatch,
+  optionalString,
+  removeCastPatch,
+  replace,
+  swapOrder,
+} from './patch'
 import section from './section.module.css'
 import type { PanelInspectorProps } from './types'
 
@@ -42,6 +51,18 @@ const CAMERAS: readonly { value: Camera | ''; label: string }[] = [
 const FRAMES: readonly { value: NonNullable<Panel['frame']> | ''; label: string }[] = [
   option('', m.panel_frame_solid),
   ...PanelFrameSchema.options.map((frame) => option(frame, m[`panel_frame_${frame}` as const])),
+]
+
+const TONES: readonly { value: NonNullable<Panel['tone']> | ''; label: string }[] = [
+  option('', m.panel_tone_page),
+  ...PanelToneSchema.options.map((tone) => option(tone, m[`panel_tone_${tone}` as const])),
+]
+
+const EFFECTS: readonly { value: NonNullable<Panel['effect']> | ''; label: string }[] = [
+  option('', m.none),
+  ...PanelEffectSchema.options.map((effect) =>
+    option(effect, m[`panel_effect_${effect}` as const]),
+  ),
 ]
 
 const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
@@ -141,6 +162,18 @@ export function PanelInspector({
         value={panel.frame ?? ''}
         options={FRAMES}
         onCommit={(v) => onChange(optionalString('/frame', panel.frame, v))}
+      />
+      <SelectField
+        label={m.panel_tone()}
+        value={panel.tone ?? ''}
+        options={TONES}
+        onCommit={(v) => onChange(optionalString('/tone', panel.tone, v))}
+      />
+      <SelectField
+        label={m.panel_effect()}
+        value={panel.effect ?? ''}
+        options={EFFECTS}
+        onCommit={(v) => onChange(optionalString('/effect', panel.effect, v))}
       />
       <CastSection panel={panel} characters={characters} onChange={onChange} />
       {diagnosis && !diagnosis.bubbleOrderOk && (
@@ -282,7 +315,8 @@ export function PanelInspector({
 }
 
 /**
- * 登場キャラの一覧と追加。台詞か焦点から拾えるキャラは理由を添えて並べ、`cast` に入れたキャラだけ外せる
+ * 登場キャラの一覧と追加。台詞か焦点から拾えるキャラは理由を添えて並べ、`cast` に入れたキャラだけ外せる。
+ * 芝居の欄は台詞や焦点で拾えるキャラにも出す。追加の候補に出ないので、`cast` に入れたキャラだけでは話者に芝居を書けない
  */
 function CastSection({
   panel,
@@ -301,6 +335,15 @@ function CastSection({
       panel.bubbles.some((b) => b.speakerId === id) && m.inspector_panel_cast_reason_dialogue(),
       panel.focusPoints.some((f) => f.characterId === id) && m.focus_point(),
     ].filter((r) => r !== false)
+  // 外して登場キャラに居なくなるなら芝居も消す。残すと画面に出ないまま参照が残る
+  const removeCast = (id: ID): Patch => {
+    const rest = panelCharacterIds({ ...panel, cast: panel.cast?.filter((c) => c !== id) })
+    return [
+      ...removeCastPatch(panel.cast, id),
+      ...(rest.includes(id) ? [] : actingPatch(panel.acting, id, '')),
+    ]
+  }
+  const actingOf = (id: ID) => panel.acting?.find((a) => a.characterId === id)?.text ?? ''
   return (
     <>
       <Typography variant="label" tone="muted" className={section.heading}>
@@ -311,28 +354,38 @@ function CastSection({
       ) : (
         <YStack as="ul" gap={2} className={styles.bubbles}>
           {cast.map((character) => (
-            <XStack
+            <YStack
               as="li"
               key={character.id}
+              gap={4}
               className={styles.bubble}
               data-cast-id={character.id}
             >
-              <span className={styles.line}>
-                <b className={styles.speaker}>{character.name}</b>
-                <Typography as="small" variant="caption" tone="muted">
-                  {reasons(character.id).join('・')}
-                </Typography>
-              </span>
-              {panel.cast?.includes(character.id) && (
-                <IconButton
-                  size="small"
-                  label={m.inspector_panel_cast_remove({ name: character.name })}
-                  onClick={() => onChange(removeCastPatch(panel.cast, character.id))}
-                >
-                  ×
-                </IconButton>
-              )}
-            </XStack>
+              <XStack>
+                <span className={styles.line}>
+                  <b className={styles.speaker}>{character.name}</b>
+                  <Typography as="small" variant="caption" tone="muted">
+                    {reasons(character.id).join('・')}
+                  </Typography>
+                </span>
+                {panel.cast?.includes(character.id) && (
+                  <IconButton
+                    size="small"
+                    label={m.inspector_panel_cast_remove({ name: character.name })}
+                    onClick={() => onChange(removeCast(character.id))}
+                  >
+                    ×
+                  </IconButton>
+                )}
+              </XStack>
+              <TextField
+                label={m.inspector_panel_acting_label({ name: character.name })}
+                value={actingOf(character.id)}
+                placeholder={m.inspector_panel_acting_placeholder()}
+                delayMs={DEBOUNCE_MS}
+                onCommit={(v) => onChange(actingPatch(panel.acting, character.id, v))}
+              />
+            </YStack>
           ))}
         </YStack>
       )}
@@ -498,6 +551,79 @@ if (import.meta.vitest) {
         must(container.querySelector<HTMLElement>(`[data-cast-id="${extra.id}"] button`)).click(),
       )
       expect(onChange).toHaveBeenCalledWith([{ op: 'remove', path: '/cast' }])
+    })
+
+    test('each character in the cast has an acting field that adds, replaces and removes its acting', async () => {
+      vi.useFakeTimers()
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const focused = must(samplePanel.focusPoints.find((f) => f.characterId)?.characterId)
+      const name = must(project.characters.find((c) => c.id === focused)).name
+      const extra = { id: 'chr_extra', name: '通行人', shortName: '通' }
+      const props = {
+        characters: [...project.characters, extra],
+        onChange,
+        onGenerate: () => {},
+        resolveAsset,
+      }
+      const { container, root } = await render(<PanelInspector panel={samplePanel} {...props} />)
+      const field = (n: string) =>
+        inputLabelled(container, m.inspector_panel_acting_label({ name: n }))
+      expect(container.querySelectorAll(`[data-cast-id] input`)).toHaveLength(1)
+      await act(async () => setValue(field(name), '振り向いて驚く'))
+      await act(async () => vi.advanceTimersByTime(DEBOUNCE_MS))
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'add', path: '/acting', value: [{ characterId: focused, text: '振り向いて驚く' }] },
+      ])
+
+      const acted: Panel = {
+        ...samplePanel,
+        acting: [{ characterId: focused, text: '振り向いて驚く' }],
+      }
+      await act(async () => root.render(<PanelInspector panel={acted} {...props} />))
+      expect(field(name).value).toBe('振り向いて驚く')
+      await act(async () => setValue(field(name), '笑う'))
+      await act(async () => vi.advanceTimersByTime(DEBOUNCE_MS))
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'replace', path: '/acting/0/text', value: '笑う' },
+      ])
+      await act(async () => setValue(field(name), ''))
+      await act(async () => vi.advanceTimersByTime(DEBOUNCE_MS))
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/acting' }])
+      expect(() => field(extra.name)).toThrow()
+    })
+
+    test('removing a character from the cast also removes its acting', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const extra = { id: 'chr_extra', name: '通行人', shortName: '通' }
+      const focused = must(samplePanel.focusPoints.find((f) => f.characterId)?.characterId)
+      const { container } = await render(
+        <PanelInspector
+          panel={{
+            ...samplePanel,
+            cast: [focused, extra.id],
+            acting: [
+              { characterId: focused, text: '見上げる' },
+              { characterId: extra.id, text: '通り過ぎる' },
+            ],
+          }}
+          characters={[...project.characters, extra]}
+          onChange={onChange}
+          onGenerate={() => {}}
+          resolveAsset={resolveAsset}
+        />,
+      )
+      await act(async () =>
+        must(container.querySelector<HTMLElement>(`[data-cast-id="${extra.id}"] button`)).click(),
+      )
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'remove', path: '/cast/1' },
+        { op: 'remove', path: '/acting/1' },
+      ])
+      // 焦点で登場キャラに残るキャラは、cast から外しても芝居を残す
+      await act(async () =>
+        must(container.querySelector<HTMLElement>(`[data-cast-id="${focused}"] button`)).click(),
+      )
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/cast/0' }])
     })
 
     test('switching among three arts emits replace /artId and highlights the current one', async () => {
@@ -682,6 +808,59 @@ if (import.meta.vitest) {
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/frame', value: 'wavy' }])
       await choose(select(), '')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/frame' }])
+    })
+
+    test('the tone select follows the page by default and adds or removes the panel tone', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = {
+        characters: project.characters,
+        onChange,
+        onGenerate: () => {},
+        resolveAsset,
+      }
+      const { container, root } = await render(<PanelInspector panel={samplePanel} {...props} />)
+      const select = () => selectLabelled(container, m.panel_tone())
+      expect(select().value).toBe('')
+      expect([...select().options].map((o) => o.value)).toEqual(['', 'sepia', 'faded', 'none'])
+      await choose(select(), 'none')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/tone', value: 'none' }])
+
+      await act(async () =>
+        root.render(<PanelInspector panel={{ ...samplePanel, tone: 'none' }} {...props} />),
+      )
+      expect(select().value).toBe('none')
+      await choose(select(), '')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/tone' }])
+    })
+
+    test('the effect select adds, replaces and removes effect', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = {
+        characters: project.characters,
+        onChange,
+        onGenerate: () => {},
+        resolveAsset,
+      }
+      const { container, root } = await render(<PanelInspector panel={samplePanel} {...props} />)
+      const select = () => selectLabelled(container, m.panel_effect())
+      expect(select().value).toBe('')
+      await choose(select(), 'focus_lines')
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'add', path: '/effect', value: 'focus_lines' },
+      ])
+
+      await act(async () =>
+        root.render(
+          <PanelInspector panel={{ ...samplePanel, effect: 'focus_lines' }} {...props} />,
+        ),
+      )
+      expect(select().value).toBe('focus_lines')
+      await choose(select(), 'speed_lines')
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'add', path: '/effect', value: 'speed_lines' },
+      ])
+      await choose(select(), '')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/effect' }])
     })
 
     test('the generate buttons call onGenerate with and without an instruction', async () => {

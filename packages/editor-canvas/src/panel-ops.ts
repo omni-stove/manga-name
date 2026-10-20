@@ -258,7 +258,7 @@ function contentIn(panel: Panel, to: Rect, keep: (p: Point) => boolean) {
         w: round(Math.min(1, (b.size.w * from.w) / to.w)),
         h: round(Math.min(1, (b.size.h * from.h) / to.h)),
       },
-      ...(b.tail && { tail: movePoint(b.tail, from, to) }),
+      ...(b.tails && { tails: b.tails.map((t) => movePoint(t, from, to)) }),
     }))
   const focusPoints = panel.focusPoints
     .filter((f) => keep(onPage(f.pos)))
@@ -591,6 +591,7 @@ export function mergePanelsPatch(
     ...(keep.beat && other.beat && { beat: true as const }),
     ...(sweep && { sweep }),
     ...(keep.frame && { frame: keep.frame }),
+    ...(keep.effect && { effect: keep.effect }),
   }
   const before = page.panels
     .map((p) => (p.id === keepId ? merged : p))

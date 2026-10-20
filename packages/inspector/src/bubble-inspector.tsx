@@ -23,6 +23,7 @@ export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[]
   option('electronic', m.bubble_shape_electronic),
   option('urchin', m.bubble_shape_urchin),
   option('narration', m.bubble_shape_narration),
+  option('monologue', m.bubble_shape_monologue),
   option('none', m.bubble_shape_none),
 ]
 
@@ -210,6 +211,19 @@ if (import.meta.vitest) {
       expect(select().value).toBe('rounded')
       await choose(select(), '')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/typeface' }])
+    })
+
+    test('the typeface select offers the hand-written typeface', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const bubble = { ...must(samplePanel.bubbles[0]), shape: 'whisper' as const }
+      const { container } = await render(
+        <BubbleInspector bubble={bubble} characters={project.characters} onChange={onChange} />,
+      )
+      const select = selectLabelled(container, m.bubble_typeface())
+      const hand = Array.from(select.options).find((o) => o.value === 'hand')
+      expect(hand?.textContent).toBe(m.bubble_typeface_hand())
+      await choose(select, 'hand')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/typeface', value: 'hand' }])
     })
   })
 }

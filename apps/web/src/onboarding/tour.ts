@@ -63,7 +63,7 @@ const EVENTS: Partial<Record<TourStep, TourEvent>> = {
 const panelShapes = (page: Page) => JSON.stringify(page.panels.map((p) => [p.rect, p.shape]))
 
 const bubbleShapes = (page: Page) =>
-  JSON.stringify(page.panels.flatMap((p) => p.bubbles.map((b) => [b.id, b.pos, b.size, b.tail])))
+  JSON.stringify(page.panels.flatMap((p) => p.bubbles.map((b) => [b.id, b.pos, b.size, b.tails])))
 
 const hintCounts = (page: Page) =>
   [
