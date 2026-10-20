@@ -22,6 +22,7 @@ import { getBackend, loadFonts } from './backend'
 import { bubbleGeometry, drawBubble } from './bubble'
 import { type PxRect, pagePixelSize, pointToPx, rectToPx } from './geometry'
 import {
+  actingNotes,
   applyColorMatrix,
   drawCover,
   drawEffectLines,
@@ -166,7 +167,11 @@ export async function drawPage(
 
   if (margin > 0) {
     const area: PxRect = { x: marginOnLeft ? 0 : pageSize.w, y: 0, w: margin, h: pageSize.h }
-    drawNotesMargin(c, byOrder(page.panels), area, unit.w * MARGIN_FONT)
+    const notes = byOrder(page.panels).map((panel) => ({
+      ...panel,
+      acting: actingNotes(panel, ctx.characters),
+    }))
+    drawNotesMargin(c, notes, area, unit.w * MARGIN_FONT)
   }
 
   return surface
@@ -276,6 +281,33 @@ if (import.meta.vitest) {
       panelNumbers: false,
     })
     await matchPngSnapshot('page-margin', png)
+  })
+
+  test("notes: 'margin' の余白にコマの芝居も書き、紙面は変えない", async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'margin', panelNumbers: false }
+    const acted: Page = {
+      ...emptyPage,
+      panels: emptyPage.panels.map((panel) =>
+        panel.id === 'pn_1'
+          ? { ...panel, acting: [{ characterId: 'chr_e', text: '振り向いて驚く' }] }
+          : panel,
+      ),
+    }
+    const pixels = async (page: Page) => {
+      const { ctx, width, height } = await drawPage(page, noAssets, opts)
+      return ctx.getImageData(0, 0, width, height)
+    }
+    const before = await pixels(emptyPage)
+    const after = await pixels(acted)
+    // 右綴じなので余白は紙面の右
+    const pageWidth = pagePixelSize(project.settings, SNAPSHOT_WIDTH).w
+    const changed = new Set<string>()
+    for (let i = 0; i < before.data.length; i += 4) {
+      if (before.data[i] !== after.data[i]) {
+        changed.add((i / 4) % before.width < pageWidth ? 'page' : 'margin')
+      }
+    }
+    expect([...changed]).toEqual(['margin'])
   })
 
   test('多角形のコマは輪郭で絵を切り、枠も輪郭に沿って引く', async () => {

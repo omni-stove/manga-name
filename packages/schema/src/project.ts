@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 20 as const
+export const SCHEMA_VERSION = 21 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -162,6 +162,12 @@ export const StrokeSchema = z.object({
   color: z.enum(['ink', 'red', 'blue']),
 })
 
+/** コマの中のキャラの芝居（表情・動き）。例「振り向いて驚く」 */
+export const PanelActingSchema = z.object({
+  characterId: IdSchema,
+  text: z.string(),
+})
+
 type RefineCtx = z.RefinementCtx
 type Path = (string | number)[]
 
@@ -198,6 +204,8 @@ const PanelBaseSchema = z.object({
   vectors: z.array(VectorSchema),
   sweep: SweepSchema.optional(),
   cast: z.array(IdSchema).optional(),
+  /** 登場キャラごとの芝居。空の芝居は要素ごと持たない */
+  acting: z.array(PanelActingSchema).optional(),
   locked: z.boolean().optional(),
 })
 
@@ -329,6 +337,15 @@ export const ProjectSchema = ProjectBaseSchema.superRefine((project, ctx) => {
             addIssue(ctx, [...base, 'cast', ci], `cast ${id} is not in characters`)
           }
         })
+        panel.acting?.forEach((a, ai) => {
+          if (!characterIds.has(a.characterId)) {
+            addIssue(
+              ctx,
+              [...base, 'acting', ai, 'characterId'],
+              `characterId ${a.characterId} is not in characters`,
+            )
+          }
+        })
       })
     })
   })
@@ -354,6 +371,7 @@ export type Strength = z.infer<typeof StrengthSchema>
 export type Vector = z.infer<typeof VectorSchema>
 export type ReferenceImage = z.infer<typeof ReferenceImageSchema>
 export type Stroke = z.infer<typeof StrokeSchema>
+export type PanelActing = z.infer<typeof PanelActingSchema>
 export type Panel = z.infer<typeof PanelSchema>
 export type Page = z.infer<typeof PageSchema>
 export type LayoutTemplate = z.infer<typeof LayoutTemplateSchema>
@@ -415,7 +433,7 @@ if (import.meta.vitest) {
       expect(issuePaths(project)).toContain(panelPath(0, 'vectors.0.targetFocusId'))
     })
 
-    test('Bubble.speakerId, FocusPoint.characterId, Panel.cast and Page.cast must be in characters', async () => {
+    test('Bubble.speakerId, FocusPoint.characterId, Panel.cast, Panel.acting and Page.cast must be in characters', async () => {
       const project = await loadFixture()
       const bubble = panel(project, 5).bubbles[0]
       const focus = panel(project, 0).focusPoints[1]
@@ -423,6 +441,10 @@ if (import.meta.vitest) {
       bubble.speakerId = 'chr_missing'
       focus.characterId = 'chr_missing'
       panel(project, 2).cast = ['chr_missing']
+      panel(project, 3).acting = [
+        { characterId: 'chr_e', text: '振り向く' },
+        { characterId: 'chr_missing', text: '驚く' },
+      ]
       const page = project.episodes[0]?.pages[0]
       if (!page) throw new Error('fixture has no page')
       page.cast = ['chr_e', 'chr_missing']
@@ -430,6 +452,8 @@ if (import.meta.vitest) {
       expect(paths).toContain(panelPath(5, 'bubbles.0.speakerId'))
       expect(paths).toContain(panelPath(0, 'focusPoints.1.characterId'))
       expect(paths).toContain(panelPath(2, 'cast.0'))
+      expect(paths).toContain(panelPath(3, 'acting.1.characterId'))
+      expect(paths).not.toContain(panelPath(3, 'acting.0.characterId'))
       expect(paths).toContain('episodes.0.pages.0.cast.1')
       expect(paths).not.toContain('episodes.0.pages.0.cast.0')
     })
