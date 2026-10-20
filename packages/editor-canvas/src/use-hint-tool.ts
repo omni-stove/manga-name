@@ -334,3 +334,38 @@ export function useHintTool(opts: Options) {
 
   return { draft: active ? draft : null, active, rotation, handleSize, handlers }
 }
+
+if (import.meta.vitest) {
+  const { describe, expect, test } = import.meta.vitest
+  const { fixtures } = await import('@manga/schema')
+  const base = fixtures.samplePage01.episodes[0]?.pages[0] as Page
+  const withFocus = (patch: Record<string, unknown>): Page => ({
+    ...base,
+    panels: base.panels.map((p) => ({
+      ...p,
+      focusPoints: p.focusPoints.map((f) =>
+        f.id === 'fp_2_vial' ? ({ ...f, kind: 'sfx', label: 'ドン', ...patch } as typeof f) : f,
+      ),
+    })),
+  })
+  const select: Selection = { kind: 'focus', id: 'fp_2_vial' }
+
+  describe('sfxRotation', () => {
+    test('is undefined unless a focus with a label is selected and unlocked', () => {
+      const page = withFocus({})
+      expect(sfxRotation(page, 210, 297, null, null, 2)).toBeUndefined()
+      expect(sfxRotation(page, 210, 297, { kind: 'focus', id: 'missing' }, null, 2)).toBeUndefined()
+      expect(sfxRotation(base, 210, 297, select, null, 2)).toBeUndefined()
+      expect(sfxRotation(withFocus({ label: ' ' }), 210, 297, select, null, 2)).toBeUndefined()
+      expect(sfxRotation(withFocus({ locked: true }), 210, 297, select, null, 2)).toBeUndefined()
+    })
+
+    test('uses the draft rotation only for the focus being turned', () => {
+      const page = withFocus({ rotation: 10 })
+      expect(sfxRotation(page, 210, 297, select, null, 2)?.frame.rotation).toBe(10)
+      const turn = (focusId: string): HintDraft => ({ kind: 'rotate', focusId, rotation: 50 })
+      expect(sfxRotation(page, 210, 297, select, turn('fp_2_vial'), 2)?.frame.rotation).toBe(50)
+      expect(sfxRotation(page, 210, 297, select, turn('other'), 2)?.frame.rotation).toBe(10)
+    })
+  })
+}
