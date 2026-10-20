@@ -126,7 +126,7 @@ import { toasts } from './toasts'
 import { useAssetResolver } from './use-asset-resolver'
 import { useKeyShortcuts } from './use-key-shortcuts'
 import { useApplyPatch, useProject } from './use-project'
-import { useStoredFlag } from './use-stored-flag'
+import { useStoredFlag, useStoredWidth } from './use-stored-flag'
 import { useTypefaceFonts } from './use-typeface-fonts'
 import { useUndoShortcuts } from './use-undo-shortcuts'
 
@@ -361,6 +361,8 @@ export function PageEditor({
   const exportFolder = loadedFolder?.projectId === projectId ? loadedFolder.path : null
   const [inspectorExpanded, setInspectorExpanded] = useStoredFlag('manga.inspector.expanded', true)
   const [scriptExpanded, setScriptExpanded] = useStoredFlag('manga.script.expanded', true)
+  const [inspectorWidth, setInspectorWidth] = useStoredWidth('manga.inspector.width')
+  const [scriptWidth, setScriptWidth] = useStoredWidth('manga.script.width')
   const [menu, setMenu] = useState<OpenMenu | null>(null)
   const [registeringLayout, setRegisteringLayout] = useState(false)
   const [addingPage, setAddingPage] = useState(false)
@@ -884,6 +886,8 @@ export function PageEditor({
           side="left"
           expanded={scriptExpanded}
           onExpandedChange={setScriptExpanded}
+          width={scriptWidth}
+          onWidthChange={setScriptWidth}
           className={styles.scriptSidebar}
         >
           <Area open={can('inspector')}>
@@ -951,6 +955,8 @@ export function PageEditor({
           side="right"
           expanded={inspectorExpanded || guidingGenerate}
           onExpandedChange={setInspectorExpanded}
+          width={inspectorWidth}
+          onWidthChange={setInspectorWidth}
           className={styles.inspectorSidebar}
         >
           <div className={styles.inspector}>
