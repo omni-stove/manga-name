@@ -27,11 +27,7 @@ export function pageScenes(pages: readonly ScenePage[], pageId: ID): Record<ID, 
 }
 
 /** コマ panelId が属するシーン（pageScenes）。どのシーンにも属さなければ undefined */
-export function sceneOf(
-  pages: readonly ScenePage[],
-  pageId: ID,
-  panelId: ID,
-): string | undefined {
+export function sceneOf(pages: readonly ScenePage[], pageId: ID, panelId: ID): string | undefined {
   return pageScenes(pages, pageId)[panelId]
 }
 
