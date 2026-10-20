@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 25 as const
+export const SCHEMA_VERSION = 26 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -74,6 +74,8 @@ export const BubbleSchema = z.object({
   typeface: BubbleTypefaceSchema.optional(),
   /** フキダシの地の色。黒は体としっぽを黒で塗り、セリフを白で描く。地を持たない形（none）では無視する。省略は白 */
   fill: z.enum(['black']).optional(),
+  /** セリフの組み方向。横書きは左から右へ書き、上から下へ行を送る。省略は縦書き */
+  writing: z.enum(['horizontal']).optional(),
   overflow: z.boolean().optional(),
   locked: z.boolean().optional(),
 })
