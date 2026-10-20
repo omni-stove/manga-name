@@ -94,15 +94,24 @@ function strokeOutside(
   ctx.restore()
 }
 
-/** 形ごとの塗りと線でフキダシを描く。しっぽは付け根に線を引かず本体と繋げる */
-export function drawBubble(ctx: Ctx, shape: Shape, g: BubbleGeometry, lineWidth: number): void {
+/**
+ * 形ごとの塗りと線でフキダシを描く。しっぽは付け根に線を引かず本体と繋げる。
+ * fill が black なら本体としっぽを黒で塗る。地を持たない形では fill を無視する
+ */
+export function drawBubble(
+  ctx: Ctx,
+  shape: Shape,
+  g: BubbleGeometry,
+  lineWidth: number,
+  fill?: Bubble['fill'],
+): void {
   const o = bubbleOutline(shape, g)
   ctx.save()
   ctx.lineWidth = lineWidth
   ctx.strokeStyle = '#000'
   ctx.lineJoin = 'round'
   if (o.fill) {
-    ctx.fillStyle = '#fff'
+    ctx.fillStyle = fill === 'black' ? '#000' : '#fff'
     fillEach(ctx, o.body, ...o.tails)
   }
   if (o.line !== 'none') {
@@ -115,7 +124,12 @@ export function drawBubble(ctx: Ctx, shape: Shape, g: BubbleGeometry, lineWidth:
       const parts = [o.body, ...o.tails]
       const box = bounds(parts.flat(), lineWidth * 4)
       for (const part of parts) {
-        strokeOutside(ctx, part, parts.filter((p) => p !== part), box)
+        strokeOutside(
+          ctx,
+          part,
+          parts.filter((p) => p !== part),
+          box,
+        )
       }
     }
   }
@@ -258,6 +272,15 @@ if (import.meta.vitest) {
       const at = await paint((ctx) => drawBubble(ctx, 'none', tailed, 2))
       expect(at(100, 100)).toEqual(GREY)
       expect(at(160, 140)).toEqual(GREY)
+    })
+
+    test('a black bubble fills the body and the tail black, and none still draws nothing', async () => {
+      const at = await paint((ctx) => drawBubble(ctx, 'normal', tailed, 4, 'black'))
+      expect(at(100, 100)).toEqual([0, 0, 0])
+      expect(at(100, 160)).toEqual([0, 0, 0])
+      expect(at(190, 100)).toEqual(GREY)
+      const none = await paint((ctx) => drawBubble(ctx, 'none', tailed, 2, 'black'))
+      expect(none(100, 100)).toEqual(GREY)
     })
 
     test('a thought tail is two separate circles shrinking toward the tip', async () => {

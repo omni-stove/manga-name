@@ -69,8 +69,7 @@ export function bubblePaths(shape: Shape, g: BubbleGeometry): BubblePaths {
 export const bodyPath = (shape: Shape, g: BubbleGeometry): string => bubblePaths(shape, g).body
 
 /** しっぽごとの SVG path。しっぽが無いか、付かない形なら空 */
-export const tailPaths = (shape: Shape, g: BubbleGeometry): string[] =>
-  bubblePaths(shape, g).tails
+export const tailPaths = (shape: Shape, g: BubbleGeometry): string[] => bubblePaths(shape, g).tails
 
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest

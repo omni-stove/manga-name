@@ -80,6 +80,17 @@ export function BubbleInspector({ bubble, characters, onChange }: BubbleInspecto
         onCommit={(v) => onChange(optionalString('/typeface', bubble.typeface, v))}
       />
       <Checkbox
+        label={m.bubble_fill_black()}
+        checked={bubble.fill === 'black'}
+        onChange={(e) =>
+          onChange(
+            e.target.checked
+              ? [{ op: 'add', path: '/fill', value: 'black' }]
+              : [{ op: 'remove', path: '/fill' }],
+          )
+        }
+      />
+      <Checkbox
         label={m.bubble_overflow()}
         checked={bubble.overflow === true}
         onChange={(e) =>
@@ -154,6 +165,28 @@ if (import.meta.vitest) {
       expect(checkbox.checked).toBe(true)
       await act(async () => checkbox.click())
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/overflow' }])
+    })
+
+    test('the black bubble checkbox adds and removes fill', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const bubble = must(samplePanel.bubbles[0])
+      const props = { bubble, characters: project.characters, onChange }
+      const { container, root } = await render(<BubbleInspector {...props} />)
+      const checkbox = must(
+        [...container.querySelectorAll('label')]
+          .find((el) => el.textContent === m.bubble_fill_black())
+          ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+      )
+      expect(checkbox.checked).toBe(false)
+      await act(async () => checkbox.click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/fill', value: 'black' }])
+
+      await act(async () =>
+        root.render(<BubbleInspector {...props} bubble={{ ...bubble, fill: 'black' }} />),
+      )
+      expect(checkbox.checked).toBe(true)
+      await act(async () => checkbox.click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/fill' }])
     })
 
     test('the typeface select names the typeface of the shape, and adds and removes typeface', async () => {

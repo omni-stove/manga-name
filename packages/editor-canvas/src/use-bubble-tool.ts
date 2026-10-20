@@ -120,9 +120,7 @@ export function bubbleHandles(
   if (!hasTail(bubble.shape)) return { corners, tails: [], add: null }
   const tails = (g.tails ?? []).map((t, index) => ({ ...t, index }))
   // 楕円を半径で割って円に直した向きで比べる
-  const taken = tails.map((t) =>
-    Math.atan2((t.y - g.cy) / (g.ry || 1), (t.x - g.cx) / (g.rx || 1)),
-  )
+  const taken = tails.map((t) => Math.atan2((t.y - g.cy) / (g.ry || 1), (t.x - g.cx) / (g.rx || 1)))
   const free = (d: { x: number; y: number }) =>
     taken.every((t) => angleBetween(Math.atan2(d.y, d.x), t) > NEW_TAIL_CLEARANCE)
   const d = NEW_TAIL_DIRECTIONS.find(free) ?? NEW_TAIL_DIRECTIONS[0]
@@ -313,7 +311,7 @@ export function useBubbleTool(opts: Options) {
       if (!g.dragging) {
         // 押しただけのしっぽも、右クリックの「しっぽを消す」が消す最後に触ったしっぽにする
         const tip = g.kind === 'tail' ? g.start.tails?.[g.index] : undefined
-        if (tip) {
+        if (tip && g.kind === 'tail') {
           const patch = updateBubblePatch(opts.page, tailedBubble(g.start, g.index, tip))
           if (patch.length > 0) opts.onChange(patch)
         }
