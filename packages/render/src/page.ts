@@ -1,6 +1,7 @@
 import {
   bubbleOutline,
   bubbleTextBox,
+  bubbleTypeface,
   clipTextBox,
   currentArt,
   frameOutline,
@@ -80,7 +81,8 @@ export async function drawPage(
   ctx: RenderContext,
   opts: RenderOptions,
 ): Promise<Surface> {
-  const [backend] = await Promise.all([getBackend(), loadFonts()])
+  const typefaces = page.panels.flatMap((panel) => panel.bubbles.map(bubbleTypeface))
+  const [backend] = await Promise.all([getBackend(), loadFonts(typefaces)])
   const unit = pagePixelSize(ctx.settings, opts.width)
   const pageSize = page.spread ? { w: unit.w * 2, h: unit.h } : unit
   const margin = opts.notes === 'margin' ? Math.round(unit.w * NOTES_MARGIN) : 0
@@ -113,7 +115,7 @@ export async function drawPage(
       const { lines, fontPx } = layoutBubbleText(bubble.text, box, unit.w * MIN_FONT)
       // 白い地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
       const onBlack = !overflow && blackInside(panel) && !bubbleOutline(bubble.shape, g).fill
-      drawVerticalText(c, lines, fontPx, box, onBlack ? '#fff' : '#000')
+      drawVerticalText(c, lines, fontPx, box, onBlack ? '#fff' : '#000', bubbleTypeface(bubble))
     }
   }
 
@@ -301,6 +303,27 @@ if (import.meta.vitest) {
       panelNumbers: true,
     })
     await matchPngSnapshot('page-shaped', png)
+  })
+
+  test('書体: ゴシック、太ゴシック、明朝、丸ゴシックのセリフを並べて描く', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const typefaces = ['gothic', 'bold', 'mincho', 'rounded'] as const
+    const bubbles = typefaces.map((typeface, i) => ({
+      id: `bb_${typeface}`,
+      order: i + 1,
+      text: '書体の見本',
+      shape: 'none' as const,
+      typeface,
+      pos: { x: 0.85 - i * 0.2, y: 0.5 },
+      size: { w: 0.15, h: 0.9 },
+    }))
+    const page: Page = { ...emptyPage, panels: [{ ...pn1, bubbles }, ...rest] }
+    const png = await renderPage(page, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-typefaces', png)
   })
 
   test('黒塗りのコマは輪郭の内側を黒で塗り、地の無いフキダシのセリフを白で描く', async () => {
