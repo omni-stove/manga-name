@@ -8,6 +8,9 @@ const COLUMN_PITCH = 1.2
 /** ルビの文字サイズ。親文字に対する比率 */
 const RUBY_SCALE = 0.5
 
+/** 傍点の字。大きさと位置はルビに揃える */
+const EMPHASIS_MARK = '﹅'
+
 /** 行数が少ない割り方を、最大の文字サイズに対してこの比率まで小さくなっても優先する */
 const FEWER_LINES_TOLERANCE = 0.8
 
@@ -56,16 +59,23 @@ export interface TextUnit {
   glyphs: string[]
   /** 親文字の右に振るルビの書記素 */
   ruby?: string[]
+  /** 親文字の右に傍点を打つ。ルビの無い 1 字の一続きにだけ付く */
+  emphasis?: true
 }
 
-/** ルビの書式（parseRuby）を解き、段落ごとの TextUnit の列にする。ルビの書式は段落をまたがない */
+/**
+ * ルビと傍点の書式（parseRuby）を解き、段落ごとの TextUnit の列にする。書式は段落をまたがない。
+ * 傍点を打った語は 1 字ずつの一続きにし、ルビと違って行をまたいで割れる
+ */
 function toUnitParagraphs(text: string): TextUnit[][] {
   return text
     .split('\n')
     .map((paragraph) =>
-      parseRuby(paragraph).flatMap(({ base, ruby }) =>
+      parseRuby(paragraph).flatMap(({ base, ruby, emphasis }): TextUnit[] =>
         ruby === undefined
-          ? graphemes(base).map((glyph) => ({ glyphs: [glyph] }))
+          ? graphemes(base).map((glyph) =>
+              emphasis ? { glyphs: [glyph], emphasis } : { glyphs: [glyph] },
+            )
           : [{ glyphs: graphemes(base), ruby: graphemes(ruby) }],
       ),
     )
@@ -113,9 +123,9 @@ function breakLines(paragraphs: TextUnit[][], maxHeight: number): TextUnit[][] {
   return lines
 }
 
-/** 行の幅。ルビのある行は親文字の右にルビの幅を足す */
+/** 行の幅。ルビか傍点のある行は親文字の右にルビの幅を足す */
 function lineWidth(line: TextUnit[], fontPx: number): number {
-  return line.some((unit) => unit.ruby) ? fontPx * (1 + RUBY_SCALE) : fontPx
+  return line.some((unit) => unit.ruby || unit.emphasis) ? fontPx * (1 + RUBY_SCALE) : fontPx
 }
 
 function blockWidth(lines: TextUnit[][], fontPx: number): number {
@@ -130,7 +140,7 @@ function fits(lines: TextUnit[][], fontPx: number, size: Size): boolean {
 }
 
 /**
- * 縦書きの行割り。`text` は `|単語《ルビ》` の書式でルビを振れる。`size` は px 単位の箱、`fontPx` は文字サイズの下限。
+ * 縦書きの行割り。`text` は `|単語《ルビ》` の書式でルビを振り、`《《語》》` の書式で傍点を打てる。`size` は px 単位の箱、`fontPx` は文字サイズの下限。
  * 箱に収まる整数 px の文字サイズのうち、最大のものか、それより少し小さくても行数が少なくなるものを選ぶ。
  * 下限でも収まらないときは下限のまま折り返して返す（はみ出す）。
  * `lines[i]` は右から i 番目の行の一続きの列。
@@ -209,7 +219,7 @@ function drawGlyph(
 
 /**
  * 行割り済みの縦書きを、箱の中央に右の行から左へ color と typeface で描く。
- * ルビは親文字の右に、親文字の長さの中央に揃えて同じ書体で置く。
+ * ルビは親文字の右に、親文字の長さの中央に揃えて同じ書体で置く。傍点はルビと同じ大きさで、親文字の右に 1 字ずつ置く。
  * halo を渡すと、その色と太さ（px）のふちを全部の字の下に敷く。字ごとに縁取って塗ると、隣の字のふちが字に掛かる
  */
 export function drawVerticalText(
@@ -248,6 +258,19 @@ export function drawVerticalText(
               glyph,
               cx + (fontPx + rubyPx) / 2,
               rubyTop + row * rubyPx + rubyPx / 2,
+              rubyPx,
+              paint,
+            )
+          })
+        }
+        if (unit.emphasis) {
+          ctx.font = font(rubyPx)
+          unit.glyphs.forEach((_, row) => {
+            drawGlyph(
+              ctx,
+              EMPHASIS_MARK,
+              cx + (fontPx + rubyPx) / 2,
+              top + row * fontPx + fontPx / 2,
               rubyPx,
               paint,
             )
@@ -390,6 +413,44 @@ if (import.meta.vitest) {
     drawVerticalText(ctx, lines, 10, { x: 0, y: 0, w: 30, h: 30 })
     expect(placed.map((p) => p.text)).toEqual(['魔', 'ま'])
     expect(placed[1]?.x).toBeGreaterThan(placed[0]?.x ?? 0)
+    expect(fonts.some((f) => f.startsWith('400 5px'))).toBe(true)
+  })
+
+  test('傍点を打った語は 1 字ずつの一続きになり、行をまたいで割れ、書式の記号は描かない', () => {
+    expect(layoutBubbleText('あ《《本当》》', { w: 20, h: 200 }, 8).lines).toEqual([
+      [{ glyphs: ['あ'] }, { glyphs: ['本'], emphasis: true }, { glyphs: ['当'], emphasis: true }],
+    ])
+    const { lines } = layoutBubbleText('《《あいう》》', { w: 40, h: 20 }, 10)
+    expect(glyphs(lines)).toEqual([['あ', 'い'], ['う']])
+  })
+
+  test('傍点のある行はルビと同じ幅だけ広く取る', () => {
+    expect(layoutBubbleText('《《あい》》\nうえ', { w: 22, h: 20 }, 1).fontPx).toBe(8)
+  })
+
+  test('傍点は親文字の 1 字ずつの右に、ルビと同じ大きさで置く', () => {
+    const fonts: string[] = []
+    const placed: { text: string; x: number; y: number }[] = []
+    const ctx = {
+      save() {},
+      restore() {},
+      set font(value: string) {
+        fonts.push(value)
+      },
+      fillText(text: string, x: number, y: number) {
+        placed.push({ text, x, y })
+      },
+    } as unknown as CanvasRenderingContext2D
+    const lines: TextUnit[][] = [
+      [
+        { glyphs: ['本'], emphasis: true },
+        { glyphs: ['当'], emphasis: true },
+      ],
+    ]
+    drawVerticalText(ctx, lines, 10, { x: 0, y: 0, w: 30, h: 30 })
+    expect(placed.map((p) => p.text)).toEqual(['本', '﹅', '当', '﹅'])
+    expect(placed[1]?.x).toBeGreaterThan(placed[0]?.x ?? 0)
+    expect(placed[3]?.y).toBeCloseTo((placed[1]?.y ?? 0) + 10)
     expect(fonts.some((f) => f.startsWith('400 5px'))).toBe(true)
   })
 

@@ -337,6 +337,25 @@ function pageCastUsage(project: Project, id: ID): number {
   return project.episodes.flatMap((e) => e.pages).filter((p) => p.cast?.includes(id)).length
 }
 
+/**
+ * コマの芝居（Panel.acting）からキャラを消す。登場キャラから外れたキャラの芝居は画面に出ないまま残るので、
+ * キャラと一緒に消さないとスキーマを通らなくなる。添字がずれないよう後ろから消す
+ */
+function removeActingPatch(project: Project, id: ID): Patch {
+  return project.episodes.flatMap((episode, ei) =>
+    episode.pages.flatMap((page, pi) =>
+      page.panels.flatMap((panel, ni): Patch => {
+        const base = `/episodes/${ei}/pages/${pi}/panels/${ni}/acting`
+        const acting = panel.acting ?? []
+        const indexes = acting.flatMap((a, i) => (a.characterId === id ? [i] : []))
+        if (indexes.length === 0) return []
+        if (indexes.length === acting.length) return [{ op: 'remove', path: base }]
+        return indexes.toReversed().map((i) => ({ op: 'remove' as const, path: `${base}/${i}` }))
+      }),
+    ),
+  )
+}
+
 /** 参照が残るキャラクターは消すとスキーマを通らなくなるので、理由を添えて throw する */
 export function removeCharacterPatch(project: Project, id: ID): Patch {
   const index = project.characters.findIndex((c) => c.id === id)
@@ -345,7 +364,7 @@ export function removeCharacterPatch(project: Project, id: ID): Patch {
   if (usage > 0) throw new Error(m.web_character_used_in_panels({ count: usage }))
   const pages = pageCastUsage(project, id)
   if (pages > 0) throw new Error(m.web_character_used_in_cast({ count: pages }))
-  return [{ op: 'remove', path: `/characters/${index}` }]
+  return [...removeActingPatch(project, id), { op: 'remove', path: `/characters/${index}` }]
 }
 
 const SETTINGS_FIELDS = ['direction', 'pageSize', 'dpi'] as const
@@ -654,6 +673,37 @@ if (import.meta.vitest) {
       expect(() => removeCharacterPatch(store.get(), character.id)).toThrow(
         m.web_character_used_in_panels({ count: 1 }),
       )
+    })
+
+    test('removing a character also removes the acting left behind after it left the panels', () => {
+      const store = storeOf(structuredClone(sample))
+      const { patch, character } = addCharacterPatch({ name: 'A', shortName: 'A' })
+      const kept = sample.characters[0]
+      if (!kept) throw new Error('fixture にキャラクターがない')
+      const keptActing = { characterId: kept.id, text: '見上げる' }
+      store.applyPatch([
+        ...patch,
+        {
+          op: 'add',
+          path: '/episodes/0/pages/0/panels/0/acting',
+          value: [
+            { characterId: character.id, text: '驚く' },
+            keptActing,
+            { characterId: character.id, text: '笑う' },
+          ],
+        },
+        {
+          op: 'add',
+          path: '/episodes/0/pages/0/panels/1/acting',
+          value: [{ characterId: character.id, text: '走る' }],
+        },
+      ])
+      expect(characterUsage(store.get(), character.id)).toBe(0)
+      store.applyPatch(removeCharacterPatch(store.get(), character.id))
+      const panels = store.get().episodes[0]?.pages[0]?.panels
+      expect(panels?.[0]?.acting).toEqual([keptActing])
+      expect(panels?.[1]?.acting).toBeUndefined()
+      expect(store.get().characters.map((c) => c.id)).not.toContain(character.id)
     })
 
     test('a character only in a page cast cannot be removed', () => {
