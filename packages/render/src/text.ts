@@ -1,4 +1,4 @@
-import { type Bubble, parseRuby, type Size } from '@manga/schema'
+import { type Bubble, combineUpright, isUpright, parseRuby, type Size } from '@manga/schema'
 import { typefaceFont } from './backend'
 import type { PxRect } from './geometry'
 
@@ -67,6 +67,7 @@ function toParagraphs(text: string): string[][] {
  * 横書きでは英単語も語ごとにまとめる
  */
 export interface TextUnit {
+  /** 字の列。縦書きで縦中横に組む 2 字の組（isUpright）は 1 つの字として持つ */
   glyphs: string[]
   /** 親文字の右（横書きでは上）に振るルビの書記素 */
   ruby?: string[]
@@ -122,13 +123,14 @@ function joinWords(glyphs: string[]): TextUnit[] {
 /**
  * ルビと傍点の書式（parseRuby）を解き、段落ごとの TextUnit の列にする。書式は段落をまたがない。
  * 傍点を打った語は 1 字ずつの一続きにし、ルビと違って行をまたいで割れる。
- * horizontal なら英単語を途中で割らないようまとめる
+ * horizontal なら英単語を途中で割らないようまとめ、縦書きなら縦中横の組（combineUpright）を 1 字にまとめる
  */
 function toUnitParagraphs(text: string, horizontal: boolean): TextUnit[][] {
+  const split = (base: string) => (horizontal ? graphemes(base) : combineUpright(graphemes(base)))
   return text.split('\n').map((paragraph) =>
     parseRuby(paragraph).flatMap(({ base, ruby, emphasis }): TextUnit[] => {
-      if (ruby !== undefined) return [{ glyphs: graphemes(base), ruby: graphemes(ruby) }]
-      const glyphs = graphemes(base)
+      if (ruby !== undefined) return [{ glyphs: split(base), ruby: graphemes(ruby) }]
+      const glyphs = split(base)
       if (emphasis) return glyphs.map((glyph) => ({ glyphs: [glyph], emphasis }))
       return horizontal ? joinWords(glyphs) : glyphs.map((glyph) => ({ glyphs: [glyph] }))
     }),
@@ -182,7 +184,8 @@ function breakLines(
     for (const unit of units) {
       if (line.length > 0 && lineLength(line, advance) + unitLength(unit, advance) > maxLength) {
         const carry: TextUnit[] = []
-        if (NO_LINE_START.has(firstGlyph(unit)) && line.length > 1) {
+        // 縦中横の組は頭の字で禁則を見る
+        if (NO_LINE_START.has(firstGlyph(unit)[0] as string) && line.length > 1) {
           carry.unshift(line.pop() as TextUnit)
         }
         while (line.length > 1 && NO_LINE_END.has(lastGlyph(line[line.length - 1] as TextUnit))) {
@@ -269,9 +272,10 @@ function paintText(
   glyph: string,
   x: number,
   y: number,
+  maxWidth?: number,
 ): void {
-  if (paint === 'stroke') ctx.strokeText(glyph, x, y)
-  else ctx.fillText(glyph, x, y)
+  if (paint === 'stroke') ctx.strokeText(glyph, x, y, maxWidth)
+  else ctx.fillText(glyph, x, y, maxWidth)
 }
 
 /** 縦書きの 1 字を、中心 (cx, cy) に現在の ctx.font の大きさ fontPx で塗るか縁取る */
@@ -283,7 +287,10 @@ function drawGlyph(
   fontPx: number,
   paint: Paint,
 ): void {
-  if (SIDEWAYS.test(glyph)) {
+  if (isUpright(glyph)) {
+    // 全角の組は字の両脇のあきごと 1 字分に詰めると間が空くので、半角に直す。2 桁の数字は 1 字分より広いので詰める
+    paintText(ctx, paint, glyph.normalize('NFKC'), cx, alphabeticY(cy, fontPx, 'middle'), fontPx)
+  } else if (SIDEWAYS.test(glyph)) {
     // 英数字は字面の中心で回すと g や y が持ち上がって並びが揃わないので、ベースラインを保って回す
     ctx.save()
     ctx.translate(cx, cy)
@@ -308,6 +315,7 @@ function drawGlyph(
 /**
  * 行割り済みの縦書きを、箱の中央に右の行から左へ color と typeface で描く。
  * ルビは親文字の右に、親文字の長さの中央に揃えて同じ書体で置く。傍点はルビと同じ大きさで、親文字の右に 1 字ずつ置く。
+ * 縦中横の組は回さず、1 字分の幅に横に並べる。
  * halo を渡すと、その色と太さ（px）のふちを全部の字の下に敷く。字ごとに縁取って塗ると、隣の字のふちが字に掛かる
  */
 export function drawVerticalText(
@@ -648,6 +656,45 @@ if (import.meta.vitest) {
     expect(placed[1]?.x).toBeGreaterThan(placed[0]?.x ?? 0)
     expect(placed[3]?.y).toBeCloseTo((placed[1]?.y ?? 0) + 10)
     expect(fonts.some((f) => f.startsWith('400 5px'))).toBe(true)
+  })
+
+  test('縦書きは !? と 2 桁の数字を 1 字にまとめ、ルビと傍点の中でもまとめ、横書きではまとめない', () => {
+    const box = { w: 20, h: 200 }
+    expect(glyphs(layoutBubbleText('え!?12時に100円', box, 8).lines)).toEqual([
+      ['え', '!?', '12', '時', 'に', '1', '0', '0', '円'],
+    ])
+    expect(layoutBubbleText('|12月《じゅうにがつ》《《！？》》', box, 8).lines).toEqual([
+      [
+        { glyphs: ['12', '月'], ruby: Array.from('じゅうにがつ') },
+        { glyphs: ['！？'], emphasis: true },
+      ],
+    ])
+    expect(glyphs(layoutBubbleText('a!?', box, 8, 'horizontal').lines)).toEqual([['a', '!', '?']])
+  })
+
+  test('縦中横の組は行頭に来ない', () => {
+    const { lines } = layoutBubbleText('あいう!?', { w: 34, h: 30 }, 10)
+    expect(glyphs(lines)).toEqual([['あ', 'い'], ['う', '!?']])
+  })
+
+  test('縦中横の組は回さず、全角は半角に直して 1 字分の幅に詰めて置く', () => {
+    const placed: { text: string; maxWidth?: number }[] = []
+    let rotated = false
+    const ctx = {
+      save() {},
+      restore() {},
+      translate() {},
+      rotate() {
+        rotated = true
+      },
+      set font(_: string) {},
+      fillText(text: string, _x: number, _y: number, maxWidth?: number) {
+        placed.push({ text, maxWidth })
+      },
+    } as unknown as CanvasRenderingContext2D
+    drawVerticalText(ctx, [[{ glyphs: ['！？'] }]], 10, { x: 0, y: 0, w: 30, h: 30 })
+    expect(placed).toEqual([{ text: '!?', maxWidth: 10 }])
+    expect(rotated).toBe(false)
   })
 
   test('書体を渡すと、その字族と太さで描く', () => {

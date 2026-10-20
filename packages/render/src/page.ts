@@ -459,6 +459,26 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-emphasis', png)
   })
 
+  test('縦中横: !? と 2 桁の数字をルビと傍点の中でも 1 字分の幅に横に組み、3 桁と 3 つ続く記号は組まない', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const texts = ['え!?12時に！？', '|12月《じゅうにがつ》《《!!》》', '100円!!!']
+    const bubbles = texts.map((text, i) => ({
+      id: `bb_upright_${i}`,
+      order: i + 1,
+      text,
+      shape: 'none' as const,
+      pos: { x: 0.8 - i * 0.3, y: 0.5 },
+      size: { w: 0.2, h: 0.9 },
+    }))
+    const page: Page = { ...emptyPage, panels: [{ ...pn1, bubbles }, ...rest] }
+    const png = await renderPage(page, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-upright', png)
+  })
+
   test('モノローグ枠は角を丸めた白地の四角をしっぽ無しで描き、ナレーションの角は丸めない', async () => {
     const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
     const shapes = ['narration', 'monologue'] as const
