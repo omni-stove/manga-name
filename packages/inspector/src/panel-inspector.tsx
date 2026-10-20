@@ -52,7 +52,7 @@ const EFFECTS: readonly { value: NonNullable<Panel['effect']> | ''; label: strin
   ),
 ]
 
-const isOrder =(n: number) => PanelSchema.shape.order.safeParse(n).success
+const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
 
 /** `arts` の中から選ぶ。`artId` が無ければ add、あれば replace */
 function selectArtPatch(artId: ID | undefined, next: ID): Patch {

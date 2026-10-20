@@ -458,10 +458,7 @@ if (import.meta.vitest) {
       expect(directionOf(line)).toBeCloseTo(diagonal, 6)
     }
     const first = effectPanel('speed_lines', {
-      vectors: [
-        vector('speed', 'weak', { x: 0, y: 1 }),
-        vector('motion', 'weak', { x: 1, y: 0 }),
-      ],
+      vectors: [vector('speed', 'weak', { x: 0, y: 1 }), vector('motion', 'weak', { x: 1, y: 0 })],
     })
     for (const line of effectLines(first, box, 100)) {
       expect(directionOf(line)).toBeCloseTo(Math.PI / 2, 6)
