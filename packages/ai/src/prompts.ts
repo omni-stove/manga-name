@@ -20,6 +20,7 @@ import {
   type ProjectSettings,
   pageCharacterIds,
   pagePlanJsonSchema,
+  panelActing,
   panelCharacterIds,
   StrengthSchema,
   VectorKindSchema,
@@ -103,7 +104,18 @@ const characterDesign = (settings: ProjectSettings) =>
   `character design shared by every character: ${settings.characterDesign}`
 
 /**
- * コマの中身を表す行。カメラ、指示メモ、登場キャラ、焦点（重い順）、誘導線、ヒント。空の行も含む。
+ * 登場キャラの芝居。1 人ずつ名前を添えるのは、pageArt がコマの中身を `; ` でつなぐ中でも誰の芝居か読めるようにするため。
+ * 芝居は利用者の書いた言葉のまま渡す
+ */
+const actingOf = (panel: Panel, characters: Character[]) =>
+  panelActing(panel)
+    .flatMap(({ characterId, text }) =>
+      characters.filter((c) => c.id === characterId).map((c) => `${c.name} acts: ${text.trim()}`),
+    )
+    .join('; ')
+
+/**
+ * コマの中身を表す行。カメラ、指示メモ、登場キャラ、芝居、焦点（重い順）、誘導線、ヒント。空の行も含む。
  * `appearance` が false なら登場キャラは名前だけにする
  */
 function panelContent(
@@ -119,6 +131,7 @@ function panelContent(
     panelCharacters(panel, characters)
       .map((c) => (appearance ? describeCharacter(c) : c.name))
       .join('; '),
+    actingOf(panel, characters),
     focusByWeight.map((f) => f.label).join('; '),
     panel.vectors
       .map(
@@ -542,6 +555,40 @@ if (import.meta.vitest) {
       prompts.panelArt({ project: { ...project, settings }, page: unpeopled, panelId: 'pn_1' })
         .prompt,
     ).not.toContain(design)
+  })
+
+  test('the acting of the characters in a panel goes into panelArt and pageArt with their names', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const characters = [...project.characters, { id: 'chr_k', name: 'ケイ', shortName: 'K' }]
+    const acted: Page = {
+      ...page,
+      panels: page.panels.map((p) =>
+        p.id === 'pn_1'
+          ? {
+              ...p,
+              cast: ['chr_k'],
+              acting: [
+                { characterId: 'chr_e', text: '振り向いて驚く' },
+                { characterId: 'chr_k', text: ' 笑う ' },
+              ],
+            }
+          : p,
+      ),
+    }
+    const acting = 'ケイ acts: 笑う; E acts: 振り向いて驚く'
+    const panelLines = prompts
+      .panelArt({ project: { ...project, characters }, page: acted, panelId: 'pn_1' })
+      .prompt.split('\n')
+    const cast = `ケイ; E: ${project.characters[0]?.appearance}`
+    expect(panelLines.indexOf(acting)).toBe(panelLines.indexOf(cast) + 1)
+    const pageLine = prompts
+      .pageArt({ project: { ...project, characters }, page: acted })
+      .prompt.split('\n')
+      .find((l) => l.startsWith('panel 1 '))
+    expect(pageLine).toContain(`; ${acting}`)
+
+    const unacted = prompts.panelArt({ project: { ...project, characters }, page, panelId: 'pn_1' })
+    expect(unacted.prompt).not.toContain(' acts: ')
   })
 
   test('planPages embeds the page plan JSON Schema and lists characters, the page count and the script', () => {

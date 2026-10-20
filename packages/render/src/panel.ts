@@ -1,5 +1,12 @@
 import { m } from '@manga/i18n'
-import { type Camera, cornerAnchor, type Panel, softEdgeStrokes } from '@manga/schema'
+import {
+  type Camera,
+  type Character,
+  cornerAnchor,
+  type Panel,
+  panelActing,
+  softEdgeStrokes,
+} from '@manga/schema'
 import { FONT_FAMILY } from './backend'
 import type { PxPoint, PxRect } from './geometry'
 import { alphabeticY, wrapHorizontal } from './text'
@@ -179,10 +186,17 @@ export function drawPanelNumber(
   ctx.restore()
 }
 
-/** 余白のメモ。コマ番号と camera の行、続けて note を横書きで列挙する */
+/** 指示メモに書く芝居。1 人 1 行で「名前：芝居」 */
+export function actingNotes(panel: Panel, characters: readonly Character[]): string[] {
+  return panelActing(panel).flatMap(({ characterId, text }) =>
+    characters.filter((c) => c.id === characterId).map((c) => `${c.name}：${text.trim()}`),
+  )
+}
+
+/** 余白のメモ。コマ番号と camera の行、続けて note と芝居（actingNotes）を横書きで列挙する */
 export function drawNotesMargin(
   ctx: Ctx,
-  panels: { order: number; camera?: Camera; note?: string }[],
+  panels: { order: number; camera?: Camera; note?: string; acting?: readonly string[] }[],
   area: PxRect,
   fontPx: number,
 ): void {
@@ -207,9 +221,11 @@ export function drawNotesMargin(
       y += lineHeight
     }
     ctx.font = `${fontPx}px "${FONT_FAMILY}"`
-    for (const line of wrapHorizontal(ctx, panel.note ?? '', area.w - pad * 2)) {
-      ctx.fillText(line, area.x + pad, alphabeticY(y, fontPx, 'top'))
-      y += lineHeight
+    for (const text of [panel.note ?? '', ...(panel.acting ?? [])]) {
+      for (const line of wrapHorizontal(ctx, text, area.w - pad * 2)) {
+        ctx.fillText(line, area.x + pad, alphabeticY(y, fontPx, 'top'))
+        y += lineHeight
+      }
     }
     y += lineHeight * 0.5
     if (y > bottom) break
@@ -394,5 +410,39 @@ if (import.meta.vitest) {
     const count = darkPixels((x, y) => x >= 100 && x < 160 && y < 120)
     expect(count.inside).toBeGreaterThan(0)
     expect(count.outside).toBe(0)
+  })
+
+  test('drawNotesMargin writes the acting on the lines after the note', async () => {
+    const area = { x: 0, y: 0, w: 200, h: 120 }
+    // 余白 8、fontPx 8、行の高さ 12 なので、番号の行は y 8、note の行は y 20 から 8px の高さに描く
+    const below = (acting?: string[]) =>
+      paint(200, 120, (ctx) =>
+        drawNotesMargin(ctx, [{ order: 1, note: '見上げる', acting }], area, 8),
+      ).then(({ darkPixels }) => darkPixels((_, y) => y >= 31).inside)
+    expect(await below()).toBe(0)
+    expect(await below(['E：振り向いて驚く', 'ケイ：笑う'])).toBeGreaterThan(0)
+  })
+
+  test('actingNotes writes one line per acting character with the name', () => {
+    const panel = {
+      id: 'pn',
+      order: 1,
+      rect: { x: 0, y: 0, w: 1, h: 1 },
+      bubbles: [],
+      focusPoints: [],
+      vectors: [],
+      arts: [],
+      cast: ['a', 'b'],
+      acting: [
+        { characterId: 'b', text: ' 笑う ' },
+        { characterId: 'a', text: '振り向いて驚く' },
+      ],
+    }
+    const characters = [
+      { id: 'a', name: 'エル', shortName: 'L' },
+      { id: 'b', name: 'ケイ', shortName: 'K' },
+    ]
+    expect(actingNotes(panel, characters)).toEqual(['エル：振り向いて驚く', 'ケイ：笑う'])
+    expect(actingNotes({ ...panel, acting: undefined }, characters)).toEqual([])
   })
 }

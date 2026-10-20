@@ -44,6 +44,8 @@
   "inspector_panel_cast_remove": "{name} を登場キャラから外す",
   "inspector_panel_cast_add": "登場キャラを追加",
   "inspector_panel_cast_add_placeholder": "キャラを追加…",
+  "inspector_panel_acting_label": "{name} の芝居",
+  "inspector_panel_acting_placeholder": "表情・動き（例: 振り向いて驚く）",
   "inspector_panel_art_alt": "生成した絵",
   "inspector_panel_art_current": "採用中",
   "inspector_panel_art_prompt": "プロンプト",
