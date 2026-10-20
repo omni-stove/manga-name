@@ -110,7 +110,7 @@ function withoutCharacters<T extends { speakerId?: ID; characterId?: ID }>(item:
   return rest as T
 }
 
-/** 中身ごと新しい id にしたコマ。ベクトルの焦点参照と絵の親子は新しい id に付け替える */
+/** 中身ごと新しい id にしたコマ。ベクトルの焦点参照、フキダシのつなぎ先、絵の親子は新しい id に付け替える */
 function renewPanel(panel: Panel, sameProject: boolean): Panel {
   const ids = new Map<ID, ID>()
   const renew = (id: ID) => {
@@ -118,10 +118,14 @@ function renewPanel(panel: Panel, sameProject: boolean): Panel {
     ids.set(id, next)
     return next
   }
-  const bubbles = panel.bubbles.map((b) => ({
+  const renewed = panel.bubbles.map((b) => ({
     ...(sameProject ? b : withoutCharacters(b)),
     id: renew(b.id),
   }))
+  const bubbles = renewed.map(({ joinedTo, ...b }) => {
+    const to = joinedTo === undefined ? undefined : ids.get(joinedTo)
+    return to === undefined ? b : { ...b, joinedTo: to }
+  })
   const focusPoints = panel.focusPoints.map((f) => ({
     ...(sameProject ? f : withoutCharacters(f)),
     id: renew(f.id),
@@ -157,7 +161,7 @@ function renewPanel(panel: Panel, sameProject: boolean): Panel {
 /**
  * コピーした要素を新しい id でページに足す Patch と、足した要素の選択。
  * 同じ位置に同じ種類の要素があれば、無い位置まで右下へ PASTE_OFFSET ずつずらす。
- * 位置のロックは外し、order はそれぞれの並びの最大の次にする。ベクトルの焦点参照は貼った先で指す先が無いので外す。
+ * 位置のロックは外し、order はそれぞれの並びの最大の次にする。ベクトルの焦点参照とフキダシのつなぎ先は貼った先で指す先が無いので外す。
  * フキダシを別のコマへ貼るときはページ上の大きさを保ち、その枠に収める。
  * フキダシ、焦点、ベクトルを貼るコマがページに無ければ null
  */
@@ -203,7 +207,7 @@ export function pastePatch(
   const base = `/panels/${i}`
 
   if (copied.kind === 'bubble') {
-    const { locked: _, ...source } = opts.sameProject
+    const { locked: _, joinedTo: _j, ...source } = opts.sameProject
       ? copied.bubble
       : withoutCharacters(copied.bubble)
     const { dx, dy } = freeShift(
@@ -326,6 +330,31 @@ if (import.meta.vitest) {
         linked?.sourceFocusId,
       )
       expect(pasted.rect).not.toMatchObject({ x: source.rect.x, y: source.rect.y })
+    })
+
+    test('joined bubbles keep their join in a pasted panel, and a pasted bubble drops it', () => {
+      const [pn1, ...rest] = page.panels as [Panel, ...Panel[]]
+      const first = pn1.bubbles[0] as Bubble
+      const joined: Page = {
+        ...page,
+        panels: [
+          { ...pn1, bubbles: [first, { ...first, id: 'bb_1b', order: 2, joinedTo: first.id }] },
+          ...rest,
+        ],
+      }
+      const panel = copyElement(joined, { kind: 'panel', id: pn1.id })
+      if (!panel) throw new Error('コピーできなかった')
+      const pastedPanel = PageSchema.parse(
+        apply(joined, pastePatch(joined, panel, opts)?.patch ?? []),
+      ).panels.at(-1) as Panel
+      const [a, b] = pastedPanel.bubbles as [Bubble, Bubble]
+      expect(b.joinedTo).toBe(a.id)
+      expect(a.id).not.toBe(first.id)
+
+      const bubble = copyElement(joined, { kind: 'bubble', id: 'bb_1b' })
+      if (!bubble) throw new Error('コピーできなかった')
+      const pasted = PageSchema.parse(apply(joined, pastePatch(joined, bubble, opts)?.patch ?? []))
+      expect(pasted.panels[0]?.bubbles.at(-1)).not.toHaveProperty('joinedTo')
     })
 
     test('a panel pasted between a single page and a spread keeps its width in mm', () => {

@@ -65,6 +65,7 @@ import { BatchOptions, useBatchGeneration } from './batch-generation'
 import {
   type ElementMenuContext,
   elementMenuItems,
+  joinMenuItems,
   setLocked,
   shapeMenuItems,
   toolMenuItems,
@@ -249,8 +250,11 @@ interface HintToggle {
   set(panelId: ID, use: boolean): void
 }
 
-/** 開いている右クリックメニュー。`shapes` はフキダシの形を選ぶメニューに切り替えたあと */
-type OpenMenu = CanvasMenuRequest & { shapes?: boolean }
+/**
+ * 開いている右クリックメニュー。`sub` はフキダシのメニューから切り替えたあとのメニューで、
+ * shapes は形を選ぶメニュー、joins はつなぐ相手を選ぶメニュー
+ */
+type OpenMenu = CanvasMenuRequest & { sub?: 'shapes' | 'joins' }
 
 const MENU_LABELS: Record<NonNullable<Selection>['kind'], () => string> = {
   panel: m.web_editor_menu_panel,
@@ -624,28 +628,37 @@ export function PageEditor({
       if (removed) setSelection(null)
     },
     setTool,
-    openShapes: () => menu && setMenu({ ...menu, shapes: true }),
+    openShapes: () => menu && setMenu({ ...menu, sub: 'shapes' }),
+    openJoins: () => menu && setMenu({ ...menu, sub: 'joins' }),
   }
-  const shapesOf =
-    menuTarget?.kind === 'bubble' && menu?.shapes ? findBubble(page, menuTarget.id) : undefined
+  const subOf =
+    menuTarget?.kind === 'bubble' && menu?.sub
+      ? { sub: menu.sub, found: findBubble(page, menuTarget.id) }
+      : undefined
+  const shapesOf = subOf?.sub === 'shapes' ? subOf.found : undefined
+  const joinsOf = subOf?.sub === 'joins' ? subOf.found : undefined
   const openMenu = menu && {
     label: shapesOf
       ? m.web_editor_menu_bubble_shapes()
-      : menuTarget
-        ? MENU_LABELS[menuTarget.kind]()
-        : m.web_editor_page_menu(),
+      : joinsOf
+        ? m.web_editor_menu_bubble_joins()
+        : menuTarget
+          ? MENU_LABELS[menuTarget.kind]()
+          : m.web_editor_page_menu(),
     items: shapesOf
       ? shapeMenuItems(shapesOf.bubble, menuContext)
-      : menuTarget
-        ? [
-            ...elementMenuItems(menuTarget, menuContext),
-            'separator' as const,
-            copyItem(menuTarget),
-            ...pasteItems,
-            'separator' as const,
-            ...undoItems,
-          ]
-        : pageMenuItems,
+      : joinsOf
+        ? joinMenuItems(joinsOf.bubble, menuContext)
+        : menuTarget
+          ? [
+              ...elementMenuItems(menuTarget, menuContext),
+              'separator' as const,
+              copyItem(menuTarget),
+              ...pasteItems,
+              'separator' as const,
+              ...undoItems,
+            ]
+          : pageMenuItems,
   }
   const chooseFolder = () => {
     chooseExportFolder(projectId, exportFolder).then(

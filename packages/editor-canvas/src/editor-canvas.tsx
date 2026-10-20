@@ -2484,6 +2484,56 @@ if (import.meta.vitest) {
       expect(two.querySelectorAll('[data-tail-handle="set"]')).toHaveLength(2)
     })
 
+    test('joined bubbles draw one outline with a neck, and each keeps its own text', async () => {
+      const joined: Page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_3'
+            ? {
+                ...p,
+                bubbles: [
+                  ...p.bubbles,
+                  {
+                    id: 'bb_3b',
+                    order: 2,
+                    text: 'まさか',
+                    shape: 'normal',
+                    pos: { x: 0.6, y: 0.7 },
+                    size: { w: 0.18, h: 0.4 },
+                    joinedTo: 'bb_3',
+                  },
+                ],
+              }
+            : p,
+        ),
+      }
+      const svg = await render({ page: joined })
+      const group = must(svg.querySelector('[data-bubble-group="bb_3 bb_3b"]'))
+      // bb_3 の本体としっぽ、bb_3b の本体と bb_3 への首を、線と塗りで 2 回ずつ描く
+      expect(group.querySelectorAll('path[fill="#fff"][stroke]')).toHaveLength(4)
+      expect(group.querySelectorAll('path[fill="#fff"]:not([stroke])')).toHaveLength(4)
+      const second = must(group.querySelector('.ec-bubble[data-bubble-id="bb_3b"]'))
+      expect(second.getAttribute('data-joined-to')).toBe('bb_3')
+      expect(second.querySelectorAll('path[fill="#fff"]')).toHaveLength(0)
+      expect(second.textContent).toContain('ま')
+
+      const apart = await render({
+        page: {
+          ...joined,
+          panels: joined.panels.map((p) => ({
+            ...p,
+            bubbles: p.bubbles.map(({ joinedTo: _, ...b }) => b),
+          })),
+        },
+      })
+      expect(apart.querySelector('[data-bubble-group]')).toBeNull()
+      expect(
+        must(apart.querySelector('.ec-bubble[data-bubble-id="bb_3b"]')).querySelectorAll(
+          'path[fill="#fff"]:not([stroke])',
+        ),
+      ).toHaveLength(1)
+    })
+
     test('dragging one of two tails moves only that tail and makes it the last', async () => {
       const onChange = vi.fn()
       const svg = await render({

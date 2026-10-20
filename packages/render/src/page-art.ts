@@ -1,6 +1,6 @@
 import { type ID, type Page, panelOutline } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
-import { bubbleGeometry, fillBubble } from './bubble'
+import { bubbleGeometry, fillBubble, joinedGeometry } from './bubble'
 import { type PxRect, pointToPx, rectToPx } from './geometry'
 import { drawFrame, withClip } from './panel'
 import { drawPlacement, hasPlacement } from './placement'
@@ -36,7 +36,8 @@ export async function renderPageLayoutPng(
     const rect = rectToPx(panel.rect, pageRect)
     for (const bubble of panel.bubbles) {
       if ((bubble.overflow === true) !== overflow) continue
-      fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff')
+      const joined = joinedGeometry(bubble, panel.bubbles, rect)
+      fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff', joined)
     }
   }
   const outlineOf = (panel: Page['panels'][number]) =>

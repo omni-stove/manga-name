@@ -2,6 +2,7 @@ import {
   BUBBLE_DASH,
   type Bubble,
   type BubbleGeometry,
+  bubbleNeck,
   bubbleOutline,
   type PathCommand,
 } from '@manga/schema'
@@ -44,11 +45,33 @@ function fillEach(ctx: Ctx, ...parts: readonly PathCommand[][]): void {
   }
 }
 
-/** 本体としっぽの領域を color で塗る。枠なしの形も塗る。配置図はこれだけを使う */
-export function fillBubble(ctx: Ctx, shape: Shape, g: BubbleGeometry, color: string): void {
+/**
+ * bubble の joinedTo が指す、bubbles のうちのフキダシの px の位置。つないでいないか、相手が無ければ undefined。
+ * bubbles には同じコマのフキダシを渡す
+ */
+export function joinedGeometry(
+  bubble: Bubble,
+  bubbles: readonly Bubble[],
+  panel: PxRect,
+): BubbleGeometry | undefined {
+  if (bubble.joinedTo === undefined || bubble.joinedTo === bubble.id) return undefined
+  const to = bubbles.find((b) => b.id === bubble.joinedTo)
+  return to && bubbleGeometry(to, panel)
+}
+
+/**
+ * 本体としっぽの領域を color で塗る。joined を渡すと、そこへの首も塗る。枠なしの形も塗る。配置図はこれだけを使う
+ */
+export function fillBubble(
+  ctx: Ctx,
+  shape: Shape,
+  g: BubbleGeometry,
+  color: string,
+  joined?: BubbleGeometry,
+): void {
   const { body, tails } = bubbleOutline(shape, g)
   ctx.fillStyle = color
-  fillEach(ctx, body, ...tails)
+  fillEach(ctx, body, ...tails, joined ? bubbleNeck(g, joined) : [])
 }
 
 /** 命令列の点と制御点を囲む矩形。クリップ用 */
@@ -94,46 +117,72 @@ function strokeOutside(
   ctx.restore()
 }
 
+/** 連結フキダシの 1 つ。joined はつなぐ相手の位置で、そこまでの首をこのフキダシの地の色と線で描く */
+interface JoinedBubble {
+  shape: Shape
+  g: BubbleGeometry
+  fill?: Bubble['fill']
+  joined?: BubbleGeometry
+}
+
 /**
  * 形ごとの塗りと線でフキダシを描く。しっぽは付け根に線を引かず本体と繋げる。
  * fill が black なら本体としっぽを黒で塗る。地を持たない形では fill を無視する
  */
-export function drawBubble(
+function drawBubble(
   ctx: Ctx,
   shape: Shape,
   g: BubbleGeometry,
   lineWidth: number,
   fill?: Bubble['fill'],
 ): void {
-  const o = bubbleOutline(shape, g)
+  drawJoinedBubbles(ctx, [{ shape, g, fill }], lineWidth)
+}
+
+/**
+ * つないだフキダシを 1 つの輪郭に描く。本体、しっぽ、首が重なる境には線を引かず、外周だけに引く。
+ * どの部分も持ち主のフキダシの形と fill で塗り、線を引く。1 つだけなら drawBubble と同じ
+ */
+export function drawJoinedBubbles(
+  ctx: Ctx,
+  bubbles: readonly JoinedBubble[],
+  lineWidth: number,
+): void {
+  const items = bubbles.map((b) => {
+    const o = bubbleOutline(b.shape, b.g)
+    const neck = b.joined ? bubbleNeck(b.g, b.joined) : []
+    const parts = neck.length > 0 ? [o.body, ...o.tails, neck] : [o.body, ...o.tails]
+    return { o, fill: b.fill, parts }
+  })
   ctx.save()
   ctx.lineWidth = lineWidth
   ctx.strokeStyle = '#000'
   ctx.lineJoin = 'round'
-  if (o.fill) {
+  // 隣の塗りが先に引いた線を隠さないよう、全部を塗ってから線を引く
+  for (const { o, fill, parts } of items) {
+    if (!o.fill) continue
     ctx.fillStyle = fill === 'black' ? '#000' : '#fff'
-    fillEach(ctx, o.body, ...o.tails)
+    fillEach(ctx, ...parts)
   }
-  if (o.line !== 'none') {
+  // 塗らない形は下の線を隠さないので、編集画面と同じく線を切り抜くのは塗る部分だけ
+  const painted = items.filter((i) => i.o.fill).flatMap((i) => i.parts)
+  const box = bounds(items.flatMap((i) => i.parts.flat()), lineWidth * 4)
+  for (const { o, parts } of items) {
+    if (o.line === 'none') continue
     ctx.setLineDash(o.line === 'dashed' ? BUBBLE_DASH.map((d) => d * lineWidth) : [])
-    if (o.tails.length === 0) {
-      ctx.beginPath()
-      trace(ctx, o.body)
-      ctx.stroke()
-    } else {
-      const parts = [o.body, ...o.tails]
-      const box = bounds(parts.flat(), lineWidth * 4)
-      for (const part of parts) {
-        strokeOutside(
-          ctx,
-          part,
-          parts.filter((p) => p !== part),
-          box,
-        )
+    for (const part of parts) {
+      const others = painted.filter((p) => p !== part)
+      if (others.length > 0) {
+        strokeOutside(ctx, part, others, box)
+        continue
       }
+      ctx.beginPath()
+      trace(ctx, part)
+      ctx.stroke()
     }
   }
-  if (o.ink.length > 0) {
+  for (const { o } of items) {
+    if (o.ink.length === 0) continue
     ctx.fillStyle = '#000'
     ctx.beginPath()
     trace(ctx, o.ink)
@@ -232,6 +281,33 @@ if (import.meta.vitest) {
       // 2 本の向かい合う辺は (100, 152) で交わる。その上は重なりで、下では辺が離れていく
       expect(at(100, 145)).toEqual([255, 255, 255])
       expect(dark(at(100, 156))).toBe(true)
+    })
+
+    test('joined bubbles share one outline, with no line across the neck at either body', async () => {
+      const left = { cx: 50, cy: 100, rx: 35, ry: 30 }
+      const right = { cx: 150, cy: 100, rx: 35, ry: 30 }
+      const at = await paint((ctx) =>
+        drawJoinedBubbles(
+          ctx,
+          [
+            { shape: 'normal', g: left, joined: right },
+            { shape: 'normal', g: right },
+          ],
+          4,
+        ),
+      )
+      const white = [255, 255, 255]
+      // 首は y 94.6..105.4 の帯で、左右の本体の輪郭は x = 85 と 115 を通る
+      expect(at(85, 100)).toEqual(white)
+      expect(at(100, 100)).toEqual(white)
+      expect(at(115, 100)).toEqual(white)
+      expect(dark(at(100, 94))).toBe(true)
+      expect(dark(at(100, 106))).toBe(true)
+      // 首の辺は本体の中まで伸ばさない
+      expect(at(70, 94)).toEqual(white)
+      expect(at(100, 85)).toEqual(GREY)
+      expect(dark(at(50, 70))).toBe(true)
+      expect(dark(at(150, 130))).toBe(true)
     })
 
     test('a shout bubble is spiky: the gaps between spikes stay outside', async () => {

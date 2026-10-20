@@ -1,4 +1,5 @@
 import {
+  type Bubble,
   boundsOf,
   clipHalfPlane,
   convexHull,
@@ -244,22 +245,23 @@ function moveSweep(sweep: Sweep, from: Rect, to: Rect): Sweep {
 /**
  * panel の中身のうち、ページ座標の位置で keep を満たすものを to のコマ内座標へ移す。
  * フキダシと焦点は中心、ベクトルは始点で振り分け、フキダシの大きさも to に合わせる。
- * 移した先に無い焦点やフキダシを指すベクトルの参照は外す（PanelSchema が実在を要求する）
+ * 移した先に無い焦点やフキダシを指すベクトルの参照と、フキダシのつなぎ先は外す（PanelSchema が実在を要求する）
  */
 function contentIn(panel: Panel, to: Rect, keep: (p: Point) => boolean) {
   const from = panel.rect
   const onPage = (p: Point) => ({ x: from.x + p.x * from.w, y: from.y + p.y * from.h })
-  const bubbles = panel.bubbles
-    .filter((b) => keep(onPage(b.pos)))
-    .map((b) => ({
-      ...b,
-      pos: movePoint(b.pos, from, to),
-      size: {
-        w: round(Math.min(1, (b.size.w * from.w) / to.w)),
-        h: round(Math.min(1, (b.size.h * from.h) / to.h)),
-      },
-      ...(b.tails && { tails: b.tails.map((t) => movePoint(t, from, to)) }),
-    }))
+  const kept = panel.bubbles.filter((b) => keep(onPage(b.pos)))
+  const keptIds = new Set(kept.map((b) => b.id))
+  const bubbles = kept.map(({ joinedTo, ...b }) => ({
+    ...b,
+    pos: movePoint(b.pos, from, to),
+    size: {
+      w: round(Math.min(1, (b.size.w * from.w) / to.w)),
+      h: round(Math.min(1, (b.size.h * from.h) / to.h)),
+    },
+    ...(b.tails && { tails: b.tails.map((t) => movePoint(t, from, to)) }),
+    ...(joinedTo !== undefined && keptIds.has(joinedTo) && { joinedTo }),
+  }))
   const focusPoints = panel.focusPoints
     .filter((f) => keep(onPage(f.pos)))
     .map((f) => ({ ...f, pos: movePoint(f.pos, from, to) }))
@@ -844,6 +846,32 @@ if (import.meta.vitest) {
         }
       }
       expect(top.vectors.length + bottom.vectors.length).toBe(2)
+    })
+
+    test('a split keeps the joins within each half and drops those across it', () => {
+      const pn6 = page.panels[5] as Panel
+      const bb6 = pn6.bubbles[0] as Bubble
+      const joined: Page = {
+        ...page,
+        panels: page.panels.map((p) =>
+          p === pn6
+            ? {
+                ...p,
+                bubbles: [
+                  bb6,
+                  { ...bb6, id: 'bb_6b', order: 2, pos: { x: 0.3, y: 0.2 }, joinedTo: 'bb_6' },
+                  { ...bb6, id: 'bb_6c', order: 3, pos: { x: 0.3, y: 0.8 }, joinedTo: 'bb_6' },
+                ],
+              }
+            : p,
+        ),
+      }
+      const next = apply(joined, splitPanelPatch(joined, 'pn_6', 'horizontal', 'rtl'))
+      expect(PageSchema.safeParse(next).success).toBe(true)
+      const [top, bottom] = [next.panels[5] as Panel, next.panels[6] as Panel]
+      expect(top.bubbles.find((b) => b.id === 'bb_6b')?.joinedTo).toBe('bb_6')
+      expect(bottom.bubbles.map((b) => b.id)).toEqual(['bb_6c'])
+      expect(bottom.bubbles[0]).not.toHaveProperty('joinedTo')
     })
 
     test('does nothing when the halves would be too small or the panel is missing', () => {

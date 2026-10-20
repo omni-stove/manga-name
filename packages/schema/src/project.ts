@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 25 as const
+export const SCHEMA_VERSION = 26 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -74,6 +74,11 @@ export const BubbleSchema = z.object({
   typeface: BubbleTypefaceSchema.optional(),
   /** フキダシの地の色。黒は体としっぽを黒で塗り、セリフを白で描く。地を持たない形（none）では無視する。省略は白 */
   fill: z.enum(['black']).optional(),
+  /**
+   * 細い首でつなぐ、同じコマのフキダシの id。同じ話者が間を置いて続けて喋るときに使う。
+   * joinedTo で辿れるフキダシを 1 つの輪郭に描く（bubbleGroups）。首はこのフキダシの地の色と線で描く
+   */
+  joinedTo: IdSchema.optional(),
   overflow: z.boolean().optional(),
   locked: z.boolean().optional(),
 })
@@ -250,6 +255,20 @@ export const PanelSchema = PanelBaseSchema.superRefine((panel, ctx) => {
           `${key} ${id} is not a FocusPoint or Bubble of this panel`,
         )
       }
+    }
+  })
+
+  const bubbleIds = new Set(panel.bubbles.map((b) => b.id))
+  panel.bubbles.forEach((b, i) => {
+    if (b.joinedTo === undefined) return
+    if (b.joinedTo === b.id) {
+      addIssue(ctx, ['bubbles', i, 'joinedTo'], `joinedTo ${b.joinedTo} is the bubble itself`)
+    } else if (!bubbleIds.has(b.joinedTo)) {
+      addIssue(
+        ctx,
+        ['bubbles', i, 'joinedTo'],
+        `joinedTo ${b.joinedTo} is not a Bubble of this panel`,
+      )
     }
   })
 
@@ -472,6 +491,22 @@ if (import.meta.vitest) {
       expect(paths).not.toContain(panelPath(3, 'acting.0.characterId'))
       expect(paths).toContain('episodes.0.pages.0.cast.1')
       expect(paths).not.toContain('episodes.0.pages.0.cast.0')
+    })
+
+    test('Bubble.joinedTo must be another Bubble of the same panel', async () => {
+      const project = await loadFixture()
+      const first = panel(project, 0).bubbles[0]
+      const other = panel(project, 2).bubbles[0]
+      if (!first || !other) throw new Error('fixture is missing the expected bubbles')
+      panel(project, 0).bubbles.push({ ...first, id: 'bb_next', order: 2, joinedTo: first.id })
+      expect(ProjectSchema.safeParse(project).success).toBe(true)
+
+      first.joinedTo = first.id
+      panel(project, 0).bubbles.push({ ...first, id: 'bb_far', order: 3, joinedTo: other.id })
+      const paths = issuePaths(project)
+      expect(paths).toContain(panelPath(0, 'bubbles.0.joinedTo'))
+      expect(paths).toContain(panelPath(0, 'bubbles.2.joinedTo'))
+      expect(paths).not.toContain(panelPath(0, 'bubbles.1.joinedTo'))
     })
 
     test('Panel.order and Bubble.order must be unique', async () => {
