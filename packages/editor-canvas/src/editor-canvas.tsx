@@ -2388,6 +2388,20 @@ if (import.meta.vitest) {
         ])
       })
 
+      test('turning the lettering and back to where it was makes no patch', async () => {
+        const onChange = vi.fn()
+        const svg = await render({ tool: 'focus', page: withSfx(), selection, onChange })
+        layout(svg)
+        const centre = inPanel('pn_5', 0.5, 0.5)
+        const upright = { x: centre.x, y: centre.y - 40 }
+        fire(svg, pointer('pointerdown', { id: 1, ...handleAt(svg) }))
+        fire(svg, pointer('pointermove', { id: 1, x: centre.x + 40, y: centre.y }))
+        fire(svg, pointer('pointermove', { id: 1, ...upright }))
+        expect(shownRotation(svg)).toBe('0')
+        fire(svg, pointer('pointerup', { id: 1, ...upright }))
+        expect(onChange).not.toHaveBeenCalled()
+      })
+
       test('Escape cancels a rotation without a patch', async () => {
         const onChange = vi.fn()
         const svg = await render({ tool: 'focus', page: withSfx(), selection, onChange })
