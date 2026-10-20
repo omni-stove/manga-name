@@ -926,6 +926,42 @@ if (import.meta.vitest) {
       expect(image.getAttribute('filter')).toBe(`url(#${filter.id})`)
     })
 
+    test('a panel tone overrides the page tone and none leaves the art unfiltered', async () => {
+      const tones: Record<string, Panel['tone']> = { pn_1: 'none', pn_2: 'faded' }
+      const svg = await render({
+        page: {
+          ...pageWithArts,
+          tone: 'sepia',
+          panels: pageWithArts.panels.map((p) => {
+            const tone = tones[p.id]
+            return tone ? { ...p, tone } : p
+          }),
+        },
+      })
+      const imageOf = (id: string) => must(svg.querySelector(`[data-panel-id="${id}"] image`))
+      const sepia = must(svg.querySelector('filter[data-tone="sepia"]'))
+      const faded = must(svg.querySelector('filter[data-tone="faded"]'))
+      expect(imageOf('pn_1').hasAttribute('filter')).toBe(false)
+      expect(imageOf('pn_2').getAttribute('filter')).toBe(`url(#${faded.id})`)
+      expect(imageOf('pn_3').getAttribute('filter')).toBe(`url(#${sepia.id})`)
+    })
+
+    test('a panel tone on a page without a tone filters only that panel', async () => {
+      const svg = await render({
+        page: {
+          ...pageWithArts,
+          panels: pageWithArts.panels.map((p) => (p.id === 'pn_1' ? { ...p, tone: 'sepia' } : p)),
+        },
+      })
+      const filter = must(svg.querySelector('filter[data-tone="sepia"]'))
+      const images = [...svg.querySelectorAll('[data-panel-id] image[filter]')]
+      const panelIds = images.map((i) =>
+        i.closest('[data-panel-id]')?.getAttribute('data-panel-id'),
+      )
+      expect(panelIds).toEqual(['pn_1'])
+      expect(images[0]?.getAttribute('filter')).toBe(`url(#${filter.id})`)
+    })
+
     test('arts are drawn as <image> clipped to the panel', async () => {
       const resolveAsset = vi.fn(resolveFixture)
       const svg = await render({ page: pageWithArts, resolveAsset })

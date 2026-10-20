@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 21 as const
+export const SCHEMA_VERSION = 22 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -129,6 +129,8 @@ export const PanelFrameSchema = z.enum([
 export const PanelEffectSchema = z.enum(['focus_lines', 'speed_lines'])
 /** コマの絵に掛ける色調。sepia は茶色、faded は色を抜いて薄くし、回想に使う。画面には `page_tone_<値>` で出す */
 export const PageToneSchema = z.enum(['sepia', 'faded'])
+/** コマの絵に掛ける色調。none はページに色調があってもそのコマには掛けない。画面には `panel_tone_<値>` で出す */
+export const PanelToneSchema = z.enum([...PageToneSchema.options, 'none'])
 
 export const VectorKindSchema = z.enum(['gaze', 'motion', 'speed'])
 /** コマの画面の切り取り方。画面には messages/schema の `panel_camera_<値>` で出す */
@@ -199,6 +201,8 @@ const PanelBaseSchema = z.object({
   frame: PanelFrameSchema.optional(),
   /** 絵の上、フキダシと枠線の下に描く効果線。省略は描かない */
   effect: PanelEffectSchema.optional(),
+  /** 絵に掛ける色調。ページの tone を上書きし、ページの一部のコマだけを回想にする。省略はページの tone に従う */
+  tone: PanelToneSchema.optional(),
   bubbles: z.array(BubbleSchema),
   note: z.string().optional(),
   camera: CameraSchema.optional(),

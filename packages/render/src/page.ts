@@ -17,6 +17,7 @@ import {
   type Panel,
   paintOrder,
   panelOutline,
+  panelTone,
   SFX_OUTLINE,
   SFX_TYPEFACE,
   sfxFontSize,
@@ -54,7 +55,7 @@ function byOrder<T extends { order: number }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.order - b.order)
 }
 
-/** 採用中の生成画像を読んでデコードし、ページの色調 tone を掛ける。無ければ undefined */
+/** 採用中の生成画像を読んでデコードし、コマの色調 tone（panelTone で決めたもの）を掛ける。無ければ undefined */
 async function loadArt(
   panel: Panel,
   ctx: RenderContext,
@@ -116,7 +117,7 @@ export async function drawPage(
 
   const innerRect = rectToPx(innerFrameOf(page), pageRect)
   const panels = paintOrder(page.panels)
-  const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx, page.tone)))
+  const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx, panelTone(page, panel))))
   // 黒塗りのコマと、黒い地の上の枠なしのコマは、中が黒い
   const blackInside = (panel: Panel) =>
     panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')
@@ -589,6 +590,59 @@ if (import.meta.vitest) {
     expect(count(faded.data, dark)).toBeGreaterThan(0)
     const warm = (r: number, b: number) => r > b + 10
     expect(count(sepia.data, warm)).toBeGreaterThan(count(plain.data, warm))
+  })
+
+  test('コマの色調はページの色調を上書きし、none のコマには掛けず、他のコマはページの色調のまま', async () => {
+    const { page, ctx } = withArts()
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const [pn1, pn2] = page.panels as [Panel, Panel]
+    const withTone = (tone: Panel['tone']) =>
+      page.panels.map((panel) => (panel.id === pn1.id ? { ...panel, tone } : panel))
+    const plain = await pixels(await renderPage(page, ctx, opts))
+    const sepia = await pixels(await renderPage({ ...page, tone: 'sepia' }, ctx, opts))
+    const sepiaButOne = await pixels(
+      await renderPage({ ...page, tone: 'sepia', panels: withTone('none') }, ctx, opts),
+    )
+    const oneSepia = await pixels(
+      await renderPage({ ...page, panels: withTone('sepia') }, ctx, opts),
+    )
+    const { width } = plain
+    const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+    /** コマの rect から縁を 1 割ずつ除いた範囲の画素。枠線を避ける */
+    const region = (data: Uint8ClampedArray, panel: Panel) => {
+      const { x, y, w, h } = panel.rect
+      const out: number[] = []
+      for (let py = Math.ceil((y + h * 0.1) * pageH); py < (y + h * 0.9) * pageH; py += 3) {
+        for (let px = Math.ceil((x + w * 0.1) * width); px < (x + w * 0.9) * width; px += 3) {
+          const i = (py * width + px) * 4
+          out.push(data[i] ?? 0, data[i + 1] ?? 0, data[i + 2] ?? 0)
+        }
+      }
+      return out
+    }
+    expect(region(sepia.data, pn1)).not.toEqual(region(plain.data, pn1))
+    expect(region(sepiaButOne.data, pn1)).toEqual(region(plain.data, pn1))
+    expect(region(sepiaButOne.data, pn2)).toEqual(region(sepia.data, pn2))
+    expect(region(oneSepia.data, pn1)).toEqual(region(sepia.data, pn1))
+    expect(region(oneSepia.data, pn2)).toEqual(region(plain.data, pn2))
+  })
+
+  test('コマの色調: セピアのページで 1 コマを生の色に、1 コマを色あせにして描く', async () => {
+    const { page, ctx } = withArts()
+    const tones: Record<string, Panel['tone']> = { pn_1: 'none', pn_2: 'faded' }
+    const png = await renderPage(
+      {
+        ...page,
+        tone: 'sepia',
+        panels: page.panels.map((panel) => {
+          const tone = tones[panel.id]
+          return tone ? { ...panel, tone } : panel
+        }),
+      },
+      ctx,
+      { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false },
+    )
+    await matchPngSnapshot('page-panel-tones', png)
   })
 
   test('紙面全体のトーンはフキダシと間白を含む紙面の全画素に乗算で掛かり、指示メモの余白には掛からない', async () => {

@@ -20,6 +20,7 @@ import {
   type Panel,
   type Point,
   paintOrder,
+  panelTone,
   type Rect,
   type ReferenceImage,
   SFX_OUTLINE,
@@ -102,14 +103,15 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
   const opaque = page.ground === 'black' || page.panels.some((p) => p.frame === 'none')
   const ground = groundColor(page)
   const unit = page.spread ? width / 2 : width
-  const toneId = page.tone && `${props.idPrefix}-tone`
+  const toneIdOf = (tone: Page['tone']) => tone && `${props.idPrefix}-tone-${tone}`
+  const tones = [...new Set(page.panels.flatMap((panel) => panelTone(page, panel) ?? []))]
   return (
     <g data-layer="page">
-      {page.tone && (
-        <filter id={toneId} colorInterpolationFilters="sRGB" data-tone={page.tone}>
-          <feColorMatrix type="matrix" values={TONE_MATRICES[page.tone].join(' ')} />
+      {tones.map((tone) => (
+        <filter key={tone} id={toneIdOf(tone)} colorInterpolationFilters="sRGB" data-tone={tone}>
+          <feColorMatrix type="matrix" values={TONE_MATRICES[tone].join(' ')} />
         </filter>
-      )}
+      ))}
       <rect
         x={0}
         y={0}
@@ -153,7 +155,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
             opaque={opaque && panel.frame !== 'none'}
             unit={unit}
             ground={ground}
-            toneId={toneId}
+            toneId={toneIdOf(panelTone(page, panel))}
           />
         )
       })}
