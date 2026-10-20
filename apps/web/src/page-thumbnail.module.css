@@ -33,6 +33,13 @@
   stroke-dasharray: 3 2;
 }
 
+.borderlessOnBlack {
+  fill: none;
+  stroke: color-mix(in srgb, var(--paper) 60%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+}
+
 .art {
   fill: color-mix(in srgb, var(--ink) 25%, transparent);
 }

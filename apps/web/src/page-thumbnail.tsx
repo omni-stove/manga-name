@@ -140,7 +140,13 @@ export function PageThumbnail({
           )}
           <polygon
             points={outlinePoints(panel, w, h)}
-            className={hasFrameLine(panel.frame) ? styles.panel : styles.borderless}
+            className={
+              hasFrameLine(panel.frame)
+                ? styles.panel
+                : page.ground === 'black'
+                  ? styles.borderlessOnBlack
+                  : styles.borderless
+            }
           />
         </g>
       ))}
