@@ -1,7 +1,7 @@
-import type { FocusPoint, Panel } from './project'
+import type { Bubble, FocusPoint, Panel } from './project'
 
 /** 描き文字の書体 */
-export const SFX_TYPEFACE = 'bold'
+export const SFX_TYPEFACE: NonNullable<Bubble['typeface']> = 'bold'
 
 /** 描き文字の文字の高さ。コマの短辺に対する比率で、weight 0 で MIN、1 で MAX */
 const SFX_FONT_MIN = 0.08
