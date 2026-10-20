@@ -784,7 +784,7 @@ function VerticalText({
     writingMode: 'vertical-rl',
     fontFamily: font.family,
     fontWeight: font.weight,
-    textAnchor: 'middle',
+    textAnchor: 'middle' as const,
     fill,
     ...(halo && {
       stroke: halo.color,
