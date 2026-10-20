@@ -92,7 +92,7 @@ function Playground() {
   const [slot, setSlot] = useState(0)
   const { spread: _spread, ...single } = page
   const episodePages = [0, 1, 2, 3].map((i) => (i === slot ? page : { ...single, id: `turn_${i}` }))
-  const turn = pageTurns({ pages: episodePages, startsRight }, direction).get(page.id)
+  const turn = pageTurns({ pages: episodePages, ...(startsRight ? { startsRight } : {}) }, direction).get(page.id)
 
   const toggleGenerating = (id: ID) =>
     setGenerating((prev) => {
