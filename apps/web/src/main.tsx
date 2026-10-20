@@ -112,7 +112,7 @@ if (platform === 'desktop') {
   // アプリメニューはアプリに 1 つで、最後に張ったウィンドウの router に項目の操作が届くので、脚本のウィンドウでは張らない
   Promise.all([import('./desktop/shell'), import('./desktop/windows')])
     .then(([{ startDesktopShell }, { isMainWindow, listenEdit }]) =>
-      isMainWindow() ? startDesktopShell({ router, library }) : listenEdit(),
+      isMainWindow() ? startDesktopShell({ router, library }) : listenEdit({ router, library }),
     )
     .catch((e: unknown) => toasts.push(m.web_menu_build_failed({ reason: errorMessage(e) })))
   // deep link のトークンは一度しか使えず、起動時の link も読み直すので、脚本のウィンドウでは受けない

@@ -14,7 +14,6 @@ import type { ProjectLibrary } from '../project-library'
 import { errorMessage } from '../route-error'
 import type { createAppRouter } from '../router'
 import { toasts } from '../toasts'
-import { isEditable } from '../use-undo-shortcuts'
 import { startFileDrop } from './file-drop'
 import {
   loadRecentFiles,
@@ -23,7 +22,7 @@ import {
   recentLabel,
   saveRecentFiles,
 } from './recent-files'
-import { EDIT_EVENT, openScriptWindow } from './windows'
+import { applyEdit, EDIT_EVENT, openScriptWindow } from './windows'
 
 export interface DesktopShellOptions {
   router: ReturnType<typeof createAppRouter>
@@ -70,19 +69,7 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
       await emit(EDIT_EVENT, name)
       return
     }
-    // メニューの accelerator が Cmd+Z を取るので、入力欄の中では入力欄自身の取り消しを呼び直す
-    if (isEditable(document.activeElement)) {
-      document.execCommand(name)
-      return
-    }
-    // Undo はページの編集画面だけのもの。他の画面では削除を確認ダイアログで確かめる
-    const page = router.state.matches.find(
-      (match) => match.routeId === '/p/$projectId_/pages/$pageId',
-    )
-    const id = (page?.params as { projectId?: ID } | undefined)?.projectId
-    const store = id ? await library.open(id) : undefined
-    if (name === 'undo') store?.undo()
-    else store?.redo()
+    await applyEdit({ router, library }, name)
   }
 
   const remember = async (file: RecentFile) => {

@@ -1,6 +1,9 @@
 import type { ID } from '@manga/schema'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow'
+import type { ProjectLibrary } from '../project-library'
+import type { createAppRouter } from '../router'
+import { isEditable } from '../use-undo-shortcuts'
 
 /** tauri.conf.json の最初のウィンドウのラベル */
 export const MAIN_WINDOW = 'main'
@@ -15,10 +18,35 @@ export const scriptWindowLabel = (projectId: ID, episodeId: ID): string =>
 /** メインのウィンドウがフォーカスのないまま受けた Undo / Redo を、フォーカスのあるウィンドウへ渡す event。payload は `'undo' | 'redo'` */
 export const EDIT_EVENT = 'desktop-edit'
 
-/** 脚本のウィンドウで、メニューの Undo / Redo を入力欄自身の取り消しとして実行する。フォーカスのないウィンドウは何もしない */
-export async function listenEdit(): Promise<void> {
+/**
+ * フォーカスのあるこのウィンドウで Undo / Redo を実行する。
+ * メニューの accelerator が Cmd+Z を取るので、入力欄の中では入力欄自身の取り消しを呼び直し、ページの編集画面ではそのプロジェクトの store に送る
+ */
+export async function applyEdit(
+  { router, library }: { router: ReturnType<typeof createAppRouter>; library: ProjectLibrary },
+  name: 'undo' | 'redo',
+): Promise<void> {
+  if (isEditable(document.activeElement)) {
+    document.execCommand(name)
+    return
+  }
+  // Undo はページの編集画面だけのもの。他の画面では削除を確認ダイアログで確かめる
+  const page = router.state.matches.find(
+    (match) => match.routeId === '/p/$projectId_/pages/$pageId',
+  )
+  const id = (page?.params as { projectId?: ID } | undefined)?.projectId
+  const store = id ? await library.open(id) : undefined
+  if (name === 'undo') store?.undo()
+  else store?.redo()
+}
+
+/** 脚本のウィンドウで、メニューの Undo / Redo を受けて実行する。フォーカスのないウィンドウは何もしない */
+export async function listenEdit(options: {
+  router: ReturnType<typeof createAppRouter>
+  library: ProjectLibrary
+}): Promise<void> {
   await listen<'undo' | 'redo'>(EDIT_EVENT, (e) => {
-    if (document.hasFocus()) document.execCommand(e.payload)
+    if (document.hasFocus()) void applyEdit(options, e.payload)
   })
 }
 
