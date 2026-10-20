@@ -2,6 +2,7 @@ import {
   type Bubble,
   type BubbleGeometry,
   type BubbleOutline,
+  bubbleNeck,
   bubbleOutline,
   type PathCommand,
 } from '@manga/schema'
@@ -65,6 +66,10 @@ export function bubblePaths(shape: Shape, g: BubbleGeometry): BubblePaths {
   }
 }
 
+/** 連結フキダシの a から b への首の SVG path。中心が重なれば null */
+export const neckPath = (a: BubbleGeometry, b: BubbleGeometry): string | null =>
+  toPath(bubbleNeck(a, b))
+
 /** 本体の輪郭の SVG path */
 export const bodyPath = (shape: Shape, g: BubbleGeometry): string => bubblePaths(shape, g).body
 
@@ -107,6 +112,14 @@ if (import.meta.vitest) {
     expect(monologue.body).toMatch(/^M80 41L80 49C/)
     expect(monologue.body.match(/C/g)).toHaveLength(4)
     expect(monologue).toMatchObject({ fill: true, line: 'solid', tails: [] })
+  })
+
+  test('neckPath is the band between the two centres, and null when they coincide', () => {
+    const a = bubbleGeometry(bubble('normal'), panel)
+    const b = bubbleGeometry({ ...bubble('normal'), pos: { x: 0.5, y: 0.9 } }, panel)
+    // 中心は (60, 45) と (60, 65)、幅の半分は短い半径 5 の 0.18 倍
+    expect(neckPath(a, b)).toBe('M59.1 45L59.1 65L60.9 65L60.9 45Z')
+    expect(neckPath(a, a)).toBeNull()
   })
 
   test('tailPaths reach each tip, and are empty without tails or on a tailless shape', () => {

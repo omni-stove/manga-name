@@ -1,5 +1,8 @@
 import {
+  detachBubblePatch,
   fitBubblesPatch,
+  joinBubblesPatch,
+  joinCandidates,
   removeLastTailPatch,
   type Selection,
   type SplitAxis,
@@ -37,6 +40,8 @@ export interface ElementMenuContext {
   setTool(tool: Tool): void
   /** フキダシの形を選ぶメニューに切り替える */
   openShapes(): void
+  /** フキダシをつなぐ相手を選ぶメニューに切り替える */
+  openJoins(): void
 }
 
 /** 並びの中で、order が `order` のすぐ前とすぐ後の要素の order。端なら undefined */
@@ -164,10 +169,21 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
     if (!found) return []
     const shape = BUBBLE_SHAPES.find((s) => s.value === found.bubble.shape)
     const removeTail = removeLastTailPatch(found.bubble)
+    const detach = (page: Page) => detachBubblePatch(page, target.id)
     return [
       {
         label: m.web_canvas_menu_bubble_shape({ shape: shape?.label ?? found.bubble.shape }),
         onSelect: ctx.openShapes,
+      },
+      {
+        label: m.web_canvas_menu_bubble_join(),
+        disabled: joinCandidates(ctx.page, target.id).length === 0,
+        onSelect: ctx.openJoins,
+      },
+      {
+        label: m.web_canvas_menu_bubble_detach(),
+        disabled: detach(ctx.page).length === 0,
+        onSelect: () => ctx.editPage(m.web_canvas_menu_history_detach_bubble(), detach),
       },
       // しっぽを描かない形では、残っているしっぽを消しても見た目が変わらないので出さない
       ...(hasTail(found.bubble.shape)
@@ -230,6 +246,31 @@ export function shapeMenuItems(
   }))
 }
 
+/** つなぐ相手の項目に出すセリフの字数。超えた分は … で切る */
+const JOIN_TEXT_LENGTH = 12
+
+/** フキダシ bubble をつなぐ相手を選ぶ項目。相手は同じコマの joinCandidates で、順番とセリフの頭で見分ける */
+export function joinMenuItems(
+  bubble: Pick<Bubble, 'id'>,
+  ctx: Pick<ElementMenuContext, 'page' | 'editPage'>,
+): ContextMenuItem[] {
+  return joinCandidates(ctx.page, bubble.id).map((other) => {
+    const text = [...other.text.replace(/\s+/g, ' ').trim()]
+    const cut = text.length > JOIN_TEXT_LENGTH
+    const head = cut ? `${text.slice(0, JOIN_TEXT_LENGTH).join('')}…` : text.join('')
+    return {
+      label:
+        head === ''
+          ? m.web_canvas_menu_bubble_join_to_blank({ order: other.order })
+          : m.web_canvas_menu_bubble_join_to({ order: other.order, text: head }),
+      onSelect: () =>
+        ctx.editPage(m.web_canvas_menu_history_join_bubbles(), (page) =>
+          joinBubblesPatch(page, bubble.id, other.id),
+        ),
+    }
+  })
+}
+
 if (import.meta.vitest) {
   const { describe, expect, test, vi } = import.meta.vitest
   const { fixtures } = await import('@manga/schema')
@@ -250,6 +291,7 @@ if (import.meta.vitest) {
     remove: vi.fn(),
     setTool: vi.fn(),
     openShapes: vi.fn(),
+    openJoins: vi.fn(),
     ...overrides,
   })
   const item = (items: MenuItems, label: string) => {
@@ -382,6 +424,66 @@ if (import.meta.vitest) {
         contextOf({ page: withBubble({ shape: 'narration' }) }),
       )
       expect(() => item(narration, m.web_canvas_menu_bubble_remove_tail())).toThrow()
+    })
+
+    test('a bubble opens the menu to join another of its panel, and detaches a joined one', () => {
+      // bb_3 は pn_3 のただ 1 つのフキダシ
+      const lone = elementMenuItems({ kind: 'bubble', id: 'bb_3' }, contextOf())
+      expect(item(lone, m.web_canvas_menu_bubble_join()).disabled).toBe(true)
+      expect(item(lone, m.web_canvas_menu_bubble_detach()).disabled).toBe(true)
+
+      const pair = (joinedTo?: string): Page => ({
+        ...page,
+        panels: page.panels.map((p) => {
+          const first = p.bubbles[0]
+          if (p.id !== 'pn_3' || !first) return p
+          const next = { ...first, id: 'bb_3b', order: 2, text: '  続けて\n喋る  ', joinedTo }
+          return { ...p, bubbles: [first, next] }
+        }),
+      })
+      const ctx = contextOf({ page: pair() })
+      const items = elementMenuItems({ kind: 'bubble', id: 'bb_3' }, ctx)
+      expect(item(items, m.web_canvas_menu_bubble_detach()).disabled).toBe(true)
+      item(items, m.web_canvas_menu_bubble_join()).onSelect()
+      expect(ctx.openJoins).toHaveBeenCalled()
+
+      const joins = joinMenuItems({ id: 'bb_3' }, ctx)
+      expect(joins.map((j) => j.label)).toEqual([
+        m.web_canvas_menu_bubble_join_to({ order: 2, text: '続けて 喋る' }),
+      ])
+      joins[0]?.onSelect()
+      const [label, build] = vi.mocked(ctx.editPage).mock.calls[0] ?? []
+      expect(label).toBe(m.web_canvas_menu_history_join_bubbles())
+      expect(build?.(pair())).toEqual([
+        { op: 'add', path: '/panels/2/bubbles/0/joinedTo', value: 'bb_3b' },
+      ])
+
+      const joinedCtx = contextOf({ page: pair('bb_3') })
+      const joined = elementMenuItems({ kind: 'bubble', id: 'bb_3' }, joinedCtx)
+      expect(item(joined, m.web_canvas_menu_bubble_join()).disabled).toBe(true)
+      item(joined, m.web_canvas_menu_bubble_detach()).onSelect()
+      const [detachLabel, detach] = vi.mocked(joinedCtx.editPage).mock.calls[0] ?? []
+      expect(detachLabel).toBe(m.web_canvas_menu_history_detach_bubble())
+      expect(detach?.(pair('bb_3'))).toEqual([
+        { op: 'remove', path: '/panels/2/bubbles/1/joinedTo' },
+      ])
+    })
+
+    test('joinMenuItems cuts a long line and names a blank one', () => {
+      const withText = (text: string): Page => ({
+        ...page,
+        panels: page.panels.map((p) => {
+          const first = p.bubbles[0]
+          if (p.id !== 'pn_3' || !first) return p
+          return { ...p, bubbles: [first, { ...first, id: 'bb_3b', order: 2, text }] }
+        }),
+      })
+      const label = (text: string) =>
+        joinMenuItems({ id: 'bb_3' }, contextOf({ page: withText(text) }))[0]?.label
+      expect(label('あいうえおかきくけこさしすせそ')).toBe(
+        m.web_canvas_menu_bubble_join_to({ order: 2, text: 'あいうえおかきくけこさし…' }),
+      )
+      expect(label('  ')).toBe(m.web_canvas_menu_bubble_join_to_blank({ order: 2 }))
     })
 
     test('locking toggles the locked flag of the element', () => {

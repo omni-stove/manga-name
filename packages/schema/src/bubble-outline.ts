@@ -56,6 +56,8 @@ const MONOLOGUE_CORNER = 0.1
 /** しっぽの付け根の開き（ラジアン）と、付け根を輪郭から中心へ入れる深さ。深さは最も深い凹みより深くする */
 const TAIL_SPREAD = 0.35
 const TAIL_INSET = 0.5
+/** 連結フキダシの首の幅の半分。小さい方のフキダシの短い半径に対する比率 */
+const NECK_HALF_WIDTH = 0.18
 const KAPPA = 0.5522847498
 const ARC_SAMPLES = 256
 
@@ -328,6 +330,54 @@ export function bubbleOutline(shape: Shape, g: BubbleGeometry): BubbleOutline {
   }
 }
 
+/**
+ * 連結フキダシの a と b をつなぐ首。両方の中心を結ぶ線上の細い帯で、両端は中心に置いて本体の塗りに隠す。
+ * 中心が重なれば空
+ */
+export function bubbleNeck(a: BubbleGeometry, b: BubbleGeometry): PathCommand[] {
+  const dx = b.cx - a.cx
+  const dy = b.cy - a.cy
+  const len = Math.hypot(dx, dy)
+  if (!(len > 0)) return []
+  const half = Math.min(unitOf(a), unitOf(b)) * NECK_HALF_WIDTH
+  const nx = (-dy / len) * half
+  const ny = (dx / len) * half
+  return polygon([
+    { x: a.cx + nx, y: a.cy + ny },
+    { x: b.cx + nx, y: b.cy + ny },
+    { x: b.cx - nx, y: b.cy - ny },
+    { x: a.cx - nx, y: a.cy - ny },
+  ])
+}
+
+/**
+ * コマのフキダシを、joinedTo で辿れるものどうしの組に分ける。つないでいないフキダシは 1 つだけの組。
+ * 組の中は order 順で、組は先頭のフキダシの order 順。コマに無いフキダシや自分自身を指す joinedTo は無視する
+ */
+export function bubbleGroups<B extends Pick<Bubble, 'id' | 'order' | 'joinedTo'>>(
+  bubbles: readonly B[],
+): B[][] {
+  const sorted = [...bubbles].sort((a, b) => a.order - b.order)
+  const parent = new Map(sorted.map((b) => [b.id, b.id]))
+  const root = (id: string): string => {
+    let r = id
+    while (parent.get(r) !== r) r = parent.get(r) as string
+    return r
+  }
+  for (const b of sorted) {
+    if (b.joinedTo === undefined || !parent.has(b.joinedTo)) continue
+    parent.set(root(b.joinedTo), root(b.id))
+  }
+  const groups = new Map<string, B[]>()
+  for (const b of sorted) {
+    const r = root(b.id)
+    const group = groups.get(r)
+    if (group) group.push(b)
+    else groups.set(r, [b])
+  }
+  return [...groups.values()]
+}
+
 /** セリフを置く箱。輪郭の内側に収まるよう shape ごとに縮める */
 export function bubbleTextBox(
   shape: Shape,
@@ -507,6 +557,39 @@ if (import.meta.vitest) {
     expect(up).toContainEqual({ x: 10, y: 20 })
     expect(bubbleOutline('normal', { ...g, tails: [] }).tails).toEqual([])
     expect(bubbleOutline('narration', { ...g, tails: tips }).tails).toEqual([])
+  })
+
+  test('bubbleNeck is a thin band along the line between the two centres', () => {
+    const left = { cx: 40, cy: 100, rx: 30, ry: 20 }
+    const right = { cx: 160, cy: 100, rx: 40, ry: 50 }
+    const rounded = (cmds: PathCommand[]) =>
+      points(cmds)
+        .map((p) => ({ x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 }))
+        .sort((p, q) => p.x - q.x || p.y - q.y)
+    const neck = bubbleNeck(left, right)
+    expect(neck[0]?.op).toBe('M')
+    expect(neck.at(-1)?.op).toBe('Z')
+    // 幅の半分は小さい方の短い半径 20 の 0.18 倍
+    expect(rounded(neck)).toEqual([
+      { x: 40, y: 96.4 },
+      { x: 40, y: 103.6 },
+      { x: 160, y: 96.4 },
+      { x: 160, y: 103.6 },
+    ])
+    expect(rounded(bubbleNeck(right, left))).toEqual(rounded(neck))
+    expect(bubbleNeck(left, { ...left, rx: 10 })).toEqual([])
+  })
+
+  test('bubbleGroups gathers the bubbles reached by joinedTo, in order', () => {
+    const b = (id: string, order: number, joinedTo?: string) => ({ id, order, joinedTo })
+    const [a, c, d, e, f] = [b('a', 1), b('c', 3, 'a'), b('d', 4), b('e', 5, 'd'), b('f', 2)]
+    expect(bubbleGroups([e, d, c, a, f])).toEqual([[a, c], [f], [d, e]])
+    // 鎖になったつなぎも 1 組にし、互いを指し合っても 1 組のまま
+    const g = b('g', 6, 'e')
+    const ids = (groups: { id: string }[][]) => groups.map((group) => group.map((x) => x.id))
+    expect(ids(bubbleGroups([a, d, e, g]))).toEqual([['a'], ['d', 'e', 'g']])
+    expect(ids(bubbleGroups([b('x', 1, 'y'), b('y', 2, 'x')]))).toEqual([['x', 'y']])
+    expect(ids(bubbleGroups([b('x', 1, 'x'), b('y', 2, 'missing')]))).toEqual([['x'], ['y']])
   })
 
   test('bubbleTextBox keeps more of a box-shaped body', () => {

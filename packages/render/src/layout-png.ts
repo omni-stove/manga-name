@@ -1,6 +1,6 @@
-import type { ID, Page } from '@manga/schema'
+import { bubbleGroups, type ID, type Page } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
-import { bubbleGeometry, fillBubble } from './bubble'
+import { bubbleGeometry, fillBubble, joinedGeometry } from './bubble'
 import type { PxRect } from './geometry'
 import { withClip } from './panel'
 import { drawPlacement, hasPlacement } from './placement'
@@ -37,9 +37,14 @@ export async function renderLayoutPng(
   c.fillStyle = GRAY
   c.fillRect(0, 0, width, height)
   const outline = (panel.shape ?? []).map((p) => ({ x: p.x * width, y: p.y * height }))
-  for (const bubble of panel.bubbles) {
-    const fill = () => fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff')
-    if (bubble.overflow || outline.length === 0) fill()
+  for (const group of bubbleGroups(panel.bubbles)) {
+    const fill = () => {
+      for (const bubble of group) {
+        const joined = joinedGeometry(bubble, panel.bubbles, rect)
+        fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff', joined)
+      }
+    }
+    if (group[0]?.overflow || outline.length === 0) fill()
     else withClip(c, outline, fill)
   }
 
