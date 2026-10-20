@@ -27,7 +27,7 @@ export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[]
   option('none', m.bubble_shape_none),
 ]
 
-const typefaceLabel = (typeface: NonNullable<Bubble['typeface']>) =>
+export const typefaceLabel = (typeface: NonNullable<Bubble['typeface']>) =>
   m[`bubble_typeface_${typeface}` as const]()
 
 /** 書体の選択肢。空は書体を持たず形に合わせる */

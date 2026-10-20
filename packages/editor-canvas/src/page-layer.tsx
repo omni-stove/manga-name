@@ -25,10 +25,10 @@ import {
   type Rect,
   type ReferenceImage,
   SFX_OUTLINE,
-  SFX_TYPEFACE,
   sceneHeading,
   sfxFontSize,
   sfxLetterings,
+  sfxTypeface,
   softEdgeStrokes,
   TONE_MATRICES,
 } from '@manga/schema'
@@ -935,16 +935,26 @@ function VerticalText({
   )
 }
 
-/** sfx の焦点の描き文字。焦点の位置を中心に、太ゴシックの縦書きの黒い字に白いふちを付けて置く */
+/**
+ * sfx の焦点の描き文字。焦点の位置を中心に、焦点の書体と大きさの縦書きの黒い字に白いふちを付けて置き、
+ * 焦点の傾きだけ中心で回す
+ */
 function SfxView({ focus, panel }: { focus: FocusPoint; panel: Box }) {
-  const fontSize = sfxFontSize(focus.weight, panel.w, panel.h)
+  const fontSize = sfxFontSize(focus, panel.w, panel.h)
+  const cx = panel.x + focus.pos.x * panel.w
+  const cy = panel.y + focus.pos.y * panel.h
+  const rotation = focus.rotation ?? 0
   return (
-    <g data-sfx-id={focus.id} pointerEvents="none">
+    <g
+      data-sfx-id={focus.id}
+      transform={rotation === 0 ? undefined : `rotate(${rotation} ${cx} ${cy})`}
+      pointerEvents="none"
+    >
       <VerticalText
         layout={layoutUnbroken(focus.label, fontSize)}
-        cx={panel.x + focus.pos.x * panel.w}
-        cy={panel.y + focus.pos.y * panel.h}
-        typeface={SFX_TYPEFACE}
+        cx={cx}
+        cy={cy}
+        typeface={sfxTypeface(focus)}
         fill="#000"
         halo={{ color: '#fff', width: fontSize * SFX_OUTLINE }}
       />

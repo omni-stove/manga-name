@@ -13,6 +13,21 @@ export function optionalString(path: string, current: string | undefined, next: 
   return [{ op: 'add', path, value: next }]
 }
 
+/**
+ * 省略すると fallback とみなす任意の数値項目の Patch。fallback にすると項目を持たない形にする。
+ * 無い項目を fallback にする Patch は空で、同じ値への変更も空
+ */
+export function optionalNumber(
+  path: string,
+  current: number | undefined,
+  next: number,
+  fallback: number,
+): Patch {
+  if (next === fallback) return current === undefined ? [] : [{ op: 'remove', path }]
+  if (next === current) return []
+  return [{ op: 'add', path, value: next }]
+}
+
 /** 2 つの要素の order を入れ替える Patch。配列内の添字を path に使う */
 export function swapOrder(
   base: string,
@@ -68,6 +83,18 @@ if (import.meta.vitest) {
     expect(optionalString('/note', 'a', 'a')).toEqual([])
     expect(optionalString('/note', undefined, 'b')).toEqual([
       { op: 'add', path: '/note', value: 'b' },
+    ])
+  })
+
+  test('optionalNumber removes on the fallback, adds otherwise, and is empty when nothing changes', () => {
+    expect(optionalNumber('/scale', undefined, 1, 1)).toEqual([])
+    expect(optionalNumber('/scale', 2, 1, 1)).toEqual([{ op: 'remove', path: '/scale' }])
+    expect(optionalNumber('/scale', 2, 2, 1)).toEqual([])
+    expect(optionalNumber('/scale', undefined, 1.5, 1)).toEqual([
+      { op: 'add', path: '/scale', value: 1.5 },
+    ])
+    expect(optionalNumber('/rotation', 30, -45, 0)).toEqual([
+      { op: 'add', path: '/rotation', value: -45 },
     ])
   })
 

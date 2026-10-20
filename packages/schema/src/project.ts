@@ -1,6 +1,7 @@
 import { z } from 'zod'
+import { SFX_SCALE_MAX, SFX_SCALE_MIN } from './sfx-lettering'
 
-export const SCHEMA_VERSION = 25 as const
+export const SCHEMA_VERSION = 26 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -97,7 +98,8 @@ export const FocusKindSchema = z.enum(['face', 'keyObject', 'sfx'])
 
 /**
  * コマの中で目を引く点。pos はコマ内座標、weight は目の引き具合。
- * sfx の label は描き文字として紙面に描く（sfxLetterings）。face と keyObject は紙面に描かない
+ * sfx の label は描き文字として紙面に描く（sfxLetterings）。face と keyObject は紙面に描かない。
+ * rotation、typeface、scale は描き文字にだけ効く
  */
 export const FocusPointSchema = z.object({
   id: IdSchema,
@@ -106,6 +108,12 @@ export const FocusPointSchema = z.object({
   pos: PointSchema,
   weight: unit,
   characterId: IdSchema.optional(),
+  /** 描き文字の傾き。度で、正は時計回り。省略は 0 */
+  rotation: z.number().min(-180).max(180).optional(),
+  /** 描き文字の書体。省略は SFX_TYPEFACE */
+  typeface: BubbleTypefaceSchema.optional(),
+  /** weight から決めた描き文字の大きさに掛ける倍率。省略は 1 */
+  scale: z.number().min(SFX_SCALE_MIN).max(SFX_SCALE_MAX).optional(),
   locked: z.boolean().optional(),
 })
 
@@ -521,6 +529,21 @@ if (import.meta.vitest) {
       expect(paths).toContain(panelPath(0, 'bubbles.0.pos.x'))
       expect(paths).toContain(panelPath(1, 'rect.w'))
       expect(paths).toContain(panelPath(1, 'bubbles.0.size.w'))
+    })
+
+    test('FocusPoint.rotation is -180..180 and FocusPoint.scale is 0.25..4', async () => {
+      const project = await loadFixture()
+      const [first, second] = panel(project, 0).focusPoints
+      if (!first || !second) throw new Error('fixture panel 1 has fewer than 2 focus points')
+      Object.assign(first, { kind: 'sfx', rotation: 180, typeface: 'hand', scale: 4 })
+      expect(ProjectSchema.safeParse(project).success).toBe(true)
+      Object.assign(first, { rotation: 181, scale: 0.2 })
+      Object.assign(second, { rotation: -181, scale: 4.5 })
+      const paths = issuePaths(project)
+      expect(paths).toContain(panelPath(0, 'focusPoints.0.rotation'))
+      expect(paths).toContain(panelPath(0, 'focusPoints.0.scale'))
+      expect(paths).toContain(panelPath(0, 'focusPoints.1.rotation'))
+      expect(paths).toContain(panelPath(0, 'focusPoints.1.scale'))
     })
   })
 }

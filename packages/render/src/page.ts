@@ -19,9 +19,9 @@ import {
   panelOutline,
   panelTone,
   SFX_OUTLINE,
-  SFX_TYPEFACE,
   sfxFontSize,
   sfxLetterings,
+  sfxTypeface,
   TONE_MATRICES,
 } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
@@ -77,7 +77,7 @@ async function loadArt(
 
 /**
  * ページ 1 枚を PNG に合成する。同じ Page と同じアセットからは同じバイト列が出る。
- * sfx の焦点の label は、絵の上、フキダシと枠線の下に、コマの輪郭で切った描き文字として描く。
+ * sfx の焦点の label は、絵の上、フキダシと枠線の下に、コマの輪郭で切った描き文字として、焦点ごとの傾き・書体・大きさで描く。
  * 紙面全体に重ねるトーンは、フキダシと間白まで描いた後に乗算で重ねる。
  * face と keyObject の焦点、ベクトル、診断、参考画像、手描きは描かない。
  */
@@ -97,7 +97,7 @@ export async function drawPage(
 ): Promise<Surface> {
   const typefaces = page.panels.flatMap((panel) => [
     ...panel.bubbles.map(bubbleTypeface),
-    ...sfxLetterings(panel).map(() => SFX_TYPEFACE),
+    ...sfxLetterings(panel).map(sfxTypeface),
   ])
   const [backend] = await Promise.all([getBackend(), loadFonts(typefaces)])
   const unit = pagePixelSize(ctx.settings, opts.width)
@@ -141,17 +141,21 @@ export async function drawPage(
   const drawSfx = (panel: Panel) => {
     const rect = rectToPx(panel.rect, pageRect)
     for (const focus of sfxLetterings(panel)) {
-      const fontPx = sfxFontSize(focus.weight, rect.w, rect.h)
+      const fontPx = sfxFontSize(focus, rect.w, rect.h)
       const center = pointToPx(focus.pos, rect)
+      c.save()
+      c.translate(center.x, center.y)
+      c.rotate(((focus.rotation ?? 0) * Math.PI) / 180)
       drawVerticalText(
         c,
         unbrokenLines(focus.label),
         fontPx,
-        { ...center, w: 0, h: 0 },
+        { x: 0, y: 0, w: 0, h: 0 },
         '#000',
-        SFX_TYPEFACE,
+        sfxTypeface(focus),
         { color: '#fff', width: fontPx * SFX_OUTLINE },
       )
+      c.restore()
     }
   }
 
@@ -766,7 +770,7 @@ if (import.meta.vitest) {
     // 焦点の位置を中心に、字の高さの 2 字ぶんの範囲で黒い画素が増える
     const cx = Math.round((pn2.rect.x + pn2.rect.w * 0.5) * width)
     const cy = Math.round((pn2.rect.y + pn2.rect.h * 0.5) * pageH)
-    const size = Math.round(sfxFontSize(0.5, pn2.rect.w * width, pn2.rect.h * pageH))
+    const size = Math.round(sfxFontSize({ weight: 0.5 }, pn2.rect.w * width, pn2.rect.h * pageH))
     const darkAround = (data: Uint8ClampedArray) => {
       let n = 0
       for (let y = cy - size; y < cy + size; y++) {
@@ -777,6 +781,88 @@ if (import.meta.vitest) {
       return n
     }
     expect(darkAround(drawn)).toBeGreaterThan(darkAround(plain))
+  })
+
+  test('描き文字: 焦点ごとの傾き、書体、大きさで描く', async () => {
+    const { page, ctx } = withArts()
+    const [pn1, pn2, pn3, ...rest] = page.panels as [Panel, Panel, Panel, ...Panel[]]
+    const styled: Page = {
+      ...page,
+      panels: [
+        {
+          ...pn1,
+          focusPoints: [
+            sfxFocus('fp_sfx_1', { label: 'ゴゴゴ', pos: { x: 0.3, y: 0.5 }, rotation: -20 }),
+            sfxFocus('fp_sfx_2', {
+              label: 'ザッ',
+              pos: { x: 0.75, y: 0.6 },
+              weight: 0,
+              typeface: 'mincho',
+              scale: 2.5,
+            }),
+          ],
+        },
+        {
+          ...pn2,
+          focusPoints: [
+            sfxFocus('fp_sfx_3', { label: 'ドンッ!!', rotation: 90, typeface: 'hand', scale: 0.6 }),
+          ],
+        },
+        { ...pn3, focusPoints: [sfxFocus('fp_sfx_4', { label: 'シーン', rotation: 180 })] },
+        ...rest,
+      ],
+    }
+    const png = await renderPage(styled, ctx, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-sfx-styled', png)
+  })
+
+  test('描き文字の傾きは焦点を中心に字の並びを回し、大きさの倍率は字を大きくする', async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const [pn1, pn2, ...rest] = emptyPage.panels as [Panel, Panel, ...Panel[]]
+    const withFocus = (focusPoints: FocusPoint[]): Page => ({
+      ...emptyPage,
+      panels: [pn1, { ...pn2, focusPoints }, ...rest],
+    })
+    const draw = async (page: Page) => (await pixels(await renderPage(page, noAssets, opts))).data
+    const drawSfx = (patch: Partial<FocusPoint>) =>
+      draw(withFocus([sfxFocus('fp', { label: 'ドドド', weight: 0.2, ...patch })]))
+    const width = SNAPSHOT_WIDTH
+    const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+    const plain = await draw(withFocus([]))
+    /** plain に無く増えた黒い画素を囲む矩形の幅と高さ */
+    const inked = (data: Uint8ClampedArray) => {
+      const x0 = Math.ceil(pn2.rect.x * width)
+      const x1 = Math.floor((pn2.rect.x + pn2.rect.w) * width)
+      const y0 = Math.ceil(pn2.rect.y * pageH)
+      const y1 = Math.floor((pn2.rect.y + pn2.rect.h) * pageH)
+      let box = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity }
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * width + x) * 4
+          if ((data[i] ?? 255) < 64 && (plain[i] ?? 255) >= 64) {
+            box = {
+              left: Math.min(box.left, x),
+              right: Math.max(box.right, x),
+              top: Math.min(box.top, y),
+              bottom: Math.max(box.bottom, y),
+            }
+          }
+        }
+      }
+      return { w: box.right - box.left, h: box.bottom - box.top }
+    }
+
+    const upright = inked(await drawSfx({}))
+    expect(upright.h).toBeGreaterThan(upright.w * 2)
+    const turned = inked(await drawSfx({ rotation: 90 }))
+    expect(turned.w).toBeGreaterThan(turned.h * 2)
+    expect(turned.w).toBeCloseTo(upright.h, -1)
+    const doubled = inked(await drawSfx({ scale: 2 }))
+    expect(doubled.h).toBeGreaterThan(upright.h * 1.8)
   })
 
   test('効果線: 集中線、スピード線、黒塗りのコマの白い集中線を絵の上に描く', async () => {
