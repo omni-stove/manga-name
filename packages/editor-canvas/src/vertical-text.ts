@@ -35,7 +35,7 @@ interface VerticalColumn {
   offset: number
 }
 
-interface VerticalLayout {
+export interface VerticalLayout {
   /** 右から順の列 */
   columns: VerticalColumn[]
   /** 組み全体の幅（mm） */
@@ -166,6 +166,11 @@ export function layoutVertical(text: string, box: { w: number; h: number }): Ver
   return toLayout(kept, fontSize, true)
 }
 
+/** 折り返さずに改行でだけ列を分け、fontSize（mm）で組む。描き文字のように文字サイズが先に決まっている文に使う */
+export function layoutUnbroken(text: string, fontSize: number): VerticalLayout {
+  return toLayout(toParagraphs(text), fontSize, false)
+}
+
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
   const texts = (layout: VerticalLayout) => layout.columns.map((c) => c.text)
@@ -216,6 +221,13 @@ if (import.meta.vitest) {
       { text: 'い', length: 1, rubies: [], emphases: [], offset: 9 + 1.2 + 3 },
     ])
     expect(layout.width).toBeCloseTo(9 + 1.2 + 6)
+  })
+
+  test('layoutUnbroken keeps the given size and breaks only at newlines', () => {
+    const layout = layoutUnbroken('ゴゴゴゴゴゴゴゴ\nゴ', 10)
+    expect(layout.fontSize).toBe(10)
+    expect(texts(layout)).toEqual(['ゴゴゴゴゴゴゴゴ', 'ゴ'])
+    expect(layout.width).toBeCloseTo(10 + 2 + 10)
   })
 
   test('a ruby word moves to the next column as a whole', () => {

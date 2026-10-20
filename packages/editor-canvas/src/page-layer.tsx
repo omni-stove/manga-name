@@ -9,6 +9,7 @@ import {
   currentArt,
   effectInk,
   effectLines,
+  type FocusPoint,
   frameOutline,
   groundColor,
   hasFrameLine,
@@ -22,6 +23,10 @@ import {
   panelTone,
   type Rect,
   type ReferenceImage,
+  SFX_OUTLINE,
+  SFX_TYPEFACE,
+  sfxFontSize,
+  sfxLetterings,
   softEdgeStrokes,
   TONE_MATRICES,
 } from '@manga/schema'
@@ -30,7 +35,13 @@ import { type AssetState, loadAsset } from './asset'
 import { type Box, bubbleGeometry, bubblePaths } from './bubble-shape'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
-import { EMPHASIS_MARK, layoutVertical, RUBY_SCALE } from './vertical-text'
+import {
+  EMPHASIS_MARK,
+  layoutUnbroken,
+  layoutVertical,
+  RUBY_SCALE,
+  type VerticalLayout,
+} from './vertical-text'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
 /**
@@ -80,8 +91,8 @@ interface PageLayerProps {
 }
 
 /**
- * ページの白地、参考画像、コマ、生成画像、フキダシと、紙面全体に重ねるトーンを描く。ズームとパンとドラッグでは props が変わらないので、
- * memo で再描画を飛ばす。コマ、フキダシ、オーバーレイもそれぞれ memo し、編集や選択の変更では
+ * ページの白地、参考画像、コマ、生成画像、sfx の焦点の描き文字、フキダシと、紙面全体に重ねるトーンを描く。
+ * ズームとパンとドラッグでは props が変わらないので、memo で再描画を飛ばす。コマ、フキダシ、オーバーレイもそれぞれ memo し、編集や選択の変更では
  * 変わった要素だけを描き直す
  */
 export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
@@ -252,6 +263,7 @@ const PanelView = memo(function PanelView({
   const outline = frameOutline(panelPolygon(panel, width, height), panel.frame, unit)
   const points = polygonPoints(outline)
   const line = hasFrameLine(panel.frame)
+  const sfx = sfxLetterings(panel)
   const placeholder = (
     <g clipPath={`url(#${clipId})`}>
       <Placeholder panel={panel} rect={rect} error={false} />
@@ -301,6 +313,13 @@ const PanelView = memo(function PanelView({
               strokeWidth={w}
               strokeLinejoin="round"
             />
+          ))}
+        </g>
+      )}
+      {sfx.length > 0 && (
+        <g clipPath={`url(#${clipId})`}>
+          {sfx.map((focus) => (
+            <SfxView key={focus.id} focus={focus} panel={rect} />
           ))}
         </g>
       )}
@@ -680,14 +699,10 @@ const BubbleView = memo(function BubbleView({
     panelBox({ rect: frame }, width, height),
   )
   const layout = layoutVertical(bubble.text, box)
-  const right = box.x + box.w / 2 + layout.width / 2
-  const fs = layout.fontSize
-  const rubySize = fs * RUBY_SCALE
   const black = paths.fill && bubble.fill === 'black'
   const paper = black ? '#000' : '#fff'
   const ink = black || (onBlack && !paths.fill) ? '#fff' : '#000'
   const typeface = bubbleTypeface(bubble)
-  const font = TYPEFACES[typeface]
   const shapes = [...paths.tails, paths.body]
   const illegible =
     layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
@@ -724,70 +739,13 @@ const BubbleView = memo(function BubbleView({
             <path key={`fill-${i}`} d={d} fill={paper} />
           ))}
         {paths.ink !== null && <path d={paths.ink} fill="#000" />}
-        {layout.columns.length > 0 && (
-          <>
-            <text
-              writingMode="vertical-rl"
-              fontFamily={font.family}
-              fontWeight={font.weight}
-              fontSize={fs}
-              textAnchor="middle"
-              fill={ink}
-              data-truncated={layout.truncated || undefined}
-            >
-              {layout.columns.map((column, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
-                <tspan key={i} x={right - column.offset} y={box.y + box.h / 2}>
-                  {column.text}
-                </tspan>
-              ))}
-            </text>
-            {layout.columns.flatMap((column, i) => {
-              // 列は中央揃えで、字は 1 字が文字サイズ 1 つぶんの高さとみなす
-              const top = box.y + box.h / 2 - (column.length * fs) / 2
-              return column.rubies.map((ruby) => (
-                <text
-                  // biome-ignore lint/suspicious/noArrayIndexKey: ルビは列と列の中の位置で決まる
-                  key={`${i}-${ruby.start}`}
-                  writingMode="vertical-rl"
-                  fontFamily={font.family}
-                  fontWeight={font.weight}
-                  fontSize={rubySize}
-                  textAnchor="middle"
-                  fill={ink}
-                  x={right - column.offset + (fs + rubySize) / 2}
-                  y={top + (ruby.start + ruby.length / 2) * fs}
-                  data-ruby
-                >
-                  {ruby.text}
-                </text>
-              ))
-            })}
-            {layout.columns.flatMap((column, i) => {
-              const top = box.y + box.h / 2 - (column.length * fs) / 2
-              const rows = column.emphases.flatMap(({ start, length }) =>
-                Array.from({ length }, (_, k) => start + k),
-              )
-              return rows.map((row) => (
-                <text
-                  // biome-ignore lint/suspicious/noArrayIndexKey: 傍点は列と列の中の位置で決まる
-                  key={`${i}-${row}`}
-                  writingMode="vertical-rl"
-                  fontFamily={font.family}
-                  fontWeight={font.weight}
-                  fontSize={rubySize}
-                  textAnchor="middle"
-                  fill={ink}
-                  x={right - column.offset + (fs + rubySize) / 2}
-                  y={top + (row + 0.5) * fs}
-                  data-emphasis
-                >
-                  {EMPHASIS_MARK}
-                </text>
-              ))
-            })}
-          </>
-        )}
+        <VerticalText
+          layout={layout}
+          cx={box.x + box.w / 2}
+          cy={box.y + box.h / 2}
+          typeface={typeface}
+          fill={ink}
+        />
       </g>
       {selected ? (
         <path
@@ -828,6 +786,110 @@ const BubbleView = memo(function BubbleView({
     </g>
   )
 })
+
+/**
+ * 組んだ縦書きを、中心 (cx, cy) に右の列から左へ置く。ルビは親文字の右に置く。
+ * halo を渡すと、その色と太さ（mm）のふちを字の下に敷く
+ */
+function VerticalText({
+  layout,
+  cx,
+  cy,
+  typeface,
+  fill,
+  halo,
+}: {
+  layout: VerticalLayout
+  cx: number
+  cy: number
+  typeface: NonNullable<Bubble['typeface']>
+  fill: string
+  halo?: { color: string; width: number }
+}) {
+  if (layout.columns.length === 0) return null
+  const right = cx + layout.width / 2
+  const fs = layout.fontSize
+  const rubySize = fs * RUBY_SCALE
+  const font = TYPEFACES[typeface]
+  const paint = {
+    writingMode: 'vertical-rl',
+    fontFamily: font.family,
+    fontWeight: font.weight,
+    textAnchor: 'middle' as const,
+    fill,
+    ...(halo && {
+      stroke: halo.color,
+      strokeWidth: halo.width,
+      strokeLinejoin: 'round' as const,
+      paintOrder: 'stroke',
+    }),
+  }
+  return (
+    <>
+      <text {...paint} fontSize={fs} data-truncated={layout.truncated || undefined}>
+        {layout.columns.map((column, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
+          <tspan key={i} x={right - column.offset} y={cy}>
+            {column.text}
+          </tspan>
+        ))}
+      </text>
+      {layout.columns.flatMap((column, i) => {
+        // 列は中央揃えで、字は 1 字が文字サイズ 1 つぶんの高さとみなす
+        const top = cy - (column.length * fs) / 2
+        return column.rubies.map((ruby) => (
+          <text
+            // biome-ignore lint/suspicious/noArrayIndexKey: ルビは列と列の中の位置で決まる
+            key={`${i}-${ruby.start}`}
+            {...paint}
+            fontSize={rubySize}
+            x={right - column.offset + (fs + rubySize) / 2}
+            y={top + (ruby.start + ruby.length / 2) * fs}
+            data-ruby
+          >
+            {ruby.text}
+          </text>
+        ))
+      })}
+      {layout.columns.flatMap((column, i) => {
+        const top = cy - (column.length * fs) / 2
+        const rows = column.emphases.flatMap(({ start, length }) =>
+          Array.from({ length }, (_, k) => start + k),
+        )
+        return rows.map((row) => (
+          <text
+            // biome-ignore lint/suspicious/noArrayIndexKey: 傍点は列と列の中の位置で決まる
+            key={`${i}-${row}`}
+            {...paint}
+            fontSize={rubySize}
+            x={right - column.offset + (fs + rubySize) / 2}
+            y={top + (row + 0.5) * fs}
+            data-emphasis
+          >
+            {EMPHASIS_MARK}
+          </text>
+        ))
+      })}
+    </>
+  )
+}
+
+/** sfx の焦点の描き文字。焦点の位置を中心に、太ゴシックの縦書きの黒い字に白いふちを付けて置く */
+function SfxView({ focus, panel }: { focus: FocusPoint; panel: Box }) {
+  const fontSize = sfxFontSize(focus.weight, panel.w, panel.h)
+  return (
+    <g data-sfx-id={focus.id} pointerEvents="none">
+      <VerticalText
+        layout={layoutUnbroken(focus.label, fontSize)}
+        cx={panel.x + focus.pos.x * panel.w}
+        cy={panel.y + focus.pos.y * panel.h}
+        typeface={SFX_TYPEFACE}
+        fill="#000"
+        halo={{ color: '#fff', width: fontSize * SFX_OUTLINE }}
+      />
+    </g>
+  )
+}
 
 /** 文字が小さすぎるか収まらないフキダシの左上に出す、出力に出ない警告の印 */
 function IllegibleAlert({ x, y, truncated }: { x: number; y: number; truncated: boolean }) {
