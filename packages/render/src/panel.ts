@@ -125,13 +125,14 @@ export function drawPlaceholder(
   rect: PxRect,
   outline: readonly PxPoint[],
   fontPx: number,
+  ink = '#000',
 ): void {
   const pad = fontPx
   const numberPx = fontPx * 1.8
   ctx.save()
   tracePolygon(ctx, outline)
   ctx.clip()
-  ctx.fillStyle = '#000'
+  ctx.fillStyle = ink
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
   ctx.font = `${numberPx}px "${FONT_FAMILY}"`

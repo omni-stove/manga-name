@@ -271,7 +271,7 @@ const PanelView = memo(function PanelView({
           frame={frame}
           selected={bubble.id === selectedBubble}
           clipId={clipId}
-          onBlack={panel.fill === 'black'}
+          onBlack={panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')}
         />
       ))}
       {/* 枠線を引かないコマは出力に枠線が出ないが、選んで動かせるよう作業用の点線で輪郭を見せる */}

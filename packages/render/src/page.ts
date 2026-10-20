@@ -99,6 +99,9 @@ export async function drawPage(
   const innerRect = rectToPx(innerFrameOf(page), pageRect)
   const panels = paintOrder(page.panels)
   const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx, page.tone)))
+  // 黒塗りのコマと、黒い地の上の枠なしのコマは、中が黒い
+  const blackInside = (panel: Panel) =>
+    panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')
   const drawBubbles = (panel: Panel, overflow: boolean) => {
     const rect = rectToPx(panel.rect, pageRect)
     for (const bubble of byOrder(panel.bubbles)) {
@@ -109,7 +112,7 @@ export async function drawPage(
       const box = clipTextBox(overflow ? text : clipTextBox(text, rect), innerRect)
       const { lines, fontPx } = layoutBubbleText(bubble.text, box, unit.w * MIN_FONT)
       // 白い地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
-      const onBlack = !overflow && panel.fill === 'black' && !bubbleOutline(bubble.shape, g).fill
+      const onBlack = !overflow && blackInside(panel) && !bubbleOutline(bubble.shape, g).fill
       drawVerticalText(c, lines, fontPx, box, onBlack ? '#fff' : '#000')
     }
   }
@@ -127,7 +130,8 @@ export async function drawPage(
     else if (panel.frame !== 'none') fillOutline(c, outline, '#fff')
     if (image) drawCover(c, image, rect, outline)
     else if (panel.fill === undefined) {
-      drawPlaceholder(c, panel, rect, outline, unit.w * NOTE_FONT)
+      const ink = blackInside(panel) ? '#fff' : '#000'
+      drawPlaceholder(c, panel, rect, outline, unit.w * NOTE_FONT, ink)
     }
     // フキダシまでぼかさないよう、絵の直後にぼかす
     if (panel.frame === 'soft') drawSoftEdge(c, outline, unit.w, ground)
