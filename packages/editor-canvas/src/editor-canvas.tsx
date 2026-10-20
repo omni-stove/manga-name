@@ -2595,6 +2595,35 @@ if (import.meta.vitest) {
       ).toHaveLength(1)
     })
 
+    test('a joined group follows the overflow of its first bubble, whatever the line style', async () => {
+      const joined: Page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_3'
+            ? {
+                ...p,
+                bubbles: [
+                  ...p.bubbles.map((b) => ({ ...b, overflow: true, shape: 'whisper' as const })),
+                  {
+                    id: 'bb_3b',
+                    order: 2,
+                    text: 'まさか',
+                    shape: 'none' as const,
+                    pos: { x: 0.6, y: 0.7 },
+                    size: { w: 0.18, h: 0.4 },
+                    joinedTo: 'bb_3',
+                  },
+                ],
+              }
+            : p,
+        ),
+      }
+      const svg = await render({ page: joined, selection: { kind: 'bubble', id: 'bb_3b' } })
+      const group = must(svg.querySelector('[data-bubble-group="bb_3 bb_3b"]'))
+      expect(group.querySelectorAll('path[stroke-dasharray]').length).toBeGreaterThan(0)
+      expect(svg.querySelectorAll('[data-bubble-group]')).toHaveLength(1)
+    })
+
     test('dragging one of two tails moves only that tail and makes it the last', async () => {
       const onChange = vi.fn()
       const svg = await render({
