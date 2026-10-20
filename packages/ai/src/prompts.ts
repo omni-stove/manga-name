@@ -28,6 +28,7 @@ import {
 import type { z } from 'zod'
 import { critiqueSystem } from './critique.prompt'
 import {
+  BEAT_PANEL,
   CAMERA_SHOTS,
   CHARACTER_ART_TAIL,
   NAME_NEGATIVE,
@@ -113,18 +114,20 @@ const actingOf = (panel: Panel, characters: Character[]) =>
     .join('; ')
 
 /**
- * コマの中身を表す行。カメラ、指示メモ、登場キャラ、芝居、焦点（重い順）、誘導線、ヒント。空の行も含む。
+ * コマの中身を表す行。舞台（コマが属するシーン）、カメラ、「間」、指示メモ、登場キャラ、芝居、焦点（重い順）、誘導線、ヒント。空の行も含む。
  * `appearance` が false なら登場キャラは名前だけにする
  */
 function panelContent(
   panel: Panel,
   characters: Character[],
-  hint: string | undefined,
+  context: { scene: string | undefined; hint: string | undefined },
   appearance: boolean,
 ): (string | undefined)[] {
   const focusByWeight = [...panel.focusPoints].sort((a, b) => b.weight - a.weight)
   return [
+    context.scene && `setting: ${context.scene}`,
     panel.camera && `camera: ${CAMERA_SHOTS[panel.camera]}`,
+    panel.beat && BEAT_PANEL,
     panel.note,
     panelCharacters(panel, characters)
       .map((c) => (appearance ? describeCharacter(c) : c.name))
@@ -137,7 +140,7 @@ function panelContent(
           `${v.kind} from ${endpointLabel(panel, v.sourceFocusId, v.from)} to ${endpointLabel(panel, v.targetFocusId, v.to)}`,
       )
       .join('; '),
-    hint,
+    context.hint,
   ]
 }
 
@@ -156,7 +159,7 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
     prompt: joinLines([
       NAME_STYLE,
       panelCharacters(panel, characters).length > 0 ? characterDesign(settings) : undefined,
-      ...panelContent(panel, characters, req.hint, true),
+      ...panelContent(panel, characters, { scene: req.scene, hint: req.hint }, true),
       req.instruction && `revise the previous image: ${req.instruction}`,
       hasPlacement(panel) ? PLACEMENT_GUIDE : undefined,
       PANEL_ART_TAIL,
@@ -184,7 +187,8 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
     .sort((a, b) => a.order - b.order)
     .map((panel) => {
       const { x, y, w, h } = panel.rect
-      const content = panelContent(panel, characters, req.hints?.[panel.id], false)
+      const context = { scene: req.scenes?.[panel.id], hint: req.hints?.[panel.id] }
+      const content = panelContent(panel, characters, context, false)
         .filter((p): p is string => Boolean(p))
         .join('; ')
       const where = `panel ${panel.order} (x ${formatSpan(x, w)}, y ${formatSpan(y, h)})`
@@ -450,6 +454,44 @@ if (import.meta.vitest) {
     expect(lines.at(-2)).toBe(PLACEMENT_GUIDE)
     expect(lines.at(-1)).toBe(PANEL_ART_TAIL)
     expect(negative).toBe(NAME_NEGATIVE)
+  })
+
+  test('panelArt puts the scene as the setting first and marks a beat panel', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const beat: Page = {
+      ...page,
+      panels: page.panels.map((p) => (p.id === 'pn_1' ? { ...p, beat: true as const } : p)),
+    }
+    const lines = prompts
+      .panelArt({ project, page: beat, panelId: 'pn_1', scene: '放課後・屋上' })
+      .prompt.split('\n')
+    const setting = lines.indexOf('setting: 放課後・屋上')
+    expect(setting).toBeGreaterThan(0)
+    expect(lines[setting + 1]).toBe('camera: long shot')
+    expect(lines[setting + 2]).toBe(BEAT_PANEL)
+
+    const plain = prompts.panelArt({ project, page, panelId: 'pn_1' }).prompt
+    expect(plain).not.toContain('setting: ')
+    expect(plain).not.toContain(BEAT_PANEL)
+  })
+
+  test('pageArt gives each panel its own scene and marks the beat panels', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const beat: Page = {
+      ...page,
+      panels: page.panels.map((p) => (p.order === 2 ? { ...p, beat: true as const } : p)),
+    }
+    const ids = [...page.panels].sort((a, b) => a.order - b.order).map((p) => p.id)
+    const scenes = { [ids[0] as ID]: '放課後・屋上', [ids[1] as ID]: '夜・帰り道' }
+    const panelLines = prompts
+      .pageArt({ project, page: beat, scenes })
+      .prompt.split('\n')
+      .filter((l) => l.startsWith('panel '))
+    expect(panelLines[0]).toContain('): setting: 放課後・屋上; ')
+    expect(panelLines[1]).toContain('): setting: 夜・帰り道; ')
+    expect(panelLines[1]).toContain(BEAT_PANEL)
+    expect(panelLines[2]).not.toContain('setting: ')
+    expect(panelLines[0]).not.toContain(BEAT_PANEL)
   })
 
   test('pageArt lists the cast once and one line per panel in reading order with its span', () => {

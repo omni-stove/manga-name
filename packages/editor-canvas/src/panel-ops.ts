@@ -531,8 +531,9 @@ export function reshapePanelPatch(page: Page, panelId: ID, outline: readonly Poi
 
 /**
  * コマ keepId と otherId を 1 コマにする Patch。2 つとも矩形なら 2 つを囲む矩形、どちらかが多角形なら
- * 2 つの輪郭の凸包にする（斜めに割った 2 コマは元の形に戻る）。keepId の id、note、camera、
- * 採用中の絵を残し、絵の履歴、フキダシ、焦点、ベクトルは両方を移す。otherId のフキダシの order は
+ * 2 つの輪郭の凸包にする（斜めに割った 2 コマは元の形に戻る）。keepId の id、note、camera、シーンの見出し、
+ * 採用中の絵を残し（無ければ otherId のもの）、絵の履歴、フキダシ、焦点、ベクトルは両方を移す。
+ * 「間」は両方が「間」のときだけ残す。otherId のフキダシの order は
  * keepId の後ろに続ける。結合後はページの全コマの order を読む順に振り直す。
  * 枠は keepId のものを残す。結合したコマが、重なってよい組み（mayOverlap）でない他のコマに重なるなら、
  * そのコマを覆ってしまうので空
@@ -570,6 +571,8 @@ export function mergePanelsPatch(
   const artId = keep.artId ?? other.artId
   const note = keep.note ?? other.note
   const camera = keep.camera ?? other.camera
+  // 見出しを落とすと、後ろのコマが前のシーンに入ってしまう
+  const scene = keep.scene ?? other.scene
   const sweep = keep.sweep
     ? moveSweep(keep.sweep, keep.rect, union)
     : other.sweep && moveSweep(other.sweep, other.rect, union)
@@ -584,6 +587,8 @@ export function mergePanelsPatch(
     ...(artId !== undefined && { artId }),
     ...(note !== undefined && { note }),
     ...(camera !== undefined && { camera }),
+    ...(scene !== undefined && { scene }),
+    ...(keep.beat && other.beat && { beat: true as const }),
     ...(sweep && { sweep }),
     ...(keep.frame && { frame: keep.frame }),
     ...(keep.effect && { effect: keep.effect }),
@@ -1065,6 +1070,23 @@ if (import.meta.vitest) {
       expect(next.panels[0]?.rect).toEqual((page.panels[0] as Panel).rect)
       expect(next.panels[0]?.shape).toBeUndefined()
       expect(next.panels).toHaveLength(6)
+    })
+
+    test('keeps the scene of either panel, and the beat only when both are beats', () => {
+      const marked = (patch: Partial<Record<ID, Partial<Panel>>>): Page => ({
+        ...page,
+        panels: page.panels.map((p) => ({ ...p, ...patch[p.id] })),
+      })
+      const mergedOf = (from: Page) =>
+        apply(from, mergePanelsPatch(from, 'pn_3', 'pn_2', 'rtl')).panels.find(
+          (p) => p.id === 'pn_3',
+        ) as Panel
+      const scened = mergedOf(marked({ pn_2: { scene: '放課後・屋上', beat: true } }))
+      expect(scened.scene).toBe('放課後・屋上')
+      expect(scened.beat).toBeUndefined()
+      const beats = mergedOf(marked({ pn_2: { beat: true }, pn_3: { beat: true } }))
+      expect(beats.beat).toBe(true)
+      expect(beats.scene).toBeUndefined()
     })
 
     test('refuses a merge that would cover another panel', () => {

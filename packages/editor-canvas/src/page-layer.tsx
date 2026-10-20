@@ -21,10 +21,12 @@ import {
   type Point,
   paintOrder,
   panelTone,
+  type ReadingDirection,
   type Rect,
   type ReferenceImage,
   SFX_OUTLINE,
   SFX_TYPEFACE,
+  sceneHeading,
   sfxFontSize,
   sfxLetterings,
   softEdgeStrokes,
@@ -66,6 +68,9 @@ const TYPEFACES: Record<NonNullable<Bubble['typeface']>, { family: string; weigh
 export const GUIDE = 'var(--guide)'
 const NOTE_COLOR = 'var(--note)'
 const NUMBER_RADIUS = 3.2
+/** 未生成のコマの指示メモとシーンの見出しの文字の大きさ（mm） */
+const NOTE_FONT = 2.6
+const NOTE_PAD = 1.5
 /**
  * これより小さいセリフは読めないとして警告する（mm）。印刷で読める下限とされる 7pt（約 2.47mm）。
  * 割り付けの下限 2mm まで縮めるのは、警告を出しつつ配置は崩さないため
@@ -80,6 +85,8 @@ interface PageLayerProps {
   /** ページの大きさ（mm）。SVG のユーザー単位 */
   width: number
   height: number
+  /** 綴じの向き。シーンの見出しを読み始めの側の隅に出す */
+  direction: ReadingDirection
   showArt: boolean
   /** 参考画像のレイヤーを出すか。出しても `page.reference.visible` が false なら隠す */
   showReference: boolean
@@ -142,6 +149,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
             panel={panel}
             width={width}
             height={height}
+            direction={props.direction}
             frame={frame}
             artRef={props.showArt ? ref : undefined}
             resolveAsset={props.resolveAsset}
@@ -230,6 +238,7 @@ const PanelView = memo(function PanelView({
   panel,
   width,
   height,
+  direction,
   frame,
   artRef,
   resolveAsset,
@@ -245,6 +254,7 @@ const PanelView = memo(function PanelView({
   panel: Panel
   width: number
   height: number
+  direction: ReadingDirection
   frame: Rect
   artRef: string | undefined
   resolveAsset(ref: string): Promise<string>
@@ -265,6 +275,7 @@ const PanelView = memo(function PanelView({
   const outline = frameOutline(panelPolygon(panel, width, height), panel.frame, unit)
   const points = polygonPoints(outline)
   const line = hasFrameLine(panel.frame)
+  const scene = sceneHeading(panel)
   const sfx = sfxLetterings(panel)
   const placeholder = (
     <g clipPath={`url(#${clipId})`}>
@@ -326,6 +337,11 @@ const PanelView = memo(function PanelView({
         </g>
       )}
       <PanelNumber order={panel.order} outline={outline} locked={panel.locked === true} />
+      {scene !== undefined && (
+        <g clipPath={`url(#${clipId})`}>
+          <SceneLabel heading={scene} outline={outline} direction={direction} />
+        </g>
+      )}
       {/* 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く */}
       {byOrder(panel.bubbles.filter((b) => !b.overflow)).map((bubble) => (
         <BubbleView
@@ -499,9 +515,13 @@ function ReferenceArt({
   )
 }
 
-/** 未生成コマの中身。camera と note を灰色の横書きで、コマに収まるぶんだけ出す */
+/**
+ * 未生成コマの中身。「間」の印、camera と note を灰色の横書きで、コマに収まるぶんだけ出す。
+ * シーンの見出しを持つコマでは、見出しの下から書く
+ */
 function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: boolean }) {
-  if (!panel.camera && !panel.note && !error) return null
+  if (!panel.beat && !panel.camera && !panel.note && !error) return null
+  const top = sceneHeading(panel) === undefined ? NOTE_PAD : NOTE_PAD * 2 + NOTE_FONT
   return (
     <foreignObject x={rect.x} y={rect.y} width={rect.w} height={rect.h} data-placeholder="">
       <div
@@ -509,10 +529,10 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
           boxSizing: 'border-box',
           height: '100%',
           overflow: 'hidden',
-          padding: `1.5px ${NUMBER_RADIUS * 2 + 2}px 1.5px 1.5px`,
+          padding: `${top}px ${NUMBER_RADIUS * 2 + 2}px ${NOTE_PAD}px ${NOTE_PAD}px`,
           color: NOTE_COLOR,
           fontFamily: FONT_FAMILY,
-          fontSize: '2.6px',
+          fontSize: `${NOTE_FONT}px`,
           lineHeight: 1.4,
           overflowWrap: 'anywhere',
         }}
@@ -520,10 +540,49 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
         {error && (
           <div style={{ color: 'var(--alert)' }}>{m.editor_canvas_panel_image_load_failed()}</div>
         )}
+        {panel.beat && <div data-beat="">{m.panel_beat_mark()}</div>}
         {panel.camera && <div>[{m[`panel_camera_${panel.camera}` as const]()}]</div>}
         {panel.note && <div>{panel.note}</div>}
       </div>
     </foreignObject>
+  )
+}
+
+/**
+ * シーンの見出し。出力に出ない作業用の印で、右綴じは左上、左綴じはコマ番号の左に出す。
+ * 絵の上でも読めるよう白で縁取る
+ */
+function SceneLabel({
+  heading,
+  outline,
+  direction,
+}: {
+  heading: string
+  outline: readonly PagePoint[]
+  direction: ReadingDirection
+}) {
+  const { x, y } =
+    direction === 'rtl'
+      ? cornerAnchor(outline, 'nw', NOTE_PAD, NOTE_PAD)
+      : cornerAnchor(outline, 'ne', -(NUMBER_RADIUS * 2 + 1 + NOTE_PAD), NOTE_PAD)
+  return (
+    <text
+      x={x}
+      y={y}
+      style={{ fill: GUIDE }}
+      stroke="#fff"
+      strokeWidth={NOTE_FONT * 0.25}
+      strokeLinejoin="round"
+      paintOrder="stroke"
+      fontFamily={FONT_FAMILY}
+      fontSize={NOTE_FONT}
+      fontWeight="bold"
+      textAnchor={direction === 'rtl' ? 'start' : 'end'}
+      dominantBaseline="hanging"
+      data-scene-label={heading}
+    >
+      {m.panel_scene_heading({ scene: heading })}
+    </text>
   )
 }
 

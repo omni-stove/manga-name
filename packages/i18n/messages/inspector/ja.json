@@ -35,6 +35,7 @@
   "inspector_panel_hint_empty": "ヒントはありません",
   "inspector_panel_use_hint": "ヒントを使う",
   "inspector_panel_use_reference": "参考画像を使う",
+  "inspector_panel_scene_placeholder": "例: 放課後・屋上",
   "inspector_panel_instruction": "修正指示",
   "inspector_panel_instruction_placeholder": "採用中の絵に対する直し方",
   "inspector_panel_regenerate": "修正して再生成",

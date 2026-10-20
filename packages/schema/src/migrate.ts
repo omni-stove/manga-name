@@ -109,6 +109,8 @@ const migrations: Record<number, (json: Record<string, unknown>) => Record<strin
   22: (json) => ({ ...json, schemaVersion: 23 }),
   // v24 は Bubble.typeface の hand を足しただけ。版を上げる理由は v6 と同じ
   23: (json) => ({ ...json, schemaVersion: 24 }),
+  // v25 は Panel.scene と Panel.beat を足しただけ。版を上げる理由は v2 と同じ
+  24: (json) => ({ ...json, schemaVersion: 25 }),
 }
 
 /**
@@ -137,28 +139,28 @@ export function migrate(json: unknown): unknown {
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('migrate v24 → v24 is a no-op', () => {
-    const json = { schemaVersion: 24, title: 't' }
+  test('migrate v25 → v25 is a no-op', () => {
+    const json = { schemaVersion: 25, title: 't' }
     expect(migrate(json)).toBe(json)
   })
 
-  test('migrate v1 → v24 only bumps the version of a project without cameras', () => {
-    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 24, title: 't' })
+  test('migrate v1 → v25 only bumps the version of a project without cameras', () => {
+    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 25, title: 't' })
   })
 
-  test('migrate v17 → v24 only bumps the version of bubbles without a tail and leaves them white', () => {
+  test('migrate v17 → v25 only bumps the version of bubbles without a tail and leaves them white', () => {
     const bubbles = [{ id: 'bb', shape: 'normal' }]
     const json = { schemaVersion: 17, episodes: [{ pages: [{ panels: [{ bubbles }] }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 24 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 25 })
   })
 
-  test('migrate v18 → v24 only bumps the version and leaves the panels without an effect', () => {
+  test('migrate v18 → v25 only bumps the version and leaves the panels without an effect', () => {
     const panels = [{ id: 'a', frame: 'cloud', camera: 'long' }]
     const json = { schemaVersion: 18, episodes: [{ pages: [{ overlay: 'gray', panels }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 24 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 25 })
   })
 
-  test('migrate v19 → v24 turns the single tail into the first of the tails', () => {
+  test('migrate v19 → v25 turns the single tail into the first of the tails', () => {
     const bubbles = [
       { id: 'a', tail: { x: 0.1, y: 0.9 } },
       { id: 'b' },
@@ -169,7 +171,7 @@ if (import.meta.vitest) {
     const json = { schemaVersion: 19, episodes: [{ pages: [{ panels }] }] }
     const migrated = migrate(json)
     expect(migrated).toEqual({
-      schemaVersion: 24,
+      schemaVersion: 25,
       episodes: [
         {
           pages: [
@@ -195,39 +197,45 @@ if (import.meta.vitest) {
     expect(migrated).not.toHaveProperty([...first, 'tail'])
   })
 
-  test('migrate v20 → v24 only bumps the version and leaves the panels without acting', () => {
+  test('migrate v20 → v25 only bumps the version and leaves the panels without acting', () => {
     const panels = [{ id: 'a', note: 'n', cast: ['chr_a'] }]
     expect(migrate({ schemaVersion: 20, episodes: [{ pages: [{ panels }] }] })).toEqual({
-      schemaVersion: 24,
+      schemaVersion: 25,
       episodes: [{ pages: [{ panels }] }],
     })
   })
 
-  test('migrate v21 → v24 keeps the page tone and leaves the panels without a tone', () => {
+  test('migrate v21 → v25 keeps the page tone and leaves the panels without a tone', () => {
     const pages = [{ tone: 'sepia', panels: [{ id: 'a', frame: 'cloud' }] }]
     const json = { schemaVersion: 21, episodes: [{ pages }] }
-    expect(migrate(json)).toEqual({ schemaVersion: 24, episodes: [{ pages }] })
+    expect(migrate(json)).toEqual({ schemaVersion: 25, episodes: [{ pages }] })
   })
 
-  test('migrate v22 → v24 only bumps the version and keeps the bubble shapes', () => {
+  test('migrate v22 → v25 only bumps the version and keeps the bubble shapes', () => {
     const bubbles = [
       { id: 'a', shape: 'narration' },
       { id: 'b', shape: 'thought' },
     ]
     const json = { schemaVersion: 22, episodes: [{ pages: [{ panels: [{ bubbles }] }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 24 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 25 })
   })
 
-  test('migrate v23 → v24 only bumps the version and keeps the typefaces of the bubbles', () => {
+  test('migrate v23 → v25 only bumps the version and keeps the typefaces of the bubbles', () => {
     const bubbles = [
       { id: 'bb_1', shape: 'narration' },
       { id: 'bb_2', shape: 'normal', typeface: 'rounded' },
     ]
     const json = { schemaVersion: 23, episodes: [{ pages: [{ panels: [{ bubbles }] }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 24 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 25 })
   })
 
-  test('migrate v12 → v24 turns the suggested camera names into values and moves the rest to the note', () => {
+  test('migrate v24 → v25 only bumps the version and gives the panels no scene or beat', () => {
+    const panels = [{ id: 'pn', note: 'n' }]
+    const json = { schemaVersion: 24, episodes: [{ pages: [{ panels }] }] }
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 25 })
+  })
+
+  test('migrate v12 → v25 turns the suggested camera names into values and moves the rest to the note', () => {
     const panels = [
       { id: 'a', camera: 'ロング' },
       { id: 'b', camera: ' あおり ' },
@@ -238,7 +246,7 @@ if (import.meta.vitest) {
     ]
     const json = { schemaVersion: 12, episodes: [{ pages: [{ panels }] }] }
     expect(migrate(json)).toEqual({
-      schemaVersion: 24,
+      schemaVersion: 25,
       episodes: [
         {
           pages: [
@@ -259,7 +267,7 @@ if (import.meta.vitest) {
   })
 
   test('migrate rejects unknown, newer or missing versions and non-objects', () => {
-    expect(() => migrate({ schemaVersion: 25 })).toThrow()
+    expect(() => migrate({ schemaVersion: 26 })).toThrow()
     expect(() => migrate({ schemaVersion: 0 })).toThrow()
     expect(() => migrate({})).toThrow()
     expect(() => migrate(null)).toThrow()

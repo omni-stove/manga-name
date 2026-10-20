@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 24 as const
+export const SCHEMA_VERSION = 25 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -200,6 +200,13 @@ const PanelBaseSchema = z.object({
   fill: z.enum(['black']).optional(),
   /** 枠線。省略は実線の枠 */
   frame: PanelFrameSchema.optional(),
+  /**
+   * シーンの見出し（場所と時間帯）。シーンが変わる最初のコマにだけ持たせ、読み順で次に持つコマの手前までが同じシーン。
+   * コマが属するシーンは sceneOf で引く。空白だけの見出しは持たないものとみなす
+   */
+  scene: z.string().optional(),
+  /** セリフも動きも無い「間」のコマ */
+  beat: z.literal(true).optional(),
   /** 絵の上、フキダシと枠線の下に描く効果線。省略は描かない */
   effect: PanelEffectSchema.optional(),
   /** 絵に掛ける色調。ページの tone を上書きし、ページの一部のコマだけを回想にする。省略はページの tone に従う */
