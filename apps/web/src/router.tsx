@@ -40,7 +40,7 @@ if (import.meta.vitest) {
   const { createProjectLibrary } = await import('./project-library')
   const { createSharingClient } = await import('./sharing')
   const { addPagePatch } = await import('./project-ops')
-  const { createFakeSyncServer } = await import('./store/fake-sync-server')
+  const { createFakeSyncServer } = await import('@manga/collab')
   // fake-indexeddb の exports は ./auto に types を付けていないので、副作用 import の型解決は諦める
   // @ts-expect-error TS7016
   await import('fake-indexeddb/auto')
