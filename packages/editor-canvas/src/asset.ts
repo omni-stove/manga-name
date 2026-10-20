@@ -1,4 +1,5 @@
-export type AssetState = { url: string } | { error: true }
+/** 解決した URL と、デコードできたなら画像の画素の大きさ */
+export type AssetState = { url: string; width?: number; height?: number } | { error: true }
 
 type Resolve = (ref: string) => Promise<string>
 
@@ -7,15 +8,21 @@ type Resolve = (ref: string) => Promise<string>
 const loadedBy = new WeakMap<Resolve, Map<string, Promise<AssetState>>>()
 
 /**
- * 画像を読み込んでデコードし終えるまで待つ。<image> の href を差し替えたフレームで
- * デコードを待たせないため。デコードできなくても URL は返し、失敗は <image> の onError に任せる
+ * 画像を読み込んでデコードし終えるまで待ち、画素の大きさを返す。<image> の href を差し替えたフレームで
+ * デコードを待たせないため。デコードできなければ大きさは返さず、失敗は <image> の onError に任せる
  */
-async function preload(url: string): Promise<void> {
-  if (typeof Image === 'undefined') return
+async function preload(url: string): Promise<{ width?: number; height?: number }> {
+  if (typeof Image === 'undefined') return {}
   const img = new Image()
   img.src = url
-  if (typeof img.decode !== 'function') return
-  await img.decode().catch(() => {})
+  if (typeof img.decode !== 'function') return {}
+  const decoded = await img.decode().then(
+    () => true,
+    () => false,
+  )
+  return decoded && img.naturalWidth > 0
+    ? { width: img.naturalWidth, height: img.naturalHeight }
+    : {}
 }
 
 /**
@@ -32,10 +39,7 @@ export function loadAsset(resolveAsset: Resolve, ref: string): Promise<AssetStat
   let loaded = cache.get(ref)
   if (!loaded) {
     loaded = resolveAsset(ref).then(
-      async (url) => {
-        await preload(url)
-        return { url }
-      },
+      async (url) => ({ url, ...(await preload(url)) }),
       () => ({ error: true }) as const,
     )
     cache.set(ref, loaded)

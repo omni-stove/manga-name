@@ -611,6 +611,19 @@ export function fitBubblesPatch(patch: Patch, pageSize: Pick<Size, 'w' | 'h'>): 
   )
 }
 
+/**
+ * コマ panelId のはみ出し（Panel.breakout）を、ページの正規化座標の多角形 polygon にする Patch。
+ * 頂点はページの内側に寄せる。頂点が 3 つ未満か面積の無い多角形、ロック中のコマ、無いコマなら空
+ */
+export function breakoutPatch(page: Page, panelId: ID, polygon: readonly Point[]): Patch {
+  const i = page.panels.findIndex((p) => p.id === panelId)
+  const panel = page.panels[i]
+  if (!panel || panel.locked) return []
+  const value = polygon.map((p) => ({ x: round(clamp01(p.x)), y: round(clamp01(p.y)) }))
+  if (value.length < 3 || polygonArea(value) <= EPSILON) return []
+  return [{ op: panel.breakout ? 'replace' : 'add', path: `/panels/${i}/breakout`, value }]
+}
+
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
   const { bubbleFits, fixtures, PageSchema } = await import('@manga/schema')
@@ -1091,6 +1104,43 @@ if (import.meta.vitest) {
       }
       const merged = apply(borderless, mergePanelsPatch(borderless, 'pn_3', 'pn_2', 'rtl'))
       expect(merged.panels.find((p) => p.id === 'pn_3')?.frame).toBe('none')
+    })
+  })
+
+  describe('breakoutPatch', () => {
+    const triangle = [
+      { x: 0.6, y: 0.2 },
+      { x: 0.8, y: 0.2 },
+      { x: 0.7, y: 0.40000000001 },
+    ]
+
+    test('adds the polygon in page coordinates, then replaces it', () => {
+      const added = apply(page, breakoutPatch(page, 'pn_2', triangle))
+      const pn2 = added.panels.find((p) => p.id === 'pn_2')
+      expect(pn2?.breakout).toEqual([
+        { x: 0.6, y: 0.2 },
+        { x: 0.8, y: 0.2 },
+        { x: 0.7, y: 0.4 },
+      ])
+      expect(() => PageSchema.parse(added)).not.toThrow()
+      const patch = breakoutPatch(added, 'pn_2', [{ x: -0.1, y: 0.1 }, ...triangle.slice(1)])
+      expect(patch[0]?.op).toBe('replace')
+      expect(apply(added, patch).panels.find((p) => p.id === 'pn_2')?.breakout?.[0]).toEqual({
+        x: 0,
+        y: 0.1,
+      })
+    })
+
+    test('is empty for fewer than 3 vertices, a flat polygon and a locked panel', () => {
+      expect(breakoutPatch(page, 'pn_2', triangle.slice(0, 2))).toEqual([])
+      const flat = [
+        { x: 0.1, y: 0.1 },
+        { x: 0.2, y: 0.1 },
+        { x: 0.3, y: 0.1 },
+      ]
+      expect(breakoutPatch(page, 'pn_2', flat)).toEqual([])
+      const locked = { ...page, panels: page.panels.map((p) => ({ ...p, locked: true })) }
+      expect(breakoutPatch(locked, 'pn_2', triangle)).toEqual([])
     })
   })
 }

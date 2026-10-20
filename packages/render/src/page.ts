@@ -147,6 +147,11 @@ export async function drawPage(
     // 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く
     withClip(c, outline, () => drawBubbles(panel, false))
     if (hasFrameLine(panel.frame)) drawFrame(c, outline, unit.w * FRAME_WIDTH, panel.frame)
+    // 枠を突き破って見えるよう、はみ出す範囲の絵は枠線の上に描く
+    if (image && panel.breakout) {
+      const breakout = panel.breakout.map((p) => pointToPx(p, pageRect))
+      drawCover(c, image, rect, breakout)
+    }
   })
 
   // はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く
@@ -526,6 +531,62 @@ if (import.meta.vitest) {
       panelNumbers: false,
     })
     await matchPngSnapshot('page-frames', png)
+  })
+
+  test('はみ出しの多角形の中は絵を枠線の上に描き、絵を cover で置いた範囲の外には何も描かない', async () => {
+    const backend = await getBackend()
+    // 正方形の絵は横長のコマに cover で置くと上下にはみ出すので、rect の外にも絵がある
+    const square = backend.createSurface(100, 100)
+    square.ctx.fillStyle = '#f00'
+    square.ctx.fillRect(0, 0, 100, 100)
+    const art = await square.toPng()
+    const ctx: RenderContext = { ...noAssets, loadAsset: async () => art }
+    const [pn1, pn2, ...rest] = emptyPage.panels as [Panel, Panel, ...Panel[]]
+    const { x, y, w, h } = pn2.rect
+    const red: Panel = {
+      ...pn2,
+      artId: 'art_red',
+      arts: [
+        {
+          id: 'art_red',
+          ref: 'file:red.png',
+          provider: 'fake',
+          prompt: '',
+          createdAt: '2026-10-15T00:00:00.000Z',
+        },
+      ],
+    }
+    // pn_2 の上辺をまたいで、上の間白と pn_1 まで伸ばした帯
+    const breakout = [
+      { x: x + w * 0.4, y: y - 0.12 },
+      { x: x + w * 0.6, y: y - 0.12 },
+      { x: x + w * 0.6, y: y + h * 0.5 },
+      { x: x + w * 0.4, y: y + h * 0.5 },
+    ]
+    const draw = async (panel: Panel) => {
+      const png = await renderPage({ ...emptyPage, panels: [pn1, panel, ...rest] }, ctx, {
+        width: SNAPSHOT_WIDTH,
+        notes: 'none',
+        panelNumbers: false,
+      })
+      const { width, data } = await pixels(png)
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      return (px: number, py: number) => {
+        const at = (Math.round(py * pageH) * width + Math.round(px * width)) * 4
+        return [data[at], data[at + 1], data[at + 2]]
+      }
+    }
+    const plain = await draw(red)
+    const broken = await draw({ ...red, breakout })
+    const pageH = project.settings.pageSize.h / project.settings.pageSize.w
+    // cover で置いた絵が rect の上へはみ出す高さ（ページの高さに対する比率）
+    const spill = (w - h * pageH) / 2 / pageH
+    const cx = x + w / 2
+    expect(plain(cx, y)[0]).toBeLessThan(128)
+    expect(broken(cx, y)).toEqual([255, 0, 0])
+    expect(broken(cx, y - spill / 2)).toEqual([255, 0, 0])
+    expect(broken(cx, y - spill - 0.02)).toEqual(plain(cx, y - spill - 0.02))
+    expect(broken(x + w * 0.2, y - spill / 2)).toEqual(plain(x + w * 0.2, y - spill / 2))
   })
 
   test('同じ入力で 2 回描くとバイト一致する', async () => {

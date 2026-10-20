@@ -83,6 +83,8 @@ const migrations: Record<number, (json: Record<string, unknown>) => Record<strin
   16: (json) => ({ ...json, schemaVersion: 17 }),
   // v18 は Bubble.fill を足しただけ。版を上げる理由は v2 と同じ
   17: (json) => ({ ...json, schemaVersion: 18 }),
+  // v19 は Panel.breakout を足しただけ。版を上げる理由は v2 と同じ
+  18: (json) => ({ ...json, schemaVersion: 19 }),
 }
 
 /**
@@ -111,22 +113,27 @@ export function migrate(json: unknown): unknown {
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('migrate v18 → v18 is a no-op', () => {
-    const json = { schemaVersion: 18, title: 't' }
+  test('migrate v19 → v19 is a no-op', () => {
+    const json = { schemaVersion: 19, title: 't' }
     expect(migrate(json)).toBe(json)
   })
 
-  test('migrate v1 → v18 only bumps the version of a project without cameras', () => {
-    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 18, title: 't' })
+  test('migrate v1 → v19 only bumps the version of a project without cameras', () => {
+    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 19, title: 't' })
   })
 
-  test('migrate v17 → v18 only bumps the version and leaves the bubbles white', () => {
+  test('migrate v17 → v19 only bumps the version and leaves the bubbles white', () => {
     const bubbles = [{ id: 'bb', shape: 'normal' }]
     const json = { schemaVersion: 17, episodes: [{ pages: [{ panels: [{ bubbles }] }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 18 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 19 })
   })
 
-  test('migrate v12 → v18 turns the suggested camera names into values and moves the rest to the note', () => {
+  test('migrate v18 → v19 only bumps the version and keeps the art inside the panels', () => {
+    const json = { schemaVersion: 18, episodes: [{ pages: [{ panels: [{ id: 'pn' }] }] }] }
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 19 })
+  })
+
+  test('migrate v12 → v19 turns the suggested camera names into values and moves the rest to the note', () => {
     const panels = [
       { id: 'a', camera: 'ロング' },
       { id: 'b', camera: ' あおり ' },
@@ -137,7 +144,7 @@ if (import.meta.vitest) {
     ]
     const json = { schemaVersion: 12, episodes: [{ pages: [{ panels }] }] }
     expect(migrate(json)).toEqual({
-      schemaVersion: 18,
+      schemaVersion: 19,
       episodes: [
         {
           pages: [
@@ -158,7 +165,7 @@ if (import.meta.vitest) {
   })
 
   test('migrate rejects unknown, newer or missing versions and non-objects', () => {
-    expect(() => migrate({ schemaVersion: 19 })).toThrow()
+    expect(() => migrate({ schemaVersion: 20 })).toThrow()
     expect(() => migrate({ schemaVersion: 0 })).toThrow()
     expect(() => migrate({})).toThrow()
     expect(() => migrate(null)).toThrow()

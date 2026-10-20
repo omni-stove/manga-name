@@ -77,4 +77,8 @@ export interface EditorCanvasProps {
    * 要素の上なら、先にその要素を `onSelect` で選んでから呼ぶ
    */
   onContextMenu?(request: CanvasMenuRequest): void
+  /** はみ出し（Panel.breakout）を描いているコマ。クリックで頂点を置き、閉じると `onChange` に Patch を出す */
+  breakoutPanelId?: ID | null
+  /** はみ出しの多角形を閉じたか取り消したら呼ぶ。`breakoutPanelId` を外すのに使う */
+  onBreakoutEnd?(): void
 }
