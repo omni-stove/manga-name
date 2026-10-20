@@ -46,3 +46,32 @@ test('ページの脚本からネームを書き起こして直し、そのネ�
   await page.reload()
   await expect(panels.first().getByLabel(m.panel_note())).toHaveValue('結晶の森の全景。E の背中。')
 })
+
+test('ページの脚本から、ネームを直さずにそのままコマ割りの案まで出す', async ({ page }) => {
+  await importProject(page, FIXTURE_PROJECT)
+  await openPage(page, 1)
+  await page
+    .getByLabel(m.inspector_page_script())
+    .fill('結晶の森。E が奥へ歩いていく。\nE「……ここか」')
+  await page.getByRole('button', { name: m.web_name_transcribe_and_suggest() }).click()
+
+  await expect(page.locator('[data-name-panel]')).toHaveCount(3)
+  await expect(page.locator('[data-layout-option]')).toHaveCount(2)
+})
+
+test('脚本が無くてもネームを自分で書き、そのネームでコマ割りの案を出す', async ({ page }) => {
+  await importProject(page, FIXTURE_PROJECT)
+  await openPage(page, 1)
+  await expect(
+    page.getByRole('button', { name: m.web_name_transcribe_and_suggest() }),
+  ).toBeDisabled()
+  await page.getByRole('button', { name: m.web_name_write() }).click()
+
+  const panels = page.locator('[data-name-panel]')
+  await expect(panels).toHaveCount(1)
+  const suggest = page.getByRole('button', { name: m.web_layout_suggest() })
+  await expect(suggest).toBeDisabled()
+  await panels.first().getByLabel(m.panel_note()).fill('結晶の森の全景。E の背中。')
+  await suggest.click()
+  await expect(page.locator('[data-layout-option]')).toHaveCount(2)
+})
