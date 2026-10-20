@@ -15,7 +15,6 @@ interface TextFieldProps {
   /** 空白だけの値を不正にする */
   required?: boolean
   placeholder?: string
-  list?: string
   onCommit(value: string): void
 }
 
@@ -27,7 +26,6 @@ export function TextField({
   delayMs = 0,
   required = false,
   placeholder,
-  list,
   onCommit,
 }: TextFieldProps) {
   const isValid = (text: string) => !required || text.trim() !== ''
@@ -44,7 +42,6 @@ export function TextField({
       label={label}
       value={draft}
       placeholder={placeholder}
-      list={list}
       aria-invalid={invalid || undefined}
       onChange={(e) => set(e.target.value)}
       onBlur={flush}

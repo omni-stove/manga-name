@@ -1,4 +1,5 @@
-import { cornerAnchor } from '@manga/schema'
+import { m } from '@manga/i18n'
+import { type Camera, cornerAnchor, type Panel, softEdgeStrokes } from '@manga/schema'
 import { FONT_FAMILY } from './backend'
 import type { PxPoint, PxRect } from './geometry'
 import { alphabeticY, wrapHorizontal } from './text'
@@ -44,14 +45,74 @@ export function withClip(ctx: Ctx, outline: readonly PxPoint[], draw: () => void
   ctx.restore()
 }
 
-export function drawFrame(ctx: Ctx, outline: readonly PxPoint[], lineWidth: number): void {
+/** 輪郭 outline の内側を color で塗る。コマの地 */
+export function fillOutline(ctx: Ctx, outline: readonly PxPoint[], color: string): void {
   ctx.save()
-  ctx.lineWidth = lineWidth
-  ctx.strokeStyle = '#000'
-  ctx.lineJoin = 'miter'
+  ctx.fillStyle = color
   tracePolygon(ctx, outline)
-  ctx.stroke()
+  ctx.fill()
   ctx.restore()
+}
+
+/**
+ * 輪郭 outline に枠線を引く。dashed は破線、double は太い黒線の中央を白で抜いた二重線にし、
+ * 他は実線。枠線を引かない枠（hasFrameLine が false）かは呼び出し側が見る
+ */
+export function drawFrame(
+  ctx: Ctx,
+  outline: readonly PxPoint[],
+  lineWidth: number,
+  frame: Panel['frame'],
+): void {
+  const stroke = (width: number, color: string) => {
+    ctx.lineWidth = width
+    ctx.strokeStyle = color
+    tracePolygon(ctx, outline)
+    ctx.stroke()
+  }
+  ctx.save()
+  ctx.lineJoin = 'miter'
+  if (frame === 'dashed') ctx.setLineDash([lineWidth * 4, lineWidth * 3])
+  if (frame === 'double') {
+    stroke(lineWidth * 4, '#000')
+    stroke(lineWidth * 2, '#fff')
+  } else stroke(lineWidth, '#000')
+  ctx.restore()
+}
+
+/** ぼかし枠。輪郭 outline の内側の縁を、softEdgeStrokes の線で地の色 color へぼかす */
+export function drawSoftEdge(
+  ctx: Ctx,
+  outline: readonly PxPoint[],
+  unit: number,
+  color: string,
+): void {
+  withClip(ctx, outline, () => {
+    ctx.strokeStyle = color
+    ctx.lineJoin = 'round'
+    for (const { width, alpha } of softEdgeStrokes(unit)) {
+      ctx.globalAlpha = alpha
+      ctx.lineWidth = width
+      tracePolygon(ctx, outline)
+      ctx.stroke()
+    }
+  })
+}
+
+/** 画素 data（RGBA）を、TONE_MATRICES と同じ並びの色の行列 matrix で書き換える */
+export function applyColorMatrix(data: Uint8ClampedArray, matrix: readonly number[]): void {
+  const k = (i: number) => matrix[i] ?? 0
+  for (let i = 0; i < data.length; i += 4) {
+    const r = (data[i] ?? 0) / 255
+    const g = (data[i + 1] ?? 0) / 255
+    const b = (data[i + 2] ?? 0) / 255
+    const a = (data[i + 3] ?? 0) / 255
+    for (let row = 0; row < 4; row++) {
+      const o = row * 5
+      const v = k(o) * r + k(o + 1) * g + k(o + 2) * b + k(o + 3) * a + k(o + 4)
+      data[i + row] = Math.round(v * 255)
+    }
+  }
 }
 
 /**
@@ -60,17 +121,18 @@ export function drawFrame(ctx: Ctx, outline: readonly PxPoint[], lineWidth: numb
  */
 export function drawPlaceholder(
   ctx: Ctx,
-  panel: { order: number; camera?: string; note?: string },
+  panel: { order: number; camera?: Camera; note?: string },
   rect: PxRect,
   outline: readonly PxPoint[],
   fontPx: number,
+  ink = '#000',
 ): void {
   const pad = fontPx
   const numberPx = fontPx * 1.8
   ctx.save()
   tracePolygon(ctx, outline)
   ctx.clip()
-  ctx.fillStyle = '#000'
+  ctx.fillStyle = ink
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
   ctx.font = `${numberPx}px "${FONT_FAMILY}"`
@@ -80,7 +142,9 @@ export function drawPlaceholder(
   const lineHeight = fontPx * 1.4
   let y = rect.y + pad + numberPx * 1.3
   const bottom = rect.y + rect.h - pad
-  const text = [panel.camera && `[${panel.camera}]`, panel.note].filter(Boolean).join('\n')
+  const text = [panel.camera && `[${m[`panel_camera_${panel.camera}` as const]()}]`, panel.note]
+    .filter(Boolean)
+    .join('\n')
   for (const line of wrapHorizontal(ctx, text, rect.w - pad * 2)) {
     if (y + lineHeight > bottom) break
     ctx.fillText(line, rect.x + pad, alphabeticY(y, fontPx, 'top'))
@@ -118,7 +182,7 @@ export function drawPanelNumber(
 /** 余白のメモ。コマ番号と camera の行、続けて note を横書きで列挙する */
 export function drawNotesMargin(
   ctx: Ctx,
-  panels: { order: number; camera?: string; note?: string }[],
+  panels: { order: number; camera?: Camera; note?: string }[],
   area: PxRect,
   fontPx: number,
 ): void {
@@ -135,7 +199,9 @@ export function drawNotesMargin(
   let y = area.y + pad
   for (const panel of panels) {
     ctx.font = `bold ${fontPx}px "${FONT_FAMILY}"`
-    const head = [String(panel.order), panel.camera].filter(Boolean).join(' ')
+    const head = [String(panel.order), panel.camera && m[`panel_camera_${panel.camera}` as const]()]
+      .filter(Boolean)
+      .join(' ')
     for (const line of wrapHorizontal(ctx, head, area.w - pad * 2)) {
       ctx.fillText(line, area.x + pad, alphabeticY(y, fontPx, 'top'))
       y += lineHeight
@@ -154,6 +220,7 @@ export function drawNotesMargin(
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
   const { getBackend, loadFonts } = await import('./backend')
+  const { TONE_MATRICES } = await import('@manga/schema')
 
   const GREY = [128, 128, 128]
   const WHITE = [255, 255, 255]
@@ -199,11 +266,46 @@ if (import.meta.vitest) {
   const inTriangle = (x: number, y: number) => x + y <= 101
 
   test('drawFrame strokes the outline in black and leaves the inside alone', async () => {
-    const { at } = await paint(100, 100, (ctx) => drawFrame(ctx, square(20, 20, 60), 4))
+    const { at } = await paint(100, 100, (ctx) => drawFrame(ctx, square(20, 20, 60), 4, undefined))
     expect(at(20, 50)).toEqual([0, 0, 0])
     expect(at(80, 50)).toEqual([0, 0, 0])
     expect(at(50, 50)).toEqual(GREY)
     expect(at(10, 50)).toEqual(GREY)
+  })
+
+  test('drawFrame dashes the dashed frame and hollows the double frame with white', async () => {
+    const dashed = await paint(100, 100, (ctx) => drawFrame(ctx, square(20, 20, 60), 2, 'dashed'))
+    const column = Array.from({ length: 60 }, (_, i) => dashed.at(20, 20 + i)[0])
+    expect(column).toContain(0)
+    expect(column).toContain(128)
+
+    const double = await paint(100, 100, (ctx) => drawFrame(ctx, square(20, 20, 60), 2, 'double'))
+    expect(double.at(20, 50)).toEqual(WHITE)
+    expect(double.at(17, 50)).toEqual([0, 0, 0])
+    expect(double.at(23, 50)).toEqual([0, 0, 0])
+    expect(double.at(50, 50)).toEqual(GREY)
+  })
+
+  test('drawSoftEdge fades the inside edge to the colour and leaves the centre and outside alone', async () => {
+    const { at } = await paint(100, 100, (ctx) => drawSoftEdge(ctx, square(0, 0, 100), 100, '#fff'))
+    // 縁の画素の中心は輪郭から 0.5px 内側なので、ほぼ白
+    expect(at(0, 50)[0]).toBeGreaterThan(240)
+    const [mid] = at(2, 50)
+    expect(mid).toBeGreaterThan(128)
+    expect(mid).toBeLessThan(255)
+    expect(at(50, 50)).toEqual(GREY)
+  })
+
+  test('applyColorMatrix maps each pixel through the matrix', () => {
+    const data = new Uint8ClampedArray([255, 255, 255, 255, 0, 0, 0, 255])
+    applyColorMatrix(data, TONE_MATRICES.faded)
+    expect([...data]).toEqual([255, 255, 255, 255, 102, 102, 102, 255])
+  })
+
+  test('fillOutline paints the inside of the outline and leaves the outside alone', async () => {
+    const { at } = await paint(100, 100, (ctx) => fillOutline(ctx, triangle, '#000'))
+    expect(at(10, 10)).toEqual([0, 0, 0])
+    expect(at(80, 80)).toEqual(GREY)
   })
 
   describe('drawCover', () => {
@@ -239,7 +341,7 @@ if (import.meta.vitest) {
   })
 
   describe('drawPlaceholder', () => {
-    const panel = { order: 3, camera: 'ロング', note: 'ガラス結晶の森を歩く。'.repeat(20) }
+    const panel = { order: 3, camera: 'long' as const, note: 'ガラス結晶の森を歩く。'.repeat(20) }
 
     test('writes the order and the text inside the outline only', async () => {
       const rect = { x: 0, y: 0, w: 100, h: 100 }
@@ -283,9 +385,9 @@ if (import.meta.vitest) {
 
   test('drawNotesMargin writes every panel inside the margin and clips the rest', async () => {
     const panels = [
-      { order: 1, camera: 'ロング', note: 'ガラス結晶の森' },
+      { order: 1, camera: 'long' as const, note: 'ガラス結晶の森' },
       { order: 2, note: '見上げる' },
-      { order: 3, camera: 'アップ', note: '新芽。'.repeat(80) },
+      { order: 3, camera: 'close_up' as const, note: '新芽。'.repeat(80) },
     ]
     const area = { x: 100, y: 0, w: 60, h: 120 }
     const { darkPixels } = await paint(200, 160, (ctx) => drawNotesMargin(ctx, panels, area, 8))

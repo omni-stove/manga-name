@@ -5,6 +5,7 @@ import {
   fitPanelBubbles,
   type ID,
   intersectPolygons,
+  mayOverlap,
   newId,
   type Page,
   type Panel,
@@ -207,6 +208,22 @@ export function orderOps(before: readonly Panel[], after: readonly Panel[], skip
     }
   })
   return patch
+}
+
+/** order の抜けを詰めて 1 から振り直す replace。並び順は変えない。base は配列の JSON Pointer */
+export function compactOrderOps(base: string, items: readonly { order: number }[]): Patch {
+  const rank = new Map(
+    items
+      .map((item, i) => ({ order: item.order, i }))
+      .sort((a, b) => a.order - b.order || a.i - b.i)
+      .map(({ i }, k) => [i, k + 1]),
+  )
+  return items.flatMap((item, i) => {
+    const order = rank.get(i)
+    return order === undefined || order === item.order
+      ? []
+      : [{ op: 'replace' as const, path: `${base}/${i}/order`, value: order }]
+  })
 }
 
 /** コマ内座標の点を、コマ from からコマ to のコマ内座標へ移す。to の外は 0..1 に収める */
@@ -517,7 +534,8 @@ export function reshapePanelPatch(page: Page, panelId: ID, outline: readonly Poi
  * 2 つの輪郭の凸包にする（斜めに割った 2 コマは元の形に戻る）。keepId の id、note、camera、
  * 採用中の絵を残し、絵の履歴、フキダシ、焦点、ベクトルは両方を移す。otherId のフキダシの order は
  * keepId の後ろに続ける。結合後はページの全コマの order を読む順に振り直す。
- * 結合したコマが他のコマに重なるなら、そのコマを覆ってしまうので空
+ * 枠は keepId のものを残す。結合したコマが、重なってよい組み（mayOverlap）でない他のコマに重なるなら、
+ * そのコマを覆ってしまうので空
  */
 export function mergePanelsPatch(
   page: Page,
@@ -537,7 +555,11 @@ export function mergePanelsPatch(
   const g = geometryOf(outline)
   const union = g.rect
   const covered = page.panels.some(
-    (p) => p.id !== keepId && p.id !== otherId && outlinesOverlap(outline, panelOutline(p)),
+    (p) =>
+      p.id !== keepId &&
+      p.id !== otherId &&
+      !mayOverlap(keep, p) &&
+      outlinesOverlap(outline, panelOutline(p)),
   )
   if (covered) return []
 
@@ -563,6 +585,7 @@ export function mergePanelsPatch(
     ...(note !== undefined && { note }),
     ...(camera !== undefined && { camera }),
     ...(sweep && { sweep }),
+    ...(keep.frame && { frame: keep.frame }),
   }
   const before = page.panels
     .map((p) => (p.id === keepId ? merged : p))
@@ -1047,6 +1070,27 @@ if (import.meta.vitest) {
       expect(mergePanelsPatch(page, 'pn_2', 'pn_6', 'rtl')).toEqual([])
       expect(mergePanelsPatch(page, 'pn_2', 'pn_2', 'rtl')).toEqual([])
       expect(mergePanelsPatch(page, 'pn_2', 'nope', 'rtl')).toEqual([])
+    })
+
+    test('merges framed panels laid over a borderless panel, and keeps the frame of keepId', () => {
+      const background: Panel = {
+        ...(page.panels[0] as Panel),
+        id: 'pn_bg',
+        order: 7,
+        frame: 'none',
+        rect: { x: 0, y: 0, w: 1, h: 1 },
+      }
+      const laid = { ...page, panels: [...page.panels, background] }
+      const next = apply(laid, mergePanelsPatch(laid, 'pn_3', 'pn_2', 'rtl'))
+      expect(next.panels).toHaveLength(6)
+      expect(next.panels.find((p) => p.id === 'pn_3')?.frame).toBeUndefined()
+
+      const borderless = {
+        ...page,
+        panels: page.panels.map((p) => (p.id === 'pn_3' ? { ...p, frame: 'none' as const } : p)),
+      }
+      const merged = apply(borderless, mergePanelsPatch(borderless, 'pn_3', 'pn_2', 'rtl'))
+      expect(merged.panels.find((p) => p.id === 'pn_3')?.frame).toBe('none')
     })
   })
 }

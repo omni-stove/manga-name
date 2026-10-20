@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import { m } from '@manga/i18n'
-import type { Vector } from '@manga/schema'
+import type { Patch, Vector } from '@manga/schema'
 import { Typography } from '@manga/ui'
 import { option, SelectField } from './fields'
 import { optionalString, replace } from './patch'
@@ -48,4 +49,45 @@ export function VectorInspector({ vector, targets, onChange }: VectorInspectorPr
       />
     </div>
   )
+}
+
+if (import.meta.vitest) {
+  const { describe, expect, test, vi } = import.meta.vitest
+  const { choose, must, render, samplePanel, selectLabelled } = await import('./dom-harness')
+
+  describe('VectorInspector', () => {
+    const vector = must(samplePanel.vectors.find((v) => v.targetFocusId))
+    const targets = samplePanel.focusPoints.map((f) => ({ value: f.id, label: f.label }))
+
+    test('kind and strength replace, and the target can be cleared to the nearest focus', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const { container } = await render(
+        <VectorInspector vector={vector} targets={targets} onChange={onChange} />,
+      )
+      await choose(selectLabelled(container, m.vector_kind()), 'speed')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/kind', value: 'speed' }])
+      await choose(selectLabelled(container, m.vector_strength()), 'weak')
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'replace', path: '/strength', value: 'weak' },
+      ])
+
+      const target = selectLabelled(container, m.vector_target_focus())
+      expect([...target.options].map((o) => o.value)).toEqual(['', ...targets.map((t) => t.value)])
+      await choose(target, '')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/targetFocusId' }])
+    })
+
+    test('a target that is no longer in targets stays selectable', async () => {
+      const { container } = await render(
+        <VectorInspector
+          vector={{ ...vector, targetFocusId: 'fp_gone' }}
+          targets={targets}
+          onChange={() => {}}
+        />,
+      )
+      const target = selectLabelled(container, m.vector_target_focus())
+      expect(target.value).toBe('fp_gone')
+      expect([...target.options].at(-1)?.textContent).toBe('fp_gone')
+    })
+  })
 }

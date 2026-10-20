@@ -3,6 +3,8 @@ import type {
   CritiqueResponse,
   ID,
   LayoutSuggestionResponse,
+  NameDraftResponse,
+  NamePanel,
   Page,
   PageArtRequest,
   PageDiagnosis,
@@ -15,6 +17,7 @@ export type {
   CharacterArtRequest,
   CritiqueResponse,
   LayoutSuggestionResponse,
+  NameDraftResponse,
   PageArtRequest,
   PagePlanResponse,
   PanelArtRequest,
@@ -37,11 +40,17 @@ export interface PagePlanRequest {
   pageCount?: number
 }
 
-/** 1 ページのコマ割りの提案の要求 */
-export interface LayoutSuggestionRequest {
+/** 1 ページの脚本からネームを書き起こす要求 */
+export interface NameDraftRequest {
   project: Pick<Project, 'settings' | 'characters'>
   /** ページの脚本（Page.script） */
   script: string
+}
+
+/** 1 ページのコマ割りの提案の要求 */
+export interface LayoutSuggestionRequest {
+  /** 書き起こして直したネームのコマ。読む順 */
+  panels: NamePanel[]
 }
 
 export interface CritiqueRequest {
@@ -61,7 +70,9 @@ export interface ImageProvider {
 export interface LlmProvider {
   /** 脚本をページに割り振り、ページごとの流れ、登場キャラ、セリフを返す。コマ割りはしない */
   planPages(req: PagePlanRequest): Promise<PagePlanResponse>
-  /** 1 ページの脚本を段とコマに割った案を返す。コマごとに描くもの、カメラ、セリフを持つ */
+  /** 1 ページの脚本を、読む順のコマごとの描くもの、カメラ、セリフに書き起こす。枠は決めない */
+  transcribeName(req: NameDraftRequest): Promise<NameDraftResponse>
+  /** ネームのコマを段に割り、段の高さとコマの幅の比を決めた案を返す。どの案もコマの数と順はネームのまま */
   suggestLayout(req: LayoutSuggestionRequest): Promise<LayoutSuggestionResponse>
   critique(req: CritiqueRequest): Promise<CritiqueResponse>
 }

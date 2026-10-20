@@ -5,6 +5,7 @@ import {
   convexHull,
   createBubble,
   INNER_FRAME,
+  innerFrameOf,
   intersectPolygons,
   newId,
   type Page,
@@ -163,11 +164,12 @@ export interface SketchConversion {
 /**
  * 下描き（Page.sketch）の閉じた線を、コマとフキダシに変える。
  * 角の少ない図形はコマにし、頂点を内枠、ページの端、他のコマの端へ吸い付け、縦横に近い辺はそろえる。
- * ただし既にあるコマと重なる角の図形は、中心を含むコマのナレーション（四角いフキダシ）にする。
- * 丸い図形は中心を含むコマのフキダシにする。セリフは空のままで、しっぽは付けない。
+ * ただし既にある枠ありのコマと重なる角の図形は、中心を含むコマのナレーション（四角いフキダシ）にする。
+ * 枠なしのコマの上に描いた角の図形は、その上に重ねる枠ありのコマにする。
+ * 丸い図形は中心を含むコマのフキダシにする。中心を含むコマが重なっていれば枠ありのコマに入れる。セリフは空のままで、しっぽは付けない。
  * コマを足したら order を読む順に振り直し、フキダシの order はコマ内の既存の次から、rtl なら右上、ltr なら左上から振る。
  * 変換した線は下描きから消し、文字や絵のように閉じていない線、小さい線、どのコマにも入らない図形は残す。
- * pageSize はページの大きさ（mm）
+ * pageSize は紙面の大きさ（mm、pageSizeOf）
  */
 export function convertSketchPatch(
   page: Page,
@@ -185,8 +187,9 @@ export function convertSketchPatch(
     // 外側のコマを先に作り、その中に描いた四角をナレーションとして拾えるようにする
     .sort((a, b) => b.shape.box.w * b.shape.box.h - a.shape.box.w * a.shape.box.h)
 
-  const xs = [0, 1, INNER_FRAME.x, INNER_FRAME.x + INNER_FRAME.w]
-  const ys = [0, 1, INNER_FRAME.y, INNER_FRAME.y + INNER_FRAME.h]
+  const frame = innerFrameOf(page)
+  const xs = [0, 1, frame.x, frame.x + frame.w]
+  const ys = [0, 1, frame.y, frame.y + frame.h]
   for (const p of page.panels) {
     xs.push(p.rect.x, p.rect.x + p.rect.w)
     ys.push(p.rect.y, p.rect.y + p.rect.h)
@@ -204,7 +207,7 @@ export function convertSketchPatch(
       return { x: snap(p.x, xs), y: snap(p.y, ys) }
     })
     if (polygonArea(outline) <= OVERLAP_AREA) continue
-    const others = [...page.panels, ...added].map(panelOutline)
+    const others = [...page.panels, ...added].filter((p) => p.frame !== 'none').map(panelOutline)
     if (others.some((o) => overlaps(outline, o))) {
       boxes.push({ index, box: shape.box, shape: 'narration' })
       continue
@@ -229,7 +232,8 @@ export function convertSketchPatch(
   const placed = new Map<number, { center: Point; bubble: Bubble }[]>()
   for (const { index, box, shape } of boxes) {
     const center = toUnit({ x: box.x + box.w / 2, y: box.y + box.h / 2 })
-    const at = outlines.findIndex((o) => containsPoint(o, center))
+    const hits = outlines.flatMap((o, i) => (containsPoint(o, center) ? [i] : []))
+    const at = hits.find((i) => panels[i]?.frame !== 'none') ?? hits[0] ?? -1
     const panel = panels[at]
     if (!panel) continue
     const { rect } = panel
@@ -422,6 +426,33 @@ if (import.meta.vitest) {
       expect(next.panels.map((p) => p.order)).toEqual(page.panels.map((p) => p.order))
       const grown = next.panels.flatMap((p, i) => p.bubbles.slice(before[i]))
       expect(grown.map((b) => b.shape).sort()).toEqual(['narration', 'normal'])
+    })
+
+    test('a box drawn over a borderless panel becomes a framed panel that takes the oval in it', () => {
+      const background: Panel = {
+        id: 'pn_bg',
+        order: 1,
+        rect: { x: 0, y: 0, w: 1, h: 1 },
+        frame: 'none',
+        bubbles: [],
+        arts: [],
+        focusPoints: [],
+        vectors: [],
+      }
+      const page: Page = {
+        ...blankWith(
+          rectStroke(30, 30, 60, 60),
+          ovalStroke(60, 60, 10, 15),
+          ovalStroke(140, 200, 10, 15),
+        ),
+        panels: [background],
+      }
+      const { next, panels, bubbles } = convert(page)
+      expect([panels, bubbles]).toEqual([1, 2])
+      const added = next.panels.find((p) => p.id !== 'pn_bg')
+      expect(added?.frame).toBeUndefined()
+      expect(added?.bubbles).toHaveLength(1)
+      expect(next.panels.find((p) => p.id === 'pn_bg')?.bubbles).toHaveLength(1)
     })
 
     test('leaves open lines, small marks and shapes outside every panel', () => {

@@ -1,23 +1,27 @@
 import {
   CritiqueResponseSchema,
   LayoutSuggestionResponseSchema,
+  NameDraftResponseSchema,
   PagePlanResponseSchema,
 } from '@manga/schema'
 import critique from '../../../fixtures/ai/critique.json'
 import layoutSuggestion from '../../../fixtures/ai/layout-suggestion.json'
+import nameDraft from '../../../fixtures/ai/name-draft.json'
 import pagePlan from '../../../fixtures/ai/page-plan.json'
 import type { LlmProvider } from './provider'
 
 /** `fixtures/ai/` の固定応答。読み込み時に検証済み */
 export const aiFixtures = {
   pagePlan: PagePlanResponseSchema.parse(pagePlan),
+  nameDraft: NameDraftResponseSchema.parse(nameDraft),
   layoutSuggestion: LayoutSuggestionResponseSchema.parse(layoutSuggestion),
   critique: CritiqueResponseSchema.parse(critique),
 }
 
 /**
  * 入力に関わらず fixtures/ai/ の応答を返す LlmProvider。planPages は `pageCount` があれば、
- * フィクスチャの 2 ページを繰り返してその枚数にする
+ * フィクスチャの 2 ページを繰り返してその枚数にする。suggestLayout は案を要求のコマの数に合わせ、
+ * 数の合う案はそのまま、合わない案は段を 6 以下に収めて並べ直して返す
  */
 export function createFakeLlmProvider(): LlmProvider {
   return {
@@ -29,8 +33,23 @@ export function createFakeLlmProvider(): LlmProvider {
         structuredClone(pages[i % pages.length] as (typeof pages)[number]),
       )
     },
-    async suggestLayout() {
-      return structuredClone(aiFixtures.layoutSuggestion)
+    async transcribeName() {
+      return structuredClone(aiFixtures.nameDraft)
+    },
+    async suggestLayout(req) {
+      // Workers がネームとコマの数の合わない案を弾くので、利用者が足し引きしたコマの数にそろえる
+      // 段は LayoutOptionSchema の上限 6 に収まるよう、1 段に ceil(n / 6) コマずつ詰める
+      const perRow = Math.max(1, Math.ceil(req.panels.length / 6))
+      const restacked = Array.from({ length: Math.ceil(req.panels.length / perRow) }, (_, i) => ({
+        height: 1,
+        panels: req.panels.slice(i * perRow, (i + 1) * perRow).map(() => ({ width: 1 })),
+      }))
+      const options = structuredClone(aiFixtures.layoutSuggestion).options.map((option) =>
+        option.rows.reduce((n, row) => n + row.panels.length, 0) === req.panels.length
+          ? option
+          : { ...option, rows: restacked },
+      )
+      return { options }
     },
     async critique() {
       return structuredClone(aiFixtures.critique)
@@ -50,5 +69,15 @@ if (import.meta.vitest) {
     const res = await provider.planPages({ ...req, pageCount: 3 })
     expect(res).toHaveLength(3)
     expect(res[2]).toEqual(aiFixtures.pagePlan[0])
+  })
+
+  test('suggestLayout keeps the options that fit the name and restacks the others', async () => {
+    const provider = createFakeLlmProvider()
+    const { panels } = aiFixtures.nameDraft
+    expect(await provider.suggestLayout({ panels })).toEqual(aiFixtures.layoutSuggestion)
+    const res = await provider.suggestLayout({ panels: [...panels, ...panels] })
+    for (const option of res.options) {
+      expect(option.rows.flatMap((row) => row.panels)).toHaveLength(panels.length * 2)
+    }
   })
 }

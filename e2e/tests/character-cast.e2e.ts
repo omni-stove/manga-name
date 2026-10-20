@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import { m } from '@manga/i18n'
 import { expect, type Page, test } from '@playwright/test'
 import {
   FIXTURE_EPISODE,
@@ -15,47 +16,59 @@ const REFERENCE = fileURLToPath(new URL('../../fixtures/art/pn_1.png', import.me
 
 /** キャラクター一覧から追加のページを開く */
 async function openNewCharacter(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'キャラクター' }).click()
-  await page.getByRole('button', { name: 'キャラクターを追加' }).click()
-  await expect(page.getByRole('heading', { name: 'キャラクターを追加' })).toBeVisible()
+  await page.getByRole('link', { name: m.character() }).click()
+  await page.getByRole('button', { name: m.web_characters_add() }).click()
+  await expect(page.getByRole('heading', { name: m.web_characters_add() })).toBeVisible()
 }
 
 test('参照画像付きで追加したキャラを、台詞の無いコマの登場キャラに足す', async ({ page }) => {
   await importProject(page, FIXTURE_PROJECT)
   await openNewCharacter(page)
-  await page.getByLabel('名前').fill('通行人')
-  await page.getByLabel('略称').fill('通')
-  await page.getByLabel('参照画像').setInputFiles(REFERENCE)
-  await page.getByRole('button', { name: '追加', exact: true }).click()
+  await page.getByLabel(m.character_name()).fill('通行人')
+  await page.getByLabel(m.character_short_name()).fill('通')
+  await page.getByLabel(m.character_reference()).setInputFiles(REFERENCE)
+  await page.getByRole('button', { name: m.add(), exact: true }).click()
 
   const card = page.locator('[data-inspector="character"]').filter({ hasText: '通行人' })
-  await expect(card.getByRole('img', { name: '通行人 の参照画像' })).toBeVisible()
+  await expect(
+    card.getByRole('img', { name: m.inspector_character_reference_alt({ name: '通行人' }) }),
+  ).toBeVisible()
 
-  await page.getByRole('link', { name: 'エピソード', exact: true }).click()
+  await page.getByRole('link', { name: m.episode(), exact: true }).click()
   await openEpisode(page, FIXTURE_EPISODE)
   await openPage(page, 1)
   await selectPanel(page, 2)
-  await panelInspector(page).getByLabel('登場キャラを追加').selectOption({ label: '通行人' })
+  await panelInspector(page)
+    .getByLabel(m.inspector_panel_cast_add())
+    .selectOption({ label: '通行人' })
   const added = panelInspector(page).locator('li[data-cast-id]').filter({ hasText: '通行人' })
   await expect(added).toBeVisible()
 
   const pageCast = inspector(page).locator('[data-section="page-cast"]')
   await pageCast.locator('summary').click()
-  await expect(pageCast.locator('li').filter({ hasText: '通行人' })).toContainText('1 コマ')
+  await expect(pageCast.locator('li').filter({ hasText: '通行人' })).toContainText(
+    m.web_page_cast_panel_count({ count: 1 }),
+  )
 
-  await added.getByRole('button', { name: '通行人 を登場キャラから外す' }).click()
+  await added
+    .getByRole('button', { name: m.inspector_panel_cast_remove({ name: '通行人' }) })
+    .click()
   await expect(added).toHaveCount(0)
 })
 
 test('参照画像を選ばずに追加したキャラは、外見から生成した参照画像で始まる', async ({ page }) => {
   await importProject(page, FIXTURE_PROJECT)
   await openNewCharacter(page)
-  await page.getByLabel('名前').fill('店主')
-  await page.getByLabel('略称').fill('店')
-  await page.getByLabel('外見（生成プロンプトに入る）').fill('白髪の老人。前掛け。')
-  await page.getByRole('button', { name: '追加', exact: true }).click()
+  await page.getByLabel(m.character_name()).fill('店主')
+  await page.getByLabel(m.character_short_name()).fill('店')
+  await page.getByLabel(m.web_character_field_appearance()).fill('白髪の老人。前掛け。')
+  await page.getByRole('button', { name: m.add(), exact: true }).click()
 
   const card = page.locator('[data-inspector="character"]').filter({ hasText: '店主' })
-  await expect(card.getByRole('img', { name: '店主 の参照画像' })).toBeVisible()
-  await expect(card.getByRole('img', { name: '既定の画像' })).toHaveCount(0)
+  await expect(
+    card.getByRole('img', { name: m.inspector_character_reference_alt({ name: '店主' }) }),
+  ).toBeVisible()
+  await expect(
+    card.getByRole('img', { name: m.inspector_character_default_reference() }),
+  ).toHaveCount(0)
 })

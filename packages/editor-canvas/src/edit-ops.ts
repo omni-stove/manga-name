@@ -1,5 +1,6 @@
 import type { Page, Patch, Rect } from '@manga/schema'
 import { findFocus, findVector, moveFocusPatch } from './hint-ops'
+import { compactOrderOps } from './panel-ops'
 import type { Selection } from './types'
 
 /** 1 回のキー操作で動かす正規化座標の量 */
@@ -48,7 +49,7 @@ export function isLocked(page: Page, selection: Selection): boolean {
   return at?.panel.vectors[at.index]?.locked === true
 }
 
-/** 選択要素を消す Patch。消せる要素が無ければ空 */
+/** 選択要素を消す Patch。コマを消したら残りのコマの order を詰め直す。消せる要素が無ければ空 */
 export function removePatch(page: Page, selection: Selection): Patch {
   const pointer = pointerOf(page, selection)
   if (pointer === undefined) return []
@@ -66,6 +67,14 @@ export function removePatch(page: Page, selection: Selection): Patch {
     }
   }
   patch.push({ op: 'remove', path: pointer })
+  if (selection?.kind === 'panel') {
+    patch.push(
+      ...compactOrderOps(
+        '/panels',
+        page.panels.filter((p) => p.id !== selection.id),
+      ),
+    )
+  }
   return patch
 }
 
@@ -143,14 +152,24 @@ if (import.meta.vitest) {
   })
 
   test('removePatch removes the element', () => {
-    expect(removePatch(page, { kind: 'panel', id: 'pn_2' })).toEqual([
-      { op: 'remove', path: '/panels/1' },
-    ])
     expect(removePatch(page, { kind: 'bubble', id: 'bb_6' })).toEqual([
       { op: 'remove', path: '/panels/5/vectors/0/sourceFocusId' },
       { op: 'remove', path: '/panels/5/bubbles/0' },
     ])
     expect(removePatch(page, null)).toEqual([])
+  })
+
+  test('removePatch closes the gap the removed panel leaves in the reading order', () => {
+    expect(removePatch(page, { kind: 'panel', id: 'pn_2' })).toEqual([
+      { op: 'remove', path: '/panels/1' },
+      { op: 'replace', path: '/panels/1/order', value: 2 },
+      { op: 'replace', path: '/panels/2/order', value: 3 },
+      { op: 'replace', path: '/panels/3/order', value: 4 },
+      { op: 'replace', path: '/panels/4/order', value: 5 },
+    ])
+    expect(removePatch(page, { kind: 'panel', id: 'pn_6' })).toEqual([
+      { op: 'remove', path: '/panels/5' },
+    ])
   })
 
   describe('nudgePatch', () => {

@@ -14,6 +14,7 @@ import {
   type Project,
   type ProjectSettings,
   pageCharacterIds,
+  pageSizeOf,
   panelCharacterIds,
   type ReferenceImage,
 } from '@manga/schema'
@@ -88,6 +89,9 @@ interface GenerateRequest {
  */
 type GenerateOutcome = 'done' | 'busy' | 'failed' | 'canceled'
 
+/** 一括生成のコマごとの結果の件数 */
+export type BatchCounts = Record<GenerateOutcome, number>
+
 interface BatchRequest {
   store: ProjectStore
   projectId: ID
@@ -95,7 +99,7 @@ interface BatchRequest {
   scope: string
   /** 対象のページ。並びの順に 1 ページ 1 回で生成する */
   pageIds: readonly ID[]
-  /** false なら絵の無いコマだけに絵を入れ、絵の無いコマが無いページは呼ばない */
+  /** false なら絵の無いコマだけに絵を入れ、絵の無いコマが無いページは呼ばない。黒塗りのコマはどちらでも入れない */
   includeGenerated: boolean
 }
 
@@ -109,7 +113,7 @@ interface PageRunRequest {
 }
 
 /** 範囲がすでに走っていれば `busy`。それ以外はコマごとの結果の件数 */
-type BatchOutcome = 'busy' | Record<GenerateOutcome, number>
+type BatchOutcome = 'busy' | BatchCounts
 
 export interface PanelGeneration {
   readonly generating: StoreApi<GeneratingState>
@@ -134,6 +138,8 @@ export interface PanelGenerationDeps {
   imageProvider: Pick<ImageProvider, 'generatePanelArt' | 'generatePageArt'>
   /** 失敗の文言の出し先。既定はトースト。signIn は未ログインのせいで失敗したことを表す */
   notify?(message: string, opts: { signIn: boolean }): void
+  /** 一括生成が終わるたびに、止めたときも含めて結果の件数で呼ぶ。`busy` で断ったときは呼ばない */
+  onBatchDone?(counts: BatchCounts): void
   now?(): string
   /** ImageProvider に渡す配置図の長辺 px。コマでもページでも同じ。既定 1024 */
   layoutLongSide?: number
@@ -148,16 +154,17 @@ function panelCharacters(panel: Panel, characters: readonly Character[]): Charac
   return panelCharacterIds(panel).flatMap((id) => characters.filter((c) => c.id === id))
 }
 
-/** コマの実寸の縦横比で、長辺を `longSide` にしたときの幅 */
-function layoutWidth(panel: Panel, settings: ProjectSettings, longSide: number): number {
-  const { pageSize } = settings
+type PageSize = ProjectSettings['pageSize']
+
+/** コマの実寸の縦横比で、長辺を `longSide` にしたときの幅。pageSize は紙面の大きさ（pageSizeOf） */
+function layoutWidth(panel: Panel, pageSize: PageSize, longSide: number): number {
   const aspect = (panel.rect.h * pageSize.h) / (panel.rect.w * pageSize.w)
   return Math.round(aspect > 1 ? longSide / aspect : longSide)
 }
 
-/** 判型の縦横比で、長辺を `longSide` にしたときの幅 */
-function pageLayoutWidth(settings: ProjectSettings, longSide: number): number {
-  const aspect = settings.pageSize.h / settings.pageSize.w
+/** 紙面（見開きなら 2 ページ分）の縦横比で、長辺を `longSide` にしたときの幅 */
+function pageLayoutWidth(pageSize: PageSize, longSide: number): number {
+  const aspect = pageSize.h / pageSize.w
   return Math.round(aspect > 1 ? longSide / aspect : longSide)
 }
 
@@ -234,6 +241,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     library,
     imageProvider,
     notify = (message, opts) => toasts.push(message, 'error', opts),
+    onBatchDone,
     now = () => new Date().toISOString(),
     layoutLongSide = 1024,
     batchConcurrency = 3,
@@ -278,11 +286,11 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     reference: ReferenceImage | undefined,
     projectId: ID,
     panel: Panel,
-    settings: ProjectSettings,
+    pageSize: PageSize,
   ) => {
     if (!reference || !usesReference(referenceOptOut.getState(), projectId, panel.id))
       return undefined
-    return crop(await library.loadAsset(reference.ref), settings.pageSize, panel.rect)
+    return crop(await library.loadAsset(reference.ref), pageSize, panel.rect)
   }
 
   const loadPrevious = async (panel: Panel, instruction: string) => {
@@ -308,14 +316,15 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     const project = store.get()
     const page = findPage(project, pageId)?.page
     const panel = page && findPanel(page, panelId)?.panel
-    if (!page || !panel) throw new Error(`panel ${panelId} is not in page ${pageId}`)
+    if (!page || !panel) throw new Error(m.web_generate_panel_gone())
     const { settings, characters } = project
+    const pageSize = pageSizeOf(page, settings.pageSize)
 
     const layoutPng = await renderLayoutPng(page, panelId, {
-      width: layoutWidth(panel, settings, layoutLongSide),
-      pageSize: settings.pageSize,
+      width: layoutWidth(panel, pageSize, layoutLongSide),
+      pageSize,
     })
-    const referencePng = await loadReference(page.reference, projectId, panel, settings)
+    const referencePng = await loadReference(page.reference, projectId, panel, pageSize)
     const characterRefs = await loadCharacterRefs(panelCharacters(panel, characters))
     const previous = instruction === undefined ? undefined : await loadPrevious(panel, instruction)
     const hint = usesHint(hintOptOut.getState(), projectId, panelId)
@@ -394,13 +403,14 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     signal.throwIfAborted()
     const project = store.get()
     const found = findPage(project, pageId)
-    if (!found) throw new Error(`page ${pageId} is not in project ${projectId}`)
+    if (!found) throw new Error(m.web_common_page_gone())
     const { page } = found
     const { settings, characters } = project
+    const pageSize = pageSizeOf(page, settings.pageSize)
 
     const layoutPng = await renderPageLayoutPng(page, {
-      width: pageLayoutWidth(settings, layoutLongSide),
-      pageSize: settings.pageSize,
+      width: pageLayoutWidth(pageSize, layoutLongSide),
+      pageSize,
     })
     const referencePng =
       page.reference &&
@@ -502,7 +512,9 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
   const batchTargets = (project: Project, pageIds: readonly ID[], includeGenerated: boolean) =>
     pageIds.flatMap((pageId) => {
       const panelIds = (findPage(project, pageId)?.page.panels ?? [])
-        .filter((panel) => includeGenerated || panel.artId === undefined)
+        .filter(
+          (panel) => panel.fill === undefined && (includeGenerated || panel.artId === undefined),
+        )
         .map((panel) => panel.id)
       return panelIds.length > 0 ? [{ pageId, panelIds }] : []
     })
@@ -531,7 +543,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       const controller = new AbortController()
       batchControllers.set(key, controller)
       toggle('batches', key, true)
-      const counts: Record<GenerateOutcome, number> = { done: 0, busy: 0, failed: 0, canceled: 0 }
+      const counts: BatchCounts = { done: 0, busy: 0, failed: 0, canceled: 0 }
       const errors: unknown[] = []
       try {
         const targets = batchTargets(store.get(), pageIds, includeGenerated)
@@ -566,6 +578,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
           { signIn: errors.some(needsSignIn) },
         )
       }
+      onBatchDone?.(counts)
       return counts
     },
     cancel(projectId, scope) {
@@ -599,12 +612,14 @@ if (import.meta.vitest) {
     const library = createProjectLibrary(storage)
     const store = createProjectStore(sample, { saveProject: async () => {} })
     const notify = vi.fn<(message: string, opts: { signIn: boolean }) => void>()
+    const onBatchDone = vi.fn<(counts: BatchCounts) => void>()
     let open = true
     const generation = createPanelGeneration({
       // store は library.open を通さず作るので、開いている扱いにする
       library: { ...library, isOpen: async () => open },
       imageProvider,
       notify,
+      onBatchDone,
       now: () => NOW,
       layoutLongSide: 64,
     })
@@ -618,7 +633,7 @@ if (import.meta.vitest) {
     const close = () => {
       open = false
     }
-    return { storage, library, store, notify, generation, generate, panelNow, close }
+    return { storage, library, store, notify, onBatchDone, generation, generate, panelNow, close }
   }
 
   describe('generate', () => {
@@ -665,7 +680,10 @@ if (import.meta.vitest) {
       expect(await generate('直して')).toBe('failed')
       expect(panelNow().arts).toHaveLength(0)
       expect(store.state.getState().canUndo).toBe(false)
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining('採用中の絵'), { signIn: false })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_panel_failed({ reason: m.web_generate_previous_art_required() }),
+        { signIn: false },
+      )
     })
 
     test('undo returns artId to the previous art and redo moves forward', async () => {
@@ -694,9 +712,12 @@ if (import.meta.vitest) {
       const before = store.get()
       expect(await generate()).toBe('failed')
       expect(store.get()).toBe(before)
-      expect(notify).toHaveBeenCalledWith('コマの生成に失敗しました: quota exceeded', {
-        signIn: false,
-      })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_panel_failed({ reason: 'quota exceeded' }),
+        {
+          signIn: false,
+        },
+      )
     })
 
     test('a failure for want of sign-in asks for sign-in', async () => {
@@ -706,9 +727,12 @@ if (import.meta.vitest) {
         },
       })
       expect(await generate()).toBe('failed')
-      expect(notify).toHaveBeenCalledWith('コマの生成に失敗しました: ログインが必要です', {
-        signIn: true,
-      })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_panel_failed({ reason: m.web_sign_in_required() }),
+        {
+          signIn: true,
+        },
+      )
     })
 
     test('the same panel is not generated twice at once', async () => {
@@ -814,9 +838,12 @@ if (import.meta.vitest) {
       const before = store.get()
       expect(await generate()).toBe('failed')
       expect(store.get()).toBe(before)
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining('削除されました'), {
-        signIn: false,
-      })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_panel_failed({ reason: m.web_generate_project_deleted() }),
+        {
+          signIn: false,
+        },
+      )
     })
 
     test('a panel removed while generating fails without a patch', async () => {
@@ -842,9 +869,12 @@ if (import.meta.vitest) {
       release()
       expect(await pending).toBe('failed')
       expect(store.get()).toBe(before)
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining('コマが消えました'), {
-        signIn: false,
-      })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_panel_failed({ reason: m.web_generate_panel_gone() }),
+        {
+          signIn: false,
+        },
+      )
     })
   })
 
@@ -880,8 +910,14 @@ if (import.meta.vitest) {
 
     test('generates the page in one call and puts a crop of it in every panel in one undo step', async () => {
       const { provider, calls } = counting()
-      const { generation, store, library, notify } = setup(provider)
+      const { generation, store, library, notify, onBatchDone } = setup(provider)
       expect(await generation.generateAll(all(store))).toEqual({
+        done: 6,
+        busy: 0,
+        failed: 0,
+        canceled: 0,
+      })
+      expect(onBatchDone).toHaveBeenCalledExactlyOnceWith({
         done: 6,
         busy: 0,
         failed: 0,
@@ -914,6 +950,14 @@ if (import.meta.vitest) {
 
       expect(await generation.generateAll(all(store, true))).toMatchObject({ done: 6 })
       expect(pagePanels(store).map((p) => p.arts.length)).toEqual([2, 2, 2, 2, 2, 2])
+    })
+
+    test('never fills a black panel, even with includeGenerated', async () => {
+      const { provider } = counting()
+      const { generation, store } = setup(provider)
+      store.applyPatch([{ op: 'add', path: '/episodes/0/pages/0/panels/0/fill', value: 'black' }])
+      expect(await generation.generateAll(all(store, true))).toMatchObject({ done: 5 })
+      expect(pagePanels(store).map((p) => p.arts.length)).toEqual([0, 1, 1, 1, 1, 1])
     })
 
     test('a panel being generated on its own is busy and gets no crop', async () => {
@@ -976,9 +1020,37 @@ if (import.meta.vitest) {
       expect(await generation.generateAll(all(store))).toMatchObject({ failed: 6, done: 0 })
       expect(store.get()).toBe(before)
       expect(notify).toHaveBeenCalledTimes(1)
-      expect(notify).toHaveBeenCalledWith('コマ 6 件の生成に失敗しました: quota exceeded', {
-        signIn: false,
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_batch_failed({ count: 6, reason: 'quota exceeded' }),
+        {
+          signIn: false,
+        },
+      )
+    })
+
+    test('a second batch of the same scope is busy and does not count as done', async () => {
+      let release = () => {}
+      let started = () => {}
+      const called = new Promise<void>((resolve) => {
+        started = resolve
       })
+      const fake = createFakeImageProvider()
+      const { generation, store, onBatchDone } = setup({
+        async generatePageArt(req) {
+          started()
+          await new Promise<void>((resolve) => {
+            release = resolve
+          })
+          return fake.generatePageArt(req)
+        },
+      })
+      const pending = generation.generateAll(all(store))
+      await called
+      expect(await generation.generateAll(all(store))).toBe('busy')
+      expect(onBatchDone).not.toHaveBeenCalled()
+      release()
+      expect(await pending).toMatchObject({ done: 6 })
+      expect(onBatchDone).toHaveBeenCalledOnce()
     })
 
     test('a panel removed while the page is generated is counted as failed, the rest get art', async () => {
@@ -1003,9 +1075,12 @@ if (import.meta.vitest) {
       release()
       expect(await pending).toMatchObject({ done: 5, failed: 1 })
       expect(pagePanels(store).map((p) => p.arts.length)).toEqual([1, 1, 1, 1, 1])
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining('コマが消えました'), {
-        signIn: false,
-      })
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_batch_failed({ count: 1, reason: m.web_generate_panel_gone() }),
+        {
+          signIn: false,
+        },
+      )
     })
 
     test('cancel drops the page reply without a patch', async () => {

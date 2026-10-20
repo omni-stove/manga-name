@@ -1,4 +1,5 @@
 import { getLocale, m } from '@manga/i18n'
+import { detectPlatform } from '@manga/storage'
 import { Button, Typography, YStack } from '@manga/ui'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -17,7 +18,8 @@ export const Route = createFileRoute('/invite/$token')({
 /**
  * 招待リンクの受け口。ログインしていなければログインさせ、招待先のメールアドレスでログインしていれば参加させて
  * そのプロジェクトを開く。違うメールアドレスなら参加させず、ログインし直すよう促す。
- * メールアドレスの無い招待なら、誰がログインしていても参加させる
+ * メールアドレスの無い招待なら、誰がログインしていても参加させる。
+ * Web でログインしていなければ、同じ招待をデスクトップアプリで開くリンクも出す
  */
 function AcceptInvite() {
   const { token } = Route.useParams()
@@ -34,6 +36,11 @@ function AcceptInvite() {
         <Typography variant="title">{m.web_invite_title()}</Typography>
         <Typography>{m.web_invite_sign_in_prompt()}</Typography>
         <SignInButton variant="primary" inviteToken={token} />
+        {detectPlatform() === 'web' && (
+          <a href={`manganame://invite/${encodeURIComponent(token)}`}>
+            {m.web_invite_open_in_app()}
+          </a>
+        )}
       </YStack>
     )
   }

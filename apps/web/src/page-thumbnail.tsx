@@ -1,9 +1,13 @@
 import { m } from '@manga/i18n'
 import {
   currentArt,
+  hasFrameLine,
+  OVERLAY_COLORS,
   type Page,
   type Panel,
   type ProjectSettings,
+  pageSizeOf,
+  paintOrder,
   panelOutline,
 } from '@manga/schema'
 import { Suspense, use, useId } from 'react'
@@ -103,7 +107,7 @@ const outlinePoints = (panel: Panel, w: number, h: number) =>
     .map((p) => `${p.x * w},${p.y * h}`)
     .join(' ')
 
-/** ページのコマ割りを判型の縦横比で描く。絵が選ばれたコマは、`resolveAsset` で読めればその絵を、読めなければ塗りを描く */
+/** ページのコマ割りを紙面（見開きなら 2 ページ分）の縦横比で描き、黒い地のページは紙を黒くし、紙面全体のトーンを重ねる。絵が選ばれたコマは、`resolveAsset` で読めればその絵を、読めなければ塗りを描く */
 export function PageThumbnail({
   page,
   pageSize,
@@ -113,7 +117,7 @@ export function PageThumbnail({
   pageSize: ProjectSettings['pageSize']
   resolveAsset?: ResolveAsset
 }) {
-  const { w, h } = pageSize
+  const { w, h } = pageSizeOf(page, pageSize)
   return (
     <svg
       className={styles.thumbnail}
@@ -121,15 +125,35 @@ export function PageThumbnail({
       role="img"
       aria-label={m.web_thumbnail_layout()}
     >
-      <rect width={w} height={h} className={styles.paper} />
-      {page.panels.map((panel) =>
-        panel.artId === undefined ? null : (
-          <PanelArt key={panel.id} panel={panel} w={w} h={h} resolveAsset={resolveAsset} />
-        ),
-      )}
-      {page.panels.map((panel) => (
-        <polygon key={panel.id} points={outlinePoints(panel, w, h)} className={styles.panel} />
+      <rect
+        width={w}
+        height={h}
+        className={page.ground === 'black' ? styles.blackPaper : styles.paper}
+      />
+      {/* 枠なしのコマは下に敷くので先に描き、枠ありのコマは紙の地でその絵を隠す */}
+      {paintOrder(page.panels).map((panel) => (
+        <g key={panel.id}>
+          {panel.frame !== 'none' && (
+            <polygon points={outlinePoints(panel, w, h)} className={styles.ground} />
+          )}
+          {panel.artId !== undefined && (
+            <PanelArt panel={panel} w={w} h={h} resolveAsset={resolveAsset} />
+          )}
+          <polygon
+            points={outlinePoints(panel, w, h)}
+            className={
+              hasFrameLine(panel.frame)
+                ? styles.panel
+                : page.ground === 'black'
+                  ? styles.borderlessOnBlack
+                  : styles.borderless
+            }
+          />
+        </g>
       ))}
+      {page.overlay && (
+        <rect width={w} height={h} fill={OVERLAY_COLORS[page.overlay]} className={styles.overlay} />
+      )}
     </svg>
   )
 }

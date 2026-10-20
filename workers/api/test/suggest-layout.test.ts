@@ -1,12 +1,11 @@
 import { env } from 'cloudflare:workers'
 import { aiFixtures, createFakeLlmProvider, type LlmProvider } from '@manga/ai'
-import { fixtures, type LayoutSuggestionResponse } from '@manga/schema'
+import type { LayoutSuggestionResponse } from '@manga/schema'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createApp } from '../src/app'
 import { DEBUG_USER_HEADER } from '../src/user'
 
-const { settings, characters } = fixtures.samplePage01
-const request = { project: { settings, characters }, script: 'E「……ここか」\n足元を見る。' }
+const request = { panels: aiFixtures.nameDraft.panels }
 
 function post(app: ReturnType<typeof createApp>, body: unknown = request) {
   return app.request(
@@ -63,45 +62,27 @@ describe('POST /v1/ai/suggest-layout', () => {
     expect(calls).toEqual([request])
   })
 
-  test('400 on a body without a page script', async () => {
+  test('400 on a body without name panels', async () => {
     const app = createApp()
     expect((await post(app, '{')).status).toBe(400)
-    expect((await post(app, { ...request, script: '  ' })).status).toBe(400)
+    expect((await post(app, { panels: [] })).status).toBe(400)
+    expect((await post(app, { panels: [{ note: '', lines: [] }] })).status).toBe(400)
     expect((await usageRows()).results).toHaveLength(0)
   })
 
-  test('drops unknown speakers without retrying', async () => {
-    const suggestion = async (): Promise<LayoutSuggestionResponse> => ({
-      options: [
-        {
-          summary: 's',
-          rows: [
-            {
-              height: 1,
-              panels: [
-                {
-                  width: 1,
-                  note: 'n',
-                  lines: [
-                    { speakerId: 'chr_e', text: 'a', shape: 'normal' },
-                    { speakerId: 'chr_missing', text: 'b', shape: 'shout' },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    })
-    const { provider, calls } = scripted([suggestion])
+  test('drops the options whose panels do not match the name, and retries when none is left', async () => {
+    const [fits] = aiFixtures.layoutSuggestion.options
+    if (!fits) throw new Error('fixture has no option')
+    const short = { summary: 's', rows: [{ height: 1, panels: [{ width: 1 }] }] }
+    const { provider, calls } = scripted([
+      async () => ({ options: [short] }),
+      async () => ({ options: [short, fits] }),
+    ])
     const res = await post(createApp({ llmProvider: () => provider }))
     expect(res.status).toBe(200)
-    const body = (await res.json()) as LayoutSuggestionResponse
-    expect(body.options[0]?.rows[0]?.panels[0]?.lines).toEqual([
-      { speakerId: 'chr_e', text: 'a', shape: 'normal' },
-      { text: 'b', shape: 'shout' },
-    ])
-    expect(calls).toHaveLength(1)
+    expect(await res.json()).toEqual({ options: [fits] })
+    expect(calls).toHaveLength(2)
+    expect((await usageRows()).results[0]?.cost_units).toBe(2)
   })
 
   test('retries an invalid suggestion, then 502 when the retry is invalid too', async () => {

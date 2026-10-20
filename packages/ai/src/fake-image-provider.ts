@@ -1,4 +1,4 @@
-import type { ID } from '@manga/schema'
+import { type ID, pageSizeOf } from '@manga/schema'
 import { placeholderPagePng, placeholderPng, placeholderSize } from './placeholder'
 import { prompts } from './prompts'
 import { findPanel, type ImageProvider } from './provider'
@@ -17,11 +17,13 @@ export function createFakeImageProvider(art: Record<ID, Blob> = {}): ImageProvid
     async generatePanelArt(req) {
       const { prompt } = prompts.panelArt({ ...req, instruction: req.previous?.instruction })
       const panel = findPanel(req.page, req.panelId)
+      const { settings } = req.project
+      const size = placeholderSize(panel, {
+        ...settings,
+        pageSize: pageSizeOf(req.page, settings.pageSize),
+      })
       const image =
-        art[req.panelId] ??
-        new Blob([placeholderPng(panel.order, placeholderSize(panel, req.project.settings))], {
-          type: 'image/png',
-        })
+        art[req.panelId] ?? new Blob([placeholderPng(panel.order, size)], { type: 'image/png' })
       return { image, provider: 'fake', prompt }
     },
     async generatePageArt(req) {

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { inflateSync } from 'node:zlib'
+import { m } from '@manga/i18n'
 import { expect, type Locator, type Page } from '@playwright/test'
 import {
   decodePDFRawStream,
@@ -25,11 +26,11 @@ export const RENDER_SNAPSHOT_ARTS = fileURLToPath(
 /** 一覧の新規作成からプロジェクトを作り、1 話目を足して開く */
 export async function createProject(page: Page, title: string): Promise<void> {
   await page.goto('/')
-  await page.getByRole('button', { name: '新規作成' }).click()
-  await page.getByLabel('タイトル').fill(title)
-  await page.getByRole('button', { name: '作成', exact: true }).click()
-  await page.getByRole('button', { name: 'エピソードを追加' }).click()
-  await expect(page.getByRole('button', { name: 'ページを追加' })).toBeVisible()
+  await page.getByRole('button', { name: m.web_projects_create_new() }).click()
+  await page.getByLabel(m.project_title()).fill(title)
+  await page.getByRole('button', { name: m.web_new_project_create(), exact: true }).click()
+  await page.getByRole('button', { name: m.web_episodes_add() }).click()
+  await expect(page.getByRole('button', { name: m.web_episode_add_page() })).toBeVisible()
 }
 
 /** 新規作成ページのファイル選択からプロジェクト JSON を読み込み、FIXTURE_PROJECT の 1 話目を開く */
@@ -45,16 +46,17 @@ export const FIXTURE_EPISODE = 'sample episode'
 /** エピソード一覧から題が title の話を開く */
 export async function openEpisode(page: Page, title: string): Promise<void> {
   await page.getByRole('link', { name: title }).click()
-  await expect(page.getByRole('button', { name: 'ページを追加' })).toBeVisible()
+  await expect(page.getByRole('button', { name: m.web_episode_add_page() })).toBeVisible()
 }
 
 /** エピソードのページ一覧から n ページ目のエディタを開く */
 export async function openPage(page: Page, n: number): Promise<void> {
-  await page.getByRole('link', { name: `${n} ページ` }).click()
+  await page.getByRole('link', { name: m.web_episode_page_number({ number: n }) }).click()
   await expect(canvas(page)).toBeVisible()
 }
 
-const canvas = (page: Page): Locator => page.getByRole('application', { name: 'キャンバス' })
+const canvas = (page: Page): Locator =>
+  page.getByRole('application', { name: m.web_editor_canvas() })
 
 export const inspector = (page: Page): Locator => page.locator('aside')
 
@@ -65,15 +67,20 @@ export const arts = (page: Page): Locator => panelInspector(page).locator('li[da
 
 /** ツールバーのツールを切り替える */
 export async function selectTool(page: Page, label: string): Promise<void> {
-  await page.getByRole('group', { name: 'ツール' }).getByText(label, { exact: true }).click()
+  await page
+    .getByRole('group', { name: m.web_editor_tools() })
+    .getByText(label, { exact: true })
+    .click()
 }
 
 /** インスペクタの要素リストからコマを選ぶ。カメラが入っていると名前の後ろに続く */
 export async function selectPanel(page: Page, order: number): Promise<void> {
   await inspector(page)
-    .getByRole('button', { name: new RegExp(`^コマ ${order}( |$)`) })
+    .getByRole('button', { name: new RegExp(`^${m.web_editor_outline_panel({ order })}( |$)`) })
     .click()
-  await expect(panelInspector(page).getByText(`コマ ${order}`, { exact: true })).toBeVisible()
+  await expect(
+    panelInspector(page).getByText(m.inspector_panel_title({ order }), { exact: true }),
+  ).toBeVisible()
 }
 
 /** キャンバスの n 番目に描かれたコマの中を、左上寄りの点でクリックする */
@@ -86,13 +93,13 @@ export async function clickInsidePanel(page: Page, index: number): Promise<void>
 
 /** debounce 待ちの変更が storage に書かれるまで待つ */
 export async function waitSaved(page: Page): Promise<void> {
-  await expect(page.getByText('保存済み', { exact: true })).toBeVisible()
+  await expect(page.getByText(m.web_save_status_saved(), { exact: true })).toBeVisible()
 }
 
 /** 書き出しダイアログを開く */
 export async function openExportDialog(page: Page): Promise<Locator> {
-  await page.getByRole('button', { name: '書き出し', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: '書き出し' })
+  await page.getByRole('button', { name: m.web_editor_export(), exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: m.web_export_title() })
   await expect(dialog).toBeVisible()
   return dialog
 }
@@ -100,7 +107,7 @@ export async function openExportDialog(page: Page): Promise<Locator> {
 /** 開いている書き出しダイアログで書き出し、ダウンロードされたバイト列を返す */
 export async function submitExport(page: Page, dialog: Locator): Promise<Buffer> {
   const download = page.waitForEvent('download')
-  await dialog.getByRole('button', { name: '書き出す' }).click()
+  await dialog.getByRole('button', { name: m.web_export_submit() }).click()
   const file = await (await download).path()
   return readFile(file)
 }
@@ -111,7 +118,7 @@ export async function exportPng(
   opts: { panelNumbers?: boolean } = {},
 ): Promise<Buffer> {
   const dialog = await openExportDialog(page)
-  await dialog.getByLabel('コマ番号を入れる').setChecked(opts.panelNumbers ?? false)
+  await dialog.getByLabel(m.web_export_panel_numbers()).setChecked(opts.panelNumbers ?? false)
   return submitExport(page, dialog)
 }
 

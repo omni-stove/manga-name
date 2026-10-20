@@ -12,6 +12,7 @@ import {
   type Project,
   ProjectSchema,
   type ReadingDirection,
+  type Rect,
   SCHEMA_VERSION,
 } from './project'
 
@@ -51,6 +52,39 @@ export const INNER_FRAME = {
   h: 220 / 257,
 } as const
 
+/**
+ * 見開きの内枠。左右のページの内枠を、ノドの側の余白を除いて 1 つにつないだもの。見開きの紙面に対する正規化座標
+ */
+export const SPREAD_INNER_FRAME = {
+  x: INNER_FRAME.x / 2,
+  y: INNER_FRAME.y,
+  w: 1 - INNER_FRAME.x,
+  h: INNER_FRAME.h,
+} as const
+
+/** ページの内枠。見開きなら SPREAD_INNER_FRAME */
+export function innerFrameOf(page: Pick<Page, 'spread'>): Rect {
+  return page.spread ? SPREAD_INNER_FRAME : INNER_FRAME
+}
+
+/** 内枠から仕上がりまでの余白のうち、組み込みのテンプレートのコマを内枠の外へ出す割合 */
+const OVERHANG = 1 / 3
+
+/**
+ * 組み込みのテンプレートがコマを割る範囲。コマの外周が内枠の線にそろうと作り物めいて見えるので、内枠を四方へ
+ * 余白の OVERHANG だけ広げる
+ */
+function panelArea(frame: Rect): Rect {
+  return {
+    x: frame.x * (1 - OVERHANG),
+    y: frame.y * (1 - OVERHANG),
+    w: frame.w + 2 * frame.x * OVERHANG,
+    h: frame.h + 2 * frame.y * OVERHANG,
+  }
+}
+
+const PANEL_AREA = panelArea(INNER_FRAME)
+
 const emptyPanel = (order: number, rect: Panel['rect']): Panel => ({
   id: newId(),
   order,
@@ -63,7 +97,7 @@ const emptyPanel = (order: number, rect: Panel['rect']): Panel => ({
 
 /**
  * テンプレートからページを作る。登録したコマ割り（LayoutTemplate）なら、その枠と order のまま空のコマを置き、
- * direction は見ない。組み込みのテンプレートなら、createRowPanels で内枠を同じ高さの行数ぶんの段に割り、
+ * direction は見ない。組み込みのテンプレートなら、createRowPanels で内枠を四方へ少し広げた範囲を同じ高さの行数ぶんの段に割り、
  * 各段を同じ幅の 2 列に割る
  */
 export function createPage(
@@ -75,13 +109,25 @@ export function createPage(
       ...emptyPanel(order, { ...rect }),
       ...(shape && { shape: shape.map((p) => ({ ...p })) }),
     }))
-    return { id: newId(), side: 'single', panels, scribbles: [] }
+    return { id: newId(), panels, scribbles: [] }
   }
   const rows = Array.from({ length: ROWS[template] }, () => ({
     height: 1,
     widths: Array.from({ length: COLUMNS }, () => 1),
   }))
-  return { id: newId(), side: 'single', panels: createRowPanels(rows, direction), scribbles: [] }
+  return { id: newId(), panels: createRowPanels(rows, direction), scribbles: [] }
+}
+
+/**
+ * 見開きのページを作る。見開きの紙面いっぱいの枠なしのコマを 1 つだけ置き、枠ありのコマはその上に重ねて割らせる
+ */
+export function createSpreadPage(): Page {
+  return {
+    id: newId(),
+    spread: true,
+    panels: [{ ...emptyPanel(1, { x: 0, y: 0, w: 1, h: 1 }), frame: 'none' }],
+    scribbles: [],
+  }
 }
 
 /** 段の高さの比と、段の中のコマの幅の比（読む順） */
@@ -91,24 +137,29 @@ export interface RowLayout {
 }
 
 /**
- * 段の比から空のコマを作る。内枠（INNER_FRAME）を段の height の比で上から縦に割り、各段を widths の比で横に割る。
+ * 段の比から空のコマを作る。page の内枠（innerFrameOf）を四方へ少し広げた範囲を段の height の比で
+ * 上から縦に割り、各段を widths の比で横に割る。
  * コマはコマ間（GUTTER）を空けて重ならない。order は段ごとに上から、段の中は widths の順に振り、
  * rtl なら右から、ltr なら左から並べる。比はどれも正の数
  */
-export function createRowPanels(rows: readonly RowLayout[], direction: ReadingDirection): Panel[] {
+export function createRowPanels(
+  rows: readonly RowLayout[],
+  direction: ReadingDirection,
+  page: Pick<Page, 'spread'> = {},
+): Panel[] {
+  const area = panelArea(innerFrameOf(page))
   const totalHeight = rows.reduce((sum, row) => sum + row.height, 0)
-  const freeHeight = INNER_FRAME.h - GUTTER * (rows.length - 1)
+  const freeHeight = area.h - GUTTER * (rows.length - 1)
   const panels: Panel[] = []
-  let y = INNER_FRAME.y
+  let y = area.y
   for (const row of rows) {
     const h = (freeHeight * row.height) / totalHeight
     const totalWidth = row.widths.reduce((sum, w) => sum + w, 0)
-    const freeWidth = INNER_FRAME.w - GUTTER * (row.widths.length - 1)
+    const freeWidth = area.w - GUTTER * (row.widths.length - 1)
     let offset = 0
     for (const width of row.widths) {
       const w = (freeWidth * width) / totalWidth
-      const x =
-        direction === 'rtl' ? INNER_FRAME.x + INNER_FRAME.w - offset - w : INNER_FRAME.x + offset
+      const x = direction === 'rtl' ? area.x + area.w - offset - w : area.x + offset
       panels.push(emptyPanel(panels.length + 1, { x, y, w, h }))
       offset += w + GUTTER
     }
@@ -179,7 +230,7 @@ if (import.meta.vitest) {
     expect(ProjectSchema.safeParse(p).success).toBe(true)
   })
 
-  test('createRowPanels splits the inner frame by the ratios in reading order', () => {
+  test('createRowPanels splits the panel area by the ratios in reading order', () => {
     const rows = [
       { height: 2, widths: [1] },
       { height: 1, widths: [2, 1] },
@@ -188,12 +239,12 @@ if (import.meta.vitest) {
       const [wide, first, second] = createRowPanels(rows, direction)
       if (!wide || !first || !second) throw new Error('コマが 3 つない')
       expect([wide.order, first.order, second.order]).toEqual([1, 2, 3])
-      expect(wide.rect.w).toBeCloseTo(INNER_FRAME.w)
+      expect(wide.rect.w).toBeCloseTo(PANEL_AREA.w)
       expect(wide.rect.h).toBeCloseTo(2 * first.rect.h)
       expect(first.rect.y).toBeCloseTo(wide.rect.y + wide.rect.h + GUTTER)
       expect(first.rect.w).toBeCloseTo(2 * second.rect.w)
       expect(first.rect.x > second.rect.x).toBe(direction === 'rtl')
-      expect(first.rect.y + first.rect.h).toBeCloseTo(INNER_FRAME.y + INNER_FRAME.h)
+      expect(first.rect.y + first.rect.h).toBeCloseTo(PANEL_AREA.y + PANEL_AREA.h)
     }
   })
 
@@ -226,13 +277,37 @@ if (import.meta.vitest) {
           })
           const right = Math.max(...page.panels.map((p) => p.rect.x + p.rect.w))
           const bottom = Math.max(...page.panels.map((p) => p.rect.y + p.rect.h))
-          expect(Math.min(...page.panels.map((p) => p.rect.x))).toBeCloseTo(INNER_FRAME.x)
-          expect(Math.min(...page.panels.map((p) => p.rect.y))).toBeCloseTo(INNER_FRAME.y)
-          expect(right).toBeCloseTo(INNER_FRAME.x + INNER_FRAME.w)
-          expect(bottom).toBeCloseTo(INNER_FRAME.y + INNER_FRAME.h)
+          expect(Math.min(...page.panels.map((p) => p.rect.x))).toBeCloseTo(PANEL_AREA.x)
+          expect(Math.min(...page.panels.map((p) => p.rect.y))).toBeCloseTo(PANEL_AREA.y)
+          expect(right).toBeCloseTo(PANEL_AREA.x + PANEL_AREA.w)
+          expect(bottom).toBeCloseTo(PANEL_AREA.y + PANEL_AREA.h)
+          expect(PANEL_AREA.x).toBeLessThan(INNER_FRAME.x)
+          expect(PANEL_AREA.x).toBeGreaterThan(0)
         })
       }
     }
+  })
+
+  test('a spread is split from the spread inner frame, which spans the gutter', () => {
+    const panels = createRowPanels([{ height: 1, widths: [1, 1] }], 'rtl', { spread: true })
+    const area = panelArea(SPREAD_INNER_FRAME)
+    expect(Math.min(...panels.map((p) => p.rect.x))).toBeCloseTo(area.x)
+    expect(Math.max(...panels.map((p) => p.rect.x + p.rect.w))).toBeCloseTo(area.x + area.w)
+    // 見開きの外側の余白（mm）は 1 ページのときと同じ
+    expect(SPREAD_INNER_FRAME.x * 2).toBeCloseTo(INNER_FRAME.x)
+  })
+
+  test('a spread page starts with one borderless panel over the whole spread', () => {
+    const page = createSpreadPage()
+    expect(page.spread).toBe(true)
+    expect(PageSchema.safeParse(page).success).toBe(true)
+    expect(page.panels).toHaveLength(1)
+    expect(page.panels[0]).toMatchObject({
+      order: 1,
+      frame: 'none',
+      rect: { x: 0, y: 0, w: 1, h: 1 },
+    })
+    expect(createPage('2rows', 'rtl').spread).toBeUndefined()
   })
 
   test('createLayoutTemplate keeps only the panel frames, and createPage restores them', () => {

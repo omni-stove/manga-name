@@ -11,11 +11,11 @@ interface ConfirmDialogProps {
   /** 戻せない操作なら確定ボタンを danger にする */
   irreversible?: boolean
   onConfirm(): void
-  /** キャンセル、Esc、背景外の close で呼ぶ */
+  /** キャンセルか Esc で呼ぶ */
   onCancel(): void
 }
 
-/** 削除などの前に確かめるモーダル。確定はボタンか Enter、取り消しはキャンセルか Esc */
+/** 削除などの前に確かめるモーダル。確定はボタンか Enter、取り消しはキャンセルか Esc。背景のクリックでは閉じない */
 export function ConfirmDialog({
   title,
   message,
@@ -28,6 +28,8 @@ export function ConfirmDialog({
     <Dialog
       title={title}
       onClose={onCancel}
+      // 押し間違いで取り消しにならないよう、選ぶまで閉じない
+      closeOnBackdrop={false}
       onSubmit={onConfirm}
       actions={
         <>

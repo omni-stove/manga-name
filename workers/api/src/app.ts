@@ -9,6 +9,8 @@ import {
 } from '@manga/ai'
 import {
   CharacterArtRequestSchema,
+  MAX_NAME_PANELS,
+  NamePanelSchema,
   PageArtRequestSchema,
   PageDiagnosisSchema,
   PageSchema,
@@ -24,6 +26,7 @@ import { ApiException, handleError, parseOrThrow } from './api-error'
 import { createUploadApp } from './assets'
 import { AUTH_BASE_PATH, getAuth } from './auth'
 import { requestJson } from './body'
+import { createDesktopSignInApp } from './desktop-sign-in'
 import type { Env } from './env'
 import { requireAllowedCountry } from './geo'
 import { createMeApp } from './me'
@@ -45,6 +48,8 @@ const MAX_ATTEMPTS = 2
 
 /** 脚本の最大文字数。LLM に渡すトークン数とその費用を 1 要求あたりで抑えるため */
 const MAX_SCRIPT_LENGTH = 20_000
+const MAX_NAME_TEXT_LENGTH = 2_000
+const MAX_NAME_LINES = 50
 /** 脚本を割り振るページ数の上限。Web の MAX_PAGE_COUNT と @manga/ai のプロンプトの上限と揃える */
 const MAX_PAGE_COUNT = 64
 /**
@@ -95,10 +100,29 @@ const PagePlanRequestSchema = z.object({
   pageCount: z.number().int().min(1).max(MAX_PAGE_COUNT).optional(),
 })
 
-/** `@manga/ai` の LayoutSuggestionRequest */
-const LayoutSuggestionRequestSchema = z.object({
+/** `@manga/ai` の NameDraftRequest */
+const NameDraftRequestSchema = z.object({
   project: ProjectBaseSchema.pick({ settings: true, characters: true }),
   script: z.string().trim().min(1).max(MAX_SCRIPT_LENGTH),
+})
+
+/** `@manga/ai` の LayoutSuggestionRequest */
+const LayoutSuggestionRequestSchema = z.object({
+  panels: z
+    .array(
+      NamePanelSchema.extend({
+        note: z.string().min(1).max(MAX_NAME_TEXT_LENGTH),
+        lines: z
+          .array(
+            NamePanelSchema.shape.lines.element.extend({
+              text: z.string().min(1).max(MAX_NAME_TEXT_LENGTH),
+            }),
+          )
+          .max(MAX_NAME_LINES),
+      }),
+    )
+    .min(1)
+    .max(MAX_NAME_PANELS),
 })
 
 /** `@manga/ai` の CritiqueRequest。診断は同じページのものに限る */
@@ -182,10 +206,10 @@ async function readImageForm<S extends z.ZodType>(c: Context<UserEnv>, schema: S
 }
 
 /**
- * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、`POST /v1/ai/panel-art`、`POST /v1/ai/page-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/suggest-layout`、`POST /v1/ai/critique`、
+ * Workers の API。`GET /v1/health`、Better Auth の `/v1/auth/*`、Desktop のログインの口 `/v1/desktop-sign-in`、`POST /v1/ai/panel-art`、`POST /v1/ai/page-art`、`POST /v1/ai/character-art`、`POST /v1/ai/plan-pages`、`POST /v1/ai/transcribe-name`、`POST /v1/ai/suggest-layout`、`POST /v1/ai/critique`、
  * `/v1/projects` の CRUD とアセットと参加者、招待リンクの受け口 `/v1/invites/:token`、アセットの署名 URL の受け口 `PUT /v1/uploads/...`、`GET /v1/usage`。
- * `/v1/health`、`/v1/auth/*`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
- * CORS は WEB_ORIGINS と tauri://localhost だけに許す。`/v1/health` 以外は ALLOWED_COUNTRIES の国からの接続だけを通す。
+ * `/v1/health`、`/v1/auth/*`、`/v1/desktop-sign-in`、`/v1/uploads` 以外は requireUser で Bearer トークンを検証する。
+ * CORS は WEB_ORIGINS と Tauri の WebView のオリジン（tauri://localhost と http://tauri.localhost）だけに許す。`/v1/health` 以外は ALLOWED_COUNTRIES の国からの接続だけを通す。
  */
 export function createApp(options: AppOptions = {}) {
   const createImage = options.imageProvider ?? (() => createFakeImageProvider())
@@ -247,6 +271,7 @@ export function createApp(options: AppOptions = {}) {
 
   app.on(['GET', 'POST'], `${AUTH_BASE_PATH}/*`, (c) => getAuth(c.env).handler(c.req.raw))
 
+  app.route('/v1/desktop-sign-in', createDesktopSignInApp())
   app.route('/v1/projects', createProjectsApp(now))
   app.route('/v1/me', createMeApp(now))
   app.route('/v1/invites', createInviteApp(now))
@@ -352,26 +377,47 @@ export function createApp(options: AppOptions = {}) {
     return c.json(value)
   })
 
+  app.post('/v1/ai/transcribe-name', async (c) => {
+    const req = parseOrThrow(NameDraftRequestSchema, await requestJson(c.req.raw))
+    const usageId = await reserve(c, 'transcribe-name')
+    const provider = createLlm(c.env)
+    const characterIds = new Set(req.project.characters.map((ch) => ch.id))
+
+    const { value, attempts } = await retryUntilValid('transcribe-name', async () => {
+      const name = await provider.transcribeName(req)
+      return {
+        panels: name.panels.map((panel) => ({
+          ...panel,
+          lines: dropUnknownSpeakers(panel.lines, characterIds),
+        })),
+      }
+    })
+    await settleUsage(c.env.DB, usageId, attempts)
+
+    if (value === undefined) {
+      throw new ApiException('provider_invalid_response', {
+        detail: 'llm provider returned an invalid name',
+      })
+    }
+    return c.json(value)
+  })
+
   app.post('/v1/ai/suggest-layout', async (c) => {
     const req = parseOrThrow(LayoutSuggestionRequestSchema, await requestJson(c.req.raw))
     const usageId = await reserve(c, 'suggest-layout')
     const provider = createLlm(c.env)
-    const characterIds = new Set(req.project.characters.map((ch) => ch.id))
 
     const { value, attempts } = await retryUntilValid('suggest-layout', async () => {
       const suggestion = await provider.suggestLayout(req)
-      return {
-        options: suggestion.options.map((option) => ({
-          ...option,
-          rows: option.rows.map((row) => ({
-            ...row,
-            panels: row.panels.map((panel) => ({
-              ...panel,
-              lines: dropUnknownSpeakers(panel.lines, characterIds),
-            })),
-          })),
-        })),
+      // Web は案のコマを読む順にネームのコマへ当てるので、数の合わない案は落とし、1 つも残らなければ作り直させる
+      const options = suggestion.options.filter(
+        (option) => option.rows.reduce((n, row) => n + row.panels.length, 0) === req.panels.length,
+      )
+      if (options.length === 0) {
+        console.error(`suggest-layout: no option has ${req.panels.length} panels`)
+        return undefined
       }
+      return { options }
     })
     await settleUsage(c.env.DB, usageId, attempts)
 

@@ -61,8 +61,11 @@ export function countMissingArts(pages: readonly Page[]): number {
   return pages.reduce((sum, page) => sum + page.panels.filter((p) => !currentArt(p)).length, 0)
 }
 
-/** PNG の zip に入れる名前。`p03.png` の形で、ページ番号はエピソード内の 1 始まり */
-const zipEntryName = (number: number) => `p${String(number).padStart(2, '0')}.png`
+/**
+ * ページごとの PNG の名前。zip に入れるときもフォルダへ書くときもこれを使う。
+ * `p03.png` の形で、ページ番号はエピソード内の 1 始まり
+ */
+export const pageFileName = (number: number) => `p${String(number).padStart(2, '0')}.png`
 
 /**
  * ExportJob から書き出しのファイルを作る。PDF は exportPdf、PNG は 1 ページならその PNG、
@@ -97,7 +100,7 @@ export async function runExportJob(
   const entries = []
   for (const { page, number } of targets) {
     const png = await renderPage(page, ctx, job.opts)
-    entries.push({ name: zipEntryName(number), png })
+    entries.push({ name: pageFileName(number), png })
     onProgress(entries.length, targets.length)
   }
   const [only] = entries

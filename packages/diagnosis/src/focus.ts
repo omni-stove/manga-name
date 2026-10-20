@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { FocusDiagnosis, Panel, Point } from '@manga/schema'
 
 /** フキダシを焦点とみなすときの weight */
@@ -27,7 +28,7 @@ export const panelFoci = (panel: Panel): Focus[] => [
       id: b.id,
       kind: 'bubble' as const,
       // セリフ本文はヒントや Issue に出さない
-      label: 'フキダシ',
+      label: m.bubble(),
       pos: b.pos,
       weight: BUBBLE_WEIGHT,
     })),
@@ -68,8 +69,8 @@ if (import.meta.vitest) {
   test('focus points come first, then bubbles in order with the fixed weight and label', () => {
     expect(panelFoci(panel)).toEqual([
       { id: 'fp', kind: 'face', label: 'E', pos: { x: 0.5, y: 0.5 }, weight: 0.7 },
-      { id: 'bb_1', kind: 'bubble', label: 'フキダシ', pos: { x: 0.8, y: 0.5 }, weight: 0.4 },
-      { id: 'bb_2', kind: 'bubble', label: 'フキダシ', pos: { x: 0.2, y: 0.5 }, weight: 0.4 },
+      { id: 'bb_1', kind: 'bubble', label: m.bubble(), pos: { x: 0.8, y: 0.5 }, weight: 0.4 },
+      { id: 'bb_2', kind: 'bubble', label: m.bubble(), pos: { x: 0.2, y: 0.5 }, weight: 0.4 },
     ])
   })
 

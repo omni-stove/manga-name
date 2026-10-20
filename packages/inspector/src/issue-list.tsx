@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { m } from '@manga/i18n'
 import type { Issue } from '@manga/schema'
 import { Typography, XStack, YStack } from '@manga/ui'
@@ -6,7 +7,7 @@ import type { IssueListProps } from './types'
 
 const SEVERITY_RANK: Record<Issue['severity'], number> = { error: 0, warning: 1, info: 2 }
 
-const SEVERITY_LABELS: Record<Issue['severity'], () => string> = {
+export const SEVERITY_LABELS: Record<Issue['severity'], () => string> = {
   error: m.issue_severity_error,
   warning: m.issue_severity_warning,
   info: m.issue_severity_info,
@@ -46,4 +47,48 @@ export function IssueList({ issues, onFocus }: IssueListProps) {
       ))}
     </YStack>
   )
+}
+
+if (import.meta.vitest) {
+  const { describe, expect, test, vi } = import.meta.vitest
+  const { act } = await import('react')
+  const { must, render } = await import('./dom-harness')
+
+  describe('IssueList', () => {
+    test('says so when there are no issues', async () => {
+      const { container } = await render(<IssueList issues={[]} onFocus={() => {}} />)
+      expect(must(container.querySelector('[data-issue-list]')).textContent).toBe(
+        m.inspector_issue_list_empty(),
+      )
+    })
+
+    test('sorts by severity, and only an issue that points at an element can be pressed', async () => {
+      const onFocus = vi.fn()
+      const pointing = {
+        severity: 'warning' as const,
+        code: 'FOCUS_WEAK' as const,
+        panelId: 'pn_2',
+        message: '焦点が弱い',
+      }
+      const { container } = await render(
+        <IssueList
+          issues={[
+            { severity: 'info', code: 'READING_ORDER', message: '補足' },
+            pointing,
+            { severity: 'error', code: 'READING_ORDER', message: '読み順が逆' },
+          ]}
+          onFocus={onFocus}
+        />,
+      )
+      const buttons = [...container.querySelectorAll('button')]
+      expect(buttons.map((b) => b.textContent)).toEqual([
+        `${SEVERITY_LABELS.error()}読み順が逆`,
+        `${SEVERITY_LABELS.warning()}焦点が弱い`,
+        `${SEVERITY_LABELS.info()}補足`,
+      ])
+      expect(buttons.map((b) => b.disabled)).toEqual([true, false, true])
+      await act(async () => must(buttons[1]).click())
+      expect(onFocus).toHaveBeenCalledWith(pointing)
+    })
+  })
 }

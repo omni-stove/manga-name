@@ -4,7 +4,7 @@ import type { TokenStore } from '../auth'
 let loading: Promise<Store> | undefined
 
 /**
- * Desktop の設定ファイル（AppData の `desktop.json`）。最近開いたファイルと認証トークンを置く。
+ * Desktop の設定ファイル（AppData の `desktop.json`）。最近開いたファイル、プロジェクトごとの書き出し先フォルダ、認証トークンを置く。
  * plugin-store は最初に使うときに読み込み、Web のバンドルには入れない
  */
 export function desktopStore(): Promise<Store> {

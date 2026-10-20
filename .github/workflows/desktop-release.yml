@@ -126,9 +126,12 @@ jobs:
           @{ bundle = @{ windows = @{ certificateThumbprint = $cert.Thumbprint } } } | ConvertTo-Json -Depth 4 | Set-Content $config
           "args=--config $config" >> $env:GITHUB_OUTPUT
 
+      # beforeBuildCommand が apps/web をビルドするので、ここで渡した値が Vite に入る。
+      # Desktop の WebView のオリジンは受け取った人が開けないので、招待リンクは Web 版のオリジンで組む
       - name: Build and upload
         uses: tauri-apps/tauri-action@v0
         env:
+          VITE_APP_ORIGIN: ${{ vars.VITE_APP_ORIGIN }}
           GITHUB_TOKEN: ${{ github.token }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}

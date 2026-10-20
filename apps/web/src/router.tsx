@@ -29,6 +29,7 @@ declare module '@tanstack/react-router' {
 if (import.meta.vitest) {
   const { beforeEach, describe, expect, test, vi } = import.meta.vitest
   const { renderToString } = await import('react-dom/server')
+  const { m } = await import('@manga/i18n')
   const { fixtures } = await import('@manga/schema')
   const { createIndexedDbStorage, createMemoryStorage, createMemoryYDocStore } = await import(
     '@manga/storage'
@@ -75,13 +76,13 @@ if (import.meta.vitest) {
 
   describe('7 ルートが描画される', () => {
     test.each([
-      ['/', 'プロジェクト一覧'],
-      ['/new', '新規プロジェクト'],
-      [`/p/${projectId}`, 'エピソードを追加'],
-      [`/p/${projectId}/episodes/${episodeId}`, '脚本から下書き'],
-      [`/p/${projectId}/pages/${pageId}`, 'インスペクタ'],
-      [`/p/${projectId}/characters`, 'キャラクター一覧'],
-      [`/p/${projectId}/characters/new`, '外見から生成'],
+      ['/', m.web_project_list()],
+      ['/new', m.web_new_project_title()],
+      [`/p/${projectId}`, m.web_episodes_add()],
+      [`/p/${projectId}/episodes/${episodeId}`, m.web_draft_title()],
+      [`/p/${projectId}/pages/${pageId}`, m.web_editor_inspector()],
+      [`/p/${projectId}/characters`, m.web_characters_title()],
+      [`/p/${projectId}/characters/new`, m.web_character_reference_hint()],
     ])('%s', async (path, heading) => {
       expect(await render(library, path)).toContain(heading)
     })
@@ -99,13 +100,15 @@ if (import.meta.vitest) {
 
   test('設定は ?settings= のときだけ、今の画面の上にダイアログで出る', async () => {
     const editor = `/p/${projectId}/pages/${pageId}`
-    expect(await render(library, editor)).not.toContain('判型')
+    expect(await render(library, editor)).not.toContain(m.project_settings_page_size())
     const project = await render(library, `${editor}?settings=project`)
-    expect(project).toContain('判型')
-    expect(project).toContain('インスペクタ')
-    expect(await render(library, `/p/${projectId}?settings=app`)).toContain('テーマ')
+    expect(project).toContain(m.project_settings_page_size())
+    expect(project).toContain(m.web_editor_inspector())
+    expect(await render(library, `/p/${projectId}?settings=app`)).toContain(m.web_settings_theme())
     // プロジェクトを開いていない画面にはプロジェクト設定を出さない
-    expect(await render(library, '/?settings=project')).not.toContain('判型')
+    expect(await render(library, '/?settings=project')).not.toContain(
+      m.project_settings_page_size(),
+    )
   })
 
   test('保存済みのプロジェクトが一覧に出る', async () => {
@@ -116,22 +119,24 @@ if (import.meta.vitest) {
     const html = await render(library, `/p/${projectId}`)
     expect(html).toContain(`/p/${projectId}/episodes/${episodeId}`)
     expect(html).toContain(project.episodes[0]?.title)
-    expect(html).toContain('1 ページ')
-    expect(html).not.toContain('ページを追加')
-    expect(html).not.toContain('脚本から下書き')
+    expect(html).toContain(m.web_episodes_page_count({ count: 1 }))
+    expect(html).not.toContain(m.web_episode_add_page())
+    expect(html).not.toContain(m.web_draft_title())
   })
 
   test('エピソードにページと生成状況が出る', async () => {
     const html = await render(library, `/p/${projectId}/episodes/${episodeId}`)
     expect(html).toContain(`/p/${projectId}/pages/${pageId}`)
-    expect(html).toContain('未生成')
-    expect(html).toContain('ページを追加')
+    expect(html).toContain(m.web_art_status_none())
+    expect(html).toContain(m.web_episode_add_page())
   })
 
   test('知らないプロジェクトとエピソードとページは見つからない旨を出す', async () => {
-    expect(await render(library, '/p/nope')).toContain('見つかりません')
-    expect(await render(library, `/p/${projectId}/episodes/nope`)).toContain('見つかりません')
-    expect(await render(library, `/p/${projectId}/pages/nope`)).toContain('見つかりません')
+    expect(await render(library, '/p/nope')).toContain(m.web_not_found_project())
+    expect(await render(library, `/p/${projectId}/episodes/nope`)).toContain(
+      m.web_episode_not_found(),
+    )
+    expect(await render(library, `/p/${projectId}/pages/nope`)).toContain(m.web_not_found_page())
   })
 
   test('リロード後も IndexedDB から復元される', async () => {

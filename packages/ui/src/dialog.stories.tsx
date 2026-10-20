@@ -48,6 +48,36 @@ export const CloseRequestCallsOnClose: Story = {
   },
 }
 
+export const BackdropClickCallsOnClose: Story = {
+  ...Message,
+  play: async ({ args }) => {
+    const dialog = screen.getByRole<HTMLDialogElement>('dialog', { name: 'ページを追加' })
+    // 背景のクリックは dialog 自身に届くので、枠の外の座標で押す
+    await userEvent.pointer({
+      keys: '[MouseLeft]',
+      target: dialog,
+      coords: { clientX: 1, clientY: 1 },
+    })
+    await waitFor(() => expect(args.onClose).toHaveBeenCalledOnce())
+  },
+}
+
+export const ClickInsideKeepsOpen: Story = {
+  ...Message,
+  play: async ({ args }) => {
+    const dialog = screen.getByRole<HTMLDialogElement>('dialog', { name: 'ページを追加' })
+    const r = dialog.getBoundingClientRect()
+    // 余白も dialog 自身に届くので、枠の内側の余白で押す
+    await userEvent.pointer({
+      keys: '[MouseLeft]',
+      target: dialog,
+      coords: { clientX: r.left + 4, clientY: r.top + 4 },
+    })
+    await expect(dialog).toHaveAttribute('open')
+    await expect(args.onClose).not.toHaveBeenCalled()
+  },
+}
+
 export const EnterAndSubmitCallOnSubmit: Story = {
   ...WithForm,
   play: async ({ args }) => {
