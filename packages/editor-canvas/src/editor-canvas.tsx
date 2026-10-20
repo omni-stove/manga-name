@@ -734,6 +734,21 @@ if (import.meta.vitest) {
       expect(text.getAttribute('fill')).toBe('#fff')
     })
 
+    test('a black bubble is filled black with white dialogue, and none ignores the black fill', async () => {
+      const black = await render({ page: withBubble3({ shape: 'normal', fill: 'black' }) })
+      const bubble = must(black.querySelector('[data-bubble-id="bb_3"]'))
+      expect(bubble.getAttribute('data-bubble-fill')).toBe('black')
+      const fills = [...bubble.querySelectorAll('path')].map((p) => p.getAttribute('fill'))
+      expect(fills).toContain('#000')
+      expect(fills).not.toContain('#fff')
+      expect(must(bubble.querySelector('text[writing-mode]')).getAttribute('fill')).toBe('#fff')
+
+      const none = await render({ page: withBubble3({ shape: 'none', fill: 'black' }) })
+      const unpainted = must(none.querySelector('[data-bubble-id="bb_3"]'))
+      expect(unpainted.getAttribute('data-bubble-fill')).toBeNull()
+      expect(must(unpainted.querySelector('text[writing-mode]')).getAttribute('fill')).toBe('#000')
+    })
+
     test('dialogue is set in the typeface of the shape unless the bubble names one', async () => {
       const textOf = (svg: SVGSVGElement) =>
         must(svg.querySelector('[data-bubble-id="bb_3"] text[writing-mode]'))

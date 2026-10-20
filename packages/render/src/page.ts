@@ -1,4 +1,5 @@
 import {
+  type Bubble,
   bubbleOutline,
   bubbleTextBox,
   bubbleTypeface,
@@ -110,13 +111,15 @@ export async function drawPage(
     for (const bubble of byOrder(panel.bubbles)) {
       if ((bubble.overflow === true) !== overflow) continue
       const g = bubbleGeometry(bubble, rect)
-      drawBubble(c, bubble.shape, g, unit.w * BUBBLE_LINE_WIDTH)
+      drawBubble(c, bubble.shape, g, unit.w * BUBBLE_LINE_WIDTH, bubble.fill)
       const text = bubbleTextBox(bubble.shape, g)
       const box = clipTextBox(overflow ? text : clipTextBox(text, rect), innerRect)
       const { lines, fontPx } = layoutBubbleText(bubble.text, box, unit.w * MIN_FONT)
-      // 白い地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
-      const onBlack = !overflow && blackInside(panel) && !bubbleOutline(bubble.shape, g).fill
-      drawVerticalText(c, lines, fontPx, box, onBlack ? '#fff' : '#000', bubbleTypeface(bubble))
+      // 地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
+      const white = bubbleOutline(bubble.shape, g).fill
+        ? bubble.fill === 'black'
+        : !overflow && blackInside(panel)
+      drawVerticalText(c, lines, fontPx, box, white ? '#fff' : '#000', bubbleTypeface(bubble))
     }
   }
 
@@ -369,6 +372,45 @@ if (import.meta.vitest) {
       px({ x: cx, y: (rect.y + rect.h * 0.35) * pageH + i }),
     )
     expect(column.some(([r]) => (r ?? 0) > 200)).toBe(true)
+  })
+
+  test('黒フキダシは体を黒で塗ってセリフを白で描き、地の無い形では黒を無視する', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const draw = async (shape: Bubble['shape']) => {
+      const bubble: Bubble = {
+        id: 'bb_black',
+        order: 1,
+        text: 'ーーーーーー',
+        shape,
+        fill: 'black',
+        pos: { x: 0.5, y: 0.5 },
+        size: { w: 0.3, h: 0.8 },
+      }
+      // 指示メモが紙面に出て画素の判定にかからないよう消す
+      const panel: Panel = { ...pn1, note: undefined, camera: undefined, bubbles: [bubble] }
+      const page: Page = { ...emptyPage, panels: [panel, ...rest] }
+      const png = await renderPage(page, noAssets, {
+        width: SNAPSHOT_WIDTH,
+        notes: 'none',
+        panelNumbers: false,
+      })
+      const { width, data } = await pixels(png)
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      const at = (x: number, y: number) => {
+        const row = Math.round((pn1.rect.y + pn1.rect.h * y) * pageH)
+        const col = Math.round((pn1.rect.x + pn1.rect.w * x) * width)
+        return data[(row * width + col) * 4] ?? 0
+      }
+      // 縦棒の長音を並べたセリフなので、箱の中央の列に文字の画素がある
+      const column = Array.from({ length: 40 }, (_, i) => at(0.5, 0.35 + (0.3 * i) / 40))
+      return { corner: at(0.5 - 0.15 * 0.9, 0.5 + 0.4 * 0.9), column }
+    }
+    const black = await draw('narration')
+    expect(black.corner).toBe(0)
+    expect(black.column.some((v) => v > 200)).toBe(true)
+    const none = await draw('none')
+    expect(none.corner).toBe(255)
+    expect(none.column.some((v) => v < 100)).toBe(true)
   })
 
   test('枠なしのコマは枠線を引かず、order に関わらず枠ありのコマの下に敷く', async () => {
