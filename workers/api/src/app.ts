@@ -15,6 +15,8 @@ import {
   PageArtRequestSchema,
   PageDiagnosisSchema,
   PageSchema,
+  type NamePanel,
+  PanelActingSchema,
   PanelArtRequestSchema,
   type PlanLine,
   ProjectBaseSchema,
@@ -51,6 +53,9 @@ const MAX_ATTEMPTS = 2
 const MAX_SCRIPT_LENGTH = 20_000
 const MAX_NAME_TEXT_LENGTH = 2_000
 const MAX_NAME_LINES = 50
+const MAX_NAME_ACTING = 20
+/** ネームの書き起こしに添える、ページに今あるコマの数の上限。LLM に渡すトークン数を抑えるため */
+const MAX_CURRENT_PANELS = 30
 /**
  * critique の本文の上限。ページの JSON は手描きの線や絵の履歴で際限なく膨らむので、
  * LLM に渡すトークン数を抑えるため本文の大きさで切る。Web は線と絵を外して送る
@@ -99,10 +104,23 @@ const PagePlanRequestSchema = z.object({
   pageCount: z.number().int().min(1).max(MAX_PAGE_COUNT).optional(),
 })
 
+const ActingRequestSchema = z
+  .array(PanelActingSchema.extend({ text: z.string().min(1).max(MAX_NAME_TEXT_LENGTH) }))
+  .max(MAX_NAME_ACTING)
+
 /** `@manga/ai` の NameDraftRequest */
 const NameDraftRequestSchema = z.object({
   project: ProjectBaseSchema.pick({ settings: true, characters: true }),
   script: z.string().trim().min(1).max(MAX_SCRIPT_LENGTH),
+  current: z
+    .array(
+      z.object({
+        note: z.string().max(MAX_NAME_TEXT_LENGTH).optional(),
+        acting: ActingRequestSchema,
+      }),
+    )
+    .max(MAX_CURRENT_PANELS)
+    .optional(),
 })
 
 /** `@manga/ai` の LayoutSuggestionRequest */
@@ -118,6 +136,7 @@ const LayoutSuggestionRequestSchema = z.object({
             }),
           )
           .max(MAX_NAME_LINES),
+        acting: ActingRequestSchema.optional(),
       }),
     )
     .min(1)
@@ -167,6 +186,21 @@ async function retryUntilValid<T>(
 function dropUnknownSpeakers(lines: PlanLine[], characterIds: ReadonlySet<string>): PlanLine[] {
   return lines.map(({ speakerId, ...line }) =>
     speakerId !== undefined && characterIds.has(speakerId) ? { ...line, speakerId } : line,
+  )
+}
+
+/**
+ * 居ないキャラの芝居と、同じキャラの 2 つ目からの芝居を落とす。
+ * セリフと違ってキャラの無い芝居は Panel.acting に置けず、Panel.acting はキャラごとに 1 つなので作り直させずに捨てる
+ */
+function dropUnknownActing(
+  acting: NonNullable<NamePanel['acting']>,
+  characterIds: ReadonlySet<string>,
+): NonNullable<NamePanel['acting']> {
+  return acting.filter(
+    (a, i) =>
+      characterIds.has(a.characterId) &&
+      acting.findIndex((b) => b.characterId === a.characterId) === i,
   )
 }
 
@@ -385,10 +419,14 @@ export function createApp(options: AppOptions = {}) {
     const { value, attempts } = await retryUntilValid('transcribe-name', async () => {
       const name = await provider.transcribeName(req)
       return {
-        panels: name.panels.map((panel) => ({
-          ...panel,
-          lines: dropUnknownSpeakers(panel.lines, characterIds),
-        })),
+        panels: name.panels.map(({ acting, ...panel }) => {
+          const known = dropUnknownActing(acting ?? [], characterIds)
+          return {
+            ...panel,
+            lines: dropUnknownSpeakers(panel.lines, characterIds),
+            ...(known.length > 0 && { acting: known }),
+          }
+        }),
       }
     })
     await settleUsage(c.env.DB, usageId, attempts)

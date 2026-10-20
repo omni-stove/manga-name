@@ -60,6 +60,7 @@ describe('POST /v1/ai/suggest-layout', () => {
     const { provider, calls } = scripted([async () => aiFixtures.layoutSuggestion])
     expect((await post(createApp({ llmProvider: () => provider }))).status).toBe(200)
     expect(calls).toEqual([request])
+    expect(request.panels.some((p) => (p.acting ?? []).length > 0)).toBe(true)
   })
 
   test('400 on a body without name panels', async () => {
@@ -67,6 +68,10 @@ describe('POST /v1/ai/suggest-layout', () => {
     expect((await post(app, '{')).status).toBe(400)
     expect((await post(app, { panels: [] })).status).toBe(400)
     expect((await post(app, { panels: [{ note: '', lines: [] }] })).status).toBe(400)
+    const blankActing = [{ characterId: 'chr_e', text: '' }]
+    expect(
+      (await post(app, { panels: [{ note: 'n', lines: [], acting: blankActing }] })).status,
+    ).toBe(400)
     expect((await usageRows()).results).toHaveLength(0)
   })
 

@@ -45,6 +45,7 @@ import { planPagesSystem } from './plan-pages.prompt'
 import {
   type CharacterArtRequest,
   type CritiqueRequest,
+  type CurrentPanelActing,
   findPanel,
   type LayoutSuggestionRequest,
   type NameDraftRequest,
@@ -261,31 +262,58 @@ const POINT_JSON_SCHEMA: JsonSchema = {
 }
 
 /**
- * ネームの書き起こしのプロンプト。1 ページの脚本を、読む順のコマごとの描くもの、カメラ、セリフに割らせる。
- * system に出力規則と JSON Schema、user にキャラ一覧とページの脚本を入れる
+ * ページに今あるコマの芝居の行。読む順のコマごとに番号と指示メモ、その下にキャラの id と芝居。
+ * 芝居が 1 つも無ければ見出しごと出さない
+ */
+function currentActingLines(current: CurrentPanelActing[] | undefined): string[] {
+  const panels = (current ?? [])
+    .map((p) => ({ ...p, acting: p.acting.filter((a) => a.text.trim() !== '') }))
+    .filter((p) => p.acting.length > 0)
+  if (panels.length === 0) return []
+  return [
+    'Current acting:',
+    ...panels.flatMap((p, i) => [
+      `${i + 1}. ${p.note?.replaceAll('\n', ' ').trim() || '(no note)'}`,
+      ...p.acting.map((a) => `   - ${a.characterId}: ${a.text.trim()}`),
+    ]),
+  ]
+}
+
+/**
+ * ネームの書き起こしのプロンプト。1 ページの脚本を、読む順のコマごとの描くもの、カメラ、セリフ、芝居に割らせる。
+ * system に出力規則と JSON Schema、user にキャラ一覧、ページに今あるコマの芝居、ページの脚本を入れる
  */
 function transcribeName(req: NameDraftRequest): LlmPrompt<NameDraftResponse> {
   const schema = nameDraftJsonSchema()
 
   const system = transcribeNameSystem(schema)
 
-  const user = [...characterList(req.project.characters), 'Script:', req.script].join('\n')
+  const user = [
+    ...characterList(req.project.characters),
+    ...currentActingLines(req.current),
+    'Script:',
+    req.script,
+  ].join('\n')
 
   return { system, user, schema, output: NameDraftResponseSchema }
 }
 
-/** ネームの 1 コマを、番号、描くもの、カメラ、セリフの行にする。話し手は枠の大きさに効かないので書かない */
+/**
+ * ネームの 1 コマを、番号、描くもの、カメラ、セリフ、芝居の行にする。
+ * 話し手と芝居のキャラは枠の大きさに効かないので書かない
+ */
 function namePanelLines(panel: NamePanel, index: number): string[] {
   const camera = panel.camera === undefined ? '' : ` (${CAMERA_SHOTS[panel.camera]})`
   return [
     `${index + 1}. ${panel.note}${camera}`,
     ...(panel.lines.length > 0 ? panel.lines.map((l) => `   - ${l.text}`) : ['   - (no lines)']),
+    ...(panel.acting ?? []).map((a) => `   * ${a.text}`),
   ]
 }
 
 /**
  * コマ割りの提案のプロンプト。ネームのコマを段に割った案を LAYOUT_OPTIONS 個返させる。
- * system に出力規則と JSON Schema、user にコマの数と、読む順のコマごとの描くもの、カメラ、セリフを入れる
+ * system に出力規則と JSON Schema、user にコマの数と、読む順のコマごとの描くもの、カメラ、セリフ、芝居を入れる
  */
 function suggestLayout(req: LayoutSuggestionRequest): LlmPrompt<LayoutSuggestionResponse> {
   const schema = layoutSuggestionJsonSchema()
@@ -677,6 +705,83 @@ if (import.meta.vitest) {
         'Script:',
         'E「こんにちは」',
         '森を歩く。',
+      ].join('\n'),
+    )
+    expect(system).toContain('- acting: ')
+    expect(nameDraftJsonSchema().properties?.panels).toMatchObject({
+      items: { properties: { acting: { type: 'array' } } },
+    })
+  })
+
+  test('transcribeName lists the acting of the current panels before the script', () => {
+    const { system, user } = prompts.transcribeName({
+      project: {
+        settings: project.settings,
+        characters: [{ id: 'chr_e', name: 'エリ', shortName: 'E' }],
+      },
+      script: 'E「こんにちは」',
+      current: [
+        { note: '森の\n全景', acting: [{ characterId: 'chr_e', text: ' 振り向いて驚く ' }] },
+        { note: '空', acting: [{ characterId: 'chr_e', text: '  ' }] },
+        { acting: [{ characterId: 'chr_e', text: '笑う' }] },
+      ],
+    })
+    expect(system).toContain('Current acting, when given, ')
+    expect(user).toBe(
+      [
+        'Characters:',
+        '- id: chr_e, name: エリ, shortName: E',
+        'Current acting:',
+        '1. 森の 全景',
+        '   - chr_e: 振り向いて驚く',
+        '2. (no note)',
+        '   - chr_e: 笑う',
+        'Script:',
+        'E「こんにちは」',
+      ].join('\n'),
+    )
+    const blank = prompts.transcribeName({
+      project: { settings: project.settings, characters: [] },
+      script: 's',
+      current: [{ note: '空', acting: [] }],
+    })
+    expect(blank.user).not.toContain('Current acting:')
+  })
+
+  test('transcribeName validates the acting the model gives a panel', () => {
+    const { output } = prompts.transcribeName({
+      project: { settings: project.settings, characters: [] },
+      script: 's',
+    })
+    const panel = { note: 'n', lines: [] }
+    const acting = [{ characterId: 'chr_e', text: '振り向く' }]
+    expect(output.parse({ panels: [{ ...panel, acting }] }).panels[0]?.acting).toEqual(acting)
+    expect(
+      output.safeParse({ panels: [{ ...panel, acting: [{ characterId: 'chr_e', text: '' }] }] })
+        .success,
+    ).toBe(false)
+    expect(output.safeParse({ panels: [{ ...panel, acting: [{ text: 'a' }] }] }).success).toBe(
+      false,
+    )
+  })
+
+  test('suggestLayout puts the acting of a name panel under its lines', () => {
+    const { system, user } = prompts.suggestLayout({
+      panels: [
+        {
+          note: '森の全景',
+          lines: [{ text: 'こんにちは', shape: 'normal' }],
+          acting: [{ characterId: 'chr_e', text: '振り向いて驚く' }],
+        },
+      ],
+    })
+    expect(system).toContain('one starting with "* " is the acting')
+    expect(user).toBe(
+      [
+        'Panels: exactly 1, in reading order.',
+        '1. 森の全景',
+        '   - こんにちは',
+        '   * 振り向いて驚く',
       ].join('\n'),
     )
   })

@@ -94,6 +94,43 @@ describe('POST /v1/ai/transcribe-name', () => {
     expect(calls).toHaveLength(1)
   })
 
+  test('keeps the acting of known characters once each without retrying', async () => {
+    const { provider, calls } = scripted([
+      async () => ({
+        panels: [
+          {
+            note: 'n',
+            lines: [],
+            acting: [
+              { characterId: 'chr_e', text: '振り向いて驚く' },
+              { characterId: 'chr_missing', text: '笑う' },
+              { characterId: 'chr_e', text: '泣く' },
+            ],
+          },
+          { note: 'm', lines: [], acting: [{ characterId: 'chr_missing', text: '走る' }] },
+        ],
+      }),
+    ])
+    const res = await post(createApp({ llmProvider: () => provider }))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as NameDraftResponse
+    expect(body.panels.map((p) => p.acting)).toEqual([
+      [{ characterId: 'chr_e', text: '振り向いて驚く' }],
+      undefined,
+    ])
+    expect(calls).toHaveLength(1)
+  })
+
+  test('passes the acting of the current panels to the provider', async () => {
+    const { provider, calls } = scripted([async () => aiFixtures.nameDraft])
+    const current = [{ note: '森', acting: [{ characterId: 'chr_e', text: '歩く' }] }]
+    const res = await post(createApp({ llmProvider: () => provider }), { ...request, current })
+    expect(res.status).toBe(200)
+    expect(calls).toEqual([{ ...request, current }])
+    const blank = [{ acting: [{ characterId: 'chr_e', text: '' }] }]
+    expect((await post(createApp(), { ...request, current: blank })).status).toBe(400)
+  })
+
   test('retries an invalid name, then 502 when the retry is invalid too', async () => {
     // スキーマを通らない応答。LlmProvider は返さずに throw する
     const invalid = async (): Promise<NameDraftResponse> => {

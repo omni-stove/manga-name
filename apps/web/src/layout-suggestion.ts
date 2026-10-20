@@ -11,23 +11,41 @@ import {
   type Patch,
   type Project,
   pageSizeOf,
+  panelActing,
 } from '@manga/schema'
 import { pagePatch } from './project-ops'
 import { readStorage, writeStorage } from './use-stored-flag'
 
-/** ネームの書き起こしの要求。ページの脚本は前後の空白を落として送る */
+/**
+ * ネームの書き起こしの要求。ページの脚本は前後の空白を落として送る。
+ * ページに今あるコマの芝居を読む順に添え、芝居のあるコマが無ければ添えない
+ */
 export function nameRequest(
   project: Pick<Project, 'settings' | 'characters'>,
   script: string,
+  page?: Pick<Page, 'panels'>,
 ): NameDraftRequest {
+  const current = [...(page?.panels ?? [])]
+    .sort((a, b) => a.order - b.order)
+    .flatMap((panel) => {
+      const acting = panelActing(panel).map((a) => ({ ...a, text: a.text.trim() }))
+      if (acting.length === 0) return []
+      const note = panel.note?.trim()
+      return [note ? { note, acting } : { acting }]
+    })
   return {
     project: { settings: project.settings, characters: project.characters },
     script: script.trim(),
+    ...(current.length > 0 && { current }),
   }
 }
 
-/** 直している途中のネームのコマを、前後の空白を落とし、空のセリフを捨てた形にする */
-function normalizeNamePanel(panel: NamePanel): NamePanel {
+/** 直している途中のネームのコマを、前後の空白を落とし、空のセリフと空の芝居を捨てた形にする */
+function normalizeNamePanel({ acting, ...panel }: NamePanel): NamePanel {
+  const kept = (acting ?? []).flatMap((a) => {
+    const text = a.text.trim()
+    return text === '' ? [] : [{ ...a, text }]
+  })
   return {
     ...panel,
     note: panel.note.trim(),
@@ -35,6 +53,7 @@ function normalizeNamePanel(panel: NamePanel): NamePanel {
       const text = line.text.trim()
       return text === '' ? [] : [{ ...line, text }]
     }),
+    ...(kept.length > 0 && { acting: kept }),
   }
 }
 
@@ -62,8 +81,9 @@ export function layoutRequest(panels: readonly NamePanel[]): LayoutSuggestionReq
 
 /**
  * 案の枠にネームのコマを読む順に当てたコマにする。枠は createRowPanels で段とコマの比から割り、
- * 描くものを指示メモ、カメラを camera、セリフを lineBubbles のフキダシにする。
- * 居ない話し手は落とし、空のセリフは捨てる。ネームより枠が多ければ余りの枠は空のままにする
+ * 描くものを指示メモ、カメラを camera、セリフを lineBubbles のフキダシ、芝居を acting にする。
+ * 芝居だけのキャラは cast に足す。panelActing は登場キャラの芝居しか拾わず、セリフの無いキャラは cast でしか登場キャラにならないため。
+ * 居ない話し手と居ないキャラの芝居は落とし、空のセリフと空の芝居は捨てる。ネームより枠が多ければ余りの枠は空のままにする
  */
 export function suggestedPanels(
   page: Pick<Page, 'spread'>,
@@ -82,18 +102,27 @@ export function suggestedPanels(
     const source = name[i]
     if (!source) return frame
     const panel = normalizeNamePanel(source)
+    const lines = panel.lines.map(({ speakerId, ...line }) => ({
+      ...line,
+      ...(speakerId !== undefined && known(speakerId) && { speakerId }),
+    }))
+    const acting = (panel.acting ?? []).filter(
+      (a, ai, all) =>
+        known(a.characterId) && all.findIndex((b) => b.characterId === a.characterId) === ai,
+    )
+    const cast = acting
+      .map((a) => a.characterId)
+      .filter((id) => !lines.some((l) => l.speakerId === id))
     return {
       ...frame,
       ...(panel.note !== '' && { note: panel.note }),
       ...(panel.camera !== undefined && { camera: panel.camera }),
-      bubbles: lineBubbles(
-        frame,
-        panel.lines.map(({ speakerId, ...line }) => ({
-          ...line,
-          ...(speakerId !== undefined && known(speakerId) && { speakerId }),
-        })),
-        { ...settings, pageSize: pageSizeOf(page, settings.pageSize) },
-      ),
+      ...(cast.length > 0 && { cast }),
+      ...(acting.length > 0 && { acting }),
+      bubbles: lineBubbles(frame, lines, {
+        ...settings,
+        pageSize: pageSizeOf(page, settings.pageSize),
+      }),
     }
   })
 }
@@ -133,7 +162,7 @@ export function replacePanelsPatch(project: Project, pageId: ID, panels: Panel[]
   return pagePatch(project, pageId, [{ op: 'replace', path: '/panels', value: panels }])
 }
 
-/** 置き換えると消える中身（絵、フキダシ、焦点、ベクトル、指示メモ）がページのコマにあるか */
+/** 置き換えると消える中身（絵、フキダシ、焦点、ベクトル、指示メモ、芝居）がページのコマにあるか */
 export function hasPanelContent(page: Page): boolean {
   return page.panels.some(
     (p) =>
@@ -141,7 +170,8 @@ export function hasPanelContent(page: Page): boolean {
       p.bubbles.length > 0 ||
       p.focusPoints.length > 0 ||
       p.vectors.length > 0 ||
-      p.note !== undefined,
+      p.note !== undefined ||
+      p.acting !== undefined,
   )
 }
 
@@ -165,7 +195,26 @@ if (import.meta.vitest) {
     })
   })
 
-  test('layoutRequest trims the name and drops empty lines', () => {
+  test('nameRequest adds the acting of the current panels in reading order', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const acted: Page = {
+      ...page,
+      panels: page.panels.map((p) =>
+        p.order === 2
+          ? { ...p, note: ' 振り返る ', acting: [{ characterId: 'chr_e', text: ' 驚く ' }] }
+          : p.order === 1
+            ? { ...p, note: undefined, acting: [{ characterId: 'chr_e', text: '歩く' }] }
+            : { ...p, acting: [{ characterId: 'chr_e', text: ' ' }] },
+      ),
+    }
+    expect(nameRequest(project, 's', acted).current).toEqual([
+      { acting: [{ characterId: 'chr_e', text: '歩く' }] },
+      { note: '振り返る', acting: [{ characterId: 'chr_e', text: '驚く' }] },
+    ])
+    expect(nameRequest(project, 's', page)).not.toHaveProperty('current')
+  })
+
+  test('layoutRequest trims the name and drops empty lines and acting', () => {
     expect(
       layoutRequest([
         {
@@ -177,6 +226,18 @@ if (import.meta.vitest) {
         },
       ]),
     ).toEqual({ panels: [{ note: '森', lines: [{ text: 'a', shape: 'normal' }] }] })
+    expect(
+      layoutRequest([
+        {
+          note: '森',
+          lines: [],
+          acting: [
+            { characterId: 'chr_e', text: ' 歩く ' },
+            { characterId: 'chr_k', text: ' ' },
+          ],
+        },
+      ]).panels[0]?.acting,
+    ).toEqual([{ characterId: 'chr_e', text: '歩く' }])
   })
 
   test('isNameReady needs a panel and a note on every panel', () => {
@@ -207,10 +268,61 @@ if (import.meta.vitest) {
     expect(panels.map((p) => p.bubbles.map((b) => [b.text, b.shape, b.speakerId]))).toEqual(
       name.map((p) => p.lines.map((l) => [l.text, l.shape, l.speakerId])),
     )
+    expect(panels.map((p) => p.acting)).toEqual(name.map((p) => p.acting))
     const [, second, third] = panels
     if (!second || !third) throw new Error('2 段目のコマが 2 つない')
     // rtl なので、2 段目は読む順の先のコマが右に来る
     expect(second.rect.x).toBeGreaterThan(third.rect.x)
+  })
+
+  test('suggestedPanels casts the characters who only act and drops unknown or repeated acting', () => {
+    const [panel] = suggestedPanels(
+      {},
+      { summary: 's', rows: [{ height: 1, panels: [{ width: 1 }] }] },
+      [
+        {
+          note: '振り向く',
+          lines: [],
+          acting: [
+            { characterId: 'chr_e', text: ' 振り向いて驚く ' },
+            { characterId: 'chr_missing', text: '笑う' },
+            { characterId: 'chr_e', text: '泣く' },
+          ],
+        },
+      ],
+      project.settings,
+      project.characters,
+    )
+    expect(panel?.acting).toEqual([{ characterId: 'chr_e', text: '振り向いて驚く' }])
+    expect(panel?.cast).toEqual(['chr_e'])
+    if (!panel) throw new Error('コマが無い')
+    expect(panelActing(panel)).toEqual(panel.acting)
+
+    const [speaking] = suggestedPanels(
+      {},
+      { summary: 's', rows: [{ height: 1, panels: [{ width: 1 }] }] },
+      [
+        {
+          note: 'n',
+          lines: [{ speakerId: 'chr_e', text: 'a', shape: 'normal' }],
+          acting: [{ characterId: 'chr_e', text: '笑う' }],
+        },
+      ],
+      project.settings,
+      project.characters,
+    )
+    expect(speaking?.cast).toBeUndefined()
+    expect(speaking?.acting).toEqual([{ characterId: 'chr_e', text: '笑う' }])
+
+    const [blank] = suggestedPanels(
+      {},
+      { summary: 's', rows: [{ height: 1, panels: [{ width: 1 }] }] },
+      [{ note: 'n', lines: [], acting: [{ characterId: 'chr_e', text: ' ' }] }],
+      project.settings,
+      project.characters,
+    )
+    expect(blank?.acting).toBeUndefined()
+    expect(blank?.cast).toBeUndefined()
   })
 
   test('replacePanelsPatch puts a page with the suggested panels into a valid project', () => {
