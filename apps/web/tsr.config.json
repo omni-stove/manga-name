@@ -1,0 +1,6 @@
+{
+  "target": "react",
+  "autoCodeSplitting": false,
+  "quoteStyle": "single",
+  "semicolons": false
+}

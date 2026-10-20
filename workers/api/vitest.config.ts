@@ -28,6 +28,8 @@ export default defineConfig(async () => {
       }),
     ],
     test: {
+      // テストは他のパッケージと違い in-source にせず test/ に置く。@cloudflare/vitest-plugin 1.4.3 と
+      // istanbul では、カバレッジの対象（src/**）にテストファイルがあると 2 本目のファイルで worker が落ちる
       setupFiles: ['./test/setup.ts'],
       // workerd には V8 のカバレッジを取る口が無いので、計装する istanbul を使う
       coverage: {

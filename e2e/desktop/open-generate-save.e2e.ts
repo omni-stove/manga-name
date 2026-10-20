@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { m } from '@manga/i18n'
 import { expect } from '@playwright/test'
 import { FIXTURE_PROJECT } from '../tests/app'
 import { test } from './tauri'
@@ -16,18 +17,19 @@ test('起動してファイルを開き、コマを生成して名前を付け�
   // パスは xdotool で打つので、テスト名の入る outputPath ではなく ASCII だけのディレクトリに保存する
   const saved = join(await mkdtemp(join(tmpdir(), 'manga-e2e-')), 'saved.manga.json')
 
-  await web.waitFor("//*[normalize-space()='プロジェクト一覧']")
+  await web.waitFor(`//*[normalize-space()='${m.web_project_list()}']`)
   await app.press('ctrl+o')
   await app.openFile(FIXTURE_PROJECT)
-  await web.waitFor("//*[normalize-space()='エピソード']")
+  await web.waitFor(`//*[normalize-space()='${m.episode()}']`)
 
-  await web.click("//a[.//strong[normalize-space()='1 ページ']]")
+  await web.click(`//a[.//strong[normalize-space()='${m.web_episode_page_number({ number: 1 })}']]`)
+  const outlinePanel = m.web_editor_outline_panel({ order: 1 })
   await web.click(
-    "//aside//button[normalize-space()='コマ 1' or starts-with(normalize-space(), 'コマ 1 ')]",
+    `//aside//button[normalize-space()='${outlinePanel}' or starts-with(normalize-space(), '${outlinePanel} ')]`,
   )
-  await web.click(`${panelInspector}//button[normalize-space()='生成']`)
+  await web.click(`${panelInspector}//button[normalize-space()='${m.generate()}']`)
   await web.waitFor(`${panelInspector}//li[@data-art-id]`, 30_000)
-  await web.waitFor("//*[normalize-space()='保存済み']")
+  await web.waitFor(`//*[normalize-space()='${m.web_save_status_saved()}']`)
 
   await app.press('ctrl+shift+s')
   await app.saveFile(saved)

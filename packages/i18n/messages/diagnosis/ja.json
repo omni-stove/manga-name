@@ -1,0 +1,12 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "diagnosis_focus_on_path_without_strong": "経路上にあるが強い誘導線がない",
+  "diagnosis_focus_off_path_with_strong": "経路から {distance} 外れているが強い誘導線がある",
+  "diagnosis_focus_off_path_with_weak": "経路から {distance} 外れており弱い誘導線しかない",
+  "diagnosis_focus_off_path_without_vector": "経路から {distance} 外れており誘導線がない",
+  "diagnosis_focus_issue": "{label}: {reason}",
+  "diagnosis_empty_panel": "焦点もフキダシもメモもない",
+  "diagnosis_bubble_order": "フキダシの順が視線経路の向きと逆転している",
+  "diagnosis_overlap": "{a} と {b} のコマが重なっている",
+  "diagnosis_reading_order": "配置から推定した読み順は {order}"
+}

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { LayoutSuggestionResponseSchema, PagePlanResponseSchema } from './ai'
+import { LayoutSuggestionResponseSchema, NameDraftResponseSchema, PagePlanReplySchema } from './ai'
 import { ProjectSchema } from './project'
 
 /** LLM の構造化出力に渡す JSON Schema。手書きの JSON Schema も同じ型で渡せる */
@@ -11,9 +11,13 @@ export type JsonSchema = z.core.JSONSchema.BaseSchema
  */
 export const projectJsonSchema = () => z.toJSONSchema(ProjectSchema, { io: 'input' })
 
-/** AI のページ割り応答の JSON Schema */
+/** LLM に返させるページ割り（PagePlanReplySchema）の JSON Schema */
 export const pagePlanJsonSchema = (): JsonSchema =>
-  z.toJSONSchema(PagePlanResponseSchema, { io: 'input' })
+  z.toJSONSchema(PagePlanReplySchema, { io: 'input' })
+
+/** AI のネームの書き起こしの応答の JSON Schema */
+export const nameDraftJsonSchema = (): JsonSchema =>
+  z.toJSONSchema(NameDraftResponseSchema, { io: 'input' })
 
 /** AI のコマ割りの提案の応答の JSON Schema */
 export const layoutSuggestionJsonSchema = (): JsonSchema =>
@@ -22,16 +26,25 @@ export const layoutSuggestionJsonSchema = (): JsonSchema =>
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('projectJsonSchema describes Project as an object with schemaVersion 10', () => {
+  test('projectJsonSchema describes Project as an object with schemaVersion 18', () => {
     const schema = projectJsonSchema()
     expect(schema.type).toBe('object')
-    expect(schema.properties?.schemaVersion).toMatchObject({ const: 10 })
+    expect(schema.properties?.schemaVersion).toMatchObject({ const: 18 })
   })
 
-  test('pagePlanJsonSchema describes an array of pages', () => {
+  test('pagePlanJsonSchema describes an object holding the array of pages', () => {
     const schema = pagePlanJsonSchema()
-    expect(schema.type).toBe('array')
-    expect(schema.items).toMatchObject({ required: ['note', 'script', 'cast', 'lines'] })
+    expect(schema).toMatchObject({ type: 'object', required: ['pages'] })
+    expect(schema.properties?.pages).toMatchObject({
+      type: 'array',
+      items: { required: ['note', 'script', 'cast', 'lines'] },
+    })
+  })
+
+  test('nameDraftJsonSchema describes an object of panels', () => {
+    const schema = nameDraftJsonSchema()
+    expect(schema.type).toBe('object')
+    expect(schema.required).toEqual(['panels'])
   })
 
   test('layoutSuggestionJsonSchema describes an object of options', () => {

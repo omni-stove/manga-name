@@ -404,13 +404,14 @@ describe('roles', () => {
 })
 
 describe('persistence', () => {
+  // 600 回の往復は CI の istanbul 計測下で既定の 5 秒を超えることがある。waitFor より長くして、待ちの失敗を waitFor の側で報告させる
   test('restores from DO storage after a restart, compacting many updates', async () => {
     const project = await createProject()
     const a = await connect(project.id)
     const b = await connect(project.id)
     a.doc.getMap('project').set('title', '復元')
     for (let i = 0; i < 600; i++) a.doc.getArray<number>('log').push([i])
-    await vi.waitFor(() => expect(b.doc.getArray('log').length).toBe(600), { timeout: 10_000 })
+    await vi.waitFor(() => expect(b.doc.getArray('log').length).toBe(600), { timeout: 15_000 })
     a.close()
     b.close()
 
@@ -423,7 +424,7 @@ describe('persistence', () => {
       expect((await state.storage.list({ prefix: 'snapshot:' })).size).toBeGreaterThan(0)
       expect((await state.storage.list({ prefix: 'update:' })).size).toBeLessThan(600)
     })
-  })
+  }, 20_000)
 
   test('writes a snapshot to D1 on the alarm and restores from it when DO storage is empty', async () => {
     const project = await createProject()

@@ -17,6 +17,19 @@ export function panelOutline(panel: Pick<Panel, 'rect' | 'shape'>): Point[] {
   return (panel.shape ?? UNIT_SQUARE).map((p) => ({ x: x + p.x * w, y: y + p.y * h }))
 }
 
+/**
+ * コマを奥から手前へ並べた新しい配列。枠なしのコマは枠ありのコマより奥に置き、同じ側どうしは order の大きいものが手前。
+ * 描画と当たり判定はこの順で重ねる
+ */
+export function paintOrder<T extends Pick<Panel, 'order' | 'frame'>>(panels: readonly T[]): T[] {
+  const depth = (p: T) => (p.frame === 'none' ? 0 : 1)
+  return [...panels].sort((a, b) => depth(a) - depth(b) || a.order - b.order)
+}
+
+/** 2 つのコマが重なってよいか。枠なしのコマの上に枠ありのコマを重ねる下敷きだけを許す */
+export const mayOverlap = (a: Pick<Panel, 'frame'>, b: Pick<Panel, 'frame'>): boolean =>
+  (a.frame === 'none') !== (b.frame === 'none')
+
 /** 頂点列を囲む最小の矩形。頂点が無ければ大きさ 0 */
 export function boundsOf(points: readonly Point[]): Rect {
   if (points.length === 0) return { x: 0, y: 0, w: 0, h: 0 }
@@ -160,6 +173,24 @@ if (import.meta.vitest) {
       { x: 0.5, y: 0.4 },
     ])
     expect(panelOutline({ rect, shape: tri })[2]).toEqual({ x: 0.5, y: 0.4 })
+  })
+
+  test('paintOrder puts borderless panels behind framed ones, then sorts by order', () => {
+    const panels = [
+      { id: 'a', order: 1 },
+      { id: 'b', order: 2, frame: 'none' as const },
+      { id: 'c', order: 0 },
+      { id: 'd', order: 3, frame: 'none' as const },
+    ]
+    expect(paintOrder(panels).map((p) => p.id)).toEqual(['b', 'd', 'c', 'a'])
+    expect(panels.map((p) => p.id)).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  test('mayOverlap allows only a framed panel over a borderless one', () => {
+    expect(mayOverlap({ frame: 'none' }, {})).toBe(true)
+    expect(mayOverlap({}, { frame: 'none' })).toBe(true)
+    expect(mayOverlap({}, {})).toBe(false)
+    expect(mayOverlap({ frame: 'none' }, { frame: 'none' })).toBe(false)
   })
 
   test('containsPoint counts the boundary as inside', () => {

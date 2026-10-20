@@ -2,9 +2,11 @@ import { diagnosePage } from '@manga/diagnosis'
 import {
   type CanvasMenuRequest,
   convertSketchPatch,
+  copyElement,
   EditorCanvas,
   isLocked,
   type Layers,
+  pastePatch,
   removePatch,
   type ScribbleTool,
   type Selection,
@@ -35,7 +37,9 @@ import {
   type Patch,
   type Project,
   pageCharacterIds,
+  pageSizeOf,
   panelCharacterIds,
+  stripRuby,
 } from '@manga/schema'
 import { detectPlatform } from '@manga/storage'
 import {
@@ -56,6 +60,7 @@ import {
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useEffectEvent, useState } from 'react'
 import { useStore } from 'zustand'
+import { BackLink } from './back-link'
 import { BatchOptions, useBatchGeneration } from './batch-generation'
 import {
   type ElementMenuContext,
@@ -67,6 +72,14 @@ import {
 import { CollaborationBar, PeerBadge, peerColor, usePeers } from './collaboration-view'
 import { previewPage } from './critique'
 import { CritiquePanel } from './critique-panel'
+import { chooseExportFolder, loadExportFolder, writePageFiles } from './desktop/export-folder'
+import { receiveDroppedReference } from './dropped-reference'
+import {
+  type ClipboardElement,
+  parseElement,
+  serializeElement,
+  useElementClipboard,
+} from './element-clipboard'
 import { ExportDialog, type ExportSettings } from './export-dialog'
 import { exportFileName, pageExporter } from './export-page'
 import { collectExportJob } from './export-page-job'
@@ -91,7 +104,7 @@ import {
   vectorPatch,
 } from './inspector-ops'
 import { LayoutSuggestions } from './layout-suggestions'
-import { LayoutTemplateDialog } from './layout-templates'
+import { AddPageDialog, LayoutTemplateDialog } from './layout-templates'
 import type { LlmProvider } from './llm-provider'
 import styles from './page-editor.module.css'
 import {
@@ -272,6 +285,15 @@ function hasElement(page: Page, selection: Selection): boolean {
   return findVector(page, selection.id) !== undefined
 }
 
+/** 選択要素のコマ。コマならそれ自身 */
+function panelOf(page: Page, selection: Selection): ID | undefined {
+  if (selection === null) return undefined
+  if (selection.kind === 'panel') return findPanel(page, selection.id)?.panel.id
+  if (selection.kind === 'bubble') return findBubble(page, selection.id)?.panel.id
+  if (selection.kind === 'focus') return findFocus(page, selection.id)?.panel.id
+  return findVector(page, selection.id)?.panel.id
+}
+
 /** Issue が指す要素。焦点の id はフキダシの合成焦点ならフキダシを指す */
 function issueTarget(page: Page, issue: Issue): Selection {
   const id = issue.focusPointId
@@ -327,10 +349,16 @@ export function PageEditor({
   const [layers, setLayers] = useState<Layers>(ALL_LAYERS)
   const [selected, setSelection] = useState<Selection>(null)
   const [exporting, setExporting] = useState<Exporting>('closed')
+  const desktop = detectPlatform() === 'desktop'
+  // 読み込みを待つ間に別のプロジェクトへ移っても前のプロジェクトのフォルダへ書かないよう、どのプロジェクトのものかを持つ
+  const [loadedFolder, setLoadedFolder] = useState<{ projectId: ID; path: string | null }>()
+  /** Desktop でこのプロジェクトの書き出し先として覚えているフォルダ。選んだことが無ければ null */
+  const exportFolder = loadedFolder?.projectId === projectId ? loadedFolder.path : null
   const [inspectorExpanded, setInspectorExpanded] = useStoredFlag('manga.inspector.expanded', true)
   const [scriptExpanded, setScriptExpanded] = useStoredFlag('manga.script.expanded', true)
   const [menu, setMenu] = useState<OpenMenu | null>(null)
   const [registeringLayout, setRegisteringLayout] = useState(false)
+  const [addingPage, setAddingPage] = useState(false)
   const canUndo = useStore(store.state, (s) => s.canUndo)
   const canRedo = useStore(store.state, (s) => s.canRedo)
   useUndoShortcuts(store, can('history'))
@@ -351,6 +379,7 @@ export function PageEditor({
       )
   }
   useReferencePaste(importReference, can('canvas'))
+  useDroppedReference(importReference, can('canvas'))
   const referencePicker = useFilePicker(REFERENCE_ACCEPT, importReference)
   const pageBatch = useBatchGeneration({
     generation,
@@ -385,11 +414,43 @@ export function PageEditor({
         }
       : {}),
   })
+  const copySelection = (): ClipboardElement | null => {
+    const element = foundPage ? copyElement(foundPage, selected) : null
+    return element && { projectId, element }
+  }
+  const pasteElement = (clip: ClipboardElement) => {
+    let pasted: Selection = null
+    const applied = apply(m.web_editor_history_paste_element(), (p) => {
+      const current = findPage(p, pageId)
+      if (!current) throw new Error(m.web_common_page_gone())
+      const result = pastePatch(current.page, clip.element, {
+        panelId: panelOf(current.page, selected),
+        sameProject: clip.projectId === projectId,
+        pageSize: pageSizeOf(current.page, p.settings.pageSize),
+      })
+      if (!result) throw new Error(m.web_editor_paste_no_panel())
+      pasted = result.selection
+      return pagePatch(p, pageId, result.patch)
+    })
+    if (applied) setSelection(pasted)
+  }
+  useElementClipboard({
+    copy: copySelection,
+    paste: canEdit ? pasteElement : undefined,
+    enabled: can('canvas'),
+  })
 
   useEffect(() => {
     collab?.presence.setLocation({ pageId, selection: selectedId ? [selectedId] : [] })
   }, [collab, pageId, selectedId])
   useEffect(() => () => collab?.presence.setLocation({ pageId: null, selection: [] }), [collab])
+  useEffect(() => {
+    if (!desktop) return
+    loadExportFolder(projectId).then(
+      (path) => setLoadedFolder({ projectId, path }),
+      (e: unknown) => toasts.push(m.web_export_folder_failed({ reason: errorMessage(e) })),
+    )
+  }, [desktop, projectId])
 
   // 開いている間に Undo や別タブの操作でページが消えることがある
   if (!found) return <PageNotFound />
@@ -409,33 +470,54 @@ export function PageEditor({
     set: (panelId, use) => generation.setUseHint(projectId, panelId, use),
   }
   // ダイアログは先に閉じ、描いている間も編集できるようにする。終わればダウンロードか保存先の選択が始まる
-  const exportPages = async ({ format, from, to, dpi, ...opts }: ExportSettings) => {
+  const exportPages = async ({ format, from, to, dpi, toFolder, ...opts }: ExportSettings) => {
     const total = to - from + 1
     const numbers = Array.from({ length: total }, (_, i) => from + i)
     const ext = format === 'pdf' ? 'pdf' : total === 1 ? 'png' : 'zip'
+    const width = Math.round((project.settings.pageSize.w / MM_PER_INCH) * dpi)
+    const onProgress = (done: number) => setExporting({ done, total })
+    const render = async (pageIds: ID[], progress?: (done: number) => void) =>
+      pageExporter.run(
+        await collectExportJob(
+          project,
+          episode.id,
+          pageIds,
+          format,
+          { ...opts, width },
+          library.loadAsset,
+        ),
+        progress,
+      )
+    const saveToFile = async () =>
+      saveFile(
+        await render(
+          episode.pages.slice(from - 1, to).map((p) => p.id),
+          onProgress,
+        ),
+        exportFileName(project.title, numbers, ext),
+        [{ name: ext.toUpperCase(), extensions: [ext] }],
+      )
+    const saveToFolder = async (folder: string) => {
+      await writePageFiles(
+        folder,
+        numbers,
+        (number) => render(episode.pages.slice(number - 1, number).map((p) => p.id)),
+        onProgress,
+      )
+      return folder
+    }
+    const folder = toFolder ? exportFolder : null
+    const write = folder ? () => saveToFolder(folder) : saveToFile
     setExporting({ done: 0, total })
     /** 保存したパス。書き出せなければ undefined */
     let path: string | null | undefined
     try {
-      const pageIds = episode.pages.slice(from - 1, to).map((p) => p.id)
-      const width = Math.round((project.settings.pageSize.w / MM_PER_INCH) * dpi)
-      const job = await collectExportJob(
-        project,
-        episode.id,
-        pageIds,
-        format,
-        { ...opts, width },
-        library.loadAsset,
-      )
-      const blob = await pageExporter.run(job, (done) => setExporting({ done, total }))
-      path = await saveFile(blob, exportFileName(project.title, numbers, ext), [
-        { name: ext.toUpperCase(), extensions: [ext] },
-      ])
+      path = await write()
     } catch (e) {
       toasts.push(m.web_page_export_failed({ reason: errorMessage(e) }))
     }
     setExporting('closed')
-    // React Compiler は try の中の条件式を扱えないので、try を出てから見る。
+    // React Compiler は try の中の条件式を扱えないので、書き出し先は try の前に選び、結果は try を出てから見る。
     // Web は常に null を返すので、保存先の選択を閉じたかどうかは Desktop でだけ分かる
     if (path !== undefined && (path !== null || detectPlatform() === 'web')) onExport?.()
   }
@@ -446,7 +528,7 @@ export function PageEditor({
       if (!current) throw new Error(m.web_common_page_gone())
       const { patch, ...counts } = convertSketchPatch(
         current.page,
-        p.settings.pageSize,
+        pageSizeOf(current.page, p.settings.pageSize),
         p.settings.direction,
       )
       // 何も変えない変換を Undo の履歴に積まない
@@ -460,8 +542,35 @@ export function PageEditor({
     { label: 'Undo', shortcut: `${MOD}Z`, disabled: !canUndo, onSelect: () => store.undo() },
     { label: 'Redo', shortcut: `${MOD}Shift+Z`, disabled: !canRedo, onSelect: () => store.redo() },
   ]
+  const clipboardFailed = (e: unknown) =>
+    toasts.push(m.web_editor_clipboard_failed({ reason: errorMessage(e) }))
+  // メニューからは copy と paste のイベントを出せないので、Clipboard API で読み書きする
+  const copyItem = (target: NonNullable<Selection>): ContextMenuItem => ({
+    label: m.copy(),
+    shortcut: `${MOD}C`,
+    onSelect: () => {
+      const element = copyElement(page, target)
+      if (!element) return
+      navigator.clipboard.writeText(serializeElement({ projectId, element })).catch(clipboardFailed)
+    },
+  })
+  const pasteItems: ContextMenuItem[] = canEdit
+    ? [
+        {
+          label: m.paste(),
+          shortcut: `${MOD}V`,
+          onSelect: () =>
+            void navigator.clipboard.readText().then((text) => {
+              const clip = parseElement(text)
+              if (clip) pasteElement(clip)
+              else toasts.push(m.web_editor_paste_nothing())
+            }, clipboardFailed),
+        },
+      ]
+    : []
   const pageMenuItems: (ContextMenuItem | 'separator')[] = [
     ...undoItems,
+    ...pasteItems,
     'separator',
     { label: m.web_editor_menu_fit(), onSelect: () => menu?.fit() },
     ...(canEdit
@@ -493,9 +602,16 @@ export function PageEditor({
   const menuTarget = canEdit && menu?.target && hasElement(page, menu.target) ? menu.target : null
   const menuContext = {
     page,
+    settings: project.settings,
     tools,
     edit: (label: string, target: NonNullable<Selection>, patch: Patch) =>
       apply(label, (p) => elementPatch(p, pageId, target, patch)),
+    editPage: (label: string, build: (page: Page) => Patch) =>
+      apply(label, (p) => {
+        const current = findPage(p, pageId)
+        if (!current) throw new Error(m.web_common_page_gone())
+        return pagePatch(p, pageId, build(current.page))
+      }),
     remove: (target: NonNullable<Selection>) => {
       const removed = apply(m.web_editor_history_remove_element(), (p) => {
         const current = findPage(p, pageId)
@@ -518,8 +634,23 @@ export function PageEditor({
     items: shapesOf
       ? shapeMenuItems(shapesOf.bubble, menuContext)
       : menuTarget
-        ? [...elementMenuItems(menuTarget, menuContext), 'separator' as const, ...undoItems]
+        ? [
+            ...elementMenuItems(menuTarget, menuContext),
+            'separator' as const,
+            copyItem(menuTarget),
+            ...pasteItems,
+            'separator' as const,
+            ...undoItems,
+          ]
         : pageMenuItems,
+  }
+  const chooseFolder = () => {
+    chooseExportFolder(projectId, exportFolder).then(
+      (path) => {
+        if (path !== null) setLoadedFolder({ projectId, path })
+      },
+      (e: unknown) => toasts.push(m.web_export_folder_failed({ reason: errorMessage(e) })),
+    )
   }
   const exportProject = () => {
     setExporting('closed')
@@ -536,12 +667,12 @@ export function PageEditor({
           {project.title || m.untitled()}
         </Typography>
         <Area open={can('navigation')}>
-          <Link
+          <BackLink
             to="/p/$projectId/episodes/$episodeId"
             params={{ projectId, episodeId: episode.id }}
           >
             {episode.title}
-          </Link>
+          </BackLink>
           <XStack as="span" gap={2} role="group" aria-label={m.web_editor_page_navigation()}>
             <IconButton
               size="small"
@@ -580,6 +711,17 @@ export function PageEditor({
                 <path d="m9 6 6 6-6 6" />
               </Icon>
             </IconButton>
+            {canEdit && (
+              <IconButton
+                size="small"
+                label={m.web_episode_add_page()}
+                onClick={() => setAddingPage(true)}
+              >
+                <Icon>
+                  <path d="M12 5v14M5 12h14" />
+                </Icon>
+              </IconButton>
+            )}
           </XStack>
         </Area>
         <CollaborationBar collab={collab} project={project} />
@@ -685,6 +827,18 @@ export function PageEditor({
           items={openMenu.items}
         />
       )}
+      {addingPage && (
+        <AddPageDialog
+          project={project}
+          episodeId={episode.id}
+          apply={apply}
+          onAdded={(id) => {
+            setAddingPage(false)
+            openPage(id)
+          }}
+          onClose={() => setAddingPage(false)}
+        />
+      )}
       {registeringLayout && (
         <LayoutTemplateDialog
           pageId={pageId}
@@ -697,6 +851,7 @@ export function PageEditor({
           pages={episode.pages}
           currentIndex={pageIndex}
           dpi={project.settings.dpi}
+          folder={desktop ? { path: exportFolder, onChoose: chooseFolder } : undefined}
           onCancel={() => setExporting('closed')}
           onExport={(settings) => void exportPages(settings)}
           onExportProject={exportProject}
@@ -864,7 +1019,7 @@ export function PageEditor({
                   store={store}
                   page={page}
                   pageId={pageId}
-                  pageSize={project.settings.pageSize}
+                  pageSize={pageSizeOf(page, project.settings.pageSize)}
                   diagnosis={diagnosis}
                   llmProvider={llmProvider}
                   canEdit={canEdit}
@@ -944,7 +1099,7 @@ function ElementOutline({
                 onClick={() => onSelect({ kind: 'panel', id: panel.id })}
               >
                 {m.web_editor_outline_panel({ order: panel.order })}
-                {panel.camera && ` [${panel.camera}]`}
+                {panel.camera && ` [${m[`panel_camera_${panel.camera}` as const]()}]`}
               </button>
               {badges(by)}
               {panel.bubbles.length > 0 && (
@@ -964,7 +1119,7 @@ function ElementOutline({
                           >
                             {m.web_editor_outline_bubble({
                               order: bubble.order,
-                              text: bubble.text || m.empty(),
+                              text: stripRuby(bubble.text) || m.empty(),
                             })}
                           </button>
                           {badges(byBubble)}
@@ -1091,7 +1246,10 @@ function SelectionInspector({
         ...found.panel.bubbles.map((b) => ({
           value: b.id,
           label: m
-            .web_editor_vector_target_bubble({ order: b.order, text: b.text.split('\n')[0] ?? '' })
+            .web_editor_vector_target_bubble({
+              order: b.order,
+              text: stripRuby(b.text).split('\n')[0] ?? '',
+            })
             .trim(),
         })),
       ]}
@@ -1126,6 +1284,15 @@ function useReferencePaste(onFile: (file: File) => void, enabled: boolean) {
     if (!enabled) return
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
+  }, [enabled])
+}
+
+/** Desktop でウィンドウに落とした画像や PDF を onFile に渡す。`enabled` が false の間は受けない */
+function useDroppedReference(onFile: (file: File) => void, enabled: boolean) {
+  const onDrop = useEffectEvent(onFile)
+  useEffect(() => {
+    if (!enabled) return
+    return receiveDroppedReference((file) => onDrop(file))
   }, [enabled])
 }
 

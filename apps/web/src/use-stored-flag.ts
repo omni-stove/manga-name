@@ -19,7 +19,7 @@ export function useStoredFlag(key: string, initial: boolean): [boolean, (value: 
 }
 
 // ストレージを塞いだブラウザでは参照だけで SecurityError になるので、覚えられないまま動かす
-function readStorage(key: string): string | null {
+export function readStorage(key: string): string | null {
   try {
     return localStorage.getItem(key)
   } catch {
@@ -27,7 +27,7 @@ function readStorage(key: string): string | null {
   }
 }
 
-function writeStorage(key: string, value: string): void {
+export function writeStorage(key: string, value: string): void {
   try {
     localStorage.setItem(key, value)
   } catch {}

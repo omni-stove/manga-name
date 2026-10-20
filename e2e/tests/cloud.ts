@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import { type BrowserContext, expect, type Page, type Request } from '@playwright/test'
 
 /** プロジェクト `cloud` の apps/web がつなぐ workers/api（wrangler dev）のオリジン */
@@ -54,13 +55,15 @@ export async function fakeGoogleAccount(context: BrowserContext, email: string):
 /** アプリ設定のログインからログインし、アプリ設定にサインアウトが出るのを待って閉じる */
 export async function signIn(page: Page): Promise<void> {
   await page.goto('/?settings=app')
-  await page.getByRole('button', { name: 'ログイン' }).click()
-  const settings = page.getByRole('dialog', { name: 'アプリ設定' })
-  await expect(settings.getByRole('button', { name: 'サインアウト' })).toBeVisible()
-  await settings.getByRole('button', { name: '閉じる' }).click()
+  await page.getByRole('button', { name: m.web_sign_in() }).click()
+  const settings = page.getByRole('dialog', { name: m.web_app_settings() })
+  await expect(settings.getByRole('button', { name: m.web_sign_out() })).toBeVisible()
+  await settings.getByRole('button', { name: m.close() }).click()
 }
 
 /** エディタのツールバーの同期状態が「同期済み」になるまで待つ */
 export async function waitSynced(page: Page): Promise<void> {
-  await expect(page.getByText('同期済み', { exact: true })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText(m.web_sync_status_synced(), { exact: true })).toBeVisible({
+    timeout: 30_000,
+  })
 }

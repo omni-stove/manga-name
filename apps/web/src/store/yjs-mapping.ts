@@ -30,6 +30,50 @@ export function writeYMap(root: Y.Map<unknown>, value: Record<string, unknown>):
 }
 
 /**
+ * `root` の JSON 表現 `before` を `after` にする。変わった値だけを書き、同じ長さの配列は要素ごとにたどる。
+ * 1 つのトランザクションの中で呼ぶ
+ */
+export function writeYChanges(
+  root: Y.Map<unknown>,
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): void {
+  const write = (
+    parent: Y.Map<unknown> | Y.Array<unknown>,
+    key: string | number,
+    from: unknown,
+    to: unknown,
+  ) => {
+    if (from === to) return
+    const current = parent instanceof Y.Map ? parent.get(String(key)) : parent.get(Number(key))
+    if (isPlainObject(from) && isPlainObject(to) && current instanceof Y.Map) {
+      for (const k of new Set([...Object.keys(from), ...Object.keys(to)])) {
+        if (to[k] === undefined) current.delete(k)
+        else write(current, k, from[k], to[k])
+      }
+    } else if (
+      Array.isArray(from) &&
+      Array.isArray(to) &&
+      from.length === to.length &&
+      current instanceof Y.Array
+    ) {
+      to.forEach((v, i) => {
+        write(current, i, from[i], v)
+      })
+    } else if (parent instanceof Y.Map) {
+      parent.set(String(key), toY(to))
+    } else {
+      parent.delete(Number(key), 1)
+      parent.insert(Number(key), [toY(to)])
+    }
+  }
+  for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (after[k] === undefined) root.delete(k)
+    else write(root, k, before[k], after[k])
+  }
+}
+
+/**
  * 添字が解決済みの Immer パッチ（`toImmerPatch` の出力）を `root` に適用する。トランザクションの中で呼ぶ。
  * 配列要素の replace は削除と挿入にする。同じプリミティブ値への replace は書かない。
  */
@@ -116,6 +160,27 @@ if (import.meta.vitest) {
     expect(root.has('skipped')).toBe(false)
     expect(root.toJSON()).toEqual(value)
     expect(fromY(root.get('title'))).toBe('t')
+  })
+
+  test('writeYChanges writes only the values that differ', () => {
+    const doc = new Y.Doc()
+    const root = doc.getMap<unknown>('root')
+    writeYMap(root, value)
+    const pages = root.get('pages')
+    const meta = root.get('meta')
+    const after = {
+      title: 't',
+      pages: [{ id: 'a', tags: ['x'], camera: 'long' }],
+      meta: { note: 'n' },
+      extra: [1],
+    }
+    doc.transact(() => writeYChanges(root, value, after))
+    expect(root.toJSON()).toEqual(after)
+    expect(root.get('pages')).toBe(pages)
+    expect(root.get('meta')).toBe(meta)
+
+    doc.transact(() => writeYChanges(root, after, { title: 't', pages: [] }))
+    expect(root.toJSON()).toEqual({ title: 't', pages: [] })
   })
 
   describe('applyPatchToY and applyYEvents', () => {

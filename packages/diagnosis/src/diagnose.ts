@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import {
   boundsOf,
   convexHull,
@@ -5,6 +6,7 @@ import {
   type FocusDiagnosis,
   type Issue,
   intersectPolygons,
+  mayOverlap,
   type Page,
   type PageDiagnosis,
   type Panel,
@@ -89,12 +91,14 @@ const judge = (
   const off = distance.toFixed(2)
   if (distance <= config.pathBand + EPSILON) {
     return config.requireStrongForOk && strong === 0
-      ? { status: 'weak', reason: '経路上にあるが強い誘導線がない' }
+      ? { status: 'weak', reason: m.diagnosis_focus_on_path_without_strong() }
       : { status: 'ok' }
   }
-  if (strong >= 1) return { status: 'ok', reason: `経路から ${off} 外れているが強い誘導線がある` }
-  if (weak >= 1) return { status: 'weak', reason: `経路から ${off} 外れており弱い誘導線しかない` }
-  return { status: 'miss', reason: `経路から ${off} 外れており誘導線がない` }
+  if (strong >= 1)
+    return { status: 'ok', reason: m.diagnosis_focus_off_path_with_strong({ distance: off }) }
+  if (weak >= 1)
+    return { status: 'weak', reason: m.diagnosis_focus_off_path_with_weak({ distance: off }) }
+  return { status: 'miss', reason: m.diagnosis_focus_off_path_without_vector({ distance: off }) }
 }
 
 const diagnosePanel = (
@@ -111,7 +115,7 @@ const diagnosePanel = (
       severity: 'info',
       code: 'EMPTY_PANEL',
       panelId: panel.id,
-      message: '焦点もフキダシもメモもない',
+      message: m.diagnosis_empty_panel(),
     })
   }
 
@@ -125,7 +129,7 @@ const diagnosePanel = (
         code: status === 'miss' ? 'FOCUS_MISS' : 'FOCUS_WEAK',
         panelId: panel.id,
         focusPointId: f.id,
-        message: `${f.label}: ${reason}`,
+        message: m.diagnosis_focus_issue({ label: f.label, reason }),
       })
     }
     return {
@@ -149,7 +153,7 @@ const diagnosePanel = (
       severity: 'warning',
       code: 'BUBBLE_ORDER',
       panelId: panel.id,
-      message: 'フキダシの順が視線経路の向きと逆転している',
+      message: m.diagnosis_bubble_order(),
     })
   }
 
@@ -169,7 +173,7 @@ const overlapIssues = (panels: readonly Panel[]): Issue[] => {
     for (let j = i + 1; j < panels.length; j++) {
       const a = panels[i]
       const b = panels[j]
-      if (!a || !b) continue
+      if (!a || !b || mayOverlap(a, b)) continue
       // 斜めに割ったコマは囲む矩形どうしが重なるので、輪郭どうしの共通部分で見る
       const outlineA = panelOutline(a)
       const outlineB = panelOutline(b)
@@ -193,7 +197,7 @@ const overlapIssues = (panels: readonly Panel[]): Issue[] => {
           severity: 'error',
           code: 'OVERLAP',
           panelId: a.id,
-          message: `${a.id} と ${b.id} のコマが重なっている`,
+          message: m.diagnosis_overlap({ a: a.id, b: b.id }),
         })
       }
     }
@@ -229,7 +233,7 @@ export function diagnosePage(page: Page, settings: ProjectSettings): PageDiagnos
     issues.push({
       severity: 'warning',
       code: 'READING_ORDER',
-      message: `配置から推定した読み順は ${inferredOrder.join(' → ')}`,
+      message: m.diagnosis_reading_order({ order: inferredOrder.join(' → ') }),
     })
   }
   issues.push(...overlapIssues(panels))
@@ -477,6 +481,24 @@ if (import.meta.vitest) {
       expect.objectContaining({ code: 'EMPTY_PANEL', severity: 'info', panelId: 'pn_5' }),
     )
     expect(d.issues).toContainEqual(expect.objectContaining({ code: 'OVERLAP', severity: 'error' }))
+  })
+
+  test('framed panels laid over a borderless panel do not overlap, but two borderless ones do', () => {
+    const page = samplePage()
+    const base = findPanel(page, 'pn_1')
+    page.panels.push({
+      ...base,
+      id: 'pn_bg',
+      order: 7,
+      frame: 'none',
+      bubbles: [],
+      focusPoints: [],
+      vectors: [],
+      rect: { x: 0, y: 0, w: 1, h: 1 },
+    })
+    expect(diagnosePage(page, settings).issues.map((i) => i.code)).not.toContain('OVERLAP')
+    base.frame = 'none'
+    expect(diagnosePage(page, settings).issues.map((i) => i.code)).toContain('OVERLAP')
   })
 
   test('panels cut along a diagonal do not overlap even though their rects do', () => {

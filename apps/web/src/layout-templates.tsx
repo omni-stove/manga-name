@@ -1,8 +1,14 @@
 import { m } from '@manga/i18n'
 import type { ID, Project } from '@manga/schema'
-import { Button, Dialog, Input, Select } from '@manga/ui'
+import { Button, Checkbox, Dialog, Input, Select } from '@manga/ui'
 import { useState } from 'react'
-import { addLayoutTemplatePatch, templateOptions } from './project-ops'
+import {
+  addLayoutTemplatePatch,
+  addPagePatch,
+  canAddSpread,
+  resolveTemplate,
+  templateOptions,
+} from './project-ops'
 import { toasts } from './toasts'
 import type { useApplyPatch } from './use-project'
 
@@ -102,6 +108,67 @@ export function LayoutTemplateDialog({
         value={name}
         placeholder={m.web_layout_template_name_placeholder()}
         onChange={(e) => setName(e.currentTarget.value)}
+      />
+    </Dialog>
+  )
+}
+
+/**
+ * 話の末尾にページを足すダイアログ。テンプレートと、見開きかを選ぶ。
+ * 足せたら `onAdded` に新しいページの id を渡す
+ */
+export function AddPageDialog({
+  project,
+  episodeId,
+  apply,
+  onAdded,
+  onClose,
+}: {
+  project: Project
+  episodeId: ID
+  apply: ReturnType<typeof useApplyPatch>['apply']
+  onAdded(pageId: ID): void
+  onClose(): void
+}) {
+  const [template, setTemplate] = useTemplateChoice(project)
+  const [spread, setSpread] = useState(false)
+  const spreadAvailable = canAddSpread(project, episodeId)
+  return (
+    <Dialog
+      title={m.web_episode_add_page()}
+      onClose={onClose}
+      onSubmit={() => {
+        let added: ID | undefined
+        const applied = apply(m.web_episode_add_page(), (p) => {
+          const result = addPagePatch(
+            p,
+            resolveTemplate(p, template),
+            episodeId,
+            spread && spreadAvailable,
+          )
+          added = result.page.id
+          return result.patch
+        })
+        if (applied && added) onAdded(added)
+      }}
+      actions={
+        <>
+          <Button type="button" onClick={onClose}>
+            {m.cancel()}
+          </Button>
+          <Button type="submit" variant="primary">
+            {m.web_episode_add_page()}
+          </Button>
+        </>
+      }
+    >
+      <TemplateSelect project={project} value={template} onChange={setTemplate} />
+      <Checkbox
+        label={m.web_episode_spread()}
+        checked={spread && spreadAvailable}
+        disabled={!spreadAvailable}
+        title={spreadAvailable ? undefined : m.web_episode_spread_unavailable()}
+        onChange={(e) => setSpread(e.currentTarget.checked)}
       />
     </Dialog>
   )

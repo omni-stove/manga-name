@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
 import {
   arts,
@@ -19,7 +20,7 @@ test('フィクスチャを読み込んでページを一括生成し、書き�
   await importProject(page, FIXTURE_PROJECT)
   await openPage(page, 1)
 
-  const generateAll = page.getByRole('button', { name: 'このページを全部生成' })
+  const generateAll = page.getByRole('button', { name: m.inspector_page_generate_all() })
   await generateAll.click()
   await expect(page.locator('[data-panel-id] image')).toHaveCount(6)
   await expect(generateAll).toBeEnabled()
@@ -40,7 +41,7 @@ test('ページを一括生成した後、気に入らない 1 コマだけを�
   await importProject(page, FIXTURE_PROJECT)
   await openPage(page, 1)
 
-  const generateAll = page.getByRole('button', { name: 'このページを全部生成' })
+  const generateAll = page.getByRole('button', { name: m.inspector_page_generate_all() })
   await generateAll.click()
   await expect(page.locator('[data-panel-id] image')).toHaveCount(6)
   await expect(generateAll).toBeEnabled()
@@ -48,8 +49,8 @@ test('ページを一括生成した後、気に入らない 1 コマだけを�
   await selectPanel(page, 1)
   await expect(arts(page)).toHaveCount(1)
   const inspector = panelInspector(page)
-  await inspector.getByLabel('修正指示').fill('もっと引きで')
-  await inspector.getByRole('button', { name: '修正して再生成' }).click()
+  await inspector.getByLabel(m.inspector_panel_instruction()).fill('もっと引きで')
+  await inspector.getByRole('button', { name: m.inspector_panel_regenerate() }).click()
   await expect(arts(page)).toHaveCount(2)
   await expect(arts(page).nth(0)).toContainText('もっと引きで')
   await expect(arts(page).nth(0)).toHaveAttribute('data-current', 'true')

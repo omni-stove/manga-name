@@ -1,7 +1,8 @@
 import { m } from '@manga/i18n'
-import { type Episode, pageCharacterIds } from '@manga/schema'
+import { type Episode, type PageSlot, pageCharacterIds, pageSlots } from '@manga/schema'
 import {
   Button,
+  Checkbox,
   ConfirmDialog,
   IconButton,
   Input,
@@ -12,6 +13,7 @@ import {
 } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
+import { BackLink } from '../back-link'
 import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { PeerBadge, usePeers } from '../collaboration-view'
 import collabStyles from '../collaboration-view.module.css'
@@ -23,12 +25,17 @@ import {
   ART_STATUS_LABELS,
   addPagePatch,
   artStatus,
+  canAddSpread,
+  canMovePage,
+  canRemovePage,
+  canSetStartsRight,
   movePagePatch,
   removeEpisodePatch,
   removeLayoutTemplatePatch,
   removePagePatch,
   renameEpisodePatch,
   resolveTemplate,
+  startsRightPatch,
   templateOptions,
 } from '../project-ops'
 import { RemoveEpisodeDialog } from '../remove-episode-dialog'
@@ -45,7 +52,10 @@ const projectRoute = getRouteApi('/p/$projectId')
 
 /**
  * 1 話分の見出し、ページの追加と下書きと一括生成、ページのカードを並べる。
- * ページの追加では登録したコマ割りもテンプレートに選べ、選んでいるときは確認を経てその登録を消せる
+ * ページの追加では登録したコマ割りもテンプレートに選べ、選んでいるときは確認を経てその登録を消せる。
+ * 見開きのページも足せ、テンプレートによらず紙面いっぱいの枠なしのコマが 1 つ入る。1 ページ目は左ページで、「右ページから始める」で右にできる。
+ * カードにはノンブルと左右を出し、見開きは 2 枚分の幅で並べる。
+ * 見開きを始められない位置への見開きの追加と、見開きを割る移動、削除、始まりの切り替えはできない
  */
 function EpisodePages() {
   const { projectId, episodeId } = Route.useParams()
@@ -56,11 +66,12 @@ function EpisodePages() {
   const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
   const [template, setTemplate] = useTemplateChoice(project)
+  const [spread, setSpread] = useState(false)
   const [removingEpisode, setRemovingEpisode] = useState(false)
   /** 確認中の登録したコマ割り */
   const [removingTemplate, setRemovingTemplate] = useState<{ id: string; name: string }>()
-  /** 確認中のページの id と、確認の文言に出すページ番号 */
-  const [removingPage, setRemovingPage] = useState<{ id: string; number: number }>()
+  /** 確認中のページの id と、確認の文言に出すノンブル */
+  const [removingPage, setRemovingPage] = useState<{ id: string; label: string }>()
   const navigate = useNavigate()
   const episode = project.episodes.find((e) => e.id === episodeId)
   // 開いている間に Undo や他の人の操作でエピソードが消えることがある
@@ -69,14 +80,15 @@ function EpisodePages() {
   const registeredTemplate = templateOptions(project).find(
     (o) => o.registered && o.value === template,
   )
+  const spreadAvailable = canAddSpread(project, episode.id)
+  const startsRight = episode.startsRight === true
 
   return (
     <YStack gap={8}>
       <YStack as="header" gap={4}>
-        <Link to="/p/$projectId" params={{ projectId }} className={styles.back}>
-          <span aria-hidden>← </span>
+        <BackLink to="/p/$projectId" params={{ projectId }}>
           {m.web_episode_list()}
-        </Link>
+        </BackLink>
         <XStack gap={12} justify="between">
           <EpisodeTitle episode={episode} apply={apply} />
           <RemoveButton label={m.web_episode_remove()} onClick={() => setRemovingEpisode(true)} />
@@ -107,11 +119,20 @@ function EpisodePages() {
           e.preventDefault()
           apply(
             m.web_episode_add_page(),
-            (p) => addPagePatch(p, resolveTemplate(p, template), episode.id).patch,
+            (p) =>
+              addPagePatch(p, resolveTemplate(p, template), episode.id, spread && spreadAvailable)
+                .patch,
           )
         }}
       >
         <TemplateSelect project={project} value={template} onChange={setTemplate} />
+        <Checkbox
+          label={m.web_episode_spread()}
+          checked={spread && spreadAvailable}
+          disabled={!spreadAvailable}
+          title={spreadAvailable ? undefined : m.web_episode_spread_unavailable()}
+          onChange={(e) => setSpread(e.currentTarget.checked)}
+        />
         {registeredTemplate && (
           <RemoveButton
             size="small"
@@ -136,17 +157,42 @@ function EpisodePages() {
           {m.web_draft_title()}
         </Button>
       </XStack>
+      <XStack wrap gap={12} className={common.toolbar}>
+        <Checkbox
+          label={m.web_episode_starts_right()}
+          checked={startsRight}
+          disabled={!canSetStartsRight(project, episode.id, !startsRight)}
+          title={
+            canSetStartsRight(project, episode.id, !startsRight)
+              ? undefined
+              : m.web_episode_spread_breaks()
+          }
+          onChange={(e) => {
+            const next = e.currentTarget.checked
+            apply(m.web_episode_starts_right_history(), (p) =>
+              startsRightPatch(p, episode.id, next),
+            )
+          }}
+        />
+      </XStack>
       <EpisodeBatch episode={episode} projectId={projectId} store={store} />
       {pages.length === 0 && <Typography tone="muted">{m.web_episode_no_pages()}</Typography>}
       <ol className={`${common.cards} ${styles.pages}`}>
-        {pages.map((page, index) => {
+        {pageSlots(episode).map((slot) => {
+          const { page } = slot
           const status = artStatus(page)
           const cast = pageCharacterIds(page).flatMap((id) =>
             project.characters.filter((c) => c.id === id).map((c) => c.name),
           )
           const editing = peers.filter((peer) => peer.pageId === page.id)
           return (
-            <YStack as="li" gap={6} key={page.id} className={common.card}>
+            <YStack
+              as="li"
+              gap={6}
+              key={page.id}
+              className={common.card}
+              data-spread={page.spread || undefined}
+            >
               <Link
                 to="/p/$projectId/pages/$pageId"
                 params={{ projectId, pageId: page.id }}
@@ -159,7 +205,7 @@ function EpisodePages() {
                     pageSize={project.settings.pageSize}
                     resolveAsset={resolveAsset}
                   />
-                  <strong>{m.web_episode_page_number({ number: index + 1 })}</strong>
+                  <strong>{slotLabel(slot)}</strong>
                 </YStack>
               </Link>
               {editing.length > 0 && (
@@ -177,6 +223,7 @@ function EpisodePages() {
                 </XStack>
               )}
               <Typography as="small" variant="caption" tone="muted">
+                {slot.side !== 'spread' && `${SIDE_LABELS[slot.side]()} `}
                 {m.web_episode_page_summary({ panels: page.panels.length })}{' '}
                 <span className={styles.status} data-status={status}>
                   {ART_STATUS_LABELS[status]()}
@@ -197,7 +244,7 @@ function EpisodePages() {
                   size="small"
                   variant="ghost"
                   aria-label={m.web_episode_move_earlier()}
-                  disabled={index === 0}
+                  disabled={!canMovePage(project, page.id, -1)}
                   onClick={() =>
                     apply(m.web_episode_move_page(), (p) => movePagePatch(p, page.id, -1))
                   }
@@ -208,7 +255,7 @@ function EpisodePages() {
                   size="small"
                   variant="ghost"
                   aria-label={m.web_episode_move_later()}
-                  disabled={index === pages.length - 1}
+                  disabled={!canMovePage(project, page.id, 1)}
                   onClick={() =>
                     apply(m.web_episode_move_page(), (p) => movePagePatch(p, page.id, 1))
                   }
@@ -218,7 +265,8 @@ function EpisodePages() {
                 <RemoveButton
                   size="small"
                   label={m.remove()}
-                  onClick={() => setRemovingPage({ id: page.id, number: index + 1 })}
+                  disabled={!canRemovePage(project, page.id)}
+                  onClick={() => setRemovingPage({ id: page.id, label: slotLabel(slot) })}
                 />
               </XStack>
             </YStack>
@@ -242,7 +290,7 @@ function EpisodePages() {
       {removingPage && (
         <ConfirmDialog
           title={m.web_episode_remove_page()}
-          message={m.web_episode_remove_page_confirm({ number: removingPage.number })}
+          message={m.web_episode_remove_page_confirm({ page: removingPage.label })}
           confirmLabel={m.remove()}
           onConfirm={() => {
             apply(m.web_episode_remove_page(), (p) => removePagePatch(p, removingPage.id))
@@ -254,6 +302,18 @@ function EpisodePages() {
     </YStack>
   )
 }
+
+/** カードに出すノンブル。見開きは 2 つのノンブルを並べる */
+function slotLabel({ number, side }: PageSlot): string {
+  return side === 'spread'
+    ? m.web_episode_spread_number({ from: number, to: number + 1 })
+    : m.web_episode_page_number({ number })
+}
+
+const SIDE_LABELS = {
+  left: m.web_episode_page_side_left,
+  right: m.web_episode_page_side_right,
+} as const
 
 /** 話の名前の見出し。横の鉛筆の「名前を変更」で入力欄に替わり、保存すると反映する */
 function EpisodeTitle({

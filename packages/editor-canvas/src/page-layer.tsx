@@ -3,25 +3,49 @@ import {
   BUBBLE_DASH,
   type Bubble,
   bubbleTextBox,
+  bubbleTypeface,
   clipTextBox,
   cornerAnchor,
   currentArt,
+  frameOutline,
+  groundColor,
+  hasFrameLine,
   type ID,
-  INNER_FRAME,
+  innerFrameOf,
+  OVERLAY_COLORS,
   type Page,
   type Panel,
   type Point,
+  paintOrder,
   type Rect,
   type ReferenceImage,
+  softEdgeStrokes,
+  TONE_MATRICES,
 } from '@manga/schema'
 import { memo, Suspense, use, useState } from 'react'
 import { type AssetState, loadAsset } from './asset'
 import { type Box, bubbleGeometry, bubblePaths } from './bubble-shape'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
-import { COLUMN_PITCH, layoutVertical } from './vertical-text'
+import { layoutVertical, RUBY_SCALE } from './vertical-text'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
+/**
+ * セリフの書体ごとの字族と太さ。太さは書き出しの @manga/render と揃える。書き出しは同梱のフォントで描く。
+ * エディタは数 MB のフォントを読み込まずに開けるよう、入っていなければ OS の同じ系統の書体で代える
+ */
+const TYPEFACES: Record<NonNullable<Bubble['typeface']>, { family: string; weight: number }> = {
+  gothic: { family: FONT_FAMILY, weight: 400 },
+  bold: { family: FONT_FAMILY, weight: 700 },
+  mincho: {
+    family: '"Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", YuMincho, serif',
+    weight: 400,
+  },
+  rounded: {
+    family: '"M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", sans-serif',
+    weight: 400,
+  },
+}
 /** 選択やコマ番号など、出力に出ない作業用の色。値は @manga/ui の tokens.css が持つ */
 export const GUIDE = 'var(--guide)'
 const NOTE_COLOR = 'var(--note)'
@@ -53,20 +77,33 @@ interface PageLayerProps {
 }
 
 /**
- * ページの白地、参考画像、コマ、生成画像、フキダシを描く。ズームとパンとドラッグでは props が変わらないので、
+ * ページの白地、参考画像、コマ、生成画像、フキダシと、紙面全体に重ねるトーンを描く。ズームとパンとドラッグでは props が変わらないので、
  * memo で再描画を飛ばす。コマ、フキダシ、オーバーレイもそれぞれ memo し、編集や選択の変更では
  * 変わった要素だけを描き直す
  */
 export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
   const { page, width, height } = props
+  const frame = innerFrameOf(page)
+  const panels = paintOrder(page.panels)
+  // 参考画像を未生成のコマ越しに見せたいので、白い地は下敷きのあるページか黒い地のページの枠ありのコマにだけ塗る
+  const opaque = page.ground === 'black' || page.panels.some((p) => p.frame === 'none')
+  const ground = groundColor(page)
+  const unit = page.spread ? width / 2 : width
+  const toneId = page.tone && `${props.idPrefix}-tone`
   return (
     <g data-layer="page">
+      {page.tone && (
+        <filter id={toneId} colorInterpolationFilters="sRGB" data-tone={page.tone}>
+          <feColorMatrix type="matrix" values={TONE_MATRICES[page.tone].join(' ')} />
+        </filter>
+      )}
       <rect
         x={0}
         y={0}
         width={width}
         height={height}
-        fill="#fff"
+        fill={ground}
+        data-ground={page.ground ?? 'white'}
         style={{ stroke: 'var(--paper-edge)' }}
         strokeWidth={1}
         vectorEffect="non-scaling-stroke"
@@ -79,7 +116,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
           height={height}
         />
       )}
-      {page.panels.map((panel, i) => {
+      {panels.map((panel, i) => {
         const ref = currentArt(panel)?.ref
         const { selection } = props
         return (
@@ -88,6 +125,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
             panel={panel}
             width={width}
             height={height}
+            frame={frame}
             artRef={props.showArt ? ref : undefined}
             resolveAsset={props.resolveAsset}
             generating={props.generating.has(panel.id)}
@@ -99,26 +137,40 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
                 : undefined
             }
             clipId={`${props.idPrefix}-clip-${i}`}
+            opaque={opaque && panel.frame !== 'none'}
+            unit={unit}
+            ground={ground}
+            toneId={toneId}
           />
         )
       })}
-      {/* はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く。重なりの前後はレンダラと同じく order 順 */}
-      {[...page.panels]
-        .sort((a, b) => a.order - b.order)
-        .map((panel) =>
-          byOrder(panel.bubbles.filter((b) => b.overflow)).map((bubble) => (
-            <BubbleView
-              key={bubble.id}
-              bubble={bubble}
-              panelRect={panel.rect}
-              width={width}
-              height={height}
-              selected={isSelected(props.selection, 'bubble', bubble.id)}
-            />
-          )),
-        )}
+      {/* はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く。重なりの前後はレンダラと同じくコマの重なり順 */}
+      {panels.map((panel) =>
+        byOrder(panel.bubbles.filter((b) => b.overflow)).map((bubble) => (
+          <BubbleView
+            key={bubble.id}
+            bubble={bubble}
+            panelRect={panel.rect}
+            width={width}
+            height={height}
+            frame={frame}
+            selected={isSelected(props.selection, 'bubble', bubble.id)}
+          />
+        )),
+      )}
+      {page.overlay && (
+        <rect
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          fill={OVERLAY_COLORS[page.overlay]}
+          data-overlay={page.overlay}
+          style={{ mixBlendMode: 'multiply', pointerEvents: 'none' }}
+        />
+      )}
       {/* スピナーと生成ボタンはエディタだけの UI なので、フキダシに隠れないよう最後に描く */}
-      {page.panels.map((panel) => (
+      {panels.map((panel) => (
         <PanelOverlay
           key={panel.id}
           panelId={panel.id}
@@ -141,6 +193,13 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
   )
 })
 
+/** 枠線の点線。破線の枠は黒の破線、線を引かない枠は作業用の細かい点線。選択中は実線 */
+function frameDash(frame: Panel['frame'], selected: boolean): string | undefined {
+  if (selected) return undefined
+  if (frame === 'dashed') return '6 3'
+  return hasFrameLine(frame) ? undefined : '4 3'
+}
+
 const isSelected = (selection: Selection, kind: 'panel' | 'bubble', id: ID) =>
   selection?.kind === kind && selection.id === id
 
@@ -150,26 +209,41 @@ const PanelView = memo(function PanelView({
   panel,
   width,
   height,
+  frame,
   artRef,
   resolveAsset,
   generating,
   selected,
   selectedBubble,
   clipId,
+  opaque,
+  unit,
+  ground,
+  toneId,
 }: {
   panel: Panel
   width: number
   height: number
+  frame: Rect
   artRef: string | undefined
   resolveAsset(ref: string): Promise<string>
   generating: boolean
   selected: boolean
   selectedBubble: ID | undefined
   clipId: string
+  /** 下に敷いた枠なしのコマか黒い紙の地を隠す白い地を塗るか */
+  opaque: boolean
+  /** 1 ページの幅（mm）。枠の形の大きさを決める */
+  unit: number
+  /** 紙の地の色。ぼかし枠はこの色へぼかす */
+  ground: string
+  /** 絵に掛ける色調の filter の id。色調が無ければ undefined */
+  toneId: string | undefined
 }) {
   const rect = panelBox(panel, width, height)
-  const outline = panelPolygon(panel, width, height)
+  const outline = frameOutline(panelPolygon(panel, width, height), panel.frame, unit)
   const points = polygonPoints(outline)
+  const line = hasFrameLine(panel.frame)
   const placeholder = (
     <g clipPath={`url(#${clipId})`}>
       <Placeholder panel={panel} rect={rect} error={false} />
@@ -180,6 +254,11 @@ const PanelView = memo(function PanelView({
       <clipPath id={clipId}>
         <polygon points={points} />
       </clipPath>
+      {panel.fill === 'black' ? (
+        <polygon points={points} fill="#000" data-panel-fill="black" />
+      ) : (
+        opaque && <polygon points={points} fill="#fff" data-panel-fill="white" />
+      )}
       {artRef === undefined ? (
         placeholder
       ) : (
@@ -189,9 +268,25 @@ const PanelView = memo(function PanelView({
             panel={panel}
             rect={rect}
             clipId={clipId}
+            toneId={toneId}
             loaded={loadAsset(resolveAsset, artRef)}
           />
         </Suspense>
+      )}
+      {panel.frame === 'soft' && (
+        <g clipPath={`url(#${clipId})`} data-soft-edge="">
+          {softEdgeStrokes(unit).map(({ width: w, alpha }) => (
+            <polygon
+              key={w}
+              points={points}
+              fill="none"
+              stroke={ground}
+              strokeOpacity={alpha}
+              strokeWidth={w}
+              strokeLinejoin="round"
+            />
+          ))}
+        </g>
       )}
       <PanelNumber order={panel.order} outline={outline} locked={panel.locked === true} />
       {/* 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く */}
@@ -202,21 +297,36 @@ const PanelView = memo(function PanelView({
           panelRect={panel.rect}
           width={width}
           height={height}
+          frame={frame}
           selected={bubble.id === selectedBubble}
           clipId={clipId}
+          onBlack={panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')}
         />
       ))}
+      {/* 枠線を引かないコマは出力に枠線が出ないが、選んで動かせるよう作業用の点線で輪郭を見せる */}
       <polygon
-        data-panel-frame=""
+        data-panel-frame={panel.frame ?? ''}
         points={points}
         fill="none"
         stroke="#000"
-        style={selected ? { stroke: GUIDE } : undefined}
+        strokeDasharray={frameDash(panel.frame, selected)}
+        style={selected || !line ? { stroke: GUIDE } : undefined}
         data-selected={selected || undefined}
-        strokeWidth={selected ? 2 : 1}
+        strokeWidth={selected ? 2 : panel.frame === 'double' ? 3 : 1}
         strokeLinejoin="miter"
         vectorEffect="non-scaling-stroke"
       />
+      {/* 二重線は太い線の中央を白で抜く。選択中は選択色の 1 本にする */}
+      {panel.frame === 'double' && !selected && (
+        <polygon
+          points={points}
+          fill="none"
+          stroke="#fff"
+          strokeWidth={1}
+          strokeLinejoin="miter"
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
     </g>
   )
 })
@@ -226,11 +336,13 @@ function PanelArt({
   panel,
   rect,
   clipId,
+  toneId,
   loaded,
 }: {
   panel: Panel
   rect: Box
   clipId: string
+  toneId: string | undefined
   loaded: Promise<AssetState>
 }) {
   const asset = use(loaded)
@@ -250,6 +362,7 @@ function PanelArt({
       height={rect.h}
       preserveAspectRatio="xMidYMid slice"
       clipPath={`url(#${clipId})`}
+      filter={toneId && `url(#${toneId})`}
       onError={() => setBroken(true)}
     />
   )
@@ -370,7 +483,7 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
         {error && (
           <div style={{ color: 'var(--alert)' }}>{m.editor_canvas_panel_image_load_failed()}</div>
         )}
-        {panel.camera && <div>[{panel.camera}]</div>}
+        {panel.camera && <div>[{m[`panel_camera_${panel.camera}` as const]()}]</div>}
         {panel.note && <div>{panel.note}</div>}
       </div>
     </foreignObject>
@@ -515,7 +628,8 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
 }
 
 /**
- * フキダシ。太線で輪郭を描いてから同じ形を白で塗り重ね、本体としっぽの継ぎ目の線を消す。
+ * フキダシ。太線で輪郭を描いてから同じ形を地の色（黒フキダシは黒、他は白）で塗り重ね、本体としっぽの継ぎ目の線を消す。
+ * 黒フキダシのセリフは白で描く。
  * 外側に残る線は太線の半分になる。枠なしは何も描かない代わりに、選択していなくても薄い破線で範囲を示す。
  * clipId を渡すと、輪郭と文字をその clipPath で切る。フキダシは内枠の外に出てよいが、セリフは断裁で
  * 切れないよう内枠の内側に寄せる
@@ -525,15 +639,21 @@ const BubbleView = memo(function BubbleView({
   panelRect,
   width,
   height,
+  frame,
   selected,
   clipId,
+  onBlack = false,
 }: {
   bubble: Bubble
   panelRect: Rect
   width: number
   height: number
+  /** ページの内枠（innerFrameOf）。セリフはこの外に出さない */
+  frame: Rect
   selected: boolean
   clipId?: string
+  /** 黒塗りのコマの中。白い地を持たないフキダシのセリフを白で描く */
+  onBlack?: boolean
 }) {
   const panel = panelBox({ rect: panelRect }, width, height)
   const g = bubbleGeometry(bubble, panel)
@@ -541,25 +661,35 @@ const BubbleView = memo(function BubbleView({
   const text = bubbleTextBox(bubble.shape, g)
   const box = clipTextBox(
     clipId ? clipTextBox(text, panel) : text,
-    panelBox({ rect: INNER_FRAME }, width, height),
+    panelBox({ rect: frame }, width, height),
   )
   const layout = layoutVertical(bubble.text, box)
-  const pitch = layout.fontSize * COLUMN_PITCH
-  const blockWidth =
-    layout.columns.length === 0 ? 0 : (layout.columns.length - 1) * pitch + layout.fontSize
-  const right = box.x + box.w / 2 + blockWidth / 2 - layout.fontSize / 2
+  const right = box.x + box.w / 2 + layout.width / 2
+  const fs = layout.fontSize
+  const rubySize = fs * RUBY_SCALE
+  const black = paths.fill && bubble.fill === 'black'
+  const paper = black ? '#000' : '#fff'
+  const ink = black || (onBlack && !paths.fill) ? '#fff' : '#000'
+  const typeface = bubbleTypeface(bubble)
+  const font = TYPEFACES[typeface]
   const shapes = paths.tail === null ? [paths.body] : [paths.tail, paths.body]
   const illegible =
     layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
-    <g className="ec-bubble" data-bubble-id={bubble.id} data-shape={bubble.shape}>
+    <g
+      className="ec-bubble"
+      data-bubble-id={bubble.id}
+      data-shape={bubble.shape}
+      data-typeface={typeface}
+      data-bubble-fill={black ? 'black' : undefined}
+    >
       <g clipPath={clipId && `url(#${clipId})`}>
         {paths.line !== 'none' &&
           shapes.map((d) => (
             <path
               key={`stroke-${d}`}
               d={d}
-              fill="#fff"
+              fill={paper}
               stroke="#000"
               strokeWidth={BUBBLE_STROKE}
               strokeDasharray={
@@ -571,24 +701,48 @@ const BubbleView = memo(function BubbleView({
               vectorEffect="non-scaling-stroke"
             />
           ))}
-        {paths.fill && shapes.map((d) => <path key={`fill-${d}`} d={d} fill="#fff" />)}
+        {paths.fill && shapes.map((d) => <path key={`fill-${d}`} d={d} fill={paper} />)}
         {paths.ink !== null && <path d={paths.ink} fill="#000" />}
         {layout.columns.length > 0 && (
-          <text
-            writingMode="vertical-rl"
-            fontFamily={FONT_FAMILY}
-            fontSize={layout.fontSize}
-            textAnchor="middle"
-            fill="#000"
-            data-truncated={layout.truncated || undefined}
-          >
-            {layout.columns.map((column, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
-              <tspan key={i} x={right - i * pitch} y={box.y + box.h / 2}>
-                {column}
-              </tspan>
-            ))}
-          </text>
+          <>
+            <text
+              writingMode="vertical-rl"
+              fontFamily={font.family}
+              fontWeight={font.weight}
+              fontSize={fs}
+              textAnchor="middle"
+              fill={ink}
+              data-truncated={layout.truncated || undefined}
+            >
+              {layout.columns.map((column, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
+                <tspan key={i} x={right - column.offset} y={box.y + box.h / 2}>
+                  {column.text}
+                </tspan>
+              ))}
+            </text>
+            {layout.columns.flatMap((column, i) => {
+              // 列は中央揃えで、字は 1 字が文字サイズ 1 つぶんの高さとみなす
+              const top = box.y + box.h / 2 - (column.length * fs) / 2
+              return column.rubies.map((ruby) => (
+                <text
+                  // biome-ignore lint/suspicious/noArrayIndexKey: ルビは列と列の中の位置で決まる
+                  key={`${i}-${ruby.start}`}
+                  writingMode="vertical-rl"
+                  fontFamily={font.family}
+                  fontWeight={font.weight}
+                  fontSize={rubySize}
+                  textAnchor="middle"
+                  fill={ink}
+                  x={right - column.offset + (fs + rubySize) / 2}
+                  y={top + (ruby.start + ruby.length / 2) * fs}
+                  data-ruby
+                >
+                  {ruby.text}
+                </text>
+              ))
+            })}
+          </>
         )}
       </g>
       {selected ? (

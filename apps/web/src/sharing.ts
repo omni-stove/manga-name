@@ -1,6 +1,7 @@
 import type { InviteApp, MemberRoutes } from '@manga/api/rpc'
 import { m } from '@manga/i18n'
 import { type ID, readApiError } from '@manga/schema'
+import type { Platform } from '@manga/storage'
 import { hc } from 'hono/client'
 
 /** workers/api の ProjectRole。owner はプロジェクトを作った人 */
@@ -85,13 +86,27 @@ export interface SharingClientOptions {
   fetch: typeof fetch
   /** ローカルの id に対応するクラウドの id。クラウドに無いか未ログインなら null */
   cloudId(localId: ID): Promise<ID | null>
-  /** 招待リンクの組み立てに使う apps/web のオリジン。既定は location.origin */
-  appOrigin?: string
+  /**
+   * 招待リンクの組み立てに使う apps/web のオリジン（`readAppOrigin`）。既定は location.origin。
+   * null なら分からないものとして、invite は API を呼ばずに throw する
+   */
+  appOrigin?: string | null
   /** 最後に取れたロールの置き場。既定は localStorage */
   storage?: Storage
 }
 
 const ROLES_KEY = 'manga.project-roles'
+
+/**
+ * 招待リンクに使う apps/web のオリジン。ビルド時の `VITE_APP_ORIGIN` を優先し、無ければ Web は location.origin、
+ * Desktop は null（WebView のオリジンは受け取った人が開けないため）
+ */
+export function readAppOrigin(platform: Platform): string | null {
+  const built: unknown = import.meta.env.VITE_APP_ORIGIN
+  const origin = typeof built === 'string' ? built.trim() : ''
+  if (origin !== '') return origin
+  return platform === 'web' ? globalThis.location.origin : null
+}
 
 /** 招待リンクの、apps/web 側のパス */
 const invitePath = (token: string) => `/invite/${encodeURIComponent(token)}`
@@ -153,13 +168,15 @@ export function createSharingClient(opts: SharingClientOptions): SharingClient {
     },
     members,
     async invite(localId, email, role) {
+      const origin = opts.appOrigin === undefined ? globalThis.location.origin : opts.appOrigin
+      // 渡せないリンクの招待をサーバに残さないよう、API を呼ぶ前に止める
+      if (origin === null) throw new Error(m.web_sharing_app_origin_unknown())
       const res = await projects[':id'].invites.$post({
         param: { id: param(await requireCloudId(localId)) },
         json: email === '' ? { role } : { email, role },
       })
       await expectOk(res, 'POST invite')
       const { token, ...invite } = await res.json()
-      const origin = opts.appOrigin ?? globalThis.location.origin
       return { invite, url: new URL(invitePath(token), origin).toString() }
     },
     async revokeInvite(localId, inviteId) {
@@ -258,6 +275,31 @@ if (import.meta.vitest) {
     return { client, fetch, sent, storage }
   }
 
+  describe('readAppOrigin', () => {
+    test('the build-time origin wins on both platforms', () => {
+      vi.stubEnv('VITE_APP_ORIGIN', ' https://built.test ')
+      expect(readAppOrigin('desktop')).toBe('https://built.test')
+      expect(readAppOrigin('web')).toBe('https://built.test')
+    })
+
+    test('without it, web uses its own origin and desktop has none', () => {
+      vi.stubEnv('VITE_APP_ORIGIN', '')
+      vi.stubGlobal('location', { origin: 'https://web.test' })
+      expect(readAppOrigin('web')).toBe('https://web.test')
+      expect(readAppOrigin('desktop')).toBeNull()
+      vi.unstubAllGlobals()
+    })
+
+    test('a desktop invite links to the build-time origin', async () => {
+      vi.stubEnv('VITE_APP_ORIGIN', 'https://built.test')
+      const invite = { id: 'i1', email: null, role: 'viewer', expiresAt: 'x' }
+      const { client } = setup(() => json({ ...invite, token: 't' }), {
+        appOrigin: readAppOrigin('desktop'),
+      })
+      expect((await client.invite('local', '', 'viewer')).url).toBe('https://built.test/invite/t')
+    })
+  })
+
   describe('createSharingClient', () => {
     test('members reads the cloud project and role uses it', async () => {
       const { client, sent } = setup(() => json(members))
@@ -349,10 +391,18 @@ if (import.meta.vitest) {
       expect(sent()[0]?.body).toBe(JSON.stringify({ role: 'viewer' }))
     })
 
+    test('invite throws without calling the API when the app origin is unknown', async () => {
+      const { client, fetch } = setup(() => json({}), { appOrigin: null })
+      await expect(client.invite('local', '', 'viewer')).rejects.toThrow(
+        m.web_sharing_app_origin_unknown(),
+      )
+      expect(fetch).not.toHaveBeenCalled()
+    })
+
     test('changes to a project that is not in the cloud throw before calling the API', async () => {
       const { client, fetch } = setup(() => json({}))
       await expect(client.invite('other', 'b@example.com', 'viewer')).rejects.toThrow(
-        'まだクラウドにありません',
+        m.web_sharing_not_in_cloud(),
       )
       await expect(client.removeMember('other', 'u1')).rejects.toThrow()
       expect(fetch).not.toHaveBeenCalled()
@@ -402,9 +452,13 @@ if (import.meta.vitest) {
 
     test('acceptInvite explains a wrong account and an expired invite', async () => {
       const wrong = setup(() => json({}, 403))
-      await expect(wrong.client.acceptInvite('t')).rejects.toThrow('別のメールアドレス')
+      await expect(wrong.client.acceptInvite('t')).rejects.toThrow(
+        m.web_sharing_invite_email_mismatch(),
+      )
       const expired = setup(() => json({}, 404))
-      await expect(expired.client.acceptInvite('t')).rejects.toThrow('期限が切れています')
+      await expect(expired.client.acceptInvite('t')).rejects.toThrow(
+        m.web_sharing_invite_not_found(),
+      )
       const failing = setup(() => new Response('oops', { status: 500, statusText: 'Server Error' }))
       await expect(failing.client.acceptInvite('t')).rejects.toThrow('POST accept invite: 500 oops')
     })

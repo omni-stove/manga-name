@@ -60,9 +60,9 @@ afterEach(() => {
 })
 
 describe('createAnthropicLlmProvider', () => {
-  test('planPages sends the prompts and the wrapped array schema to the Messages API with the key', async () => {
+  test('planPages sends the prompts and the page plan schema to the Messages API with the key', async () => {
     const plan = [{ note: 'n', script: 's', cast: [], lines: [{ text: 't', shape: 'normal' }] }]
-    fetchMock.mockResolvedValueOnce(message(JSON.stringify({ elements: plan })))
+    fetchMock.mockResolvedValueOnce(message(JSON.stringify({ pages: plan })))
     const provider = createAnthropicLlmProvider({ apiKey: 'test-key' })
     expect(await provider.planPages(planRequest)).toEqual(plan)
 
@@ -71,6 +71,7 @@ describe('createAnthropicLlmProvider', () => {
     expect(url).toBe('https://api.anthropic.com/v1/messages')
     expect(new Headers(init?.headers).get('x-api-key')).toBe('test-key')
     const { system, user, schema } = prompts.planPages(planRequest)
+    const pagesSchema = schema.properties?.pages as JsonSchema
     const body = sentBody()
     expect(body).toMatchObject({ model: 'claude-haiku-5-5', max_tokens: 64_000, stream: true })
     expect(body.system).toBe(system)
@@ -82,9 +83,14 @@ describe('createAnthropicLlmProvider', () => {
         type: 'json_schema',
         schema: {
           type: 'object',
-          required: ['elements'],
+          required: ['pages'],
           properties: {
-            elements: { type: 'array', items: { required: (schema.items as JsonSchema).required } },
+            pages: {
+              type: 'array',
+              items: {
+                required: (pagesSchema.items as JsonSchema).required,
+              },
+            },
           },
         },
       },
@@ -104,13 +110,13 @@ describe('createAnthropicLlmProvider', () => {
     expect(body.output_config.format.schema).toMatchObject({ required: schema.required })
   })
 
-  test('suggestLayout sends its prompts and the object schema', async () => {
-    const reply = aiFixtures.layoutSuggestion
+  test('transcribeName sends its prompts and the object schema', async () => {
+    const reply = aiFixtures.nameDraft
     fetchMock.mockResolvedValueOnce(message(JSON.stringify(reply)))
     const provider = createAnthropicLlmProvider({ apiKey: 'test-key' })
-    expect(await provider.suggestLayout(planRequest)).toEqual(reply)
+    expect(await provider.transcribeName(planRequest)).toEqual(reply)
 
-    const { system, user, schema } = prompts.suggestLayout(planRequest)
+    const { system, user, schema } = prompts.transcribeName(planRequest)
     const body = sentBody()
     expect(body.max_tokens).toBe(8_000)
     expect(body.system).toBe(system)
@@ -118,8 +124,23 @@ describe('createAnthropicLlmProvider', () => {
     expect(body.output_config.format.schema).toMatchObject({ required: schema.required })
   })
 
+  test('suggestLayout sends its prompts and the object schema', async () => {
+    const reply = aiFixtures.layoutSuggestion
+    const layoutRequest = { panels: aiFixtures.nameDraft.panels }
+    fetchMock.mockResolvedValueOnce(message(JSON.stringify(reply)))
+    const provider = createAnthropicLlmProvider({ apiKey: 'test-key' })
+    expect(await provider.suggestLayout(layoutRequest)).toEqual(reply)
+
+    const { system, user, schema } = prompts.suggestLayout(layoutRequest)
+    const body = sentBody()
+    expect(body.max_tokens).toBe(4_000)
+    expect(body.system).toBe(system)
+    expect(body.messages[0]?.content).toBe(user)
+    expect(body.output_config.format.schema).toMatchObject({ required: schema.required })
+  })
+
   test('throws when the reply does not match the output schema', async () => {
-    fetchMock.mockResolvedValueOnce(message('{"elements":[{"unexpected":true}]}'))
+    fetchMock.mockResolvedValueOnce(message('{"pages":[{"unexpected":true}]}'))
     const provider = createAnthropicLlmProvider({ apiKey: 'test-key' })
     await expect(provider.planPages(planRequest)).rejects.toThrow('invalid llm output')
   })

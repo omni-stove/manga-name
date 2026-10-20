@@ -1,3 +1,4 @@
+import { m } from '@manga/i18n'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn, screen, userEvent } from 'storybook/test'
 import { ConfirmDialog } from './confirm-dialog'
@@ -36,9 +37,22 @@ export const ConfirmCallsOnConfirm: Story = {
   },
 }
 
+export const BackdropClickKeepsOpen: Story = {
+  play: async ({ args }) => {
+    const dialog = screen.getByRole<HTMLDialogElement>('dialog', { name: 'エピソードを削除' })
+    await userEvent.pointer({
+      keys: '[MouseLeft]',
+      target: dialog,
+      coords: { clientX: 1, clientY: 1 },
+    })
+    await expect(dialog).toHaveAttribute('open')
+    await expect(args.onCancel).not.toHaveBeenCalled()
+  },
+}
+
 export const CancelCallsOnCancel: Story = {
   play: async ({ args }) => {
-    await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+    await userEvent.click(screen.getByRole('button', { name: m.cancel() }))
     await expect(args.onCancel).toHaveBeenCalledOnce()
     await expect(args.onConfirm).not.toHaveBeenCalled()
   },

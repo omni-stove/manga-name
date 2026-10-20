@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 10 as const
+export const SCHEMA_VERSION = 18 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -43,6 +43,12 @@ export const CharacterSchema = z.object({
 
 const order = z.number().int().min(1)
 
+/**
+ * セリフの書体。gothic はゴシック、bold は太ゴシック、mincho は明朝、rounded は丸ゴシック。
+ * 画面には messages/schema の `bubble_typeface_<値>` で出す
+ */
+export const BubbleTypefaceSchema = z.enum(['gothic', 'bold', 'mincho', 'rounded'])
+
 export const BubbleSchema = z.object({
   id: IdSchema,
   order,
@@ -62,6 +68,10 @@ export const BubbleSchema = z.object({
   pos: PointSchema,
   size: SizeSchema,
   tail: PointSchema.optional(),
+  /** 省略は形に合わせる（bubbleTypeface） */
+  typeface: BubbleTypefaceSchema.optional(),
+  /** フキダシの地の色。黒は体としっぽを黒で塗り、セリフを白で描く。地を持たない形（none）では無視する。省略は白 */
+  fill: z.enum(['black']).optional(),
   overflow: z.boolean().optional(),
   locked: z.boolean().optional(),
 })
@@ -93,7 +103,33 @@ export const FocusPointSchema = z.object({
   locked: z.boolean().optional(),
 })
 
+/**
+ * コマの枠線。none は枠線を引かず、他のコマを上に重ねる下敷きの大ゴマにもなる。
+ * round（角丸）、wavy（波線）、soft（ぼかし）は回想・夢、cloud（雲形）は空想や夢想、dashed（破線）、double（二重線）は過去や画面の中に使う。
+ * soft は枠線を引かず、絵の縁を紙の地の色へぼかす。画面には messages/schema の `panel_frame_<値>` で出す
+ */
+export const PanelFrameSchema = z.enum([
+  'none',
+  'round',
+  'wavy',
+  'dashed',
+  'double',
+  'soft',
+  'cloud',
+])
+/** コマの絵に掛ける色調。sepia は茶色、faded は色を抜いて薄くし、回想に使う。画面には `page_tone_<値>` で出す */
+export const PageToneSchema = z.enum(['sepia', 'faded'])
+
 export const VectorKindSchema = z.enum(['gaze', 'motion', 'speed'])
+/** コマの画面の切り取り方。画面には messages/schema の `panel_camera_<値>` で出す */
+export const CameraSchema = z.enum([
+  'long',
+  'middle',
+  'bust',
+  'close_up',
+  'low_angle',
+  'high_angle',
+])
 export const StrengthSchema = z.enum(['strong', 'weak'])
 
 export const VectorSchema = z.object({
@@ -141,9 +177,13 @@ const PanelBaseSchema = z.object({
   order,
   rect: RectSchema,
   shape: z.array(PointSchema).min(3).optional(),
+  /** コマの地の色。黒は暗転や無音の間に使う。絵があれば絵が上に乗る */
+  fill: z.enum(['black']).optional(),
+  /** 枠線。省略は実線の枠 */
+  frame: PanelFrameSchema.optional(),
   bubbles: z.array(BubbleSchema),
   note: z.string().optional(),
-  camera: z.string().optional(),
+  camera: CameraSchema.optional(),
   arts: z.array(PanelArtSchema),
   artId: IdSchema.optional(),
   focusPoints: z.array(FocusPointSchema),
@@ -186,7 +226,17 @@ export const PanelSchema = PanelBaseSchema.superRefine((panel, ctx) => {
 
 const PageBaseSchema = z.object({
   id: IdSchema,
-  side: z.enum(['left', 'right', 'single']),
+  /**
+   * 見開きのページ。正規化座標は 2 ページ分（幅 2 倍）の紙面に対してとり、ノンブルは 2 つ使う。
+   * 左右のページに分けないのは、ノドをまたぐコマを 1 つのコマのまま持つため
+   */
+  spread: z.literal(true).optional(),
+  /** 紙の地の色。黒は間白とタチキリの外を黒ベタにし、回想のページに使う。省略は白 */
+  ground: z.enum(['black']).optional(),
+  /** コマの絵に掛ける色調。フキダシと枠には掛けない。省略は生成したままの色 */
+  tone: PageToneSchema.optional(),
+  /** 紙面全体に重ねるトーン。gray はフキダシと間白も含めて灰色を乗算で重ね、回想のページに使う。省略は重ねない */
+  overlay: z.enum(['gray']).optional(),
   panels: z.array(PanelSchema),
   reference: ReferenceImageSchema.optional(),
   scribbles: z.array(StrokeSchema),
@@ -216,6 +266,8 @@ export const LayoutTemplateSchema = LayoutTemplateBaseSchema.superRefine((templa
 export const EpisodeSchema = z.object({
   id: IdSchema,
   title: z.string(),
+  /** 1 ページ目を右ページにする。既定は左ページ。掲載誌の台割で決まるので話ごとに持つ */
+  startsRight: z.literal(true).optional(),
   pages: z.array(PageSchema),
 })
 
@@ -289,6 +341,7 @@ export type Sweep = z.infer<typeof SweepSchema>
 export type FocusKind = z.infer<typeof FocusKindSchema>
 export type FocusPoint = z.infer<typeof FocusPointSchema>
 export type VectorKind = z.infer<typeof VectorKindSchema>
+export type Camera = z.infer<typeof CameraSchema>
 export type Strength = z.infer<typeof StrengthSchema>
 export type Vector = z.infer<typeof VectorSchema>
 export type ReferenceImage = z.infer<typeof ReferenceImageSchema>

@@ -11,14 +11,16 @@ import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createAuthClient, takeSignInError } from './auth'
+import { openSignInInBrowser } from './desktop/browser'
 import { createDesktopTokenStore } from './desktop/desktop-store'
+import { notifyBatchDone } from './desktop/notify'
 import { createPanelGeneration } from './generate-panel'
 import { createImageProvider, readApiBaseUrl } from './image-provider'
 import { createLlmProvider } from './llm-provider'
 import { createProjectLibrary } from './project-library'
 import { errorMessage } from './route-error'
 import { createAppRouter } from './router'
-import { createSharingClient } from './sharing'
+import { createSharingClient, readAppOrigin } from './sharing'
 import { createTabSync } from './store/tab-sync'
 import { SyncStatusProvider } from './sync-status'
 import { toasts } from './toasts'
@@ -43,7 +45,10 @@ const platform = detectPlatform()
 const baseUrl = readApiBaseUrl()
 const auth = createAuthClient({
   baseUrl,
-  tokenStore: platform === 'desktop' ? createDesktopTokenStore() : undefined,
+  ...(platform === 'desktop' && {
+    tokenStore: createDesktopTokenStore(),
+    openExternal: openSignInInBrowser,
+  }),
 })
 void auth.restore()
 
@@ -64,6 +69,7 @@ const sharing = createSharingClient({
   baseUrl,
   fetch: auth.fetch,
   cloudId: async (id) => (await cloud?.cloudId(id)) ?? null,
+  appOrigin: readAppOrigin(platform),
 })
 // 本番の同期サーバにつなぐのは別タスクなので、e2e のビルドだけ同じブラウザのタブ同士でつなぐ
 const library = createProjectLibrary(storage, {
@@ -79,7 +85,11 @@ const library = createProjectLibrary(storage, {
 })
 const imageProvider = createImageProvider({ baseUrl, getToken: auth.getToken })
 const llmProvider = createLlmProvider({ baseUrl, getToken: auth.getToken })
-const generation = createPanelGeneration({ library, imageProvider })
+const generation = createPanelGeneration({
+  library,
+  imageProvider,
+  ...(platform === 'desktop' && { onBatchDone: notifyBatchDone }),
+})
 const router = createAppRouter({
   library,
   imageProvider,
@@ -105,6 +115,9 @@ if (platform === 'desktop') {
       isMainWindow() ? startDesktopShell({ router, library }) : listenEdit(),
     )
     .catch((e: unknown) => toasts.push(m.web_menu_build_failed({ reason: errorMessage(e) })))
+  import('./desktop/deep-link')
+    .then(({ startDeepLinks }) => startDeepLinks({ router, auth }))
+    .catch((e: unknown) => toasts.push(m.web_desktop_start_failed({ reason: errorMessage(e) })))
 }
 
 // debounce 待ちの変更をタブを閉じる・隠す時点で書く。pagehide だけでは書き込みが終わる前にページが破棄されうる

@@ -1,4 +1,38 @@
-import { SCHEMA_VERSION } from './project'
+import { type Camera, SCHEMA_VERSION } from './project'
+
+/** v12 まで画面の候補として出していた呼び名 */
+const CAMERA_NAMES: Record<string, Camera> = {
+  ロング: 'long',
+  ミドル: 'middle',
+  バストアップ: 'bust',
+  アップ: 'close_up',
+  アオリ: 'low_angle',
+  あおり: 'low_angle',
+  俯瞰: 'high_angle',
+}
+
+type Json = Record<string, unknown>
+
+/** 配列のうちオブジェクトの要素だけを fn で変える。形の違う値は ProjectSchema に断らせるのでそのまま残す */
+const mapObjects = (value: unknown, fn: (item: Json) => Json): unknown =>
+  Array.isArray(value)
+    ? value.map((v) => (typeof v === 'object' && v !== null && !Array.isArray(v) ? fn(v) : v))
+    : value
+
+/**
+ * v12 の自由記述の Panel.camera を v13 の値にする。候補の呼び名はその値に、それ以外の記述は
+ * 消さずに note の頭に移す
+ */
+function cameraToEnum(panel: Json): Json {
+  const { camera, ...rest } = panel
+  if (typeof camera !== 'string' || camera.trim() === '') return rest
+  const key = camera.trim()
+  const value = Object.hasOwn(CAMERA_NAMES, key) ? CAMERA_NAMES[key] : undefined
+  if (value) return { ...rest, camera: value }
+  const note =
+    typeof panel.note === 'string' && panel.note !== '' ? `${camera}\n${panel.note}` : camera
+  return { ...rest, note }
+}
 
 /** 版 N の JSON を版 N+1 に上げる関数。キーは元の版 */
 const migrations: Record<number, (json: Record<string, unknown>) => Record<string, unknown>> = {
@@ -22,6 +56,33 @@ const migrations: Record<number, (json: Record<string, unknown>) => Record<strin
   8: (json) => ({ ...json, schemaVersion: 9 }),
   // v10 は settings.characterDesign を足しただけ。版を上げる理由は v2 と同じ
   9: (json) => ({ ...json, schemaVersion: 10 }),
+  // v11 は Panel.fill を足しただけ。版を上げる理由は v2 と同じ
+  10: (json) => ({ ...json, schemaVersion: 11 }),
+  // v12 は Panel.frame を足しただけ。版を上げる理由は v2 と同じ
+  11: (json) => ({ ...json, schemaVersion: 12 }),
+  // v13 は Panel.camera を自由記述から CameraSchema の値にした
+  12: (json) => ({
+    ...json,
+    schemaVersion: 13,
+    episodes: mapObjects(json.episodes, (episode) => ({
+      ...episode,
+      pages: mapObjects(episode.pages, (page) => ({
+        ...page,
+        panels: mapObjects(page.panels, cameraToEnum),
+      })),
+    })),
+  }),
+  // v14 は Page.side を除き、Page.spread と Episode.startsRight を足した。残った side は ProjectSchema が読み捨てる。
+  // 版を上げる理由は v6 と同じ
+  13: (json) => ({ ...json, schemaVersion: 14 }),
+  // v15 は Page.ground、Page.tone と Panel.frame の値を足しただけ。版を上げる理由は v6 と同じ
+  14: (json) => ({ ...json, schemaVersion: 15 }),
+  // v16 は Bubble.typeface を足しただけ。版を上げる理由は v6 と同じ
+  15: (json) => ({ ...json, schemaVersion: 16 }),
+  // v17 は Page.overlay と Panel.frame の cloud を足しただけ。版を上げる理由は v6 と同じ
+  16: (json) => ({ ...json, schemaVersion: 17 }),
+  // v18 は Bubble.fill を足しただけ。版を上げる理由は v2 と同じ
+  17: (json) => ({ ...json, schemaVersion: 18 }),
 }
 
 /**
@@ -50,17 +111,54 @@ export function migrate(json: unknown): unknown {
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('migrate v10 → v10 is a no-op', () => {
-    const json = { schemaVersion: 10, title: 't' }
+  test('migrate v18 → v18 is a no-op', () => {
+    const json = { schemaVersion: 18, title: 't' }
     expect(migrate(json)).toBe(json)
   })
 
-  test('migrate v1 → v10 only bumps the version', () => {
-    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 10, title: 't' })
+  test('migrate v1 → v18 only bumps the version of a project without cameras', () => {
+    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 18, title: 't' })
+  })
+
+  test('migrate v17 → v18 only bumps the version and leaves the bubbles white', () => {
+    const bubbles = [{ id: 'bb', shape: 'normal' }]
+    const json = { schemaVersion: 17, episodes: [{ pages: [{ panels: [{ bubbles }] }] }] }
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 18 })
+  })
+
+  test('migrate v12 → v18 turns the suggested camera names into values and moves the rest to the note', () => {
+    const panels = [
+      { id: 'a', camera: 'ロング' },
+      { id: 'b', camera: ' あおり ' },
+      { id: 'c', camera: '目元のアップ', note: 'レンズ越しの目' },
+      { id: 'd', camera: 'ロング、俯瞰気味' },
+      { id: 'e', camera: '' },
+      { id: 'f', note: 'n' },
+    ]
+    const json = { schemaVersion: 12, episodes: [{ pages: [{ panels }] }] }
+    expect(migrate(json)).toEqual({
+      schemaVersion: 18,
+      episodes: [
+        {
+          pages: [
+            {
+              panels: [
+                { id: 'a', camera: 'long' },
+                { id: 'b', camera: 'low_angle' },
+                { id: 'c', note: '目元のアップ\nレンズ越しの目' },
+                { id: 'd', note: 'ロング、俯瞰気味' },
+                { id: 'e' },
+                { id: 'f', note: 'n' },
+              ],
+            },
+          ],
+        },
+      ],
+    })
   })
 
   test('migrate rejects unknown, newer or missing versions and non-objects', () => {
-    expect(() => migrate({ schemaVersion: 11 })).toThrow()
+    expect(() => migrate({ schemaVersion: 19 })).toThrow()
     expect(() => migrate({ schemaVersion: 0 })).toThrow()
     expect(() => migrate({})).toThrow()
     expect(() => migrate(null)).toThrow()

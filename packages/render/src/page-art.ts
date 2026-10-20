@@ -54,7 +54,7 @@ export async function renderPageLayoutPng(
     withClip(c, outline, () => fillBubbles(panel, false))
   }
   const lineWidth = Math.max(1, Math.round(width * FRAME_WIDTH))
-  for (const panel of page.panels) drawFrame(c, outlineOf(panel), lineWidth)
+  for (const panel of page.panels) drawFrame(c, outlineOf(panel), lineWidth, undefined)
   // はみ出したフキダシを後ろのコマの塗りと枠線が隠さないよう、全コマの後に塗る
   for (const panel of page.panels) fillBubbles(panel, true)
   const mm = width / pageSize.w

@@ -1,6 +1,7 @@
 import {
   CritiqueResponseSchema,
   LayoutSuggestionResponseSchema,
+  NameDraftResponseSchema,
   PagePlanResponseSchema,
   readApiError,
 } from '@manga/schema'
@@ -8,7 +9,7 @@ import { type HttpProviderOptions, SignInRequiredError } from './http-image-prov
 import type { LlmProvider } from './provider'
 
 /**
- * Workers のプロキシ `POST /v1/ai/plan-pages`、`POST /v1/ai/suggest-layout`、`POST /v1/ai/critique` に JSON を送る LlmProvider。
+ * Workers のプロキシ `POST /v1/ai/plan-pages`、`POST /v1/ai/transcribe-name`、`POST /v1/ai/suggest-layout`、`POST /v1/ai/critique` に JSON を送る LlmProvider。
  * 応答は `@manga/schema` で検証して返す。トークン無しと 401 は SignInRequiredError、
  * ほかの HTTP エラーは readApiError の Error（多くは ApiError）を、検証に通らない応答は Error を throw する。
  */
@@ -32,6 +33,9 @@ export function createHttpLlmProvider(opts: HttpProviderOptions): LlmProvider {
   return {
     async planPages(req) {
       return PagePlanResponseSchema.parse(await postJson('/v1/ai/plan-pages', req))
+    },
+    async transcribeName(req) {
+      return NameDraftResponseSchema.parse(await postJson('/v1/ai/transcribe-name', req))
     },
     async suggestLayout(req) {
       return LayoutSuggestionResponseSchema.parse(await postJson('/v1/ai/suggest-layout', req))
@@ -87,8 +91,26 @@ if (import.meta.vitest) {
     await expect(provider.planPages(req)).rejects.toThrow()
   })
 
-  test('suggestLayout posts the page script and validates the reply', async () => {
-    const layoutReq = { project: { settings, characters }, script: 'E「……」' }
+  test('transcribeName posts the page script and validates the reply', async () => {
+    const nameReq = { project: { settings, characters }, script: 'E「……」' }
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      expect(JSON.parse(init.body as string)).toEqual(nameReq)
+      return Response.json(aiFixtures.nameDraft)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = createHttpLlmProvider({
+      baseUrl: 'https://api.example',
+      getToken: async () => 't',
+    })
+    expect(await provider.transcribeName(nameReq)).toEqual(aiFixtures.nameDraft)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example/v1/ai/transcribe-name')
+
+    vi.stubGlobal('fetch', async () => Response.json({ panels: [] }))
+    await expect(provider.transcribeName(nameReq)).rejects.toThrow()
+  })
+
+  test('suggestLayout posts the name panels and validates the reply', async () => {
+    const layoutReq = { panels: aiFixtures.nameDraft.panels }
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
       expect(JSON.parse(init.body as string)).toEqual(layoutReq)
       return Response.json(aiFixtures.layoutSuggestion)

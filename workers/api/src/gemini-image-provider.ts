@@ -1,5 +1,5 @@
 import { findPanel, type ImageProvider, type PanelArtRequest, prompts } from '@manga/ai'
-import type { Character } from '@manga/schema'
+import { type Character, pageSizeOf } from '@manga/schema'
 
 const GEMINI_IMAGE_MODEL = 'gemini-nano-banana-2.1'
 
@@ -139,7 +139,7 @@ export function createGeminiImageProvider(opts: GeminiImageProviderOptions): Ima
       )
       const panel = findPanel(req.page, req.panelId)
 
-      const { pageSize } = req.project.settings
+      const pageSize = pageSizeOf(req.page, req.project.settings.pageSize)
 
       const parts: Part[] = [await imagePart(req.layoutPng)]
       if (req.referencePng) parts.push(await imagePart(req.referencePng))
@@ -154,7 +154,7 @@ export function createGeminiImageProvider(opts: GeminiImageProviderOptions): Ima
     },
     async generatePageArt(req) {
       const prompt = withNegative(prompts.pageArt(req))
-      const { pageSize } = req.project.settings
+      const pageSize = pageSizeOf(req.page, req.project.settings.pageSize)
 
       const parts: Part[] = [await imagePart(req.layoutPng)]
       if (req.referencePng) parts.push(await imagePart(req.referencePng))

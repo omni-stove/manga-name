@@ -40,26 +40,56 @@ export function findBubble(page: Page, bubbleId: ID): Found | undefined {
 }
 
 /**
- * コマ panelId のコマ内座標 pos に、createBubble の既定値のフキダシを足す Patch と、その id。
- * order はコマ内の最大の次。pageSize（mm）を渡すとコマの枠に収める。コマが無ければ null
+ * コマ panel のコマ内座標 pos を中心に置く新しいフキダシ。size を省くと createBubble の既定の大きさ。
+ * order はコマ内の最大の次。pageSize（mm）を渡すとコマの枠に収める
+ */
+export function newBubble(
+  panel: Panel,
+  pos: Point,
+  pageSize?: BubbleFrame['pageSize'],
+  size?: Bubble['size'],
+): Bubble {
+  const created = createBubble({
+    pos: roundPoint(pos),
+    order: Math.max(0, ...panel.bubbles.map((b) => b.order)) + 1,
+    ...(size && { size }),
+  })
+  return pageSize ? fitBubble(created, { panel, pageSize }) : created
+}
+
+/**
+ * コマ panelId に newBubble を足す Patch と、その id。コマが無ければ null
  */
 export function createBubblePatch(
   page: Page,
   panelId: ID,
   pos: Point,
   pageSize?: BubbleFrame['pageSize'],
+  size?: Bubble['size'],
 ): { patch: Patch; id: ID } | null {
   const i = page.panels.findIndex((p) => p.id === panelId)
   const panel = page.panels[i]
   if (!panel) return null
-  const created = createBubble({
-    pos: roundPoint(pos),
-    order: Math.max(0, ...panel.bubbles.map((b) => b.order)) + 1,
-  })
-  const bubble = pageSize ? fitBubble(created, { panel, pageSize }) : created
+  const bubble = newBubble(panel, pos, pageSize, size)
   return {
     patch: [{ op: 'add', path: `/panels/${i}/bubbles/${panel.bubbles.length}`, value: bubble }],
     id: bubble.id,
+  }
+}
+
+/**
+ * コマ内座標の 2 点 a、b を対角にした外接矩形の中心と大きさ。点はコマ内座標の 0..1 に収め、
+ * 幅と高さは MIN_BUBBLE_SIZE 以上
+ */
+export function spannedRect(a: Point, b: Point): { pos: Point; size: Bubble['size'] } {
+  const p = roundPoint(a)
+  const q = roundPoint(b)
+  return {
+    pos: roundPoint({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }),
+    size: {
+      w: round(Math.max(MIN_BUBBLE_SIZE, Math.abs(p.x - q.x))),
+      h: round(Math.max(MIN_BUBBLE_SIZE, Math.abs(p.y - q.y))),
+    },
   }
 }
 
@@ -176,6 +206,28 @@ if (import.meta.vitest) {
     expect(resizedBubble(bubble, 'se', { x: 1, y: 0.6 })).toMatchObject({
       pos: { x: 0.65, y: 0.5 },
       size: { w: 0.7, h: 0.2 },
+    })
+  })
+
+  test('createBubblePatch takes the size of the new bubble', () => {
+    const created = createBubblePatch(page, 'pn_3', { x: 0.5, y: 0.5 }, undefined, {
+      w: 0.4,
+      h: 0.1,
+    })
+    expect((created?.patch[0] as { value: Bubble } | undefined)?.value.size).toEqual({
+      w: 0.4,
+      h: 0.1,
+    })
+  })
+
+  test('spannedRect spans two corners in any order, inside the panel and at least the minimum size', () => {
+    expect(spannedRect({ x: 0.6, y: 0.2 }, { x: 0.2, y: 0.4 })).toEqual({
+      pos: { x: 0.4, y: 0.3 },
+      size: { w: 0.4, h: 0.2 },
+    })
+    expect(spannedRect({ x: -0.2, y: 0.5 }, { x: 0.4, y: 0.51 })).toEqual({
+      pos: { x: 0.2, y: 0.505 },
+      size: { w: 0.4, h: MIN_BUBBLE_SIZE },
     })
   })
 

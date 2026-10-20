@@ -1,0 +1,9 @@
+.back {
+  font-size: var(--text-s);
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--text);
+}
