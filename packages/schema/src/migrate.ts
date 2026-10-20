@@ -34,7 +34,7 @@ function cameraToEnum(panel: Json): Json {
   return { ...rest, note }
 }
 
-/** v17 の 1 本だけの Bubble.tail を v18 の Bubble.tails の 1 本目にする */
+/** v19 の 1 本だけの Bubble.tail を v20 の Bubble.tails の 1 本目にする */
 function tailToTails(bubble: Json): Json {
   if (!Object.hasOwn(bubble, 'tail')) return bubble
   const { tail, ...rest } = bubble
