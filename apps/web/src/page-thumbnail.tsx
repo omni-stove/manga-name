@@ -2,6 +2,7 @@ import { m } from '@manga/i18n'
 import {
   currentArt,
   hasFrameLine,
+  OVERLAY_COLORS,
   type Page,
   type Panel,
   type ProjectSettings,
@@ -106,7 +107,7 @@ const outlinePoints = (panel: Panel, w: number, h: number) =>
     .map((p) => `${p.x * w},${p.y * h}`)
     .join(' ')
 
-/** ページのコマ割りを紙面（見開きなら 2 ページ分）の縦横比で描き、黒い地のページは紙を黒くする。絵が選ばれたコマは、`resolveAsset` で読めればその絵を、読めなければ塗りを描く */
+/** ページのコマ割りを紙面（見開きなら 2 ページ分）の縦横比で描き、黒い地のページは紙を黒くし、紙面全体のトーンを重ねる。絵が選ばれたコマは、`resolveAsset` で読めればその絵を、読めなければ塗りを描く */
 export function PageThumbnail({
   page,
   pageSize,
@@ -150,6 +151,9 @@ export function PageThumbnail({
           />
         </g>
       ))}
+      {page.overlay && (
+        <rect width={w} height={h} fill={OVERLAY_COLORS[page.overlay]} className={styles.overlay} />
+      )}
     </svg>
   )
 }

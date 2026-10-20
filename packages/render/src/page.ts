@@ -7,6 +7,7 @@ import {
   groundColor,
   hasFrameLine,
   innerFrameOf,
+  OVERLAY_COLORS,
   type Page,
   type Panel,
   paintOrder,
@@ -64,7 +65,7 @@ async function loadArt(
 
 /**
  * ページ 1 枚を PNG に合成する。同じ Page と同じアセットからは同じバイト列が出る。
- * 焦点、ベクトル、診断、参考画像、手描きは描かない。
+ * 紙面全体に重ねるトーンは、フキダシと間白まで描いた後に乗算で重ねる。焦点、ベクトル、診断、参考画像、手描きは描かない。
  */
 export async function renderPage(
   page: Page,
@@ -145,6 +146,14 @@ export async function drawPage(
 
   // はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く
   for (const panel of panels) drawBubbles(panel, true)
+
+  if (page.overlay) {
+    c.save()
+    c.globalCompositeOperation = 'multiply'
+    c.fillStyle = OVERLAY_COLORS[page.overlay]
+    c.fillRect(pageRect.x, pageRect.y, pageRect.w, pageRect.h)
+    c.restore()
+  }
 
   if (margin > 0) {
     const area: PxRect = { x: marginOnLeft ? 0 : pageSize.w, y: 0, w: margin, h: pageSize.h }
@@ -413,9 +422,30 @@ if (import.meta.vitest) {
     expect(count(sepia.data, warm)).toBeGreaterThan(count(plain.data, warm))
   })
 
-  test('枠の種類: 角丸、波線、破線、二重線、ぼかしを黒い地とセピアのページで描く', async () => {
+  test('紙面全体のトーンはフキダシと間白を含む紙面の全画素に乗算で掛かり、指示メモの余白には掛からない', async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'margin', panelNumbers: false }
+    const plain = await pixels(await renderPage(emptyPage, noAssets, opts))
+    const toned = await pixels(await renderPage({ ...emptyPage, overlay: 'gray' }, noAssets, opts))
+    const gray = Number.parseInt(OVERLAY_COLORS.gray.slice(1, 3), 16)
+    let worst = 0
+    let white = 0
+    for (let y = 0; y < plain.height; y++) {
+      for (let x = 0; x < SNAPSHOT_WIDTH; x++) {
+        const i = (y * plain.width + x) * 4
+        const before = plain.data[i] ?? 0
+        if (before === 255) white++
+        worst = Math.max(worst, Math.abs((toned.data[i] ?? 0) - (before * gray) / 255))
+      }
+    }
+    expect(white).toBeGreaterThan(0)
+    expect(worst).toBeLessThanOrEqual(1)
+    const margin = (Math.round(plain.height / 2) * plain.width + plain.width - 2) * 4
+    expect(toned.data[margin]).toBe(255)
+  })
+
+  test('枠の種類: 角丸、波線、破線、二重線、ぼかし、雲形を黒い地とセピアのページで描く', async () => {
     const { page, ctx } = withArts()
-    const frames = ['round', 'wavy', 'dashed', 'double', 'soft'] as const
+    const frames = ['round', 'wavy', 'dashed', 'double', 'soft', 'cloud'] as const
     const styled: Page = {
       ...page,
       ground: 'black',

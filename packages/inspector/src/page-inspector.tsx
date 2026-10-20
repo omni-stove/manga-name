@@ -48,6 +48,17 @@ export function PageInspector({
             )
           }
         />
+        <Checkbox
+          label={m.page_overlay_gray()}
+          checked={page.overlay === 'gray'}
+          onChange={(e) =>
+            onChange(
+              e.target.checked
+                ? [{ op: 'add', path: '/overlay', value: 'gray' }]
+                : [{ op: 'remove', path: '/overlay' }],
+            )
+          }
+        />
         <SelectField
           label={m.page_tone()}
           value={page.tone ?? ''}
@@ -234,6 +245,23 @@ if (import.meta.vitest) {
       expect(onPickReference).toHaveBeenCalledTimes(1)
       await act(async () => buttonNamed(container, m.remove()).click())
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/reference' }])
+    })
+
+    test('the overlay checkbox adds and removes the gray overlay', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = { onChange, onGenerateAll: () => {}, onPickReference: () => {} }
+      const { container, root } = await render(<PageInspector page={page} {...props} />)
+      const overlay = () => must(checkboxNamed(container, m.page_overlay_gray()))
+      expect(overlay().checked).toBe(false)
+      await act(async () => overlay().click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/overlay', value: 'gray' }])
+
+      await act(async () =>
+        root.render(<PageInspector page={{ ...page, overlay: 'gray' }} {...props} />),
+      )
+      expect(overlay().checked).toBe(true)
+      await act(async () => overlay().click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/overlay' }])
     })
 
     test('the ground checkbox and the tone select patch ground and tone', async () => {

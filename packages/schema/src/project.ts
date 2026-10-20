@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 15 as const
+export const SCHEMA_VERSION = 16 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -95,10 +95,18 @@ export const FocusPointSchema = z.object({
 
 /**
  * コマの枠線。none は枠線を引かず、他のコマを上に重ねる下敷きの大ゴマにもなる。
- * round（角丸）、wavy（波線）、soft（ぼかし）は回想・夢、dashed（破線）、double（二重線）は過去や画面の中に使う。
+ * round（角丸）、wavy（波線）、soft（ぼかし）は回想・夢、cloud（雲形）は空想や夢想、dashed（破線）、double（二重線）は過去や画面の中に使う。
  * soft は枠線を引かず、絵の縁を紙の地の色へぼかす。画面には messages/schema の `panel_frame_<値>` で出す
  */
-export const PanelFrameSchema = z.enum(['none', 'round', 'wavy', 'dashed', 'double', 'soft'])
+export const PanelFrameSchema = z.enum([
+  'none',
+  'round',
+  'wavy',
+  'dashed',
+  'double',
+  'soft',
+  'cloud',
+])
 /** コマの絵に掛ける色調。sepia は茶色、faded は色を抜いて薄くし、回想に使う。画面には `page_tone_<値>` で出す */
 export const PageToneSchema = z.enum(['sepia', 'faded'])
 
@@ -217,6 +225,8 @@ const PageBaseSchema = z.object({
   ground: z.enum(['black']).optional(),
   /** コマの絵に掛ける色調。フキダシと枠には掛けない。省略は生成したままの色 */
   tone: PageToneSchema.optional(),
+  /** 紙面全体に重ねるトーン。gray はフキダシと間白も含めて灰色を乗算で重ね、回想のページに使う。省略は重ねない */
+  overlay: z.enum(['gray']).optional(),
   panels: z.array(PanelSchema),
   reference: ReferenceImageSchema.optional(),
   scribbles: z.array(StrokeSchema),

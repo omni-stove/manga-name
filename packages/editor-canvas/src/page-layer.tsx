@@ -11,6 +11,7 @@ import {
   hasFrameLine,
   type ID,
   innerFrameOf,
+  OVERLAY_COLORS,
   type Page,
   type Panel,
   type Point,
@@ -59,7 +60,7 @@ interface PageLayerProps {
 }
 
 /**
- * ページの白地、参考画像、コマ、生成画像、フキダシを描く。ズームとパンとドラッグでは props が変わらないので、
+ * ページの白地、参考画像、コマ、生成画像、フキダシと、紙面全体に重ねるトーンを描く。ズームとパンとドラッグでは props が変わらないので、
  * memo で再描画を飛ばす。コマ、フキダシ、オーバーレイもそれぞれ memo し、編集や選択の変更では
  * 変わった要素だけを描き直す
  */
@@ -139,6 +140,17 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
             selected={isSelected(props.selection, 'bubble', bubble.id)}
           />
         )),
+      )}
+      {page.overlay && (
+        <rect
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          fill={OVERLAY_COLORS[page.overlay]}
+          data-overlay={page.overlay}
+          style={{ mixBlendMode: 'multiply', pointerEvents: 'none' }}
+        />
       )}
       {/* スピナーと生成ボタンはエディタだけの UI なので、フキダシに隠れないよう最後に描く */}
       {panels.map((panel) => (

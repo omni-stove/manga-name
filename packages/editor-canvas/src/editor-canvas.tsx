@@ -761,7 +761,7 @@ if (import.meta.vitest) {
     })
 
     test('frame styles shape the outline, dash or double the line, and soften the edge', async () => {
-      const frames = ['round', 'wavy', 'dashed', 'double', 'soft'] as const
+      const frames = ['round', 'wavy', 'dashed', 'double', 'soft', 'cloud'] as const
       const page = {
         ...samplePage,
         panels: samplePage.panels.map((p, i) => (frames[i] ? { ...p, frame: frames[i] } : p)),
@@ -772,11 +772,22 @@ if (import.meta.vitest) {
       const corners = (id: string) => frameOf(id).getAttribute('points')?.split(' ').length
       expect(corners('pn_1')).toBeGreaterThan(4)
       expect(corners('pn_2')).toBeGreaterThan(4)
-      expect(corners('pn_6')).toBe(4)
       expect(frameOf('pn_3').getAttribute('stroke-dasharray')).toBe('6 3')
       expect(frameOf('pn_4').getAttribute('stroke-width')).toBe('3')
       expect(frameOf('pn_5').style.stroke).toBe('var(--guide)')
       expect(svg.querySelector('[data-panel-id="pn_5"] [data-soft-edge]')).not.toBeNull()
+      expect(corners('pn_6')).toBeGreaterThan(4)
+    })
+
+    test('a page overlay multiplies a gray rect over the whole page above the bubbles', async () => {
+      expect((await render({})).querySelector('[data-overlay]')).toBeNull()
+      const svg = await render({ page: { ...samplePage, overlay: 'gray' } })
+      const overlay = must(svg.querySelector<SVGElement>('[data-overlay="gray"]'))
+      expect(overlay.style.mixBlendMode).toBe('multiply')
+      const bubble = must(svg.querySelector('[data-bubble-id]'))
+      expect(
+        bubble.compareDocumentPosition(overlay) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
     })
 
     test('the selected panel gets a guide-coloured frame', async () => {
