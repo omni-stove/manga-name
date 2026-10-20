@@ -9,6 +9,7 @@ import {
   type ID,
   type Panel,
   type PanelArt,
+  PanelEffectSchema,
   PanelFrameSchema,
   PanelSchema,
   type Patch,
@@ -44,7 +45,14 @@ const FRAMES: readonly { value: NonNullable<Panel['frame']> | ''; label: string 
   ...PanelFrameSchema.options.map((frame) => option(frame, m[`panel_frame_${frame}` as const])),
 ]
 
-const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
+const EFFECTS: readonly { value: NonNullable<Panel['effect']> | ''; label: string }[] = [
+  option('', m.none),
+  ...PanelEffectSchema.options.map((effect) =>
+    option(effect, m[`panel_effect_${effect}` as const]),
+  ),
+]
+
+const isOrder =(n: number) => PanelSchema.shape.order.safeParse(n).success
 
 /** `arts` の中から選ぶ。`artId` が無ければ add、あれば replace */
 function selectArtPatch(artId: ID | undefined, next: ID): Patch {
@@ -123,6 +131,12 @@ export function PanelInspector({
         value={panel.frame ?? ''}
         options={FRAMES}
         onCommit={(v) => onChange(optionalString('/frame', panel.frame, v))}
+      />
+      <SelectField
+        label={m.panel_effect()}
+        value={panel.effect ?? ''}
+        options={EFFECTS}
+        onCommit={(v) => onChange(optionalString('/effect', panel.effect, v))}
       />
       <CastSection panel={panel} characters={characters} onChange={onChange} />
       {diagnosis && !diagnosis.bubbleOrderOk && (
@@ -614,6 +628,36 @@ if (import.meta.vitest) {
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/frame', value: 'wavy' }])
       await choose(select(), '')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/frame' }])
+    })
+
+    test('the effect select adds, replaces and removes effect', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = {
+        characters: project.characters,
+        onChange,
+        onGenerate: () => {},
+        resolveAsset,
+      }
+      const { container, root } = await render(<PanelInspector panel={samplePanel} {...props} />)
+      const select = () => selectLabelled(container, m.panel_effect())
+      expect(select().value).toBe('')
+      await choose(select(), 'focus_lines')
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'add', path: '/effect', value: 'focus_lines' },
+      ])
+
+      await act(async () =>
+        root.render(
+          <PanelInspector panel={{ ...samplePanel, effect: 'focus_lines' }} {...props} />,
+        ),
+      )
+      expect(select().value).toBe('focus_lines')
+      await choose(select(), 'speed_lines')
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'add', path: '/effect', value: 'speed_lines' },
+      ])
+      await choose(select(), '')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/effect' }])
     })
 
     test('the generate buttons call onGenerate with and without an instruction', async () => {

@@ -7,6 +7,8 @@ import {
   clipTextBox,
   cornerAnchor,
   currentArt,
+  effectInk,
+  effectLines,
   frameOutline,
   groundColor,
   hasFrameLine,
@@ -200,6 +202,10 @@ function frameDash(frame: Panel['frame'], selected: boolean): string | undefined
   return hasFrameLine(frame) ? undefined : '4 3'
 }
 
+/** 効果線の多角形の列を、1 つの path の d 属性にする */
+const effectPath = (lines: readonly (readonly PagePoint[])[]): string =>
+  lines.map((line) => `M${line.map((p) => `${p.x},${p.y}`).join('L')}Z`).join('')
+
 const isSelected = (selection: Selection, kind: 'panel' | 'bubble', id: ID) =>
   selection?.kind === kind && selection.id === id
 
@@ -272,6 +278,14 @@ const PanelView = memo(function PanelView({
             loaded={loadAsset(resolveAsset, artRef)}
           />
         </Suspense>
+      )}
+      {panel.effect && (
+        <path
+          d={effectPath(effectLines(panel, rect, unit))}
+          fill={effectInk(panel)}
+          clipPath={`url(#${clipId})`}
+          data-panel-effect={panel.effect}
+        />
       )}
       {panel.frame === 'soft' && (
         <g clipPath={`url(#${clipId})`} data-soft-edge="">
