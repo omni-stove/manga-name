@@ -139,6 +139,7 @@
   "web_editor_paste_no_panel": "フキダシ・焦点・ベクトルを貼り付けるコマがありません",
   "web_editor_paste_nothing": "クリップボードに貼り付けられる要素がありません",
   "web_editor_clipboard_failed": "クリップボードを使えません: {reason}",
+  "web_canvas_menu_panel_move": "選択して動かす",
   "web_canvas_menu_panel_resize": "サイズ・形を変える",
   "web_canvas_menu_panel_split_vertical": "左右に分割",
   "web_canvas_menu_panel_split_horizontal": "上下に分割",
