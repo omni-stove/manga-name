@@ -734,6 +734,19 @@ if (import.meta.vitest) {
       expect(text.getAttribute('fill')).toBe('#fff')
     })
 
+    test('dialogue is set in the typeface of the shape unless the bubble names one', async () => {
+      const textOf = (svg: SVGSVGElement) =>
+        must(svg.querySelector('[data-bubble-id="bb_3"] text[writing-mode]'))
+      const narration = textOf(await render({ page: withBubble3({ shape: 'narration' }) }))
+      expect(narration.getAttribute('font-family')).toContain('Noto Serif JP')
+      const shout = textOf(await render({ page: withBubble3({ shape: 'shout' }) }))
+      expect(shout.getAttribute('font-weight')).toBe('700')
+      const named = textOf(
+        await render({ page: withBubble3({ shape: 'narration', typeface: 'rounded' }) }),
+      )
+      expect(named.getAttribute('font-family')).toContain('M PLUS Rounded 1c')
+    })
+
     test('a borderless panel is drawn first with a dashed guide outline, and framed panels get a white ground', async () => {
       const [pn1, ...rest] = samplePage.panels as [Panel, ...Panel[]]
       const background = { ...pn1, id: 'pn_bg', order: 99, frame: 'none' as const }

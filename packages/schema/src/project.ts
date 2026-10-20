@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 15 as const
+export const SCHEMA_VERSION = 16 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -43,6 +43,12 @@ export const CharacterSchema = z.object({
 
 const order = z.number().int().min(1)
 
+/**
+ * セリフの書体。gothic はゴシック、bold は太ゴシック、mincho は明朝、rounded は丸ゴシック。
+ * 画面には messages/schema の `bubble_typeface_<値>` で出す
+ */
+export const BubbleTypefaceSchema = z.enum(['gothic', 'bold', 'mincho', 'rounded'])
+
 export const BubbleSchema = z.object({
   id: IdSchema,
   order,
@@ -62,6 +68,8 @@ export const BubbleSchema = z.object({
   pos: PointSchema,
   size: SizeSchema,
   tail: PointSchema.optional(),
+  /** 省略は形に合わせる（bubbleTypeface） */
+  typeface: BubbleTypefaceSchema.optional(),
   overflow: z.boolean().optional(),
   locked: z.boolean().optional(),
 })
