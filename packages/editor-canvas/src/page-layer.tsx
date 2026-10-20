@@ -2,6 +2,7 @@ import { m } from '@manga/i18n'
 import {
   BUBBLE_DASH,
   type Bubble,
+  blackPanel,
   bubbleTextBox,
   bubbleTypeface,
   clipTextBox,
@@ -35,15 +36,15 @@ import {
 import { memo, Suspense, use, useState } from 'react'
 import { type AssetState, loadAsset } from './asset'
 import { type Box, bubbleGeometry, bubblePaths } from './bubble-shape'
-import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
-import type { Selection } from './types'
 import {
   EMPHASIS_MARK,
+  layoutText,
   layoutUnbroken,
-  layoutVertical,
   RUBY_SCALE,
-  type VerticalLayout,
-} from './vertical-text'
+  type TextLayout,
+} from './bubble-text'
+import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
+import type { Selection } from './types'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
 /**
@@ -287,7 +288,7 @@ const PanelView = memo(function PanelView({
       <clipPath id={clipId}>
         <polygon points={points} />
       </clipPath>
-      {panel.fill === 'black' ? (
+      {blackPanel(panel) ? (
         <polygon points={points} fill="#000" data-panel-fill="black" />
       ) : (
         opaque && <polygon points={points} fill="#fff" data-panel-fill="white" />
@@ -353,7 +354,7 @@ const PanelView = memo(function PanelView({
           frame={frame}
           selected={bubble.id === selectedBubble}
           clipId={clipId}
-          onBlack={panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')}
+          onBlack={blackPanel(panel) || (panel.frame === 'none' && ground === '#000')}
         />
       ))}
       {/* 枠線を引かないコマは出力に枠線が出ないが、選んで動かせるよう作業用の点線で輪郭を見せる */}
@@ -725,7 +726,7 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
 
 /**
  * フキダシ。太線で輪郭を描いてから同じ形を地の色（黒フキダシは黒、他は白）で塗り重ね、本体としっぽの継ぎ目の線を消す。
- * 黒フキダシのセリフは白で描く。
+ * 黒フキダシのセリフは白で描く。セリフは縦書きで、writing が horizontal なら横書きでルビを上に振る。
  * 外側に残る線は太線の半分になる。枠なしは何も描かない代わりに、選択していなくても薄い破線で範囲を示す。
  * clipId を渡すと、輪郭と文字をその clipPath で切る。フキダシは内枠の外に出てよいが、セリフは断裁で
  * 切れないよう内枠の内側に寄せる
@@ -748,7 +749,7 @@ const BubbleView = memo(function BubbleView({
   frame: Rect
   selected: boolean
   clipId?: string
-  /** 黒塗りのコマの中。白い地を持たないフキダシのセリフを白で描く */
+  /** 黒い地のコマの中。白い地を持たないフキダシのセリフを白で描く */
   onBlack?: boolean
 }) {
   const panel = panelBox({ rect: panelRect }, width, height)
@@ -759,14 +760,14 @@ const BubbleView = memo(function BubbleView({
     clipId ? clipTextBox(text, panel) : text,
     panelBox({ rect: frame }, width, height),
   )
-  const layout = layoutVertical(bubble.text, box)
+  const horizontal = bubble.writing === 'horizontal'
+  const layout = layoutText(bubble.text, box, bubble.writing)
   const black = paths.fill && bubble.fill === 'black'
   const paper = black ? '#000' : '#fff'
   const ink = black || (onBlack && !paths.fill) ? '#fff' : '#000'
   const typeface = bubbleTypeface(bubble)
   const shapes = [...paths.tails, paths.body]
-  const illegible =
-    layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
+  const illegible = layout.lines.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
     <g
       className="ec-bubble"
@@ -774,6 +775,7 @@ const BubbleView = memo(function BubbleView({
       data-shape={bubble.shape}
       data-typeface={typeface}
       data-bubble-fill={black ? 'black' : undefined}
+      data-writing={horizontal ? 'horizontal' : undefined}
     >
       <g clipPath={clipId && `url(#${clipId})`}>
         {paths.line !== 'none' &&
@@ -800,11 +802,12 @@ const BubbleView = memo(function BubbleView({
             <path key={`fill-${i}`} d={d} fill={paper} />
           ))}
         {paths.ink !== null && <path d={paths.ink} fill="#000" />}
-        <VerticalText
+        <TextBlock
           layout={layout}
           cx={box.x + box.w / 2}
           cy={box.y + box.h / 2}
           typeface={typeface}
+          horizontal={horizontal}
           fill={ink}
         />
       </g>
@@ -849,31 +852,32 @@ const BubbleView = memo(function BubbleView({
 })
 
 /**
- * 組んだ縦書きを、中心 (cx, cy) に右の列から左へ置く。ルビは親文字の右に置く。
- * halo を渡すと、その色と太さ（mm）のふちを字の下に敷く
+ * 組んだセリフを中心 (cx, cy) に置く。縦書きは右の列から左へ、horizontal なら上の行から下へ、行を中央に揃えて置く。
+ * ルビと傍点は親文字の右（横書きでは上）に置く。halo を渡すと、その色と太さ（mm）のふちを字の下に敷く
  */
-function VerticalText({
+function TextBlock({
   layout,
   cx,
   cy,
   typeface,
   fill,
+  horizontal = false,
   halo,
 }: {
-  layout: VerticalLayout
+  layout: TextLayout
   cx: number
   cy: number
   typeface: NonNullable<Bubble['typeface']>
   fill: string
+  horizontal?: boolean
   halo?: { color: string; width: number }
 }) {
-  if (layout.columns.length === 0) return null
-  const right = cx + layout.width / 2
+  if (layout.lines.length === 0) return null
   const fs = layout.fontSize
   const rubySize = fs * RUBY_SCALE
   const font = TYPEFACES[typeface]
   const paint = {
-    writingMode: 'vertical-rl',
+    ...(horizontal ? { dominantBaseline: 'central' as const } : { writingMode: 'vertical-rl' }),
     fontFamily: font.family,
     fontWeight: font.weight,
     textAnchor: 'middle' as const,
@@ -885,52 +889,55 @@ function VerticalText({
       paintOrder: 'stroke',
     }),
   }
+  // 実際の字幅は測らず、行の長さは layoutText の見積もった字の幅の和とみなす
+  const right = cx + layout.thickness / 2
+  const top = cy - layout.thickness / 2
+  const center = (line: TextLayout['lines'][number]) =>
+    horizontal ? { x: cx, y: top + line.offset } : { x: right - line.offset, y: cy }
+  const at = (line: TextLayout['lines'][number], along: number, aside: number) => {
+    const c = center(line)
+    const from = (along - line.length / 2) * fs
+    return horizontal ? { x: c.x + from, y: c.y - aside } : { x: c.x + aside, y: c.y + from }
+  }
+  const besideBase = (fs + rubySize) / 2
   return (
     <>
-      <text {...paint} fontSize={fs} data-truncated={layout.truncated || undefined}>
-        {layout.columns.map((column, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
-          <tspan key={i} x={right - column.offset} y={cy}>
-            {column.text}
+      <text {...paint} fontSize={fs} data-dialogue data-truncated={layout.truncated || undefined}>
+        {layout.lines.map((line, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: 行は位置で決まり、同じ文字列の行も並びうる
+          <tspan key={i} {...center(line)}>
+            {line.text}
           </tspan>
         ))}
       </text>
-      {layout.columns.flatMap((column, i) => {
-        // 列は中央揃えで、字は 1 字が文字サイズ 1 つぶんの高さとみなす
-        const top = cy - (column.length * fs) / 2
-        return column.rubies.map((ruby) => (
+      {layout.lines.flatMap((line, i) =>
+        line.rubies.map((ruby) => (
           <text
-            // biome-ignore lint/suspicious/noArrayIndexKey: ルビは列と列の中の位置で決まる
+            // biome-ignore lint/suspicious/noArrayIndexKey: ルビは行と行の中の位置で決まる
             key={`${i}-${ruby.start}`}
             {...paint}
             fontSize={rubySize}
-            x={right - column.offset + (fs + rubySize) / 2}
-            y={top + (ruby.start + ruby.length / 2) * fs}
+            {...at(line, ruby.start + ruby.length / 2, besideBase)}
             data-ruby
           >
             {ruby.text}
           </text>
-        ))
-      })}
-      {layout.columns.flatMap((column, i) => {
-        const top = cy - (column.length * fs) / 2
-        const rows = column.emphases.flatMap(({ start, length }) =>
-          Array.from({ length }, (_, k) => start + k),
-        )
-        return rows.map((row) => (
+        )),
+      )}
+      {layout.lines.flatMap((line, i) =>
+        line.marks.map((mark) => (
           <text
-            // biome-ignore lint/suspicious/noArrayIndexKey: 傍点は列と列の中の位置で決まる
-            key={`${i}-${row}`}
+            // biome-ignore lint/suspicious/noArrayIndexKey: 傍点は行と行の中の位置で決まる
+            key={`${i}-${mark}`}
             {...paint}
             fontSize={rubySize}
-            x={right - column.offset + (fs + rubySize) / 2}
-            y={top + (row + 0.5) * fs}
+            {...at(line, mark, besideBase)}
             data-emphasis
           >
             {EMPHASIS_MARK}
           </text>
-        ))
-      })}
+        )),
+      )}
     </>
   )
 }
@@ -950,7 +957,7 @@ function SfxView({ focus, panel }: { focus: FocusPoint; panel: Box }) {
       transform={rotation === 0 ? undefined : `rotate(${rotation} ${cx} ${cy})`}
       pointerEvents="none"
     >
-      <VerticalText
+      <TextBlock
         layout={layoutUnbroken(focus.label, fontSize)}
         cx={cx}
         cy={cy}

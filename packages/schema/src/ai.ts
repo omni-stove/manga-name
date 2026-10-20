@@ -6,6 +6,7 @@ import {
   CharacterSchema,
   IdSchema,
   PageSchema,
+  PanelActingSchema,
   ProjectBaseSchema,
 } from './project'
 
@@ -86,6 +87,8 @@ export const NamePanelSchema = z.object({
   camera: CameraSchema.optional(),
   /** このコマのセリフ。読む順。Bubble になる */
   lines: z.array(PlanLineSchema),
+  /** 登場キャラの芝居。Panel.acting になる */
+  acting: z.array(PanelActingSchema.extend({ text: z.string().min(1) })).optional(),
 })
 
 /** ネームの書き起こしの応答。1 ページの脚本を読む順のコマに割ったもの */
@@ -98,6 +101,7 @@ export const NameDraftSchema = z.array(
   NamePanelSchema.extend({
     note: z.string(),
     lines: z.array(PlanLineSchema.extend({ text: z.string() })),
+    acting: z.array(PanelActingSchema).optional(),
   }),
 )
 
@@ -168,10 +172,21 @@ if (import.meta.vitest) {
       { panels: Array.from({ length: MAX_NAME_PANELS + 1 }, () => panel) },
       { panels: [{ ...panel, note: '' }] },
       { panels: [{ ...panel, camera: '' }] },
+      { panels: [{ ...panel, acting: [{ characterId: 'chr_e', text: '' }] }] },
     ]
     for (const res of invalid) expect(NameDraftResponseSchema.safeParse(res).success).toBe(false)
+    const acting = [{ characterId: 'chr_e', text: '振り向く' }]
     expect(
-      NameDraftSchema.parse([{ note: '', lines: [{ text: '', shape: 'normal' }] }]),
+      NameDraftResponseSchema.parse({ panels: [{ ...panel, acting }] }).panels[0]?.acting,
+    ).toEqual(acting)
+    expect(
+      NameDraftSchema.parse([
+        {
+          note: '',
+          lines: [{ text: '', shape: 'normal' }],
+          acting: [{ characterId: 'chr_e', text: '' }],
+        },
+      ]),
     ).toHaveLength(1)
   })
 

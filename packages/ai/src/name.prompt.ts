@@ -9,7 +9,9 @@ export const transcribeNameSystem = (schema: JsonSchema) =>
     '- note: what the panel shows, in the language of the script: who does what, where, in one or two sentences.',
     '- camera: the shot. Omit it when the shot does not matter.',
     ...lineFields('in the panel'),
+    '- acting: for each listed character in the panel, the pose, gesture and expression that carry the beat, in the language of the script, as one short phrase. characterId: the id of the listed character. Leave out characters not listed, and omit acting when no listed character is in the panel.',
     '- Put every line of the script in exactly one panel, word for word; never drop, merge, shorten or paraphrase one.',
+    '- Current acting, when given, is what the author already wrote for the panels on the page: on the panel that shows the same beat, keep it word for word for the same character.',
     'JSON Schema:',
     JSON.stringify(schema),
   ].join('\n')

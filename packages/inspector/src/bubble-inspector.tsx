@@ -81,6 +81,17 @@ export function BubbleInspector({ bubble, characters, onChange }: BubbleInspecto
         onCommit={(v) => onChange(optionalString('/typeface', bubble.typeface, v))}
       />
       <Checkbox
+        label={m.bubble_writing_horizontal()}
+        checked={bubble.writing === 'horizontal'}
+        onChange={(e) =>
+          onChange(
+            e.target.checked
+              ? [{ op: 'add', path: '/writing', value: 'horizontal' }]
+              : [{ op: 'remove', path: '/writing' }],
+          )
+        }
+      />
+      <Checkbox
         label={m.bubble_fill_black()}
         checked={bubble.fill === 'black'}
         onChange={(e) =>
@@ -188,6 +199,30 @@ if (import.meta.vitest) {
       expect(checkbox.checked).toBe(true)
       await act(async () => checkbox.click())
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/fill' }])
+    })
+
+    test('the horizontal checkbox adds and removes writing', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const bubble = must(samplePanel.bubbles[0])
+      const props = { bubble, characters: project.characters, onChange }
+      const { container, root } = await render(<BubbleInspector {...props} />)
+      const checkbox = must(
+        [...container.querySelectorAll('label')]
+          .find((el) => el.textContent === m.bubble_writing_horizontal())
+          ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+      )
+      expect(checkbox.checked).toBe(false)
+      await act(async () => checkbox.click())
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'add', path: '/writing', value: 'horizontal' },
+      ])
+
+      await act(async () =>
+        root.render(<BubbleInspector {...props} bubble={{ ...bubble, writing: 'horizontal' }} />),
+      )
+      expect(checkbox.checked).toBe(true)
+      await act(async () => checkbox.click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/writing' }])
     })
 
     test('the typeface select names the typeface of the shape, and adds and removes typeface', async () => {

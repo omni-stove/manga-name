@@ -1,8 +1,8 @@
 import { type FocusPoint, type ID, type Page, type Patch, sfxFontSize } from '@manga/schema'
 import type { Box } from './bubble-shape'
+import { layoutUnbroken } from './bubble-text'
 import { findFocus } from './hint-ops'
 import type { PagePoint } from './hit-test'
-import { layoutUnbroken } from './vertical-text'
 
 /** Shift を押しながら回すときに吸い付く角度（度） */
 const SNAP_DEGREES = 15
@@ -20,11 +20,11 @@ export interface SfxFrame {
 export function sfxFrame(focus: FocusPoint, panel: Box): SfxFrame {
   const fontSize = sfxFontSize(focus, panel.w, panel.h)
   const layout = layoutUnbroken(focus.label, fontSize)
-  const rows = Math.max(0, ...layout.columns.map((c) => c.length))
+  const rows = Math.max(0, ...layout.lines.map((l) => l.length))
   return {
     cx: panel.x + focus.pos.x * panel.w,
     cy: panel.y + focus.pos.y * panel.h,
-    w: layout.width,
+    w: layout.thickness,
     h: rows * fontSize,
     rotation: focus.rotation ?? 0,
   }
