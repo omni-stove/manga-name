@@ -342,6 +342,26 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-typefaces', png)
   })
 
+  test('ルビと傍点: 傍点の中のルビ付きの語には傍点を打たず、対の無い《《は字のまま描く', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const texts = ['それは《《本当》》だ', '《《この|魔法《まほう》だ》》', '《《まだ']
+    const bubbles = texts.map((text, i) => ({
+      id: `bb_emphasis_${i}`,
+      order: i + 1,
+      text,
+      shape: 'none' as const,
+      pos: { x: 0.8 - i * 0.3, y: 0.5 },
+      size: { w: 0.2, h: 0.9 },
+    }))
+    const page: Page = { ...emptyPage, panels: [{ ...pn1, bubbles }, ...rest] }
+    const png = await renderPage(page, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-emphasis', png)
+  })
+
   test('黒塗りのコマは輪郭の内側を黒で塗り、地の無いフキダシのセリフを白で描く', async () => {
     const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
     const bubble = {

@@ -29,7 +29,7 @@ import { type AssetState, loadAsset } from './asset'
 import { type Box, bubbleGeometry, bubblePaths } from './bubble-shape'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
-import { layoutVertical, RUBY_SCALE } from './vertical-text'
+import { EMPHASIS_MARK, layoutVertical, RUBY_SCALE } from './vertical-text'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
 /**
@@ -753,6 +753,29 @@ const BubbleView = memo(function BubbleView({
                   data-ruby
                 >
                   {ruby.text}
+                </text>
+              ))
+            })}
+            {layout.columns.flatMap((column, i) => {
+              const top = box.y + box.h / 2 - (column.length * fs) / 2
+              const rows = column.emphases.flatMap(({ start, length }) =>
+                Array.from({ length }, (_, k) => start + k),
+              )
+              return rows.map((row) => (
+                <text
+                  // biome-ignore lint/suspicious/noArrayIndexKey: 傍点は列と列の中の位置で決まる
+                  key={`${i}-${row}`}
+                  writingMode="vertical-rl"
+                  fontFamily={font.family}
+                  fontWeight={font.weight}
+                  fontSize={rubySize}
+                  textAnchor="middle"
+                  fill={ink}
+                  x={right - column.offset + (fs + rubySize) / 2}
+                  y={top + (row + 0.5) * fs}
+                  data-emphasis
+                >
+                  {EMPHASIS_MARK}
                 </text>
               ))
             })}
