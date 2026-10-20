@@ -284,7 +284,10 @@ export async function startDesktopShell({ router, library }: DesktopShellOptions
             separator,
             {
               text: m.web_menu_script_window(),
-              action: run((reason) => m.web_menu_script_window_failed({ reason }), whenFocused(openScript)),
+              action: run(
+                (reason) => m.web_menu_script_window_failed({ reason }),
+                whenFocused(openScript),
+              ),
             },
             ...(isMac ? [separator, predefined('Fullscreen'), predefined('Minimize')] : []),
           ],
