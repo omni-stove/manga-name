@@ -28,6 +28,7 @@ import { HintsLayer } from './hints-layer'
 import { panelBox, panelPolygon, polygonPoints } from './hit-test'
 import { PageLayer } from './page-layer'
 import { PanelToolLayer } from './panel-tool-layer'
+import { SfxToolLayer } from './sfx-tool-layer'
 import type { EditorCanvasProps, Selection } from './types'
 import { useBubbleTool } from './use-bubble-tool'
 import { useHintTool } from './use-hint-tool'
@@ -73,7 +74,8 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * `bubble` ツールではコマのクリックでフキダシを作り、ドラッグで移動、隅のハンドルでリサイズ、
  * しっぽごとの先端のドラッグでそのしっぽを動かし、しっぽを足すハンドルのドラッグでしっぽを増やす。セリフは縦書きで、収まらなければ末尾を省略記号にする。
  * Patch はページ root 基準で `onChange` に 1 操作 1 回出し、Undo / Redo は持たない。
- * `focus` ツールではクリックで焦点を置き、ドラッグで動かす。`vector` ツールではドラッグでベクトルを作り、
+ * `focus` ツールではクリックで焦点を置き、ドラッグで動かし、選んだ描き文字を回転のハンドルのドラッグで傾ける。
+ * `vector` ツールではドラッグでベクトルを作り、
  * 終点（と始点）が焦点かフキダシの上なら `targetFocusId`（と `sourceFocusId`）を付ける。
  * `layers.frames` が立っていれば、タチキリ枠、外枠、内枠をコマの上に重ねる。
  * シーンの見出しを持つコマには、右綴じは左上、左綴じは右上に出力に出ない見出しを出す。
@@ -423,6 +425,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         draft={bubbleTool.draft ?? move.bubbleDraft}
         handleSize={bubbleTool.handleSize}
       />
+      <SfxToolLayer rotation={hintTool.rotation} handleSize={hintTool.handleSize} />
     </svg>
   )
 }
@@ -1077,6 +1080,48 @@ if (import.meta.vitest) {
       expect(later('[data-panel-id="pn_3"] > [data-panel-frame]')).toBeTruthy()
       // 焦点の印はヒントのレイヤーに残る
       expect(svg.querySelector('[data-focus-id="fp_sfx"]')).not.toBeNull()
+      // 傾けない描き文字は回さない
+      expect(lettering.getAttribute('transform')).toBeNull()
+    })
+
+    test('an sfx focus point letters with its own rotation, typeface and scale', async () => {
+      const panel = must(samplePage.panels.find((p) => p.id === 'pn_3'))
+      const focus = {
+        id: 'fp_sfx',
+        kind: 'sfx' as const,
+        label: 'ドン',
+        pos: { x: 0.25, y: 0.5 },
+        weight: 0,
+        rotation: -30,
+        typeface: 'hand' as const,
+        scale: 2,
+      }
+      const page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_3' ? { ...p, focusPoints: [...p.focusPoints, focus] } : p,
+        ),
+      }
+      const svg = await render({ page })
+      const { w, h } = project.settings.pageSize
+      const center = {
+        x: (panel.rect.x + panel.rect.w * 0.25) * w,
+        y: (panel.rect.y + panel.rect.h * 0.5) * h,
+      }
+      const lettering = must(svg.querySelector('[data-sfx-id="fp_sfx"]'))
+      const transform = must(lettering.getAttribute('transform'))
+      expect(transform).toMatch(/^rotate\(/)
+      const [angle, x, y] = transform
+        .replace(/^rotate\(|\)$/g, '')
+        .split(' ')
+        .map(Number)
+      expect(angle).toBe(-30)
+      expect(x).toBeCloseTo(center.x)
+      expect(y).toBeCloseTo(center.y)
+      const text = must(lettering.querySelector('text[writing-mode]'))
+      expect(text.getAttribute('font-family')).toContain('Yomogi')
+      const size = Math.min(panel.rect.w * w, panel.rect.h * h) * 0.08 * 2
+      expect(Number(text.getAttribute('font-size'))).toBeCloseTo(size)
     })
 
     test('the selected panel gets a guide-coloured frame', async () => {
@@ -2318,6 +2363,120 @@ if (import.meta.vitest) {
       fire(svg, pointer('pointerup', { id: 1, ...to }))
       expect(onChange).not.toHaveBeenCalled()
       expect(onSelect).not.toHaveBeenCalled()
+    })
+
+    describe('rotating an sfx lettering', () => {
+      const sfx = {
+        id: 'fp_sfx',
+        kind: 'sfx' as const,
+        label: 'ドン',
+        pos: { x: 0.5, y: 0.5 },
+        weight: 0.5,
+      }
+      const withSfx = (patch: Partial<Panel['focusPoints'][number]> = {}): Page => ({
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_5' ? { ...p, focusPoints: [...p.focusPoints, { ...sfx, ...patch }] } : p,
+        ),
+      })
+      const sfxIndex = must(samplePage.panels.find((p) => p.id === 'pn_5')).focusPoints.length
+      const selection = { kind: 'focus' as const, id: 'fp_sfx' }
+      const shownRotation = (svg: SVGSVGElement) =>
+        must(svg.querySelector('[data-layer="sfx-tool"]')).getAttribute('data-rotation')
+      /** 回転のハンドルの画面座標 */
+      const handleAt = (svg: SVGSVGElement) => {
+        const handle = must(svg.querySelector('[data-rotate-handle]'))
+        return {
+          x: (Number(handle.getAttribute('cx')) - base.x) * 2,
+          y: (Number(handle.getAttribute('cy')) - base.y) * 2,
+        }
+      }
+
+      test('the selected sfx lettering gets a rotation handle above it, only with the focus tool', async () => {
+        const svg = await render({ tool: 'focus', page: withSfx(), selection })
+        const handle = must(svg.querySelector('[data-rotate-handle]'))
+        const { rect } = must(samplePage.panels.find((p) => p.id === 'pn_5'))
+        const { w, h } = project.settings.pageSize
+        expect(Number(handle.getAttribute('cx'))).toBeCloseTo((rect.x + rect.w * 0.5) * w)
+        expect(Number(handle.getAttribute('cy'))).toBeLessThan((rect.y + rect.h * 0.5) * h)
+
+        const handleWith = async (overrides: Partial<EditorCanvasProps>) => {
+          const other = await render({ tool: 'focus', page: withSfx(), selection, ...overrides })
+          return other.querySelector('[data-rotate-handle]')
+        }
+        expect(await handleWith({ tool: 'select' })).toBeNull()
+        expect(await handleWith({ selection: { kind: 'focus', id: 'fp_5_e' } })).toBeNull()
+        expect(await handleWith({ page: withSfx({ label: ' ' }) })).toBeNull()
+        expect(await handleWith({ page: withSfx({ locked: true }) })).toBeNull()
+        expect(await handleWith({ layers: { ...defaults.layers, hints: false } })).toBeNull()
+      })
+
+      test('dragging the handle draws the turned frame, then tilts the lettering in one patch', async () => {
+        const onChange = vi.fn()
+        const onSelect = vi.fn()
+        const svg = await render({ tool: 'focus', page: withSfx(), selection, onChange, onSelect })
+        layout(svg)
+        const centre = inPanel('pn_5', 0.5, 0.5)
+        const to = { x: centre.x + 40, y: centre.y }
+        drag(svg, handleAt(svg), to, { release: false })
+        expect(shownRotation(svg)).toBe('90')
+        expect(onChange).not.toHaveBeenCalled()
+        fire(svg, pointer('pointerup', { id: 1, ...to }))
+        expect(onChange).toHaveBeenCalledTimes(1)
+        expect(patchOf(onChange)).toEqual([
+          { op: 'add', path: `/panels/4/focusPoints/${sfxIndex}/rotation`, value: 90 },
+        ])
+        expect(onSelect).not.toHaveBeenCalled()
+      })
+
+      test('Shift snaps to 15 degrees, and turning back upright removes the rotation', async () => {
+        const onChange = vi.fn()
+        const svg = await render({
+          tool: 'focus',
+          page: withSfx({ rotation: 40 }),
+          selection,
+          onChange,
+        })
+        layout(svg)
+        const centre = inPanel('pn_5', 0.5, 0.5)
+        const to = { x: centre.x + 40 * Math.sin(0.3), y: centre.y - 40 * Math.cos(0.3) }
+        fire(svg, pointer('pointerdown', { id: 1, ...handleAt(svg) }))
+        fire(svg, pointer('pointermove', { id: 1, ...to, shiftKey: true }))
+        expect(shownRotation(svg)).toBe('15')
+        const upright = { x: centre.x, y: centre.y - 40 }
+        fire(svg, pointer('pointermove', { id: 1, ...upright }))
+        fire(svg, pointer('pointerup', { id: 1, ...upright }))
+        expect(patchOf(onChange)).toEqual([
+          { op: 'remove', path: `/panels/4/focusPoints/${sfxIndex}/rotation` },
+        ])
+      })
+
+      test('turning the lettering and back to where it was makes no patch', async () => {
+        const onChange = vi.fn()
+        const svg = await render({ tool: 'focus', page: withSfx(), selection, onChange })
+        layout(svg)
+        const centre = inPanel('pn_5', 0.5, 0.5)
+        const upright = { x: centre.x, y: centre.y - 40 }
+        fire(svg, pointer('pointerdown', { id: 1, ...handleAt(svg) }))
+        fire(svg, pointer('pointermove', { id: 1, x: centre.x + 40, y: centre.y }))
+        fire(svg, pointer('pointermove', { id: 1, ...upright }))
+        expect(shownRotation(svg)).toBe('0')
+        fire(svg, pointer('pointerup', { id: 1, ...upright }))
+        expect(onChange).not.toHaveBeenCalled()
+      })
+
+      test('Escape cancels a rotation without a patch', async () => {
+        const onChange = vi.fn()
+        const svg = await render({ tool: 'focus', page: withSfx(), selection, onChange })
+        layout(svg)
+        const centre = inPanel('pn_5', 0.5, 0.5)
+        const to = { x: centre.x + 40, y: centre.y }
+        drag(svg, handleAt(svg), to, { release: false })
+        key(svg, { key: 'Escape' })
+        expect(shownRotation(svg)).toBe('0')
+        fire(svg, pointer('pointerup', { id: 1, ...to }))
+        expect(onChange).not.toHaveBeenCalled()
+      })
     })
 
     test('a vector drag draws a dashed draft, then creates one linked vector and selects it', async () => {

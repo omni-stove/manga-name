@@ -2,6 +2,7 @@
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "editor_canvas_bubble_tail_tip": "しっぽの先端",
   "editor_canvas_bubble_tail_drag": "ドラッグでしっぽを足す",
+  "editor_canvas_sfx_rotate": "ドラッグで描き文字を傾ける（Shift で 15° ずつ）",
   "editor_canvas_diagnosis_legend_sweep": "視線経路",
   "editor_canvas_diagnosis_legend_chain": "フキダシ順",
   "editor_canvas_diagnosis_legend_vector": "誘導線",
