@@ -60,14 +60,14 @@ interface LayoutSuggestionsProps {
 
 /**
  * 脚本からコマ割りまでを 2 段で提案する。
- * 「脚本からネームを書き起こす」でページの脚本を LlmProvider.transcribeName に送り、読む順のコマごとの描くもの、カメラ、
+ * 「脚本からネームを書き起こす」でページの脚本と今のコマの芝居を LlmProvider.transcribeName に送り、読む順のコマごとの描くもの、カメラ、
  * セリフを並べて、コマとセリフを足し引きし、セリフを隣のコマへ移して直せるようにする。
  * 「ネームを自分で書く」で空のコマ 1 つから書き始めることもでき、脚本が無くてもネームから先へ進める。
  * 直したネームはこのブラウザにページごとに残す。
  * 「脚本からコマ割りまで提案」は書き起こしたネームを直さずにそのままコマ割りの提案へ送る。描くものの空いたコマがあれば提案は送らない。
  * 「このネームでコマ割りを提案」でネームを LlmProvider.suggestLayout に送り、案ごとにネームを当てたコマ割りの縮図と狙いを並べる。
  * コマを足し引きすると、数の合わなくなった案は消す。
- * 「このコマ割りにする」でページのコマを案の枠にネームを当てたコマ（指示メモ、カメラ、フキダシつき）に置き換え、`source: 'ai'` の 1 手として入れる。
+ * 「このコマ割りにする」でページのコマを案の枠にネームを当てたコマ（指示メモ、カメラ、フキダシ、芝居つき）に置き換え、`source: 'ai'` の 1 手として入れる。
  * 今のコマに絵やフキダシがあれば確かめてから置き換え、位置をロックしたコマがあれば置き換えない。
  * ページを替えるときは key で作り直し、遅れて届いた応答は捨てる
  */
@@ -115,7 +115,7 @@ export function LayoutSuggestions({
     setApplyError(undefined)
     let panels: NamePanel[]
     try {
-      panels = (await llmProvider.transcribeName(nameRequest(project, script))).panels
+      panels = (await llmProvider.transcribeName(nameRequest(project, script, page))).panels
     } catch (e) {
       if (requestId.current === id) setTranscription({ status: 'error', error: e })
       return

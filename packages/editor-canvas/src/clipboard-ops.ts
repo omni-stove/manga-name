@@ -207,9 +207,11 @@ export function pastePatch(
   const base = `/panels/${i}`
 
   if (copied.kind === 'bubble') {
-    const { locked: _, joinedTo: _j, ...source } = opts.sameProject
-      ? copied.bubble
-      : withoutCharacters(copied.bubble)
+    const {
+      locked: _,
+      joinedTo: _j,
+      ...source
+    } = opts.sameProject ? copied.bubble : withoutCharacters(copied.bubble)
     const { dx, dy } = freeShift(
       (dx, dy) => panel.bubbles.some((b) => samePoint(b.pos, shifted(source.pos, dx, dy))),
       { x: 1, y: 1, at: source.pos },

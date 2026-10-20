@@ -304,7 +304,7 @@ if (import.meta.vitest) {
   })
 
   describe('joining bubbles', () => {
-    // pn_3（3 番目のコマ）に bb_3 の後ろで 3 つ足す
+    // pn_3（3 番目のコマ）に bb_3 の後ろで 3 つ足す。id は他のコマのフキダシ（bb_1 など）と重ねない
     const withBubbles = (...more: Partial<Bubble>[]): Page => ({
       ...page,
       panels: page.panels.map((p) =>
@@ -313,7 +313,7 @@ if (import.meta.vitest) {
               ...p,
               bubbles: [
                 ...p.bubbles,
-                ...more.map((b, i) => ({ ...bubble, id: `bb_${i}`, order: i + 2, ...b })),
+                ...more.map((b, i) => ({ ...bubble, id: `bj_${i}`, order: i + 2, ...b })),
               ],
             }
           : p,
@@ -323,31 +323,31 @@ if (import.meta.vitest) {
 
     test('joinCandidates are the other bubbles of the panel not in the same group', () => {
       const three = withBubbles({}, {}, {})
-      expect(ids(joinCandidates(three, 'bb_3'))).toEqual(['bb_0', 'bb_1', 'bb_2'])
-      const joined = withBubbles({ joinedTo: 'bb_3' }, {}, { joinedTo: 'bb_1' })
-      expect(ids(joinCandidates(joined, 'bb_3'))).toEqual(['bb_1', 'bb_2'])
-      // bb_0 も bb_2 もつなぎ先を持つので、互いにはつなげない
-      expect(ids(joinCandidates(joined, 'bb_0'))).toEqual(['bb_1'])
+      expect(ids(joinCandidates(three, 'bb_3'))).toEqual(['bj_0', 'bj_1', 'bj_2'])
+      const joined = withBubbles({ joinedTo: 'bb_3' }, {}, { joinedTo: 'bj_1' })
+      expect(ids(joinCandidates(joined, 'bb_3'))).toEqual(['bj_1', 'bj_2'])
+      // bj_0 も bj_2 もつなぎ先を持つので、互いにはつなげない
+      expect(ids(joinCandidates(joined, 'bj_0'))).toEqual(['bj_1'])
       expect(joinCandidates(page, 'bb_3')).toEqual([])
       expect(joinCandidates(page, 'nope')).toEqual([])
     })
 
     test('joinBubblesPatch gives joinedTo to the one without it', () => {
       const three = withBubbles({}, {}, {})
-      expect(joinBubblesPatch(three, 'bb_3', 'bb_1')).toEqual([
-        { op: 'add', path: '/panels/2/bubbles/0/joinedTo', value: 'bb_1' },
+      expect(joinBubblesPatch(three, 'bb_3', 'bj_1')).toEqual([
+        { op: 'add', path: '/panels/2/bubbles/0/joinedTo', value: 'bj_1' },
       ])
       const holding = withBubbles({}, { joinedTo: 'bb_3' }, {})
-      expect(joinBubblesPatch(holding, 'bb_1', 'bb_2')).toEqual([
-        { op: 'add', path: '/panels/2/bubbles/3/joinedTo', value: 'bb_1' },
+      expect(joinBubblesPatch(holding, 'bj_1', 'bj_2')).toEqual([
+        { op: 'add', path: '/panels/2/bubbles/3/joinedTo', value: 'bj_1' },
       ])
-      expect(joinBubblesPatch(holding, 'bb_1', 'bb_3')).toEqual([])
+      expect(joinBubblesPatch(holding, 'bj_1', 'bb_3')).toEqual([])
       expect(joinBubblesPatch(holding, 'bb_3', 'bb_6')).toEqual([])
     })
 
     test('detachBubblePatch removes its own joinedTo and those pointing to it', () => {
-      const chain = withBubbles({ joinedTo: 'bb_3' }, { joinedTo: 'bb_0' }, { joinedTo: 'bb_0' })
-      expect(detachBubblePatch(chain, 'bb_0')).toEqual([
+      const chain = withBubbles({ joinedTo: 'bb_3' }, { joinedTo: 'bj_0' }, { joinedTo: 'bj_0' })
+      expect(detachBubblePatch(chain, 'bj_0')).toEqual([
         { op: 'remove', path: '/panels/2/bubbles/1/joinedTo' },
         { op: 'remove', path: '/panels/2/bubbles/2/joinedTo' },
         { op: 'remove', path: '/panels/2/bubbles/3/joinedTo' },

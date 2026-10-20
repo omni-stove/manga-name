@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 26 as const
+export const SCHEMA_VERSION = 28 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -74,6 +74,8 @@ export const BubbleSchema = z.object({
   typeface: BubbleTypefaceSchema.optional(),
   /** フキダシの地の色。黒は体としっぽを黒で塗り、セリフを白で描く。地を持たない形（none）では無視する。省略は白 */
   fill: z.enum(['black']).optional(),
+  /** セリフの組み方向。横書きは左から右へ書き、上から下へ行を送る。省略は縦書き */
+  writing: z.enum(['horizontal']).optional(),
   /**
    * 細い首でつなぐ、同じコマのフキダシの id。同じ話者が間を置いて続けて喋るときに使う。
    * joinedTo で辿れるフキダシを 1 つの輪郭に描く（bubbleGroups）。首はこのフキダシの地の色と線で描く
@@ -129,10 +131,11 @@ export const PanelFrameSchema = z.enum([
   'cloud',
 ])
 /**
- * コマに描く効果線。focus_lines（集中線）は焦点へ向かう放射状の線、speed_lines（スピード線）は動きの向きに平行な線。
+ * コマに描く効果線。focus_lines（集中線）は焦点へ向かう放射状の線、speed_lines（スピード線）は動きの向きに平行な線、
+ * beta_flash（ベタフラ）はコマの地を黒で塗り、焦点から放射状に白い線を描くフラッシュ。
  * 画面には messages/schema の `panel_effect_<値>` で出す
  */
-export const PanelEffectSchema = z.enum(['focus_lines', 'speed_lines'])
+export const PanelEffectSchema = z.enum(['focus_lines', 'speed_lines', 'beta_flash'])
 /** コマの絵に掛ける色調。sepia は茶色、faded は色を抜いて薄くし、回想に使う。画面には `page_tone_<値>` で出す */
 export const PageToneSchema = z.enum(['sepia', 'faded'])
 /** コマの絵に掛ける色調。none はページに色調があってもそのコマには掛けない。画面には `panel_tone_<値>` で出す */
@@ -201,7 +204,7 @@ const PanelBaseSchema = z.object({
   order,
   rect: RectSchema,
   shape: z.array(PointSchema).min(3).optional(),
-  /** コマの地の色。黒は暗転や無音の間に使う。絵があれば絵が上に乗る */
+  /** コマの地の色。黒は暗転や無音の間に使う。絵があれば絵が上に乗る。effect が beta_flash のコマは省略でも黒い */
   fill: z.enum(['black']).optional(),
   /** 枠線。省略は実線の枠 */
   frame: PanelFrameSchema.optional(),

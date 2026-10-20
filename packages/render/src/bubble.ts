@@ -166,7 +166,10 @@ export function drawJoinedBubbles(
   }
   // 塗らない形は下の線を隠さないので、編集画面と同じく線を切り抜くのは塗る部分だけ
   const painted = items.filter((i) => i.o.fill).flatMap((i) => i.parts)
-  const box = bounds(items.flatMap((i) => i.parts.flat()), lineWidth * 4)
+  const box = bounds(
+    items.flatMap((i) => i.parts.flat()),
+    lineWidth * 4,
+  )
   for (const { o, parts } of items) {
     if (o.line === 'none') continue
     ctx.setLineDash(o.line === 'dashed' ? BUBBLE_DASH.map((d) => d * lineWidth) : [])
