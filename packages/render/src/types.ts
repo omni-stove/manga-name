@@ -26,5 +26,6 @@ export interface Surface {
 export interface Backend {
   createSurface(width: number, height: number): Surface
   decodeImage(blob: Blob): Promise<CanvasImageSource>
-  registerFont(family: string, url: URL): Promise<void>
+  /** `weight` は可変フォントの太さの範囲（CSS の font-weight の記法） */
+  registerFont(family: string, url: URL, weight?: string): Promise<void>
 }

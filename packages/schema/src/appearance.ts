@@ -88,7 +88,12 @@ function waveEdges(outline: readonly Point[], amplitude: number, wavelength: num
 function cloudEdges(outline: readonly Point[], height: number, length: number): Point[] {
   // 頂点の並びが時計回りか反時計回りかで、辺の左手の法線が内側か外側かが変わる
   const inward = signedArea(outline) > 0 ? 1 : -1
-  const inner = insetPolygon(outline, height * inward)
+  // 長さ 0 の辺は法線の向きが無く、内側へ寄せられない頂点が残って弧が輪郭の外へ出るので、重なった頂点を 1 つにする
+  const distinct = outline.filter((p, i) => {
+    const next = outline[(i + 1) % outline.length] as Point
+    return p.x !== next.x || p.y !== next.y
+  })
+  const inner = insetPolygon(distinct, height * inward)
   return inner.flatMap((a, i) => {
     const b = inner[(i + 1) % inner.length] as Point
     const dx = b.x - a.x

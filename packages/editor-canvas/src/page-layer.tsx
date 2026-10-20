@@ -3,6 +3,7 @@ import {
   BUBBLE_DASH,
   type Bubble,
   bubbleTextBox,
+  bubbleTypeface,
   clipTextBox,
   cornerAnchor,
   currentArt,
@@ -29,6 +30,22 @@ import type { Selection } from './types'
 import { layoutVertical, RUBY_SCALE } from './vertical-text'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
+/**
+ * セリフの書体ごとの字族と太さ。太さは書き出しの @manga/render と揃える。書き出しは同梱のフォントで描く。
+ * エディタは数 MB のフォントを読み込まずに開けるよう、入っていなければ OS の同じ系統の書体で代える
+ */
+const TYPEFACES: Record<NonNullable<Bubble['typeface']>, { family: string; weight: number }> = {
+  gothic: { family: FONT_FAMILY, weight: 400 },
+  bold: { family: FONT_FAMILY, weight: 700 },
+  mincho: {
+    family: '"Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", YuMincho, serif',
+    weight: 400,
+  },
+  rounded: {
+    family: '"M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", sans-serif',
+    weight: 400,
+  },
+}
 /** 選択やコマ番号など、出力に出ない作業用の色。値は @manga/ui の tokens.css が持つ */
 export const GUIDE = 'var(--guide)'
 const NOTE_COLOR = 'var(--note)'
@@ -650,11 +667,18 @@ const BubbleView = memo(function BubbleView({
   const fs = layout.fontSize
   const rubySize = fs * RUBY_SCALE
   const ink = onBlack && !paths.fill ? '#fff' : '#000'
+  const typeface = bubbleTypeface(bubble)
+  const font = TYPEFACES[typeface]
   const shapes = paths.tail === null ? [paths.body] : [paths.tail, paths.body]
   const illegible =
     layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
-    <g className="ec-bubble" data-bubble-id={bubble.id} data-shape={bubble.shape}>
+    <g
+      className="ec-bubble"
+      data-bubble-id={bubble.id}
+      data-shape={bubble.shape}
+      data-typeface={typeface}
+    >
       <g clipPath={clipId && `url(#${clipId})`}>
         {paths.line !== 'none' &&
           shapes.map((d) => (
@@ -679,7 +703,8 @@ const BubbleView = memo(function BubbleView({
           <>
             <text
               writingMode="vertical-rl"
-              fontFamily={FONT_FAMILY}
+              fontFamily={font.family}
+              fontWeight={font.weight}
               fontSize={fs}
               textAnchor="middle"
               fill={ink}
@@ -700,7 +725,8 @@ const BubbleView = memo(function BubbleView({
                   // biome-ignore lint/suspicious/noArrayIndexKey: ルビは列と列の中の位置で決まる
                   key={`${i}-${ruby.start}`}
                   writingMode="vertical-rl"
-                  fontFamily={FONT_FAMILY}
+                  fontFamily={font.family}
+                  fontWeight={font.weight}
                   fontSize={rubySize}
                   textAnchor="middle"
                   fill={ink}

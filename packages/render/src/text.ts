@@ -1,5 +1,5 @@
-import { parseRuby, type Size } from '@manga/schema'
-import { FONT_FAMILY } from './backend'
+import { type Bubble, parseRuby, type Size } from '@manga/schema'
+import { typefaceFont } from './backend'
 import type { PxRect } from './geometry'
 
 /** 行（縦書きの 1 列）の間隔。文字サイズに対する比率 */
@@ -188,19 +188,23 @@ function drawGlyph(
   }
 }
 
-/** 行割り済みの縦書きを、箱の中央に右の行から左へ color で描く。ルビは親文字の右に、親文字の長さの中央に揃えて置く */
+/**
+ * 行割り済みの縦書きを、箱の中央に右の行から左へ color と typeface で描く。
+ * ルビは親文字の右に、親文字の長さの中央に揃えて同じ書体で置く
+ */
 export function drawVerticalText(
   ctx: CanvasRenderingContext2D,
   lines: TextUnit[][],
   fontPx: number,
   box: PxRect,
   color = '#000',
+  typeface: NonNullable<Bubble['typeface']> = 'gothic',
 ): void {
   ctx.save()
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = color
-  const font = (px: number) => `${px}px "${FONT_FAMILY}"`
+  const font = (px: number) => typefaceFont(typeface, px)
   const rubyPx = fontPx * RUBY_SCALE
   let right = box.x + box.w / 2 + blockWidth(lines, fontPx) / 2
   for (const line of lines) {
@@ -355,6 +359,28 @@ if (import.meta.vitest) {
     drawVerticalText(ctx, lines, 10, { x: 0, y: 0, w: 30, h: 30 })
     expect(placed.map((p) => p.text)).toEqual(['魔', 'ま'])
     expect(placed[1]?.x).toBeGreaterThan(placed[0]?.x ?? 0)
-    expect(fonts.some((f) => f.startsWith('5px'))).toBe(true)
+    expect(fonts.some((f) => f.startsWith('400 5px'))).toBe(true)
+  })
+
+  test('書体を渡すと、その字族と太さで描く', () => {
+    const fonts: string[] = []
+    const ctx = {
+      save() {},
+      restore() {},
+      fillText() {},
+      set font(value: string) {
+        fonts.push(value)
+      },
+    } as unknown as CanvasRenderingContext2D
+    drawVerticalText(
+      ctx,
+      [[{ glyphs: ['あ'] }]],
+      10,
+      { x: 0, y: 0, w: 30, h: 30 },
+      '#000',
+      'mincho',
+    )
+    drawVerticalText(ctx, [[{ glyphs: ['あ'] }]], 10, { x: 0, y: 0, w: 30, h: 30 }, '#000', 'bold')
+    expect(fonts).toEqual(['400 10px "Noto Serif JP"', '700 10px "Noto Sans JP"'])
   })
 }
