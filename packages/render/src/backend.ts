@@ -5,11 +5,7 @@ export const FONT_FAMILY = 'Noto Sans JP'
 const MINCHO_FAMILY = 'Noto Serif JP'
 const ROUNDED_FAMILY = 'M PLUS Rounded 1c'
 const HAND_FAMILY = 'Yomogi'
-type Family =
-  | typeof FONT_FAMILY
-  | typeof MINCHO_FAMILY
-  | typeof ROUNDED_FAMILY
-  | typeof HAND_FAMILY
+type Family = typeof FONT_FAMILY | typeof MINCHO_FAMILY | typeof ROUNDED_FAMILY | typeof HAND_FAMILY
 
 // どれも Google Fonts から取った SIL OFL 1.1 のフォント。ライセンスは fonts/OFL*.txt
 const FONTS: Record<Family, { url: URL; weight?: string }> = {
