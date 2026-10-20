@@ -28,6 +28,7 @@ import { HintsLayer } from './hints-layer'
 import { panelBox, panelPolygon, polygonPoints } from './hit-test'
 import { PageLayer } from './page-layer'
 import { PanelToolLayer } from './panel-tool-layer'
+import { TurnLayer } from './turn-layer'
 import type { EditorCanvasProps, Selection } from './types'
 import { useBubbleTool } from './use-bubble-tool'
 import { useHintTool } from './use-hint-tool'
@@ -82,6 +83,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * `sketch` ツールも同じ操作で、線は `Page.sketch` に足す。下描きのレイヤーが非表示なら何もしない。
  * `diagnosis` があり `layers.diagnosis` が立っていれば、視線経路、bubble chain、焦点ごとの診断ラベル、
  * ページ下の集計行と凡例を重ねる。そのとき焦点の素のラベルは診断ラベルに譲る。
+ * `turn` があれば、めくりの直前のページの最後のコマに「めくり」、直後のページの最初のコマに「めくり後」の印を重ねる。
  * `ghostPage` があれば、AI の提案で動く焦点とフキダシ、増えるベクトルを元の位置と提案の位置の両方で重ねる。
  * 作業用の色は `@manga/ui/tokens.css` の変数を参照するので、使う側でそれを読み込んでおく
  */
@@ -399,6 +401,15 @@ export function EditorCanvas(props: EditorCanvasProps) {
       )}
       {diagnosis !== null && (
         <DiagnosisLayer page={page} diagnosis={diagnosis} width={pageW} height={pageH} />
+      )}
+      {props.turn && (props.turn.before || props.turn.after) && (
+        <TurnLayer
+          page={page}
+          turn={props.turn}
+          direction={settings.direction}
+          width={pageW}
+          height={pageH}
+        />
       )}
       {props.ghostPage && (
         <GhostLayer page={page} ghost={props.ghostPage} width={pageW} height={pageH} />
@@ -1760,6 +1771,37 @@ if (import.meta.vitest) {
       fire(svg, pointer('pointerup', { id: 2, x: 300, y: 200, ...touch }))
       fire(svg, pointer('pointermove', { id: 1, x: 0, y: 0, ...touch }))
       expect(svg.getAttribute('data-zoom')).toBe('2.000')
+    })
+  })
+
+  describe('turn', () => {
+    test('draws nothing without a turn', async () => {
+      const svg = await render({ turn: { before: false, after: false } })
+      expect(svg.querySelector('[data-layer="turn"]')).toBeNull()
+    })
+
+    test('marks the last panel before a turn and the first panel after one', async () => {
+      const svg = await render({ turn: { before: true, after: true } })
+      const layer = must(svg.querySelector('[data-layer="turn"]'))
+      expect(layer.querySelector('[data-turn="before"]')?.getAttribute('data-turn-panel-id')).toBe(
+        'pn_6',
+      )
+      expect(layer.querySelector('[data-turn="after"]')?.getAttribute('data-turn-panel-id')).toBe(
+        'pn_1',
+      )
+    })
+
+    test('rtl puts the turn mark on the left corner, ltr on the right', async () => {
+      const turn = { before: true, after: false }
+      const { w, h } = project.settings.pageSize
+      const box = panelBox(must(samplePage.panels.find((p) => p.id === 'pn_6')), w, h)
+      const cornerX = async (direction: 'rtl' | 'ltr') => {
+        const svg = await render({ turn, settings: { ...project.settings, direction } })
+        const mark = must(svg.querySelector('[data-turn="before"] polygon'))
+        return Number(must(mark.getAttribute('points')).split(/[ ,]/)[0])
+      }
+      expect(await cornerX('rtl')).toBeCloseTo(box.x)
+      expect(await cornerX('ltr')).toBeCloseTo(box.x + box.w)
     })
   })
 

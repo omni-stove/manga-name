@@ -38,6 +38,7 @@ import {
   type Project,
   pageCharacterIds,
   pageSizeOf,
+  pageTurns,
   panelCharacterIds,
   stripRuby,
 } from '@manga/schema'
@@ -913,6 +914,7 @@ export function PageEditor({
             characters={project.characters}
             diagnosis={diagnosis}
             ghostPage={ghostPage}
+            turn={pageTurns(episode, project.settings.direction).get(page.id)}
             selection={selection}
             tool={tool}
             scribbleTool={scribbleTool}
