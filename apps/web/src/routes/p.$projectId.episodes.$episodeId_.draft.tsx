@@ -1,3 +1,11 @@
+import {
+  MAX_PAGE_COUNT,
+  missingLines,
+  normalizePlan,
+  parsePageCount,
+  plannedPage,
+  planRequest,
+} from '@manga/ai'
 import { m } from '@manga/i18n'
 import type { PagePlan, PlanLine, Project } from '@manga/schema'
 import {
@@ -17,16 +25,7 @@ import common from '../common.module.css'
 import { TemplateSelect, useTemplateChoice } from '../layout-templates'
 import { LineEditor } from '../line-editor'
 import { useTourStep } from '../onboarding/tour-guide'
-import {
-  abortable,
-  MAX_PAGE_COUNT,
-  missingLines,
-  normalizePlan,
-  PAGE_COUNT_GUIDES,
-  parsePageCount,
-  plannedPage,
-  planRequest,
-} from '../page-plan'
+import { abortable, PAGE_COUNT_GUIDES } from '../page-plan'
 import { appendPagesPatch, resolveTemplate } from '../project-ops'
 import { errorMessage } from '../route-error'
 import { FailureAlert } from '../sign-in'

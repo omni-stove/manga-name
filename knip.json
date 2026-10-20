@@ -21,6 +21,9 @@
     "workers/api": {
       "entry": ["src/rpc.ts"],
       "ignoreDependencies": ["cloudflare"]
+    },
+    "apps/cli": {
+      "entry": ["src/main.ts"]
     }
   }
 }

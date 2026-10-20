@@ -17,6 +17,8 @@ export const PanelArtRequestSchema = z.object({
   panelId: IdSchema,
   layoutPng: blob,
   hint: z.string().optional(),
+  /** コマが属するシーンの見出し（sceneOf）。前のページに遡って引くので、page だけからは決まらない */
+  scene: z.string().optional(),
   referencePng: blob.optional(),
   characterRefs: z.array(z.object({ characterId: IdSchema, image: blob })).optional(),
   previous: z.object({ art: blob, instruction: z.string() }).optional(),
@@ -33,6 +35,8 @@ export const PageArtRequestSchema = z.object({
   layoutPng: blob,
   /** コマごとの診断のヒント。キーは Panel.id */
   hints: z.record(IdSchema, z.string()).optional(),
+  /** コマごとのシーンの見出し（pageScenes）。キーは Panel.id */
+  scenes: z.record(IdSchema, z.string()).optional(),
   /** Page.reference をページ丸ごと */
   referencePng: blob.optional(),
   characterRefs: z.array(z.object({ characterId: IdSchema, image: blob })).optional(),
@@ -230,6 +234,7 @@ if (import.meta.vitest) {
     }
     expect(PageArtRequestSchema.parse({ ...base, hints: { pn: 'h' } }).hints).toEqual({ pn: 'h' })
     expect(PageArtRequestSchema.safeParse({ ...base, hints: { pn: 1 } }).success).toBe(false)
+    expect(PageArtRequestSchema.parse({ ...base, scenes: { pn: 's' } }).scenes).toEqual({ pn: 's' })
     expect(PageArtRequestSchema.parse({ ...base, previous: {} })).not.toHaveProperty('previous')
   })
 }

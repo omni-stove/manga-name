@@ -4,6 +4,8 @@ import { type Bubble, parseRuby } from '@manga/schema'
 const COLUMN_PITCH = 1.2
 /** ルビの文字サイズ。親文字に対する比率 */
 export const RUBY_SCALE = 0.5
+/** 傍点の字。大きさと位置はルビに揃える */
+export const EMPHASIS_MARK = '﹅'
 /** 文字サイズの上限と下限（mm）。下限でも収まらなければ末尾を省略する */
 const MAX_FONT = 6
 const MIN_FONT = 2
@@ -27,11 +29,13 @@ interface TextLine {
   /** 行の向きの長さ（文字サイズ単位）。縦書きでは字数 */
   length: number
   rubies: LineRuby[]
+  /** 傍点を打つ親文字の、行頭から字の中心までの長さ（文字サイズ単位） */
+  marks: number[]
   /** 組みの右端（横書きでは上端）から、この行の親文字の中心までの距離（mm） */
   offset: number
 }
 
-interface TextLayout {
+export interface TextLayout {
   /** 縦書きは右から、横書きは上から順の行 */
   lines: TextLine[]
   /** 行を送る向きの、組み全体の幅（mm）。縦書きでは横幅、横書きでは高さ */
@@ -42,10 +46,13 @@ interface TextLayout {
   truncated: boolean
 }
 
-/** 行の中で割らない一続き。ルビを振った語は語ごと、横書きでは英単語も語ごとにまとめる */
+/**
+ * 行の中で割らない一続き。ルビを振った語は語ごと、横書きでは英単語も語ごとにまとめ、傍点を打った語は 1 字ずつにする
+ */
 interface Unit {
   glyphs: string[]
   ruby?: string
+  emphasis?: true
 }
 
 /** 1 字が行の向きに進む長さ（文字サイズ単位） */
@@ -75,15 +82,14 @@ function joinWords(glyphs: string[]): Unit[] {
 }
 
 function toParagraphs(text: string, horizontal: boolean): Unit[][] {
-  return text
-    .split('\n')
-    .map((p) =>
-      parseRuby(p).flatMap(({ base, ruby }) => {
-        if (ruby !== undefined) return [{ glyphs: graphemes(base), ruby }]
-        const glyphs = graphemes(base)
-        return horizontal ? joinWords(glyphs) : glyphs.map((glyph) => ({ glyphs: [glyph] }))
-      }),
-    )
+  return text.split('\n').map((p) =>
+    parseRuby(p).flatMap(({ base, ruby, emphasis }): Unit[] => {
+      if (ruby !== undefined) return [{ glyphs: graphemes(base), ruby }]
+      const glyphs = graphemes(base)
+      if (emphasis) return glyphs.map((glyph) => ({ glyphs: [glyph], emphasis }))
+      return horizontal ? joinWords(glyphs) : glyphs.map((glyph) => ({ glyphs: [glyph] }))
+    }),
+  )
 }
 
 const unitLength = (unit: Unit, advance: Advance) =>
@@ -135,7 +141,7 @@ function fitsLength(
 }
 
 const lineThickness = (line: readonly Unit[], fontSize: number) =>
-  line.some((u) => u.ruby) ? fontSize * (1 + RUBY_SCALE) : fontSize
+  line.some((u) => u.ruby || u.emphasis) ? fontSize * (1 + RUBY_SCALE) : fontSize
 
 function blockThickness(lines: readonly Unit[][], fontSize: number): number {
   if (lines.length === 0) return 0
@@ -155,20 +161,28 @@ function toLayout(
     const offset = edge + thickness - fontSize / 2
     edge += thickness + fontSize * (COLUMN_PITCH - 1)
     const rubies: LineRuby[] = []
+    const marks: number[] = []
     let start = 0
     for (const u of units) {
       const length = unitLength(u, advance)
       if (u.ruby) rubies.push({ start, length, text: u.ruby })
+      if (u.emphasis) marks.push(start + length / 2)
       start += length
     }
-    return { text: units.flatMap((u) => u.glyphs).join(''), length: start, rubies, offset }
+    return {
+      text: units.flatMap((u) => u.glyphs).join(''),
+      length: start,
+      rubies,
+      marks,
+      offset,
+    }
   })
   return { lines: placed, thickness: blockThickness(lines, fontSize), fontSize, truncated }
 }
 
 /**
  * セリフを w x h（mm）の箱に割り付ける。writing が horizontal なら横書きで、半角の字を文字サイズの半分の幅とみなし、
- * 英単語を割らない。省略は縦書き。`|単語《ルビ》` のルビは語ごと同じ行に置く。
+ * 英単語を割らない。省略は縦書き。`|単語《ルビ》` のルビは語ごと同じ行に置き、`《《語》》` の傍点は 1 字ずつ行をまたいで割れる。
  * 収まる最大の文字サイズを選び、MIN_FONT でも収まらなければ収まる行数で切り、最後の字を省略記号にする。
  * 禁則、ルビによる親文字のあけ、書体ごとの字の幅は扱わない（レンダラと折り返し位置まで揃える必要はない）
  */
@@ -212,13 +226,18 @@ export function layoutText(
   return toLayout(kept, advance, fontSize, true)
 }
 
+/** 折り返さずに改行でだけ列を分け、fontSize（mm）で縦書きに組む。描き文字のように文字サイズが先に決まっている文に使う */
+export function layoutUnbroken(text: string, fontSize: number): TextLayout {
+  return toLayout(toParagraphs(text, false), squareAdvance, fontSize, false)
+}
+
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
   const texts = (layout: TextLayout) => layout.lines.map((c) => c.text)
 
   test('short text fits in one column at the largest size', () => {
     expect(layoutText('……芽が', { w: 10, h: 40 })).toEqual({
-      lines: [{ text: '……芽が', length: 4, rubies: [], offset: 3 }],
+      lines: [{ text: '……芽が', length: 4, rubies: [], marks: [], offset: 3 }],
       thickness: 6,
       fontSize: 6,
       truncated: false,
@@ -252,10 +271,23 @@ if (import.meta.vitest) {
     const layout = layoutText('あ|魔法《まほう》\nい', { w: 30, h: 18 })
     expect(layout.fontSize).toBe(6)
     expect(layout.lines).toEqual([
-      { text: 'あ魔法', length: 3, rubies: [{ start: 1, length: 2, text: 'まほう' }], offset: 6 },
-      { text: 'い', length: 1, rubies: [], offset: 9 + 1.2 + 3 },
+      {
+        text: 'あ魔法',
+        length: 3,
+        rubies: [{ start: 1, length: 2, text: 'まほう' }],
+        marks: [],
+        offset: 6,
+      },
+      { text: 'い', length: 1, rubies: [], marks: [], offset: 9 + 1.2 + 3 },
     ])
     expect(layout.thickness).toBeCloseTo(9 + 1.2 + 6)
+  })
+
+  test('layoutUnbroken keeps the given size and breaks only at newlines', () => {
+    const layout = layoutUnbroken('ゴゴゴゴゴゴゴゴ\nゴ', 10)
+    expect(layout.fontSize).toBe(10)
+    expect(texts(layout)).toEqual(['ゴゴゴゴゴゴゴゴ', 'ゴ'])
+    expect(layout.thickness).toBeCloseTo(10 + 2 + 10)
   })
 
   test('a ruby word moves to the next column as a whole', () => {
@@ -284,11 +316,47 @@ if (import.meta.vitest) {
   test('horizontal ruby goes above its base and thickens that line', () => {
     expect(layoutText('あ|魔法《まほう》', { w: 18, h: 30 }, 'horizontal')).toEqual({
       lines: [
-        { text: 'あ魔法', length: 3, rubies: [{ start: 1, length: 2, text: 'まほう' }], offset: 6 },
+        {
+          text: 'あ魔法',
+          length: 3,
+          rubies: [{ start: 1, length: 2, text: 'まほう' }],
+          marks: [],
+          offset: 6,
+        },
       ],
       thickness: 9,
       fontSize: 6,
       truncated: false,
     })
+  })
+
+  test('emphasis marks are dropped, widen the column and skip ruby words', () => {
+    const layout = layoutText('あ《《本当|魔法《まほう》だ》》\nい', { w: 30, h: 36 })
+    expect(layout.fontSize).toBe(6)
+    expect(layout.lines).toEqual([
+      {
+        text: 'あ本当魔法だ',
+        length: 6,
+        rubies: [{ start: 3, length: 2, text: 'まほう' }],
+        marks: [1.5, 2.5, 5.5],
+        offset: 6,
+      },
+      { text: 'い', length: 1, rubies: [], marks: [], offset: 9 + 1.2 + 3 },
+    ])
+  })
+
+  test('an emphasized word can wrap across columns', () => {
+    const layout = layoutText('《《あいう》》', { w: 30, h: 12 })
+    expect(layout.fontSize).toBe(6)
+    expect(layout.lines.map((c) => [c.text, c.marks])).toEqual([
+      ['あい', [0.5, 1.5]],
+      ['う', [0.5]],
+    ])
+  })
+
+  test('horizontal emphasis marks sit over each glyph, half-width ones included', () => {
+    expect(layoutText('《《本A》》', { w: 30, h: 30 }, 'horizontal').lines).toMatchObject([
+      { text: '本A', length: 1.5, marks: [0.5, 1.25] },
+    ])
   })
 }

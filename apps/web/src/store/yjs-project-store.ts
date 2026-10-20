@@ -1,4 +1,5 @@
-import { migrate, PatchSchema, type Project, ProjectSchema, parseProject } from '@manga/schema'
+import { applyPatchToY, applyYEvents, openProjectDoc, PROJECT_ROOT, writeYMap } from '@manga/collab'
+import { PatchSchema, type Project, ProjectSchema } from '@manga/schema'
 import {
   applyPatches,
   enablePatches,
@@ -11,12 +12,8 @@ import { createStore } from 'zustand/vanilla'
 import { toImmerPatch } from './json-patch'
 import type { ProjectStoreOptions, ProjectStoreState, WebProjectStore } from './project-store-types'
 import { createSaveScheduler } from './save-scheduler'
-import { applyPatchToY, applyYEvents, writeYChanges, writeYMap } from './yjs-mapping'
 
 enablePatches()
-
-/** Project を置く Y.Doc の共有型の名前 */
-export const PROJECT_ROOT = 'project'
 
 export interface YjsProjectStoreOptions extends ProjectStoreOptions {
   /** Project を置く Y.Doc。既に Project を持っていればそれを起点にし、`initial` は使わない。省略時は新しく作る */
@@ -60,19 +57,7 @@ export function createYjsProjectStore(
   const local = Symbol('local')
   const untracked = Symbol('untracked')
 
-  let project: Project
-  if (root.size === 0) {
-    doc.transact(() => writeYMap(root, initial), untracked)
-    project = initial
-  } else {
-    const stored = root.toJSON()
-    project = parseProject(stored)
-    if (writeBackVersion && stored.schemaVersion !== project.schemaVersion) {
-      // ProjectSchema が読み捨てる古いキーまで消さないよう、parse 前の移行結果との差だけを書く
-      const migrated = migrate(stored) as Record<string, unknown>
-      doc.transact(() => writeYChanges(root, stored, migrated), untracked)
-    }
-  }
+  const project = openProjectDoc(doc, initial, { origin: untracked, writeBackVersion })
 
   const state = createStore<ProjectStoreState>()(() => ({
     project,
@@ -271,7 +256,7 @@ if (import.meta.vitest) {
 
       const writer = createYjsProjectStore(createEmptyProject('x'), { ...options(), doc: old() })
       expect(writer.get().episodes[0]?.pages[0]?.panels[0]?.camera).toBe('long')
-      expect(writer.doc.getMap(PROJECT_ROOT).get('schemaVersion')).toBe(19)
+      expect(writer.doc.getMap(PROJECT_ROOT).get('schemaVersion')).toBe(26)
       expect(panelOf(writer.doc)?.camera).toBe('long')
 
       const reader = createYjsProjectStore(createEmptyProject('x'), {

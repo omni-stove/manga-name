@@ -14,9 +14,11 @@ import {
   type Project,
   type ProjectSettings,
   pageCharacterIds,
+  pageScenes,
   pageSizeOf,
   panelCharacterIds,
   type ReferenceImage,
+  sceneOf,
 } from '@manga/schema'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { findPanel, panelPatch } from './inspector-ops'
@@ -187,6 +189,11 @@ function hintFor(page: Page, panel: Panel, settings: ProjectSettings): string | 
   return hint === '' ? undefined : hint
 }
 
+/** findPage で見つけたページを含む話のページ。シーンは話の中で前のページに遡って引く */
+function episodePages(project: Project, found: { episodeIndex: number }): readonly Page[] {
+  return project.episodes[found.episodeIndex]?.pages ?? []
+}
+
 /** ImageProvider は signal を受け取らないので、中止されたら応答を待たずに捨てる */
 function abortable<T>(start: () => Promise<T>, signal: AbortSignal | undefined): Promise<T> {
   if (!signal) return start()
@@ -231,7 +238,8 @@ function addArtPatch(project: Project, pageId: ID, panelId: ID, art: PanelArt): 
 
 /**
  * コマの生成をまとめる。`generate` は 1 コマ分で、
- * 配置図 → 参考画像の切り抜き → 登場キャラの参照画像 → 前回の絵（修正指示つきのとき）→ 診断のヒント → ImageProvider → putAsset → applyPatch(ai)。
+ * 配置図 → 参考画像の切り抜き → 登場キャラの参照画像 → 前回の絵（修正指示つきのとき）→ 診断のヒント → コマが属するシーン →
+ * ImageProvider → putAsset → applyPatch(ai)。
  * `generateAll` はページごとに、ページ全体を 1 回で生成してコマごとに切り抜く（`runPage`）。
  * 生成は store の外で進め、結果だけを Patch で入れるので Undo で生成前に戻せる。アセットは残る。
  * 進行中のコマは `generating` に持ち、画面を離れても生き続ける。同じコマの二重起動は `busy` で断る
@@ -314,9 +322,10 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
   }: GenerateRequest) => {
     signal?.throwIfAborted()
     const project = store.get()
-    const page = findPage(project, pageId)?.page
+    const found = findPage(project, pageId)
+    const page = found?.page
     const panel = page && findPanel(page, panelId)?.panel
-    if (!page || !panel) throw new Error(m.web_generate_panel_gone())
+    if (!found || !page || !panel) throw new Error(m.web_generate_panel_gone())
     const { settings, characters } = project
     const pageSize = pageSizeOf(page, settings.pageSize)
 
@@ -330,6 +339,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     const hint = usesHint(hintOptOut.getState(), projectId, panelId)
       ? hintFor(page, panel, settings)
       : undefined
+    const scene = sceneOf(episodePages(project, found), pageId, panelId)
     const req: PanelArtRequest = {
       project: { settings, characters },
       page,
@@ -339,6 +349,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       ...(characterRefs.length > 0 && { characterRefs }),
       ...(previous && { previous: { art: previous.art, instruction: previous.instruction } }),
       ...(hint && { hint }),
+      ...(scene && { scene }),
     }
     const res = await abortable(() => imageProvider.generatePanelArt(req), signal)
     signal?.throwIfAborted()
@@ -395,7 +406,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
   }
 
   /**
-   * ページ全体の配置図 → 参考画像（どれかのコマが使うときページ丸ごと）→ 登場キャラの参照画像 → コマごとのヒント →
+   * ページ全体の配置図 → 参考画像（どれかのコマが使うときページ丸ごと）→ 登場キャラの参照画像 → コマごとのヒントとシーン →
    * generatePageArt → コマごとに切り抜き → putAsset → 1 回の applyPatch(ai)。
    * 絵を入れる間にコマが消えていれば、残りのコマにだけ入れてそのコマの id を返す。全部消えていれば throw
    */
@@ -419,6 +430,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
         : undefined
     const characterRefs = await loadCharacterRefs(pageCharacters(page, characters))
     const hints = pageHints(page, settings, projectId)
+    const scenes = pageScenes(episodePages(project, found), pageId)
     const req: PageArtRequest = {
       project: { settings, characters },
       page,
@@ -426,6 +438,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
       ...(referencePng && { referencePng }),
       ...(characterRefs.length > 0 && { characterRefs }),
       ...(Object.keys(hints).length > 0 && { hints }),
+      ...(Object.keys(scenes).length > 0 && { scenes }),
     }
     const res = await abortable(() => imageProvider.generatePageArt(req), signal)
     signal.throwIfAborted()
@@ -781,6 +794,20 @@ if (import.meta.vitest) {
       expect(seen[0]?.characterRefs?.map((r) => r.characterId)).toEqual([extra.id])
     })
 
+    test('the acting written on the panel goes into the prompt of the art', async () => {
+      const { generate, panelNow, store } = setup()
+      const characterId = panel.focusPoints.find((f) => f.characterId)?.characterId
+      const name = sample.characters.find((c) => c.id === characterId)?.name
+      if (!characterId || !name) throw new Error('fixture の最初のコマにキャラの焦点がない')
+      store.applyPatch(
+        panelPatch(store.get(), pageId, panelId, [
+          { op: 'add', path: '/acting', value: [{ characterId, text: '振り向いて驚く' }] },
+        ]),
+      )
+      expect(await generate()).toBe('done')
+      expect(panelNow().arts[0]?.prompt).toContain(`${name} acts: 振り向いて驚く`)
+    })
+
     test('sends the panel hint unless the panel opts out of it', async () => {
       const seen: PanelArtRequest[] = []
       const fake = createFakeImageProvider()
@@ -805,6 +832,38 @@ if (import.meta.vitest) {
       generation.setUseHint(sample.id, panelId, true)
       await generate()
       expect(seen[2]?.hint).toBe(expected)
+    })
+
+    test('sends the scene the panel belongs to, going back to the previous pages', async () => {
+      const seen: PanelArtRequest[] = []
+      const fake = createFakeImageProvider()
+      const { generate, generation, store } = setup({
+        generatePanelArt(req) {
+          seen.push(req)
+          return fake.generatePanelArt(req)
+        },
+      })
+      await generate()
+      expect(seen[0]).not.toHaveProperty('scene')
+
+      const next: Page = {
+        id: 'pg_next',
+        scribbles: [],
+        panels: [{ ...panel, id: 'pn_next', bubbles: [], focusPoints: [], vectors: [] }],
+      }
+      store.applyPatch([
+        { op: 'add', path: '/episodes/0/pages/0/panels/0/scene', value: '放課後・屋上' },
+        { op: 'add', path: '/episodes/0/pages/-', value: next },
+      ])
+      await generate()
+      expect(seen[1]?.scene).toBe('放課後・屋上')
+      await generation.generate({
+        store,
+        projectId: sample.id,
+        pageId: next.id,
+        panelId: 'pn_next',
+      })
+      expect(seen[2]?.scene).toBe('放課後・屋上')
     })
 
     test('a panel with an empty hint sends no hint', async () => {
@@ -1008,6 +1067,20 @@ if (import.meta.vitest) {
       expect(seen[0]?.hints).toBeDefined()
       expect(seen[0]?.hints).not.toHaveProperty(panelId)
       expect(Object.keys(seen[0]?.hints ?? {}).length).toBeGreaterThan(0)
+    })
+
+    test('sends the scene of each panel from the first panel with one', async () => {
+      const { provider, seen } = counting()
+      const { generation, store } = setup(provider)
+      await generation.generateAll(all(store, true))
+      expect(seen[0]).not.toHaveProperty('scenes')
+
+      store.applyPatch([
+        { op: 'add', path: '/episodes/0/pages/0/panels/2/scene', value: '夜・帰り道' },
+      ])
+      await generation.generateAll(all(store, true))
+      const later = pagePanels(store).filter((p) => p.order >= 3)
+      expect(seen[1]?.scenes).toEqual(Object.fromEntries(later.map((p) => [p.id, '夜・帰り道'])))
     })
 
     test('a page failure notifies once with the number of panels and leaves the project untouched', async () => {

@@ -1,7 +1,7 @@
 {
   "$comment": "6 コマ、右綴じの 1 ページ。arts は空で、生成前のネーム。sample-page-01.diagnosis.json の入力。",
   "project": {
-    "schemaVersion": 19,
+    "schemaVersion": 26,
     "id": "prj_sample",
     "title": "sample",
     "createdAt": "2026-10-15T00:00:00.000Z",
@@ -249,10 +249,12 @@
                       "w": 0.22,
                       "h": 0.4
                     },
-                    "tail": {
-                      "x": 0.64,
-                      "y": 0.38
-                    }
+                    "tails": [
+                      {
+                        "x": 0.64,
+                        "y": 0.38
+                      }
+                    ]
                   }
                 ],
                 "note": "何かに気づいて見上げる。",
@@ -421,10 +423,12 @@
                       "w": 0.22,
                       "h": 0.5
                     },
-                    "tail": {
-                      "x": 0.7,
-                      "y": 0.58
-                    }
+                    "tails": [
+                      {
+                        "x": 0.7,
+                        "y": 0.58
+                      }
+                    ]
                   }
                 ],
                 "camera": "close_up",

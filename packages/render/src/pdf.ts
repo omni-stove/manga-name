@@ -1,10 +1,13 @@
 import { m } from '@manga/i18n'
 import {
+  type Character,
   type ID,
   type Page,
   type PageSlot,
+  type Panel,
   type Project,
   pageSlots,
+  sceneHeading,
   stripRuby,
 } from '@manga/schema'
 import {
@@ -19,6 +22,7 @@ import {
 import { FONT_FAMILY, getBackend, loadFonts } from './backend'
 import { pagePixelSize } from './geometry'
 import { drawPage } from './page'
+import { actingNotes } from './panel'
 import { alphabeticY, wrapHorizontal } from './text'
 import type { RenderContext, RenderOptions, Surface } from './types'
 
@@ -252,7 +256,7 @@ function layoutSheets(
 }
 
 /**
- * ページ 1 枚分の指示メモ（コマ番号、camera、note、セリフ）を横書きで並べた Surface。収まらなければ複数枚。
+ * ページ 1 枚分の指示メモ（シーンの見出し、コマ番号、camera、「間」の印、note、芝居、セリフ）を横書きで並べた Surface。収まらなければ複数枚。
  * pdf-lib に Noto Sans JP を埋め込んで文字で書かないのは、@pdf-lib/fontkit のサブセット化で字が欠け、
  * サブセットしないと PDF ごとに約 6MB 増えるうえ可変フォントの既定の太さ（Thin）になるため
  */
@@ -267,29 +271,7 @@ async function renderNotesSheets(
   const fontPx = size.w * SHEET_FONT
   const lineHeight = fontPx * 1.6
   const pad = size.w * SHEET_PAD
-  const names = new Map(ctx.characters.map((c) => [c.id, c.name]))
-
-  const blocks: { text: string; indent: number; bold?: boolean }[] = [
-    { text: `p.${number}`, indent: 0, bold: true },
-  ]
-  for (const panel of [...page.panels].sort((a, b) => a.order - b.order)) {
-    blocks.push({ text: '', indent: 0 })
-    blocks.push({
-      text: [
-        String(panel.order),
-        panel.camera && `[${m[`panel_camera_${panel.camera}` as const]()}]`,
-      ]
-        .filter(Boolean)
-        .join('  '),
-      indent: 0,
-      bold: true,
-    })
-    if (panel.note) blocks.push({ text: panel.note, indent: 1 })
-    for (const bubble of [...panel.bubbles].sort((a, b) => a.order - b.order)) {
-      const speaker = bubble.speakerId ? names.get(bubble.speakerId) : undefined
-      blocks.push({ text: `${speaker ?? '—'}「${stripRuby(bubble.text)}」`, indent: 1 })
-    }
-  }
+  const blocks = notesBlocks(page, number, ctx.characters)
 
   const surfaces: ReturnType<typeof backend.createSurface>[] = []
   const newSurface = () => {
@@ -319,6 +301,47 @@ async function renderNotesSheets(
     }
   }
   return surfaces
+}
+
+interface NotesBlock {
+  text: string
+  /** 字下げ。1 で 2 字分 */
+  indent: number
+  bold?: boolean
+}
+
+/**
+ * 指示メモのページに並べる段落。ノンブルの見出しの後に、読み順のコマごとに空行、シーンの始まるコマならその見出し、
+ * コマ番号と camera と「間」の印の行、note、芝居（actingNotes）、話し手つきのセリフ
+ */
+function notesBlocks(page: Page, number: number, characters: readonly Character[]): NotesBlock[] {
+  const names = new Map(characters.map((c) => [c.id, c.name]))
+  const blocks: NotesBlock[] = [{ text: `p.${number}`, indent: 0, bold: true }]
+  for (const panel of [...page.panels].sort((a, b) => a.order - b.order)) {
+    blocks.push({ text: '', indent: 0 })
+    const scene = sceneHeading(panel)
+    if (scene !== undefined) {
+      blocks.push({ text: m.panel_scene_heading({ scene }), indent: 0, bold: true })
+    }
+    blocks.push({
+      text: [
+        String(panel.order),
+        panel.camera && `[${m[`panel_camera_${panel.camera}` as const]()}]`,
+        panel.beat && m.panel_beat_mark(),
+      ]
+        .filter(Boolean)
+        .join('  '),
+      indent: 0,
+      bold: true,
+    })
+    if (panel.note) blocks.push({ text: panel.note, indent: 1 })
+    for (const text of actingNotes(panel, characters)) blocks.push({ text, indent: 1 })
+    for (const bubble of [...panel.bubbles].sort((a, b) => a.order - b.order)) {
+      const speaker = bubble.speakerId ? names.get(bubble.speakerId) : undefined
+      blocks.push({ text: `${speaker ?? '—'}「${stripRuby(bubble.text)}」`, indent: 1 })
+    }
+  }
+  return blocks
 }
 
 if (import.meta.vitest) {
@@ -482,6 +505,27 @@ if (import.meta.vitest) {
       const { writeFile } = await import('node:fs/promises')
       await writeFile(process.env.PDF_OUT, new Uint8Array(await blob.arrayBuffer()))
     }
+  })
+
+  test('指示メモはシーンの始まるコマの前に見出しを置き、「間」のコマに印を付ける', () => {
+    const [pn1, pn2, ...rest] = template.panels as [Panel, Panel, ...Panel[]]
+    const page: Page = {
+      ...template,
+      panels: [
+        { ...pn1, scene: '放課後・屋上' },
+        { ...pn2, camera: undefined, beat: true },
+        ...rest,
+      ],
+    }
+    const blocks = notesBlocks(page, 3, base.characters)
+    const texts = blocks.map((b) => b.text)
+    const scene = m.panel_scene_heading({ scene: '放課後・屋上' })
+    const heading = texts.indexOf(scene)
+    expect(heading).toBeGreaterThan(0)
+    expect(blocks[heading]?.bold).toBe(true)
+    expect(texts[heading + 1]?.startsWith(`${pn1.order}`)).toBe(true)
+    expect(texts).toContain(`${pn2.order}  ${m.panel_beat_mark()}`)
+    expect(texts.filter((t) => t === scene)).toHaveLength(1)
   })
 
   // 共有ランナーの CPU で所要時間がぶれ、コードと無関係に落ちるので、PERF=1（mise run perf）のときだけ測る

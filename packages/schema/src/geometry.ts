@@ -132,17 +132,18 @@ export function intersectPolygons(subject: readonly Point[], clip: readonly Poin
 }
 
 /**
- * 輪郭の右上（corner が 'ne'）か右下（'se'）の頂点から (dx, dy) ずらした点。コマ番号やボタンを
+ * 輪郭の右上（corner が 'ne'）、右下（'se'）か左上（'nw'）の頂点から (dx, dy) ずらした点。コマ番号やボタンを
  * コマの隅に置くのに使う。そこが輪郭の外なら、内側に入るまで頂点の重心へ寄せる。
  * 矩形のコマでは隅から (dx, dy) ずらした点そのもの。座標の単位は問わない
  */
 export function cornerAnchor(
   outline: readonly Point[],
-  corner: 'ne' | 'se',
+  corner: 'ne' | 'se' | 'nw',
   dx: number,
   dy: number,
 ): Point {
-  const score = (p: Point) => (corner === 'ne' ? p.x - p.y : p.x + p.y)
+  const score = (p: Point) =>
+    corner === 'ne' ? p.x - p.y : corner === 'se' ? p.x + p.y : -p.x - p.y
   const v = outline.reduce((best, p) => (score(p) > score(best) ? p : best))
   const c = {
     x: outline.reduce((sum, p) => sum + p.x, 0) / outline.length,
@@ -221,6 +222,7 @@ if (import.meta.vitest) {
     const square = panelOutline({ rect: { x: 0, y: 0, w: 10, h: 10 } })
     expect(cornerAnchor(square, 'ne', -1, 1)).toEqual({ x: 9, y: 1 })
     expect(cornerAnchor(square, 'se', -1, -1)).toEqual({ x: 9, y: 9 })
+    expect(cornerAnchor(square, 'nw', 1, 1)).toEqual({ x: 1, y: 1 })
     // 右上を斜めに落とした三角形
     const triangle = [
       { x: 0, y: 0 },
