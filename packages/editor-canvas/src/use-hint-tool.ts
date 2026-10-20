@@ -366,6 +366,8 @@ if (import.meta.vitest) {
       const turn = (focusId: string): HintDraft => ({ kind: 'rotate', focusId, rotation: 50 })
       expect(sfxRotation(page, 210, 297, select, turn('fp_2_vial'), 2)?.frame.rotation).toBe(50)
       expect(sfxRotation(page, 210, 297, select, turn('other'), 2)?.frame.rotation).toBe(10)
+      const moving: HintDraft = { kind: 'focus', focusId: 'fp_2_vial', pos: { x: 0.5, y: 0.5 } }
+      expect(sfxRotation(page, 210, 297, select, moving, 2)?.frame.rotation).toBe(10)
     })
   })
 }
