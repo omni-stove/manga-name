@@ -13,10 +13,7 @@ export function sceneHeading(panel: Pick<Panel, 'scene'>): string | undefined {
  * コマの見出しで、前のページに遡る。どのシーンにも属さないコマは入れない。キーは Panel.id。
  * pages は 1 話分を渡す。pageId が pages に無ければ空
  */
-export function pageScenes(
-  pages: readonly ScenePage[],
-  pageId: ID,
-): Record<ID, string> {
+export function pageScenes(pages: readonly ScenePage[], pageId: ID): Record<ID, string> {
   let current: string | undefined
   for (const page of pages) {
     const scenes: Record<ID, string> = {}

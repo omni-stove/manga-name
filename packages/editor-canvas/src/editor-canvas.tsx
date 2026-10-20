@@ -731,9 +731,7 @@ if (import.meta.vitest) {
       const ltr = labelIn(ltrSvg)
       expect(ltr.getAttribute('text-anchor')).toBe('end')
       expect(Number(ltr.getAttribute('x'))).toBeGreaterThan((pn1.rect.x + pn1.rect.w / 2) * w)
-      const number = must(
-        ltrSvg.querySelector('[data-panel-id="pn_1"] [data-panel-number] circle'),
-      )
+      const number = must(ltrSvg.querySelector('[data-panel-id="pn_1"] [data-panel-number] circle'))
       expect(Number(ltr.getAttribute('x'))).toBeLessThan(
         Number(number.getAttribute('cx')) - Number(number.getAttribute('r')),
       )

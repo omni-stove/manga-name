@@ -753,7 +753,9 @@ if (import.meta.vitest) {
       await act(async () => setValue(scene, '夜・帰り道'))
       expect(onChange).not.toHaveBeenCalled()
       await act(async () => vi.advanceTimersByTime(DEBOUNCE_MS))
-      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/scene', value: '夜・帰り道' }])
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'add', path: '/scene', value: '夜・帰り道' },
+      ])
       await act(async () => setValue(scene, ''))
       await act(async () => vi.advanceTimersByTime(DEBOUNCE_MS))
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/scene' }])

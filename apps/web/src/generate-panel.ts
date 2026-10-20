@@ -14,9 +14,9 @@ import {
   type Project,
   type ProjectSettings,
   pageCharacterIds,
+  pageScenes,
   pageSizeOf,
   panelCharacterIds,
-  pageScenes,
   type ReferenceImage,
   sceneOf,
 } from '@manga/schema'
