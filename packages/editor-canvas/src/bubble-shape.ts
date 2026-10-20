@@ -103,6 +103,10 @@ if (import.meta.vitest) {
     expect(bodyPath('narration', g)).toBe('M40 40L80 40L80 50L40 50Z')
     expect(bubblePaths('urchin', g).ink).toMatch(/^M.*Z$/)
     expect(bubblePaths('normal', g).ink).toBeNull()
+    const monologue = bubblePaths('monologue', g)
+    expect(monologue.body).toMatch(/^M80 41L80 49C/)
+    expect(monologue.body.match(/C/g)).toHaveLength(4)
+    expect(monologue).toMatchObject({ fill: true, line: 'solid', tails: [] })
   })
 
   test('tailPaths reach each tip, and are empty without tails or on a tailless shape', () => {
@@ -112,6 +116,7 @@ if (import.meta.vitest) {
     expect(second).toContain('L110 20')
     expect(tailPaths('thought', g).map((d) => d.match(/M/g)?.length)).toEqual([2, 2])
     expect(tailPaths('narration', g)).toEqual([])
+    expect(tailPaths('monologue', g)).toEqual([])
     expect(tailPaths('normal', bubbleGeometry(bubble('normal'), panel))).toEqual([])
   })
 }

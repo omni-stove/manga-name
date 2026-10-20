@@ -51,6 +51,8 @@ const URCHIN_SPACING = 0.1
 const URCHIN_GAP = 0.04
 const URCHIN_LENGTH = 0.35
 const URCHIN_WIDTH = 0.03
+/** モノローグ枠の角の半径。短辺に対する比率 */
+const MONOLOGUE_CORNER = 0.1
 /** しっぽの付け根の開き（ラジアン）と、付け根を輪郭から中心へ入れる深さ。深さは最も深い凹みより深くする */
 const TAIL_SPREAD = 0.35
 const TAIL_INSET = 0.5
@@ -66,10 +68,11 @@ const SHAPE_STYLE: Record<Shape, { tail: boolean; box: boolean }> = {
   electronic: { tail: true, box: false },
   urchin: { tail: false, box: false },
   narration: { tail: false, box: true },
+  monologue: { tail: false, box: true },
   none: { tail: false, box: true },
 }
 
-/** その形にしっぽが付くか。ナレーション、枠なし、ウニフラは話し手を指さない */
+/** その形にしっぽが付くか。ナレーション、モノローグ、枠なし、ウニフラは話し手を指さない */
 export const hasTail = (shape: Shape): boolean => SHAPE_STYLE[shape].tail
 
 /** 本体が楕円でなく、半径で囲む矩形そのものか */
@@ -153,6 +156,27 @@ function ellipse(cx: number, cy: number, rx: number, ry: number): PathCommand[] 
   ]
 }
 
+/** 角を半径 r の四分円で丸めた矩形。右上の角の終わりから時計回り（y 下向き） */
+function roundedBox(g: BubbleGeometry, r: number): PathCommand[] {
+  const k = r * (1 - KAPPA)
+  const l = g.cx - g.rx
+  const t = g.cy - g.ry
+  const rt = g.cx + g.rx
+  const b = g.cy + g.ry
+  return [
+    { op: 'M', x: rt, y: t + r },
+    { op: 'L', x: rt, y: b - r },
+    { op: 'C', x1: rt, y1: b - k, x2: rt - k, y2: b, x: rt - r, y: b },
+    { op: 'L', x: l + r, y: b },
+    { op: 'C', x1: l + k, y1: b, x2: l, y2: b - k, x: l, y: b - r },
+    { op: 'L', x: l, y: t + r },
+    { op: 'C', x1: l, y1: t + k, x2: l + k, y2: t, x: l + r, y: t },
+    { op: 'L', x: rt - r, y: t },
+    { op: 'C', x1: rt - k, y1: t, x2: rt, y2: t + k, x: rt, y: t + r },
+    { op: 'Z' },
+  ]
+}
+
 function body(shape: Shape, g: BubbleGeometry): PathCommand[] {
   const unit = unitOf(g)
   switch (shape) {
@@ -168,6 +192,8 @@ function body(shape: Shape, g: BubbleGeometry): PathCommand[] {
         { x: g.cx + g.rx, y: g.cy + g.ry },
         { x: g.cx - g.rx, y: g.cy + g.ry },
       ])
+    case 'monologue':
+      return roundedBox(g, 2 * unit * MONOLOGUE_CORNER)
     case 'shout': {
       // 先と谷の深さを揺らし、均一な星形（値札のような形）に見えないようにする
       const s = stations(g, countAlong(g, SHOUT_SPACING, 10, 40) * 2)
@@ -356,6 +382,7 @@ if (import.meta.vitest) {
     'electronic',
     'urchin',
     'narration',
+    'monologue',
     'none',
   ] as const
 
@@ -381,11 +408,30 @@ if (import.meta.vitest) {
     expect(o.tails).toEqual([])
   })
 
-  test('narration, none and urchin take no tail; the rest do', () => {
+  test('monologue is a box with corners rounded by a tenth of the short side, and no tail', () => {
+    const o = bubbleOutline('monologue', g)
+    expect(isBoxShape('monologue')).toBe(true)
+    expect(o.body.filter((c) => c.op === 'C')).toHaveLength(4)
+    const ps = points(o.body)
+    // 短辺 80 の 0.1 倍の半径で、角の点は各辺から 8 だけ内に入る
+    expect(ps).toContainEqual({ x: 160, y: 68 })
+    expect(ps).toContainEqual({ x: 152, y: 140 })
+    expect(ps).toContainEqual({ x: 40, y: 132 })
+    expect(ps).toContainEqual({ x: 48, y: 60 })
+    for (const p of ps) {
+      expect(p.x).toBeGreaterThanOrEqual(40)
+      expect(p.x).toBeLessThanOrEqual(160)
+      expect(p.y).toBeGreaterThanOrEqual(60)
+      expect(p.y).toBeLessThanOrEqual(140)
+    }
+    expect(o.tails).toEqual([])
+  })
+
+  test('narration, monologue, none and urchin take no tail; the rest do', () => {
     for (const shape of SHAPES) {
       expect(bubbleOutline(shape, g).tails.length > 0).toBe(hasTail(shape))
     }
-    expect(SHAPES.filter((s) => !hasTail(s))).toEqual(['urchin', 'narration', 'none'])
+    expect(SHAPES.filter((s) => !hasTail(s))).toEqual(['urchin', 'narration', 'monologue', 'none'])
   })
 
   test('how each shape is painted', () => {
@@ -396,6 +442,7 @@ if (import.meta.vitest) {
     expect(style('normal')).toEqual({ fill: true, line: 'solid', ink: false })
     expect(style('whisper')).toEqual({ fill: true, line: 'dashed', ink: false })
     expect(style('urchin')).toEqual({ fill: true, line: 'none', ink: true })
+    expect(style('monologue')).toEqual({ fill: true, line: 'solid', ink: false })
     expect(style('none')).toEqual({ fill: false, line: 'none', ink: false })
   })
 
@@ -464,6 +511,7 @@ if (import.meta.vitest) {
 
   test('bubbleTextBox keeps more of a box-shaped body', () => {
     expect(bubbleTextBox('narration', g)).toEqual({ x: 49, y: 66, w: 102, h: 68 })
+    expect(bubbleTextBox('monologue', g)).toEqual({ x: 49, y: 66, w: 102, h: 68 })
     expect(bubbleTextBox('none', g)).toEqual({ x: 49, y: 66, w: 102, h: 68 })
     expect(bubbleTextBox('normal', g)).toEqual({ x: 58, y: 70, w: 84, h: 60 })
   })
