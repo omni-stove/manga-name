@@ -136,7 +136,7 @@ function renewPanel(panel: Panel, sameProject: boolean): Panel {
       ...(target !== undefined && { targetFocusId: target }),
     }
   })
-  const { arts, artId, cast, ...rest } = panel
+  const { arts, artId, cast, acting, ...rest } = panel
   const base = { ...rest, id: newId(), bubbles, focusPoints, vectors }
   // 絵の ref はプロジェクトのアセットを指すので、別のプロジェクトでは開けない
   if (!sameProject) return { ...base, arts: [] }
@@ -150,6 +150,7 @@ function renewPanel(panel: Panel, sameProject: boolean): Panel {
     })),
     ...(artId !== undefined && { artId: artIds.get(artId) }),
     ...(cast && { cast }),
+    ...(acting && { acting }),
   }
 }
 
@@ -215,7 +216,7 @@ export function pastePatch(
       id: newId(),
       order: Math.max(0, ...panel.bubbles.map((b) => b.order)) + 1,
       pos: shifted(source.pos, dx, dy),
-      ...(source.tail && { tail: shifted(source.tail, dx, dy) }),
+      ...(source.tails && { tails: source.tails.map((t) => shifted(t, dx, dy)) }),
     }
     const samePanel = copied.panelId === panel.id
     const bubble = samePanel
@@ -354,12 +355,18 @@ if (import.meta.vitest) {
     test('a panel pasted into another project drops its art and character references', () => {
       const source = page.panels.find((p) => p.bubbles.some((b) => b.speakerId))
       if (!source) throw new Error('fixture に話者のあるフキダシがない')
-      const copied = copyElement(page, { kind: 'panel', id: source.id })
+      const acting = [{ characterId: 'chr_e', text: '振り向いて驚く' }]
+      const copied = copyElement(
+        { ...page, panels: page.panels.map((p) => (p.id === source.id ? { ...p, acting } : p)) },
+        { kind: 'panel', id: source.id },
+      )
       if (!copied) throw new Error('コピーできなかった')
       const pasted = paste(copied, { sameProject: false }).page.panels.at(-1) as Panel
       expect(pasted.arts).toEqual([])
       expect(pasted.artId).toBeUndefined()
       expect(pasted.bubbles.every((b) => b.speakerId === undefined)).toBe(true)
+      expect(pasted.acting).toBeUndefined()
+      expect((paste(copied).page.panels.at(-1) as Panel).acting).toEqual(acting)
     })
 
     test('a bubble goes into the given panel, unlocked and next in order', () => {
