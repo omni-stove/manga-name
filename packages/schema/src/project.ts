@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SFX_SCALE_MAX, SFX_SCALE_MIN } from './sfx-lettering'
 
-export const SCHEMA_VERSION = 29 as const
+export const SCHEMA_VERSION = 30 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -183,6 +183,11 @@ export const StrokeSchema = z.object({
   points: z.array(PointSchema),
   width: z.number().positive(),
   color: z.enum(['ink', 'red', 'blue']),
+  /**
+   * ペンで描いた線の点ごとの筆圧（0..1）。points と同じ並びで、無い線と足りない点は一定の太さ（筆圧 0.5）で描く。
+   * Point に持たせないのは、コマやフキダシの頂点にも使う Point の形を変えずに済ませるため
+   */
+  pressure: z.array(unit).optional(),
 })
 
 /** コマの中のキャラの芝居（表情・動き）。例「振り向いて驚く」 */

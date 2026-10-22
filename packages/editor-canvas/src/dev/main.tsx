@@ -39,6 +39,23 @@ function withFixtureArts(page: Page): Page {
   }
 }
 
+/** ペンが無くても筆圧の描き方を見られるよう、入りと抜きで細くなる波線を足したページ */
+function withPressureSample(page: Page): Page {
+  const n = 80
+  const points = Array.from({ length: n }, (_, i) => ({
+    x: 0.15 + (0.7 * i) / (n - 1),
+    y: 0.9 + 0.03 * Math.sin((i / (n - 1)) * Math.PI * 4),
+  }))
+  const pressure = points.map((_, i) => Math.round(Math.sin((i / (n - 1)) * Math.PI) * 100) / 100)
+  return {
+    ...page,
+    scribbles: [
+      ...page.scribbles,
+      { id: `st_pressure_${page.scribbles.length}`, points, pressure, width: 0.002, color: 'ink' },
+    ],
+  }
+}
+
 const resolveAsset = async (ref: string) =>
   new URL(`../../../../fixtures/art/${ref.replace(/^fixture:/, '')}.png`, import.meta.url).href
 
@@ -96,6 +113,9 @@ function Playground() {
       <div style={{ display: 'flex', gap: 12, padding: 8, alignItems: 'center' }}>
         <button type="button" onClick={() => setPage(withFixtureArts(page))}>
           フィクスチャ画像を入れる
+        </button>
+        <button type="button" onClick={() => setPage(withPressureSample(page))}>
+          筆圧の見本を入れる
         </button>
         <button type="button" onClick={() => setPage(samplePage)}>
           リセット

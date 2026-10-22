@@ -1,5 +1,6 @@
 import { newId, type Page, type Patch, type Point, type Stroke } from '@manga/schema'
 import { type PointerEvent as ReactPointerEvent, type RefObject, useRef } from 'react'
+import { DEFAULT_PRESSURE, pressureSegment, pressureWidth } from './pressure-stroke'
 import type { ScribbleTool } from './types'
 import { type ClientBox, clientToPage, type View } from './view'
 
@@ -20,6 +21,8 @@ interface Options {
   tool: ScribbleTool
   /** 描画中の線。React を通さず points 属性を直接書き換える */
   liveRef: RefObject<SVGPolylineElement | null>
+  /** ペンで描画中の線の輪郭。liveRef と同じく d 属性を直接書き換える */
+  livePenRef: RefObject<SVGPathElement | null>
   onChange(patch: Patch): void
 }
 
@@ -28,6 +31,8 @@ type Mm = { x: number; y: number }
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 // 間引き幅 0.002 より十分細かい桁で切り、保存する JSON を短くする
 const round = (v: number) => Math.round(v * 1e5) / 1e5
+// 太さの差が見えない桁で切る
+const roundPressure = (v: number) => Math.round(clamp01(v) * 100) / 100
 
 function boxOf(el: Element): ClientBox {
   const r = el.getBoundingClientRect()
@@ -59,7 +64,13 @@ function strokeAt(
   const mm = (q: Point): Mm => ({ x: q.x * width, y: q.y * height })
   for (let i = scribbles.length - 1; i >= 0; i--) {
     const stroke = scribbles[i] as Stroke
-    const reach = tolerance + (stroke.width * width) / 2
+    let peak = DEFAULT_PRESSURE
+    if (stroke.pressure) {
+      // 展開すると引数の上限を超えて RangeError になりうるので、ループで points の範囲だけ見る
+      for (let k = 0; k < stroke.points.length; k++) peak = Math.max(peak, stroke.pressure[k] ?? 0)
+    }
+    const thickest = stroke.pressure ? pressureWidth(stroke.width, peak) : stroke.width
+    const reach = tolerance + (thickest * width) / 2
     const pts = stroke.points.map(mm)
     for (let j = 0; j < pts.length; j++) {
       const a = pts[j] as Mm
@@ -72,10 +83,17 @@ function strokeAt(
 /**
  * `scribble` と `sketch` ツールの入力。マウス、ペン、1 本指のタッチで線を引き、pointerup で
  * `/<key>/-` に Stroke を足す Patch を 1 回だけ出す（sketch がまだ無ければ配列ごと足す）。2 本目の指が触れたら描きかけの線は捨て、
- * ピンチとパンは useViewport に任せる。消しゴムは押した位置のストロークを 1 本消す
+ * ピンチとパンは useViewport に任せる。消しゴムは押した位置のストロークを 1 本消す。
+ * ペンで描いた線は点ごとの筆圧を Stroke.pressure に持ち、描いている間は livePenRef に輪郭を描く
  */
 export function useScribble(opts: Options) {
-  const drawing = useRef<{ pointerId: number; points: Point[]; attr: string } | null>(null)
+  // pressure はペンのときだけ持つ。マウスと指は筆圧が取れず、Pointer Events が 0.5 か 0 を返すだけなので一定の太さで描く
+  const drawing = useRef<{
+    pointerId: number
+    points: Point[]
+    attr: string
+    pressure: number[] | null
+  } | null>(null)
   const touches = useRef(new Set<number>())
   // タッチの消しゴムは、2 本目の指が来ないと分かる pointerup まで消さない
   const pendingErase = useRef<{ pointerId: number; clientX: number; clientY: number } | null>(null)
@@ -84,10 +102,11 @@ export function useScribble(opts: Options) {
     drawing.current = null
     pendingErase.current = null
     opts.liveRef.current?.setAttribute('points', '')
+    opts.livePenRef.current?.setAttribute('d', '')
   }
   const toPage = (e: { clientX: number; clientY: number }, box: ClientBox): Mm | null =>
     clientToPage(opts.view, box, { x: e.clientX, y: e.clientY })
-  const append = (p: Mm) => {
+  const append = (p: Mm, pressure: number) => {
     const d = drawing.current
     if (!d) return
     const last = d.points[d.points.length - 1]
@@ -100,7 +119,22 @@ export function useScribble(opts: Options) {
       return
     }
     d.points.push(point)
-    d.attr += `${d.attr ? ' ' : ''}${point.x * opts.width},${point.y * opts.height}`
+    const at = { x: point.x * opts.width, y: point.y * opts.height }
+    if (d.pressure) {
+      // 輪郭は点ごとの丸と台形を足していくだけなので、描きかけの線を毎回作り直さずに済む
+      const q = roundPressure(pressure)
+      const r = (v: number) => pressureWidth(SCRIBBLE_WIDTH * opts.width, v) / 2
+      d.attr += pressureSegment(
+        last ? { x: last.x * opts.width, y: last.y * opts.height } : null,
+        r(d.pressure[d.pressure.length - 1] ?? q),
+        at,
+        r(q),
+      )
+      d.pressure.push(q)
+      opts.livePenRef.current?.setAttribute('d', d.attr)
+      return
+    }
+    d.attr += `${d.attr ? ' ' : ''}${at.x},${at.y}`
     opts.liveRef.current?.setAttribute('points', d.attr)
   }
   const erase = (at: { clientX: number; clientY: number }, svg: SVGSVGElement) => {
@@ -142,9 +176,14 @@ export function useScribble(opts: Options) {
       } catch {
         // pointerdown の処理中に指が離れていると NotFoundError になる。キャプチャ無しでも描ける
       }
-      drawing.current = { pointerId: e.pointerId, points: [], attr: '' }
+      drawing.current = {
+        pointerId: e.pointerId,
+        points: [],
+        attr: '',
+        pressure: e.pointerType === 'pen' ? [] : null,
+      }
       const p = toPage(e, boxOf(e.currentTarget))
-      if (p) append(p)
+      if (p) append(p, e.pressure)
     },
     onPointerMove(e: ReactPointerEvent<SVGSVGElement>) {
       if (drawing.current?.pointerId !== e.pointerId) return
@@ -153,7 +192,7 @@ export function useScribble(opts: Options) {
       const events = e.nativeEvent.getCoalescedEvents?.() ?? []
       for (const ev of events.length > 0 ? events : [e]) {
         const p = toPage(ev, box)
-        if (p) append(p)
+        if (p) append(p, ev.pressure)
       }
     },
     onPointerUp(e: ReactPointerEvent<SVGSVGElement>) {
@@ -173,6 +212,7 @@ export function useScribble(opts: Options) {
         points: d.points,
         width: SCRIBBLE_WIDTH,
         color: opts.tool === 'eraser' ? 'ink' : opts.tool,
+        ...(d.pressure && { pressure: d.pressure }),
       }
       opts.onChange(
         opts.page[opts.key]
