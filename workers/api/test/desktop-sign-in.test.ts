@@ -41,6 +41,14 @@ describe('GET /v1/desktop-sign-in', () => {
     expect(to.searchParams.get('redirect_uri')).toBe('http://api.test/v1/auth/callback/google')
     expect(res.headers.getSetCookie().join('\n')).toContain('state')
   })
+
+  test('rejects a port outside 1024-65535', async () => {
+    const google = { ...env, GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: 'secret' }
+    for (const port of ['80', '65536', 'x']) {
+      const res = await app.request(`http://api.test/v1/desktop-sign-in?port=${port}`, {}, google)
+      expect(res.status).toBe(400)
+    }
+  })
 })
 
 describe('GET /v1/desktop-sign-in/done', () => {
@@ -71,6 +79,20 @@ describe('GET /v1/desktop-sign-in/done', () => {
     expect(body.session.token).toBe('tok-alice')
     expect(body.user.id).toBe('u_alice')
     expect(verified.headers.getSetCookie()).toEqual([])
+  })
+
+  test('hands the token to the CLI on 127.0.0.1 when a port is given', async () => {
+    await seedAlice('tok-alice')
+    const res = await app.request(
+      '/v1/desktop-sign-in/done?port=48123',
+      { headers: { authorization: 'Bearer tok-alice' } },
+      env,
+    )
+    const back = location(res)
+    expect(back.origin).toBe('http://127.0.0.1:48123')
+    expect(back.searchParams.get('token')).not.toBe('')
+    const failed = await app.request('/v1/desktop-sign-in/done?port=48123&error=x', {}, env)
+    expect(location(failed).origin).toBe('http://127.0.0.1:48123')
   })
 
   test('returns the sign-in error to the app', async () => {

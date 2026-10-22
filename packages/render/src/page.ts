@@ -1,5 +1,7 @@
 import {
   type Bubble,
+  blackPanel,
+  bubbleGroups,
   bubbleOutline,
   bubbleTextBox,
   bubbleTypeface,
@@ -7,6 +9,7 @@ import {
   currentArt,
   effectInk,
   effectLines,
+  type FocusPoint,
   frameOutline,
   groundColor,
   hasFrameLine,
@@ -17,10 +20,14 @@ import {
   paintOrder,
   panelOutline,
   panelTone,
+  SFX_OUTLINE,
+  sfxFontSize,
+  sfxLetterings,
+  sfxTypeface,
   TONE_MATRICES,
 } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
-import { bubbleGeometry, drawBubble } from './bubble'
+import { bubbleGeometry, drawJoinedBubbles, joinedGeometry } from './bubble'
 import { type PxRect, pagePixelSize, pointToPx, rectToPx } from './geometry'
 import {
   actingNotes,
@@ -35,7 +42,13 @@ import {
   fillOutline,
   withClip,
 } from './panel'
-import { drawVerticalText, layoutBubbleText } from './text'
+import {
+  drawHorizontalText,
+  drawVerticalText,
+  layoutBubbleText,
+  measuredAdvance,
+  unbrokenLines,
+} from './text'
 import type { RenderContext, RenderOptions, Surface } from './types'
 
 /** 1 ページの幅に対する比率。見開きでも 1 ページ分の幅に対してとり、線と文字を 1 ページのときと同じ太さにする */
@@ -72,7 +85,9 @@ async function loadArt(
 
 /**
  * ページ 1 枚を PNG に合成する。同じ Page と同じアセットからは同じバイト列が出る。
- * 紙面全体に重ねるトーンは、フキダシと間白まで描いた後に乗算で重ねる。焦点、ベクトル、診断、参考画像、手描きは描かない。
+ * sfx の焦点の label は、絵の上、フキダシと枠線の下に、コマの輪郭で切った描き文字として、焦点ごとの傾き・書体・大きさで描く。
+ * 紙面全体に重ねるトーンは、フキダシと間白まで描いた後に乗算で重ねる。
+ * face と keyObject の焦点、ベクトル、診断、参考画像、手描きは描かない。
  */
 export async function renderPage(
   page: Page,
@@ -88,7 +103,10 @@ export async function drawPage(
   ctx: RenderContext,
   opts: RenderOptions,
 ): Promise<Surface> {
-  const typefaces = page.panels.flatMap((panel) => panel.bubbles.map(bubbleTypeface))
+  const typefaces = page.panels.flatMap((panel) => [
+    ...panel.bubbles.map(bubbleTypeface),
+    ...sfxLetterings(panel).map(sfxTypeface),
+  ])
   const [backend] = await Promise.all([getBackend(), loadFonts(typefaces)])
   const unit = pagePixelSize(ctx.settings, opts.width)
   const pageSize = page.spread ? { w: unit.w * 2, h: unit.h } : unit
@@ -108,23 +126,62 @@ export async function drawPage(
   const innerRect = rectToPx(innerFrameOf(page), pageRect)
   const panels = paintOrder(page.panels)
   const arts = await Promise.all(panels.map((panel) => loadArt(panel, ctx, panelTone(page, panel))))
-  // 黒塗りのコマと、黒い地の上の枠なしのコマは、中が黒い
+  // 黒い地のコマと、黒い紙の上の枠なしのコマは、中が黒い
   const blackInside = (panel: Panel) =>
-    panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')
+    blackPanel(panel) || (panel.frame === 'none' && ground === '#000')
+  // つないだフキダシは 1 つの輪郭なので、組の先頭のフキダシの overflow に従って組ごと描く
   const drawBubbles = (panel: Panel, overflow: boolean) => {
     const rect = rectToPx(panel.rect, pageRect)
-    for (const bubble of byOrder(panel.bubbles)) {
-      if ((bubble.overflow === true) !== overflow) continue
-      const g = bubbleGeometry(bubble, rect)
-      drawBubble(c, bubble.shape, g, unit.w * BUBBLE_LINE_WIDTH, bubble.fill)
-      const text = bubbleTextBox(bubble.shape, g)
-      const box = clipTextBox(overflow ? text : clipTextBox(text, rect), innerRect)
-      const { lines, fontPx } = layoutBubbleText(bubble.text, box, unit.w * MIN_FONT)
-      // 地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
-      const white = bubbleOutline(bubble.shape, g).fill
-        ? bubble.fill === 'black'
-        : !overflow && blackInside(panel)
-      drawVerticalText(c, lines, fontPx, box, white ? '#fff' : '#000', bubbleTypeface(bubble))
+    for (const group of bubbleGroups(panel.bubbles)) {
+      if ((group[0]?.overflow === true) !== overflow) continue
+      const members = group.map((bubble) => ({
+        bubble,
+        shape: bubble.shape,
+        g: bubbleGeometry(bubble, rect),
+        fill: bubble.fill,
+        joined: joinedGeometry(bubble, group, rect),
+      }))
+      drawJoinedBubbles(c, members, unit.w * BUBBLE_LINE_WIDTH)
+      for (const { bubble, g } of members) {
+        const text = bubbleTextBox(bubble.shape, g)
+        const box = clipTextBox(overflow ? text : clipTextBox(text, rect), innerRect)
+        // 地を持たないフキダシのセリフは黒塗りの上で見えないので白抜きにする。はみ出す方は白い紙にかかるので黒のまま
+        const white = bubbleOutline(bubble.shape, g).fill
+          ? bubble.fill === 'black'
+          : !overflow && blackInside(panel)
+        const color = white ? '#fff' : '#000'
+        const typeface = bubbleTypeface(bubble)
+        const minPx = unit.w * MIN_FONT
+        if (bubble.writing === 'horizontal') {
+          const advance = measuredAdvance(c, typeface)
+          const laid = layoutBubbleText(bubble.text, box, minPx, 'horizontal', advance)
+          drawHorizontalText(c, laid.lines, laid.fontPx, box, color, typeface, advance)
+        } else {
+          const { lines, fontPx } = layoutBubbleText(bubble.text, box, minPx)
+          drawVerticalText(c, lines, fontPx, box, color, typeface)
+        }
+      }
+    }
+  }
+
+  const drawSfx = (panel: Panel) => {
+    const rect = rectToPx(panel.rect, pageRect)
+    for (const focus of sfxLetterings(panel)) {
+      const fontPx = sfxFontSize(focus, rect.w, rect.h)
+      const center = pointToPx(focus.pos, rect)
+      c.save()
+      c.translate(center.x, center.y)
+      c.rotate(((focus.rotation ?? 0) * Math.PI) / 180)
+      drawVerticalText(
+        c,
+        unbrokenLines(focus.label),
+        fontPx,
+        { x: 0, y: 0, w: 0, h: 0 },
+        '#000',
+        sfxTypeface(focus),
+        { color: '#fff', width: fontPx * SFX_OUTLINE },
+      )
+      c.restore()
     }
   }
 
@@ -137,7 +194,7 @@ export async function drawPage(
     )
     const image = arts[i]
     // 枠ありのコマは、下に敷いた枠なしのコマの絵を隠すよう白い地を持つ
-    if (panel.fill === 'black') fillOutline(c, outline, '#000')
+    if (blackPanel(panel)) fillOutline(c, outline, '#000')
     else if (panel.frame !== 'none') fillOutline(c, outline, '#fff')
     if (image) drawCover(c, image, rect, outline)
     else if (panel.fill === undefined) {
@@ -147,6 +204,7 @@ export async function drawPage(
     drawEffectLines(c, outline, effectLines(panel, rect, unit.w), effectInk(panel))
     // フキダシまでぼかさないよう、絵の直後にぼかす
     if (panel.frame === 'soft') drawSoftEdge(c, outline, unit.w, ground)
+    withClip(c, outline, () => drawSfx(panel))
     if (opts.panelNumbers) {
       drawPanelNumber(c, panel.order, outline, unit.w * NOTE_FONT * 1.5)
     }
@@ -354,17 +412,17 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-shaped', png)
   })
 
-  test('書体: ゴシック、太ゴシック、明朝、丸ゴシックのセリフを並べて描く', async () => {
+  test('書体: ゴシック、太ゴシック、明朝、丸ゴシック、手書き風のセリフを並べて描く', async () => {
     const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
-    const typefaces = ['gothic', 'bold', 'mincho', 'rounded'] as const
+    const typefaces = ['gothic', 'bold', 'mincho', 'rounded', 'hand'] as const
     const bubbles = typefaces.map((typeface, i) => ({
       id: `bb_${typeface}`,
       order: i + 1,
       text: '書体の見本',
       shape: 'none' as const,
       typeface,
-      pos: { x: 0.85 - i * 0.2, y: 0.5 },
-      size: { w: 0.15, h: 0.9 },
+      pos: { x: 0.86 - i * 0.17, y: 0.5 },
+      size: { w: 0.13, h: 0.9 },
     }))
     const page: Page = { ...emptyPage, panels: [{ ...pn1, bubbles }, ...rest] }
     const png = await renderPage(page, noAssets, {
@@ -395,6 +453,36 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-tails', png)
   })
 
+  test('連結フキダシ: つないだ 2 つの輪郭を細い首で結び、境に線を引かない', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const bubble = (
+      id: string,
+      order: number,
+      shape: Bubble['shape'],
+      pos: { x: number; y: number },
+      more: Partial<Bubble> = {},
+    ): Bubble => ({ id, order, text: 'つないだ', shape, pos, size: { w: 0.11, h: 0.42 }, ...more })
+    const bubbles = [
+      bubble('bb_a', 1, 'normal', { x: 0.86, y: 0.3 }),
+      bubble(
+        'bb_b',
+        2,
+        'normal',
+        { x: 0.68, y: 0.62 },
+        { joinedTo: 'bb_a', tails: [{ x: 0.62, y: 0.98 }] },
+      ),
+      bubble('bb_c', 3, 'whisper', { x: 0.44, y: 0.3 }),
+      bubble('bb_d', 4, 'whisper', { x: 0.26, y: 0.6 }, { joinedTo: 'bb_c' }),
+    ]
+    const page: Page = { ...emptyPage, panels: [{ ...pn1, bubbles }, ...rest] }
+    const png = await renderPage(page, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-joined', png)
+  })
+
   test('ルビと傍点: 傍点の中のルビ付きの語には傍点を打たず、対の無い《《は字のまま描く', async () => {
     const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
     const texts = ['それは《《本当》》だ', '《《この|魔法《まほう》だ》》', '《《まだ']
@@ -413,6 +501,49 @@ if (import.meta.vitest) {
       panelNumbers: false,
     })
     await matchPngSnapshot('page-emphasis', png)
+  })
+
+  test('縦中横: !? と 2 桁の数字をルビと傍点の中でも 1 字分の幅に横に組み、3 桁と 3 つ続く記号は組まない', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const texts = ['え!?12時に！？', '|12月《じゅうにがつ》《《!!》》', '100円!!!']
+    const bubbles = texts.map((text, i) => ({
+      id: `bb_upright_${i}`,
+      order: i + 1,
+      text,
+      shape: 'none' as const,
+      pos: { x: 0.8 - i * 0.3, y: 0.5 },
+      size: { w: 0.2, h: 0.9 },
+    }))
+    const page: Page = { ...emptyPage, panels: [{ ...pn1, bubbles }, ...rest] }
+    const png = await renderPage(page, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-upright', png)
+  })
+
+  test('モノローグ枠は角を丸めた白地の四角をしっぽ無しで描き、ナレーションの角は丸めない', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const shapes = ['narration', 'monologue'] as const
+    const bubbles: Bubble[] = shapes.map((shape, i) => ({
+      id: `bb_${shape}`,
+      order: i + 1,
+      text: '心の声の見本',
+      shape,
+      pos: { x: 0.7 - i * 0.4, y: 0.5 },
+      size: { w: 0.25, h: 0.8 },
+      // しっぽの付かない形なので描かれない
+      tails: [{ x: 0.5, y: 0.95 }],
+    }))
+    const panel: Panel = { ...pn1, note: undefined, camera: undefined, bubbles }
+    const page: Page = { ...emptyPage, panels: [panel, ...rest] }
+    const png = await renderPage(page, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-monologue', png)
   })
 
   test('黒塗りのコマは輪郭の内側を黒で塗り、地の無いフキダシのセリフを白で描く', async () => {
@@ -488,6 +619,68 @@ if (import.meta.vitest) {
     const none = await draw('none')
     expect(none.corner).toBe(255)
     expect(none.column.some((v) => v < 100)).toBe(true)
+  })
+
+  test('横書き: ルビ、英文、黒フキダシのセリフを左から右へ書き、上から下へ行を送る', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const bubble = (id: string, text: string, x: number, extra: Partial<Bubble> = {}): Bubble => ({
+      id,
+      order: 1,
+      text,
+      shape: 'narration',
+      writing: 'horizontal',
+      pos: { x, y: 0.5 },
+      size: { w: 0.3, h: 0.5 },
+      ...extra,
+    })
+    const bubbles = [
+      bubble('bb_ruby', 'あの|魔法陣《まほうじん》が、光った。', 0.8),
+      bubble('bb_english', 'Hello, world! This is a sign.', 0.5, { shape: 'electronic' }),
+      bubble('bb_black', '画面の中の文字', 0.2, { fill: 'black' }),
+    ]
+    const panel: Panel = { ...pn1, note: undefined, camera: undefined, bubbles }
+    const png = await renderPage({ ...emptyPage, panels: [panel, ...rest] }, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-horizontal', png)
+  })
+
+  test('横書きの長音は回さず、箱の中央を横に貫く 1 行に並べる', async () => {
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const draw = async (writing?: Bubble['writing']) => {
+      const bubble: Bubble = {
+        id: 'bb_line',
+        order: 1,
+        text: 'ーーーーーー',
+        shape: 'none',
+        ...(writing && { writing }),
+        pos: { x: 0.5, y: 0.5 },
+        size: { w: 0.8, h: 0.3 },
+      }
+      // 指示メモが紙面に出て画素の判定にかからないよう消す
+      const panel: Panel = { ...pn1, note: undefined, camera: undefined, bubbles: [bubble] }
+      const png = await renderPage({ ...emptyPage, panels: [panel, ...rest] }, noAssets, {
+        width: SNAPSHOT_WIDTH,
+        notes: 'none',
+        panelNumbers: false,
+      })
+      const { width, data } = await pixels(png)
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      const at = (x: number, y: number) => {
+        const row = Math.round((pn1.rect.y + pn1.rect.h * y) * pageH)
+        const col = Math.round((pn1.rect.x + pn1.rect.w * x) * width)
+        return data[(row * width + col) * 4] ?? 0
+      }
+      // コマの幅の 3 割から 7 割の列のうち、中央の帯に文字の画素がある列の数
+      return Array.from({ length: 40 }, (_, i) => 0.3 + (0.4 * i) / 40).filter((x) =>
+        Array.from({ length: 40 }, (_, j) => at(x, 0.4 + (0.2 * j) / 40)).some((v) => v < 100),
+      ).length
+    }
+    expect(await draw('horizontal')).toBeGreaterThanOrEqual(25)
+    // 縦書きでは長音を回して縦棒にするので、帯を横に貫かない
+    expect(await draw()).toBeLessThan(15)
   })
 
   test('枠なしのコマは枠線を引かず、order に関わらず枠ありのコマの下に敷く', async () => {
@@ -658,6 +851,158 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-frames', png)
   })
 
+  const sfxFocus = (id: string, patch: Partial<FocusPoint>): FocusPoint => ({
+    id,
+    kind: 'sfx',
+    label: 'ドン',
+    pos: { x: 0.5, y: 0.5 },
+    weight: 0.5,
+    ...patch,
+  })
+
+  test('描き文字: sfx の焦点の label を太ゴシックの縦書きで白いふち付きに描き、コマの輪郭で切ってフキダシの下に置く', async () => {
+    const { page, ctx } = withArts()
+    const [pn1, pn2, ...rest] = page.panels as [Panel, Panel, ...Panel[]]
+    const styled: Page = {
+      ...page,
+      panels: [
+        {
+          ...pn1,
+          focusPoints: [
+            // pn_1 のフキダシ bb_1 の下に潜る
+            sfxFocus('fp_sfx_1', { label: 'ゴゴゴ', pos: { x: 0.85, y: 0.4 }, weight: 1 }),
+            // コマの左端からはみ出して切れる
+            sfxFocus('fp_sfx_2', { label: 'ザッ\nザッ', pos: { x: 0.02, y: 0.6 }, weight: 0 }),
+          ],
+        },
+        { ...pn2, focusPoints: [sfxFocus('fp_sfx_3', { label: 'ドンッ!!', weight: 0.5 })] },
+        ...rest,
+      ],
+    }
+    const png = await renderPage(styled, ctx, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-sfx', png)
+  })
+
+  test('描き文字は sfx の焦点にだけ、label があるときだけ描く', async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const [pn1, pn2, ...rest] = emptyPage.panels as [Panel, Panel, ...Panel[]]
+    const withFocus = (focusPoints: FocusPoint[]): Page => ({
+      ...emptyPage,
+      panels: [pn1, { ...pn2, focusPoints }, ...rest],
+    })
+    const draw = async (page: Page) => (await pixels(await renderPage(page, noAssets, opts))).data
+    const plain = await draw(withFocus([]))
+    const differs = (data: Uint8ClampedArray) => data.some((v, i) => v !== plain[i])
+
+    expect(differs(await draw(withFocus([sfxFocus('fp_a', { label: '' })])))).toBe(false)
+    expect(differs(await draw(withFocus([sfxFocus('fp_b', { kind: 'face' })])))).toBe(false)
+    expect(differs(await draw(withFocus([sfxFocus('fp_c', { kind: 'keyObject' })])))).toBe(false)
+
+    const drawn = await draw(withFocus([sfxFocus('fp_d', {})]))
+    const width = SNAPSHOT_WIDTH
+    const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+    // 焦点の位置を中心に、字の高さの 2 字ぶんの範囲で黒い画素が増える
+    const cx = Math.round((pn2.rect.x + pn2.rect.w * 0.5) * width)
+    const cy = Math.round((pn2.rect.y + pn2.rect.h * 0.5) * pageH)
+    const size = Math.round(sfxFontSize({ weight: 0.5 }, pn2.rect.w * width, pn2.rect.h * pageH))
+    const darkAround = (data: Uint8ClampedArray) => {
+      let n = 0
+      for (let y = cy - size; y < cy + size; y++) {
+        for (let x = cx - size; x < cx + size; x++) {
+          if ((data[(y * width + x) * 4] ?? 255) < 64) n++
+        }
+      }
+      return n
+    }
+    expect(darkAround(drawn)).toBeGreaterThan(darkAround(plain))
+  })
+
+  test('描き文字: 焦点ごとの傾き、書体、大きさで描く', async () => {
+    const { page, ctx } = withArts()
+    const [pn1, pn2, pn3, ...rest] = page.panels as [Panel, Panel, Panel, ...Panel[]]
+    const styled: Page = {
+      ...page,
+      panels: [
+        {
+          ...pn1,
+          focusPoints: [
+            sfxFocus('fp_sfx_1', { label: 'ゴゴゴ', pos: { x: 0.3, y: 0.5 }, rotation: -20 }),
+            sfxFocus('fp_sfx_2', {
+              label: 'ザッ',
+              pos: { x: 0.75, y: 0.6 },
+              weight: 0,
+              typeface: 'mincho',
+              scale: 2.5,
+            }),
+          ],
+        },
+        {
+          ...pn2,
+          focusPoints: [
+            sfxFocus('fp_sfx_3', { label: 'ドンッ!!', rotation: 90, typeface: 'hand', scale: 0.6 }),
+          ],
+        },
+        { ...pn3, focusPoints: [sfxFocus('fp_sfx_4', { label: 'シーン', rotation: 180 })] },
+        ...rest,
+      ],
+    }
+    const png = await renderPage(styled, ctx, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-sfx-styled', png)
+  })
+
+  test('描き文字の傾きは焦点を中心に字の並びを回し、大きさの倍率は字を大きくする', async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const [pn1, pn2, ...rest] = emptyPage.panels as [Panel, Panel, ...Panel[]]
+    const withFocus = (focusPoints: FocusPoint[]): Page => ({
+      ...emptyPage,
+      panels: [pn1, { ...pn2, focusPoints }, ...rest],
+    })
+    const draw = async (page: Page) => (await pixels(await renderPage(page, noAssets, opts))).data
+    const drawSfx = (patch: Partial<FocusPoint>) =>
+      draw(withFocus([sfxFocus('fp', { label: 'ドドド', weight: 0.2, ...patch })]))
+    const width = SNAPSHOT_WIDTH
+    const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+    const plain = await draw(withFocus([]))
+    /** plain に無く増えた黒い画素を囲む矩形の幅と高さ */
+    const inked = (data: Uint8ClampedArray) => {
+      const x0 = Math.ceil(pn2.rect.x * width)
+      const x1 = Math.floor((pn2.rect.x + pn2.rect.w) * width)
+      const y0 = Math.ceil(pn2.rect.y * pageH)
+      const y1 = Math.floor((pn2.rect.y + pn2.rect.h) * pageH)
+      let box = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity }
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * width + x) * 4
+          if ((data[i] ?? 255) < 64 && (plain[i] ?? 255) >= 64) {
+            box = {
+              left: Math.min(box.left, x),
+              right: Math.max(box.right, x),
+              top: Math.min(box.top, y),
+              bottom: Math.max(box.bottom, y),
+            }
+          }
+        }
+      }
+      return { w: box.right - box.left, h: box.bottom - box.top }
+    }
+
+    const upright = inked(await drawSfx({}))
+    expect(upright.h).toBeGreaterThan(upright.w * 2)
+    const turned = inked(await drawSfx({ rotation: 90 }))
+    expect(turned.w).toBeGreaterThan(turned.h * 2)
+    expect(turned.w).toBeCloseTo(upright.h, -1)
+    const doubled = inked(await drawSfx({ scale: 2 }))
+    expect(doubled.h).toBeGreaterThan(upright.h * 1.8)
+  })
+
   test('効果線: 集中線、スピード線、黒塗りのコマの白い集中線を絵の上に描く', async () => {
     const { page, ctx } = withArts()
     const effects: Partial<Panel>[] = [
@@ -715,6 +1060,85 @@ if (import.meta.vitest) {
     expect(black(light, 0, Infinity)).toBe(0)
     expect(blackFocused(light, 0, 0.95)).toBe(0)
     expect(blackFocused(light, 1.5, Infinity)).toBeGreaterThan(0)
+  })
+
+  test('ベタフラ: コマの地を黒で塗り、焦点から白い線を描き、フキダシのセリフを白抜きにする', async () => {
+    const { page, ctx } = withArts()
+    const [pn1, pn2, pn3, ...rest] = page.panels as [Panel, Panel, Panel, ...Panel[]]
+    const bubble: Bubble = {
+      id: 'bb_flash',
+      order: 9,
+      text: 'ーーーー',
+      shape: 'none',
+      pos: { x: 0.2, y: 0.5 },
+      size: { w: 0.2, h: 0.6 },
+    }
+    const withFlash: Page = {
+      ...page,
+      panels: [
+        { ...pn1, artId: undefined, arts: [], effect: 'beta_flash' },
+        { ...pn2, artId: undefined, arts: [], effect: 'beta_flash', bubbles: [bubble] },
+        { ...pn3, effect: 'beta_flash' },
+        ...rest,
+      ],
+    }
+    const png = await renderPage(withFlash, ctx, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-beta-flash', png)
+  })
+
+  test('ベタフラは中心のまわりを白く抜いて外を黒く残し、地の無いフキダシのセリフを白で描く', async () => {
+    const pn5 = emptyPage.panels.find((p) => p.id === 'pn_5') as Panel
+    const bare: Panel = {
+      ...pn5,
+      note: undefined,
+      camera: undefined,
+      bubbles: [],
+      focusPoints: [],
+      vectors: [],
+      effect: 'beta_flash',
+    }
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const draw = async (panel: Panel) => {
+      const others = emptyPage.panels.filter((p) => p.id !== pn5.id)
+      const { width, data } = await pixels(
+        await renderPage({ ...emptyPage, panels: [...others, panel] }, noAssets, opts),
+      )
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      const rect = rectToPx(panel.rect, { x: 0, y: 0, w: width, h: pageH })
+      // コマの中の box（コマの rect に対する比）にある画素のうち、白い画素の割合
+      return (box: { x: number; y: number; w: number; h: number }) => {
+        const px = rectToPx(box, rect)
+        let light = 0
+        let all = 0
+        for (let y = Math.ceil(px.y); y < px.y + px.h; y++) {
+          for (let x = Math.ceil(px.x); x < px.x + px.w; x++) {
+            all++
+            if ((data[(y * width + x) * 4] ?? 0) > 128) light++
+          }
+        }
+        return light / all
+      }
+    }
+    const flash = await draw(bare)
+    expect(flash({ x: 0.47, y: 0.47, w: 0.06, h: 0.06 })).toBeGreaterThan(0.8)
+    const corner = { x: 0.02, y: 0.02, w: 0.1, h: 0.1 }
+    expect(flash(corner)).toBeLessThan(0.5)
+
+    const bubbleBox = { x: 0.02, y: 0.1, w: 0.16, h: 0.8 }
+    const bubble: Bubble = {
+      id: 'bb_flash',
+      order: 1,
+      text: 'ーーーーーー',
+      shape: 'none',
+      pos: { x: bubbleBox.x + bubbleBox.w / 2, y: 0.5 },
+      size: { w: bubbleBox.w, h: bubbleBox.h },
+    }
+    const withBubble = await draw({ ...bare, bubbles: [bubble] })
+    expect(withBubble(bubbleBox)).toBeGreaterThan(flash(bubbleBox))
   })
 
   test('同じ入力で 2 回描くとバイト一致する', async () => {

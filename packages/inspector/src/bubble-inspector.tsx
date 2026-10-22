@@ -23,10 +23,11 @@ export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[]
   option('electronic', m.bubble_shape_electronic),
   option('urchin', m.bubble_shape_urchin),
   option('narration', m.bubble_shape_narration),
+  option('monologue', m.bubble_shape_monologue),
   option('none', m.bubble_shape_none),
 ]
 
-const typefaceLabel = (typeface: NonNullable<Bubble['typeface']>) =>
+export const typefaceLabel = (typeface: NonNullable<Bubble['typeface']>) =>
   m[`bubble_typeface_${typeface}` as const]()
 
 /** 書体の選択肢。空は書体を持たず形に合わせる */
@@ -78,6 +79,17 @@ export function BubbleInspector({ bubble, characters, onChange }: BubbleInspecto
         value={bubble.typeface ?? ''}
         options={typefaceOptions(bubble.shape)}
         onCommit={(v) => onChange(optionalString('/typeface', bubble.typeface, v))}
+      />
+      <Checkbox
+        label={m.bubble_writing_horizontal()}
+        checked={bubble.writing === 'horizontal'}
+        onChange={(e) =>
+          onChange(
+            e.target.checked
+              ? [{ op: 'add', path: '/writing', value: 'horizontal' }]
+              : [{ op: 'remove', path: '/writing' }],
+          )
+        }
       />
       <Checkbox
         label={m.bubble_fill_black()}
@@ -189,6 +201,30 @@ if (import.meta.vitest) {
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/fill' }])
     })
 
+    test('the horizontal checkbox adds and removes writing', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const bubble = must(samplePanel.bubbles[0])
+      const props = { bubble, characters: project.characters, onChange }
+      const { container, root } = await render(<BubbleInspector {...props} />)
+      const checkbox = must(
+        [...container.querySelectorAll('label')]
+          .find((el) => el.textContent === m.bubble_writing_horizontal())
+          ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+      )
+      expect(checkbox.checked).toBe(false)
+      await act(async () => checkbox.click())
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'add', path: '/writing', value: 'horizontal' },
+      ])
+
+      await act(async () =>
+        root.render(<BubbleInspector {...props} bubble={{ ...bubble, writing: 'horizontal' }} />),
+      )
+      expect(checkbox.checked).toBe(true)
+      await act(async () => checkbox.click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/writing' }])
+    })
+
     test('the typeface select names the typeface of the shape, and adds and removes typeface', async () => {
       const onChange = vi.fn<(patch: Patch) => void>()
       const bubble = { ...must(samplePanel.bubbles[0]), shape: 'narration' as const }
@@ -210,6 +246,19 @@ if (import.meta.vitest) {
       expect(select().value).toBe('rounded')
       await choose(select(), '')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/typeface' }])
+    })
+
+    test('the typeface select offers the hand-written typeface', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const bubble = { ...must(samplePanel.bubbles[0]), shape: 'whisper' as const }
+      const { container } = await render(
+        <BubbleInspector bubble={bubble} characters={project.characters} onChange={onChange} />,
+      )
+      const select = selectLabelled(container, m.bubble_typeface())
+      const hand = Array.from(select.options).find((o) => o.value === 'hand')
+      expect(hand?.textContent).toBe(m.bubble_typeface_hand())
+      await choose(select, 'hand')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/typeface', value: 'hand' }])
     })
   })
 }

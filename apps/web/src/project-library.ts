@@ -1,3 +1,4 @@
+import { createSyncProvider, type SyncProviderState } from '@manga/collab'
 import { createEmptyProject, type ID, newId, type Project } from '@manga/schema'
 import type { ProjectSummary, ProjectsByOrigin, StorageAdapter, YDocStore } from '@manga/storage'
 import { Awareness } from 'y-protocols/awareness'
@@ -8,7 +9,6 @@ import { createPresence, type Presence } from './store/presence'
 import { createProjectStore } from './store/project-store'
 import type { ProjectStore, WebProjectStore } from './store/project-store-types'
 import { restrictStore } from './store/restricted-store'
-import { createSyncProvider, type SyncProviderState } from './store/sync-provider'
 import { createYjsProjectStore } from './store/yjs-project-store'
 
 /**
@@ -296,7 +296,7 @@ if (import.meta.vitest) {
   const { afterEach, describe, expect, test, vi } = import.meta.vitest
   const { createMemoryStorage, createMemoryYDocStore } = await import('@manga/storage')
   const { currentArt, fixtures } = await import('@manga/schema')
-  const { createFakeSyncServer } = await import('./store/fake-sync-server')
+  const { createFakeSyncServer } = await import('@manga/collab')
 
   const NOW = '2026-10-15T00:00:00.000Z'
   const setup = () => {

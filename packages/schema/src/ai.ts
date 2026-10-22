@@ -6,6 +6,7 @@ import {
   CharacterSchema,
   IdSchema,
   PageSchema,
+  PanelActingSchema,
   ProjectBaseSchema,
 } from './project'
 
@@ -17,6 +18,8 @@ export const PanelArtRequestSchema = z.object({
   panelId: IdSchema,
   layoutPng: blob,
   hint: z.string().optional(),
+  /** コマが属するシーンの見出し（sceneOf）。前のページに遡って引くので、page だけからは決まらない */
+  scene: z.string().optional(),
   referencePng: blob.optional(),
   characterRefs: z.array(z.object({ characterId: IdSchema, image: blob })).optional(),
   previous: z.object({ art: blob, instruction: z.string() }).optional(),
@@ -33,6 +36,8 @@ export const PageArtRequestSchema = z.object({
   layoutPng: blob,
   /** コマごとの診断のヒント。キーは Panel.id */
   hints: z.record(IdSchema, z.string()).optional(),
+  /** コマごとのシーンの見出し（pageScenes）。キーは Panel.id */
+  scenes: z.record(IdSchema, z.string()).optional(),
   /** Page.reference をページ丸ごと */
   referencePng: blob.optional(),
   characterRefs: z.array(z.object({ characterId: IdSchema, image: blob })).optional(),
@@ -82,6 +87,8 @@ export const NamePanelSchema = z.object({
   camera: CameraSchema.optional(),
   /** このコマのセリフ。読む順。Bubble になる */
   lines: z.array(PlanLineSchema),
+  /** 登場キャラの芝居。Panel.acting になる */
+  acting: z.array(PanelActingSchema.extend({ text: z.string().min(1) })).optional(),
 })
 
 /** ネームの書き起こしの応答。1 ページの脚本を読む順のコマに割ったもの */
@@ -94,6 +101,7 @@ export const NameDraftSchema = z.array(
   NamePanelSchema.extend({
     note: z.string(),
     lines: z.array(PlanLineSchema.extend({ text: z.string() })),
+    acting: z.array(PanelActingSchema).optional(),
   }),
 )
 
@@ -164,10 +172,21 @@ if (import.meta.vitest) {
       { panels: Array.from({ length: MAX_NAME_PANELS + 1 }, () => panel) },
       { panels: [{ ...panel, note: '' }] },
       { panels: [{ ...panel, camera: '' }] },
+      { panels: [{ ...panel, acting: [{ characterId: 'chr_e', text: '' }] }] },
     ]
     for (const res of invalid) expect(NameDraftResponseSchema.safeParse(res).success).toBe(false)
+    const acting = [{ characterId: 'chr_e', text: '振り向く' }]
     expect(
-      NameDraftSchema.parse([{ note: '', lines: [{ text: '', shape: 'normal' }] }]),
+      NameDraftResponseSchema.parse({ panels: [{ ...panel, acting }] }).panels[0]?.acting,
+    ).toEqual(acting)
+    expect(
+      NameDraftSchema.parse([
+        {
+          note: '',
+          lines: [{ text: '', shape: 'normal' }],
+          acting: [{ characterId: 'chr_e', text: '' }],
+        },
+      ]),
     ).toHaveLength(1)
   })
 
@@ -230,6 +249,7 @@ if (import.meta.vitest) {
     }
     expect(PageArtRequestSchema.parse({ ...base, hints: { pn: 'h' } }).hints).toEqual({ pn: 'h' })
     expect(PageArtRequestSchema.safeParse({ ...base, hints: { pn: 1 } }).success).toBe(false)
+    expect(PageArtRequestSchema.parse({ ...base, scenes: { pn: 's' } }).scenes).toEqual({ pn: 's' })
     expect(PageArtRequestSchema.parse({ ...base, previous: {} })).not.toHaveProperty('previous')
   })
 }

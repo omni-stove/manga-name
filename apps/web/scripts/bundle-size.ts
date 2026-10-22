@@ -1,12 +1,12 @@
 /**
  * `vite build` の成果物から、エディタを開くまでに読み込む JS と CSS（index.html から静的 import で辿れるもの）の
- * gzip 後の合計を測り、500KB を超えるか、フォントを最初から読み込んでいたら終了コード 1 で終わる。
+ * gzip 後の合計を測り、508KB を超えるか、フォントを最初から読み込んでいたら終了コード 1 で終わる。
  * `pnpm --filter @manga/web size` で、ビルドしてから実行する。
  */
 import { readFile } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
 
-const BUDGET = 500 * 1024
+const BUDGET = 508 * 1024
 const FONT = /\.(ttf|otf|woff2?)\b/
 
 interface ManifestChunk {

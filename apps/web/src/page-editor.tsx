@@ -65,6 +65,7 @@ import { BatchOptions, useBatchGeneration } from './batch-generation'
 import {
   type ElementMenuContext,
   elementMenuItems,
+  joinMenuItems,
   setLocked,
   shapeMenuItems,
   toolMenuItems,
@@ -125,7 +126,8 @@ import { toasts } from './toasts'
 import { useAssetResolver } from './use-asset-resolver'
 import { useKeyShortcuts } from './use-key-shortcuts'
 import { useApplyPatch, useProject } from './use-project'
-import { useStoredFlag } from './use-stored-flag'
+import { useStoredFlag, useStoredWidth } from './use-stored-flag'
+import { useTypefaceFonts } from './use-typeface-fonts'
 import { useUndoShortcuts } from './use-undo-shortcuts'
 
 // 数字キーはペンと焦点の種別に使うので、ツールは英字にする
@@ -248,8 +250,11 @@ interface HintToggle {
   set(panelId: ID, use: boolean): void
 }
 
-/** 開いている右クリックメニュー。`shapes` はフキダシの形を選ぶメニューに切り替えたあと */
-type OpenMenu = CanvasMenuRequest & { shapes?: boolean }
+/**
+ * 開いている右クリックメニュー。`sub` はフキダシのメニューから切り替えたあとのメニューで、
+ * shapes は形を選ぶメニュー、joins はつなぐ相手を選ぶメニュー
+ */
+type OpenMenu = CanvasMenuRequest & { sub?: 'shapes' | 'joins' }
 
 const MENU_LABELS: Record<NonNullable<Selection>['kind'], () => string> = {
   panel: m.web_editor_menu_panel,
@@ -356,6 +361,8 @@ export function PageEditor({
   const exportFolder = loadedFolder?.projectId === projectId ? loadedFolder.path : null
   const [inspectorExpanded, setInspectorExpanded] = useStoredFlag('manga.inspector.expanded', true)
   const [scriptExpanded, setScriptExpanded] = useStoredFlag('manga.script.expanded', true)
+  const [inspectorWidth, setInspectorWidth] = useStoredWidth('manga.inspector.width')
+  const [scriptWidth, setScriptWidth] = useStoredWidth('manga.script.width')
   const [menu, setMenu] = useState<OpenMenu | null>(null)
   const [registeringLayout, setRegisteringLayout] = useState(false)
   const [addingPage, setAddingPage] = useState(false)
@@ -392,6 +399,7 @@ export function PageEditor({
   // presence は早期 return より前に送るので、page を待たずに今ある要素の選択だけを選ぶ
   const selectedId = found && hasElement(found.page, selected) ? selected?.id : undefined
   const foundPage = found?.page
+  useTypefaceFonts(foundPage)
   const diagnosis = foundPage ? diagnosePage(foundPage, project.settings) : null
   // 提案の Patch だけを持ち、ゴーストは今のページに当てて作る。ホバー中に編集されても古いページを描かない
   const [preview, setPreview] = useState<Patch | null>(null)
@@ -604,6 +612,7 @@ export function PageEditor({
     page,
     settings: project.settings,
     tools,
+    tool,
     edit: (label: string, target: NonNullable<Selection>, patch: Patch) =>
       apply(label, (p) => elementPatch(p, pageId, target, patch)),
     editPage: (label: string, build: (page: Page) => Patch) =>
@@ -621,28 +630,37 @@ export function PageEditor({
       if (removed) setSelection(null)
     },
     setTool,
-    openShapes: () => menu && setMenu({ ...menu, shapes: true }),
+    openShapes: () => menu && setMenu({ ...menu, sub: 'shapes' }),
+    openJoins: () => menu && setMenu({ ...menu, sub: 'joins' }),
   }
-  const shapesOf =
-    menuTarget?.kind === 'bubble' && menu?.shapes ? findBubble(page, menuTarget.id) : undefined
+  const subOf =
+    menuTarget?.kind === 'bubble' && menu?.sub
+      ? { sub: menu.sub, found: findBubble(page, menuTarget.id) }
+      : undefined
+  const shapesOf = subOf?.sub === 'shapes' ? subOf.found : undefined
+  const joinsOf = subOf?.sub === 'joins' ? subOf.found : undefined
   const openMenu = menu && {
     label: shapesOf
       ? m.web_editor_menu_bubble_shapes()
-      : menuTarget
-        ? MENU_LABELS[menuTarget.kind]()
-        : m.web_editor_page_menu(),
+      : joinsOf
+        ? m.web_editor_menu_bubble_joins()
+        : menuTarget
+          ? MENU_LABELS[menuTarget.kind]()
+          : m.web_editor_page_menu(),
     items: shapesOf
       ? shapeMenuItems(shapesOf.bubble, menuContext)
-      : menuTarget
-        ? [
-            ...elementMenuItems(menuTarget, menuContext),
-            'separator' as const,
-            copyItem(menuTarget),
-            ...pasteItems,
-            'separator' as const,
-            ...undoItems,
-          ]
-        : pageMenuItems,
+      : joinsOf
+        ? joinMenuItems(joinsOf.bubble, menuContext)
+        : menuTarget
+          ? [
+              ...elementMenuItems(menuTarget, menuContext),
+              'separator' as const,
+              copyItem(menuTarget),
+              ...pasteItems,
+              'separator' as const,
+              ...undoItems,
+            ]
+          : pageMenuItems,
   }
   const chooseFolder = () => {
     chooseExportFolder(projectId, exportFolder).then(
@@ -868,6 +886,8 @@ export function PageEditor({
           side="left"
           expanded={scriptExpanded}
           onExpandedChange={setScriptExpanded}
+          width={scriptWidth}
+          onWidthChange={setScriptWidth}
           className={styles.scriptSidebar}
         >
           <Area open={can('inspector')}>
@@ -935,6 +955,8 @@ export function PageEditor({
           side="right"
           expanded={inspectorExpanded || guidingGenerate}
           onExpandedChange={setInspectorExpanded}
+          width={inspectorWidth}
+          onWidthChange={setInspectorWidth}
           className={styles.inspectorSidebar}
         >
           <div className={styles.inspector}>

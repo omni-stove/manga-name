@@ -28,6 +28,7 @@ import {
 import type { z } from 'zod'
 import { critiqueSystem } from './critique.prompt'
 import {
+  BEAT_PANEL,
   CAMERA_SHOTS,
   CHARACTER_ART_TAIL,
   NAME_NEGATIVE,
@@ -39,10 +40,12 @@ import {
 import { suggestLayoutSystem } from './layout.prompt'
 import { lineFields } from './lines.prompt'
 import { transcribeNameSystem } from './name.prompt'
+import { MAX_PAGE_COUNT } from './page-plan'
 import { planPagesSystem } from './plan-pages.prompt'
 import {
   type CharacterArtRequest,
   type CritiqueRequest,
+  type CurrentPanelActing,
   findPanel,
   type LayoutSuggestionRequest,
   type NameDraftRequest,
@@ -50,9 +53,6 @@ import {
   type PagePlanRequest,
   type PanelArtRequest,
 } from './provider'
-
-/** ページ割りで割り振らせるページ数の上限。Workers が受け付けるページ数の上限と揃える */
-const MAX_PLANNED_PAGES = 64
 
 /** コマ割りの提案で出させる案の数。LayoutSuggestionResponseSchema の上限と揃える */
 const LAYOUT_OPTIONS = 3
@@ -115,18 +115,20 @@ const actingOf = (panel: Panel, characters: Character[]) =>
     .join('; ')
 
 /**
- * コマの中身を表す行。カメラ、指示メモ、登場キャラ、芝居、焦点（重い順）、誘導線、ヒント。空の行も含む。
+ * コマの中身を表す行。舞台（コマが属するシーン）、カメラ、「間」、指示メモ、登場キャラ、芝居、焦点（重い順）、誘導線、ヒント。空の行も含む。
  * `appearance` が false なら登場キャラは名前だけにする
  */
 function panelContent(
   panel: Panel,
   characters: Character[],
-  hint: string | undefined,
+  context: { scene: string | undefined; hint: string | undefined },
   appearance: boolean,
 ): (string | undefined)[] {
   const focusByWeight = [...panel.focusPoints].sort((a, b) => b.weight - a.weight)
   return [
+    context.scene && `setting: ${context.scene}`,
     panel.camera && `camera: ${CAMERA_SHOTS[panel.camera]}`,
+    panel.beat && BEAT_PANEL,
     panel.note,
     panelCharacters(panel, characters)
       .map((c) => (appearance ? describeCharacter(c) : c.name))
@@ -139,7 +141,7 @@ function panelContent(
           `${v.kind} from ${endpointLabel(panel, v.sourceFocusId, v.from)} to ${endpointLabel(panel, v.targetFocusId, v.to)}`,
       )
       .join('; '),
-    hint,
+    context.hint,
   ]
 }
 
@@ -158,7 +160,7 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
     prompt: joinLines([
       NAME_STYLE,
       panelCharacters(panel, characters).length > 0 ? characterDesign(settings) : undefined,
-      ...panelContent(panel, characters, req.hint, true),
+      ...panelContent(panel, characters, { scene: req.scene, hint: req.hint }, true),
       req.instruction && `revise the previous image: ${req.instruction}`,
       hasPlacement(panel) ? PLACEMENT_GUIDE : undefined,
       PANEL_ART_TAIL,
@@ -186,7 +188,8 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
     .sort((a, b) => a.order - b.order)
     .map((panel) => {
       const { x, y, w, h } = panel.rect
-      const content = panelContent(panel, characters, req.hints?.[panel.id], false)
+      const context = { scene: req.scenes?.[panel.id], hint: req.hints?.[panel.id] }
+      const content = panelContent(panel, characters, context, false)
         .filter((p): p is string => Boolean(p))
         .join('; ')
       const where = `panel ${panel.order} (x ${formatSpan(x, w)}, y ${formatSpan(y, h)})`
@@ -242,7 +245,7 @@ function planPages(req: PagePlanRequest): LlmPrompt<PagePlanResponse> {
   const user = [
     ...characterList(req.project.characters),
     req.pageCount === undefined
-      ? `Pages: as many as the script needs, at most ${MAX_PLANNED_PAGES}.`
+      ? `Pages: as many as the script needs, at most ${MAX_PAGE_COUNT}.`
       : `Pages: exactly ${req.pageCount}.`,
     'Script:',
     req.script,
@@ -259,31 +262,58 @@ const POINT_JSON_SCHEMA: JsonSchema = {
 }
 
 /**
- * ネームの書き起こしのプロンプト。1 ページの脚本を、読む順のコマごとの描くもの、カメラ、セリフに割らせる。
- * system に出力規則と JSON Schema、user にキャラ一覧とページの脚本を入れる
+ * ページに今あるコマの芝居の行。読む順のコマごとに番号と指示メモ、その下にキャラの id と芝居。
+ * 芝居が 1 つも無ければ見出しごと出さない
+ */
+function currentActingLines(current: CurrentPanelActing[] | undefined): string[] {
+  const panels = (current ?? [])
+    .map((p) => ({ ...p, acting: p.acting.filter((a) => a.text.trim() !== '') }))
+    .filter((p) => p.acting.length > 0)
+  if (panels.length === 0) return []
+  return [
+    'Current acting:',
+    ...panels.flatMap((p, i) => [
+      `${i + 1}. ${p.note?.replaceAll('\n', ' ').trim() || '(no note)'}`,
+      ...p.acting.map((a) => `   - ${a.characterId}: ${a.text.trim()}`),
+    ]),
+  ]
+}
+
+/**
+ * ネームの書き起こしのプロンプト。1 ページの脚本を、読む順のコマごとの描くもの、カメラ、セリフ、芝居に割らせる。
+ * system に出力規則と JSON Schema、user にキャラ一覧、ページに今あるコマの芝居、ページの脚本を入れる
  */
 function transcribeName(req: NameDraftRequest): LlmPrompt<NameDraftResponse> {
   const schema = nameDraftJsonSchema()
 
   const system = transcribeNameSystem(schema)
 
-  const user = [...characterList(req.project.characters), 'Script:', req.script].join('\n')
+  const user = [
+    ...characterList(req.project.characters),
+    ...currentActingLines(req.current),
+    'Script:',
+    req.script,
+  ].join('\n')
 
   return { system, user, schema, output: NameDraftResponseSchema }
 }
 
-/** ネームの 1 コマを、番号、描くもの、カメラ、セリフの行にする。話し手は枠の大きさに効かないので書かない */
+/**
+ * ネームの 1 コマを、番号、描くもの、カメラ、セリフ、芝居の行にする。
+ * 話し手と芝居のキャラは枠の大きさに効かないので書かない
+ */
 function namePanelLines(panel: NamePanel, index: number): string[] {
   const camera = panel.camera === undefined ? '' : ` (${CAMERA_SHOTS[panel.camera]})`
   return [
     `${index + 1}. ${panel.note}${camera}`,
     ...(panel.lines.length > 0 ? panel.lines.map((l) => `   - ${l.text}`) : ['   - (no lines)']),
+    ...(panel.acting ?? []).map((a) => `   * ${a.text}`),
   ]
 }
 
 /**
  * コマ割りの提案のプロンプト。ネームのコマを段に割った案を LAYOUT_OPTIONS 個返させる。
- * system に出力規則と JSON Schema、user にコマの数と、読む順のコマごとの描くもの、カメラ、セリフを入れる
+ * system に出力規則と JSON Schema、user にコマの数と、読む順のコマごとの描くもの、カメラ、セリフ、芝居を入れる
  */
 function suggestLayout(req: LayoutSuggestionRequest): LlmPrompt<LayoutSuggestionResponse> {
   const schema = layoutSuggestionJsonSchema()
@@ -454,6 +484,44 @@ if (import.meta.vitest) {
     expect(negative).toBe(NAME_NEGATIVE)
   })
 
+  test('panelArt puts the scene as the setting first and marks a beat panel', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const beat: Page = {
+      ...page,
+      panels: page.panels.map((p) => (p.id === 'pn_1' ? { ...p, beat: true as const } : p)),
+    }
+    const lines = prompts
+      .panelArt({ project, page: beat, panelId: 'pn_1', scene: '放課後・屋上' })
+      .prompt.split('\n')
+    const setting = lines.indexOf('setting: 放課後・屋上')
+    expect(setting).toBeGreaterThan(0)
+    expect(lines[setting + 1]).toBe('camera: long shot')
+    expect(lines[setting + 2]).toBe(BEAT_PANEL)
+
+    const plain = prompts.panelArt({ project, page, panelId: 'pn_1' }).prompt
+    expect(plain).not.toContain('setting: ')
+    expect(plain).not.toContain(BEAT_PANEL)
+  })
+
+  test('pageArt gives each panel its own scene and marks the beat panels', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const beat: Page = {
+      ...page,
+      panels: page.panels.map((p) => (p.order === 2 ? { ...p, beat: true as const } : p)),
+    }
+    const ids = [...page.panels].sort((a, b) => a.order - b.order).map((p) => p.id)
+    const scenes = { [ids[0] as ID]: '放課後・屋上', [ids[1] as ID]: '夜・帰り道' }
+    const panelLines = prompts
+      .pageArt({ project, page: beat, scenes })
+      .prompt.split('\n')
+      .filter((l) => l.startsWith('panel '))
+    expect(panelLines[0]).toContain('): setting: 放課後・屋上; ')
+    expect(panelLines[1]).toContain('): setting: 夜・帰り道; ')
+    expect(panelLines[1]).toContain(BEAT_PANEL)
+    expect(panelLines[2]).not.toContain('setting: ')
+    expect(panelLines[0]).not.toContain(BEAT_PANEL)
+  })
+
   test('pageArt lists the cast once and one line per panel in reading order with its span', () => {
     const page = project.episodes[0]?.pages[0] as Page
     const panel = page.panels.find((p) => p.order === 1) as Panel
@@ -616,7 +684,7 @@ if (import.meta.vitest) {
     )
     expect(
       prompts.planPages({ project: { ...project, characters: [] }, script: 's' }).user,
-    ).toContain(`- (none)\nPages: as many as the script needs, at most ${MAX_PLANNED_PAGES}.`)
+    ).toContain(`- (none)\nPages: as many as the script needs, at most ${MAX_PAGE_COUNT}.`)
   })
 
   test('transcribeName embeds the name JSON Schema and lists characters and the page script', () => {
@@ -637,6 +705,83 @@ if (import.meta.vitest) {
         'Script:',
         'E「こんにちは」',
         '森を歩く。',
+      ].join('\n'),
+    )
+    expect(system).toContain('- acting: ')
+    expect(nameDraftJsonSchema().properties?.panels).toMatchObject({
+      items: { properties: { acting: { type: 'array' } } },
+    })
+  })
+
+  test('transcribeName lists the acting of the current panels before the script', () => {
+    const { system, user } = prompts.transcribeName({
+      project: {
+        settings: project.settings,
+        characters: [{ id: 'chr_e', name: 'エリ', shortName: 'E' }],
+      },
+      script: 'E「こんにちは」',
+      current: [
+        { note: '森の\n全景', acting: [{ characterId: 'chr_e', text: ' 振り向いて驚く ' }] },
+        { note: '空', acting: [{ characterId: 'chr_e', text: '  ' }] },
+        { acting: [{ characterId: 'chr_e', text: '笑う' }] },
+      ],
+    })
+    expect(system).toContain('Current acting, when given, ')
+    expect(user).toBe(
+      [
+        'Characters:',
+        '- id: chr_e, name: エリ, shortName: E',
+        'Current acting:',
+        '1. 森の 全景',
+        '   - chr_e: 振り向いて驚く',
+        '2. (no note)',
+        '   - chr_e: 笑う',
+        'Script:',
+        'E「こんにちは」',
+      ].join('\n'),
+    )
+    const blank = prompts.transcribeName({
+      project: { settings: project.settings, characters: [] },
+      script: 's',
+      current: [{ note: '空', acting: [] }],
+    })
+    expect(blank.user).not.toContain('Current acting:')
+  })
+
+  test('transcribeName validates the acting the model gives a panel', () => {
+    const { output } = prompts.transcribeName({
+      project: { settings: project.settings, characters: [] },
+      script: 's',
+    })
+    const panel = { note: 'n', lines: [] }
+    const acting = [{ characterId: 'chr_e', text: '振り向く' }]
+    expect(output.parse({ panels: [{ ...panel, acting }] }).panels[0]?.acting).toEqual(acting)
+    expect(
+      output.safeParse({ panels: [{ ...panel, acting: [{ characterId: 'chr_e', text: '' }] }] })
+        .success,
+    ).toBe(false)
+    expect(output.safeParse({ panels: [{ ...panel, acting: [{ text: 'a' }] }] }).success).toBe(
+      false,
+    )
+  })
+
+  test('suggestLayout puts the acting of a name panel under its lines', () => {
+    const { system, user } = prompts.suggestLayout({
+      panels: [
+        {
+          note: '森の全景',
+          lines: [{ text: 'こんにちは', shape: 'normal' }],
+          acting: [{ characterId: 'chr_e', text: '振り向いて驚く' }],
+        },
+      ],
+    })
+    expect(system).toContain('one starting with "* " is the acting')
+    expect(user).toBe(
+      [
+        'Panels: exactly 1, in reading order.',
+        '1. 森の全景',
+        '   - こんにちは',
+        '   * 振り向いて驚く',
       ].join('\n'),
     )
   })

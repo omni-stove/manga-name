@@ -29,6 +29,7 @@ import { panelBox, panelPolygon, polygonPoints } from './hit-test'
 import { PageLayer } from './page-layer'
 import { PanelToolLayer } from './panel-tool-layer'
 import { pressurePath } from './pressure-stroke'
+import { SfxToolLayer } from './sfx-tool-layer'
 import type { EditorCanvasProps, Selection } from './types'
 import { useBubbleTool } from './use-bubble-tool'
 import { useHintTool } from './use-hint-tool'
@@ -74,9 +75,11 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * `bubble` ツールではコマのクリックでフキダシを作り、ドラッグで移動、隅のハンドルでリサイズ、
  * しっぽごとの先端のドラッグでそのしっぽを動かし、しっぽを足すハンドルのドラッグでしっぽを増やす。セリフは縦書きで、収まらなければ末尾を省略記号にする。
  * Patch はページ root 基準で `onChange` に 1 操作 1 回出し、Undo / Redo は持たない。
- * `focus` ツールではクリックで焦点を置き、ドラッグで動かす。`vector` ツールではドラッグでベクトルを作り、
+ * `focus` ツールではクリックで焦点を置き、ドラッグで動かし、選んだ描き文字を回転のハンドルのドラッグで傾ける。
+ * `vector` ツールではドラッグでベクトルを作り、
  * 終点（と始点）が焦点かフキダシの上なら `targetFocusId`（と `sourceFocusId`）を付ける。
  * `layers.frames` が立っていれば、タチキリ枠、外枠、内枠をコマの上に重ねる。
+ * シーンの見出しを持つコマには、右綴じは左上、左綴じは右上に出力に出ない見出しを出す。
  * 参考画像はページの白地の上、コマの下に描く。焦点とベクトルはフキダシの上に描き、
  * `layers.hints` を切ると描画も選択も操作もしない。
  * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
@@ -345,6 +348,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         page={page}
         width={pageW}
         height={pageH}
+        direction={settings.direction}
         showArt={layers.art}
         showReference={layers.reference}
         resolveAsset={props.resolveAsset}
@@ -436,6 +440,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         draft={bubbleTool.draft ?? move.bubbleDraft}
         handleSize={bubbleTool.handleSize}
       />
+      <SfxToolLayer rotation={hintTool.rotation} handleSize={hintTool.handleSize} />
     </svg>
   )
 }
@@ -737,6 +742,46 @@ if (import.meta.vitest) {
       expect(first.textContent).toContain('ガラス結晶の森')
     })
 
+    test('a panel with a scene shows the heading at the top-left, or at the top-right left of the number in ltr', async () => {
+      const [pn1, pn2, ...rest] = samplePage.panels as [Panel, Panel, ...Panel[]]
+      const page = { ...samplePage, panels: [{ ...pn1, scene: '放課後・屋上' }, pn2, ...rest] }
+      const labelIn = (svg: SVGSVGElement) =>
+        must(svg.querySelector('[data-panel-id="pn_1"] [data-scene-label]'))
+      const { w } = project.settings.pageSize
+
+      const rtl = labelIn(await render({ page }))
+      expect(rtl.textContent).toBe(m.panel_scene_heading({ scene: '放課後・屋上' }))
+      expect(rtl.getAttribute('text-anchor')).toBe('start')
+      expect(Number(rtl.getAttribute('x'))).toBeLessThan((pn1.rect.x + pn1.rect.w / 2) * w)
+
+      const ltrSvg = await render({ page, settings: { ...project.settings, direction: 'ltr' } })
+      const ltr = labelIn(ltrSvg)
+      expect(ltr.getAttribute('text-anchor')).toBe('end')
+      expect(Number(ltr.getAttribute('x'))).toBeGreaterThan((pn1.rect.x + pn1.rect.w / 2) * w)
+      const number = must(ltrSvg.querySelector('[data-panel-id="pn_1"] [data-panel-number] circle'))
+      expect(Number(ltr.getAttribute('x'))).toBeLessThan(
+        Number(number.getAttribute('cx')) - Number(number.getAttribute('r')),
+      )
+
+      const plain = await render()
+      expect(plain.querySelector('[data-scene-label]')).toBeNull()
+    })
+
+    test('a beat panel without art shows the beat mark in its placeholder', async () => {
+      const [pn1, ...rest] = samplePage.panels as [Panel, ...Panel[]]
+      const bare = { ...pn1, camera: undefined, note: undefined }
+      expect(
+        (await render({ page: { ...samplePage, panels: [bare, ...rest] } })).querySelector(
+          '[data-panel-id="pn_1"] [data-placeholder]',
+        ),
+      ).toBeNull()
+      const svg = await render({
+        page: { ...samplePage, panels: [{ ...bare, beat: true as const }, ...rest] },
+      })
+      const placeholder = must(svg.querySelector('[data-panel-id="pn_1"] [data-placeholder]'))
+      expect(placeholder.textContent).toBe(m.panel_beat_mark())
+    })
+
     test('a black panel is filled black and the dialogue of an unpainted bubble in it is white', async () => {
       const [pn1, ...rest] = samplePage.panels as [Panel, ...Panel[]]
       const bubble = BubbleSchema.parse({
@@ -773,6 +818,43 @@ if (import.meta.vitest) {
       expect(must(unpainted.querySelector('text[writing-mode]')).getAttribute('fill')).toBe('#000')
     })
 
+    test('joined bubbles share one outline with a neck in the line of the holder, and each keeps its dialogue', async () => {
+      const panel3 = must(samplePage.panels.find((p) => p.id === 'pn_3'))
+      const bb3 = must(panel3.bubbles[0])
+      const page: Page = {
+        ...samplePage,
+        panels: samplePage.panels.map((panel) =>
+          panel.id === 'pn_3'
+            ? {
+                ...panel,
+                bubbles: [
+                  { ...bb3, shape: 'whisper', joinedTo: 'bj_1' },
+                  { ...bb3, id: 'bj_1', order: 2, shape: 'urchin', pos: { x: 0.2, y: 0.6 } },
+                ],
+              }
+            : panel,
+        ),
+      }
+      const props = { ...defaults, page }
+      const { svg, root } = await mount({ ...props, selection: { kind: 'bubble', id: 'bj_1' } })
+      // 選択を移して描き直しても、組は 1 つの輪郭のまま
+      await act(async () =>
+        root.render(<EditorCanvas {...props} selection={{ kind: 'bubble', id: 'bb_3' }} />),
+      )
+      const group = must(svg.querySelector('[data-bubble-group="bb_3 bj_1"]'))
+      expect(
+        must(group.querySelector('[data-bubble-id="bb_3"]')).getAttribute('data-joined-to'),
+      ).toBe('bj_1')
+      expect(group.querySelectorAll('[data-bubble-id] text[writing-mode]')).toHaveLength(2)
+      // 輪郭は組でまとめて描き、フキダシごとには描かない。線を持たないウニには太線を引かず、
+      // ささやきの本体としっぽと首にだけ破線を引く
+      expect(group.querySelector('[data-bubble-id] path[stroke]')).toBeNull()
+      const strokes = [...group.querySelectorAll(':scope > g > path[stroke="#000"]')]
+      expect(strokes).toHaveLength(1 + (bb3.tails?.length ?? 0) + 1)
+      for (const stroke of strokes) expect(stroke.getAttribute('stroke-dasharray')).not.toBeNull()
+      expect(group.querySelectorAll(':scope > g > path[fill="#000"]:not([stroke])')).toHaveLength(1)
+    })
+
     test('dialogue is set in the typeface of the shape unless the bubble names one', async () => {
       const textOf = (svg: SVGSVGElement) =>
         must(svg.querySelector('[data-bubble-id="bb_3"] text[writing-mode]'))
@@ -784,6 +866,68 @@ if (import.meta.vitest) {
         await render({ page: withBubble3({ shape: 'narration', typeface: 'rounded' }) }),
       )
       expect(named.getAttribute('font-family')).toContain('M PLUS Rounded 1c')
+      const hand = textOf(
+        await render({ page: withBubble3({ shape: 'whisper', typeface: 'hand' }) }),
+      )
+      expect(hand.getAttribute('font-family')).toContain('Yomogi')
+    })
+
+    test('horizontal dialogue goes left to right in lines down the bubble, with ruby above', async () => {
+      const svg = await render({
+        page: withBubble3({
+          writing: 'horizontal',
+          text: '|魔法《まほう》\nHello',
+          pos: { x: 0.5, y: 0.5 },
+          size: { w: 0.6, h: 0.4 },
+        }),
+      })
+      const bubble = must(svg.querySelector('[data-bubble-id="bb_3"]'))
+      expect(bubble.getAttribute('data-writing')).toBe('horizontal')
+      expect(bubble.querySelector('text[writing-mode]')).toBeNull()
+      const text = must(bubble.querySelector('text[data-dialogue]'))
+      expect(text.getAttribute('dominant-baseline')).toBe('central')
+      const lines = [...text.querySelectorAll('tspan')]
+      expect(lines.map((l) => l.textContent)).toEqual(['魔法', 'Hello'])
+      const [first, second] = lines.map((l) => ({
+        x: Number(l.getAttribute('x')),
+        y: Number(l.getAttribute('y')),
+      }))
+      expect(second?.x).toBeCloseTo(first?.x ?? 0)
+      expect(second?.y).toBeGreaterThan(first?.y ?? 0)
+      const ruby = must(bubble.querySelector('[data-ruby]'))
+      expect(ruby.textContent).toBe('まほう')
+      expect(Number(ruby.getAttribute('x'))).toBeCloseTo(first?.x ?? 0)
+      expect(Number(ruby.getAttribute('y'))).toBeLessThan(first?.y ?? 0)
+
+      const vertical = await render({ page: withBubble3({ text: 'Hello' }) })
+      const unset = must(vertical.querySelector('[data-bubble-id="bb_3"]'))
+      expect(unset.getAttribute('data-writing')).toBeNull()
+      expect(unset.querySelector('text[writing-mode]')).not.toBeNull()
+    })
+
+    test('vertical dialogue sets !? and two-digit numbers upright, one glyph wide, between the vertical runs, with full-width marks made half-width', async () => {
+      const svg = await render({
+        page: withBubble3({
+          text: 'え!?12月！？',
+          pos: { x: 0.5, y: 0.5 },
+          size: { w: 0.3, h: 0.9 },
+        }),
+      })
+      const bubble = must(svg.querySelector('[data-bubble-id="bb_3"]'))
+      const runs = [...must(bubble.querySelector('text[data-dialogue]')).querySelectorAll('tspan')]
+      expect(runs.map((r) => r.textContent)).toEqual(['え', '月'])
+      const uprights = [...bubble.querySelectorAll('text[data-upright]')]
+      expect(uprights.map((u) => u.textContent)).toEqual(['!?', '12', '!?'])
+      for (const u of uprights) expect(u.getAttribute('writing-mode')).toBeNull()
+      const [marks, digits, wide] = uprights
+      expect(marks?.getAttribute('textLength')).toBeNull()
+      expect(wide?.getAttribute('textLength')).toBeNull()
+      expect(Number(digits?.getAttribute('textLength'))).toBeCloseTo(
+        Number(digits?.getAttribute('font-size')),
+      )
+      const ys = [runs[0], marks, digits, runs[1], wide].map((e) => Number(e?.getAttribute('y')))
+      expect(ys).toEqual([...ys].sort((p, q) => p - q))
+      expect(new Set([runs[0], marks, digits].map((e) => e?.getAttribute('x'))).size).toBe(1)
     })
 
     test('a borderless panel is drawn first with a dashed guide outline, and framed panels get a white ground', async () => {
@@ -865,6 +1009,34 @@ if (import.meta.vitest) {
       )
     })
 
+    test('a beta flash paints the panel black, radiates white wedges and whitens unpainted dialogue', async () => {
+      const [pn1, ...rest] = samplePage.panels as [Panel, ...Panel[]]
+      const bubble = BubbleSchema.parse({
+        id: 'bb_flash',
+        order: 9,
+        text: '……',
+        shape: 'none',
+        pos: { x: 0.5, y: 0.5 },
+        size: { w: 0.3, h: 0.5 },
+      })
+      const page = {
+        ...samplePage,
+        panels: [{ ...pn1, effect: 'beta_flash' as const, bubbles: [bubble] }, ...rest],
+      }
+      const svg = await render({ page })
+      expect(svg.querySelector('[data-panel-id="pn_1"] [data-panel-fill="black"]')).not.toBeNull()
+      const flash = must(svg.querySelector('[data-panel-effect="beta_flash"]'))
+      expect(flash.closest('[data-panel-id]')?.getAttribute('data-panel-id')).toBe('pn_1')
+      expect(flash.getAttribute('fill')).toBe('#fff')
+      expect(flash.getAttribute('d')?.match(/M/g)?.length).toBeGreaterThan(20)
+      const text = must(svg.querySelector('[data-bubble-id="bb_flash"] text[writing-mode]'))
+      expect(text.getAttribute('fill')).toBe('#fff')
+      const again = await render({ page })
+      expect(must(again.querySelector('[data-panel-effect="beta_flash"]')).getAttribute('d')).toBe(
+        flash.getAttribute('d'),
+      )
+    })
+
     test('a page overlay multiplies a gray rect over the whole page above the bubbles', async () => {
       expect((await render({})).querySelector('[data-overlay]')).toBeNull()
       const svg = await render({ page: { ...samplePage, overlay: 'gray' } })
@@ -874,6 +1046,106 @@ if (import.meta.vitest) {
       expect(
         bubble.compareDocumentPosition(overlay) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy()
+    })
+
+    test('the label of an sfx focus point is lettered in bold with a white outline, under the bubbles and the frame', async () => {
+      const panel = must(samplePage.panels.find((p) => p.id === 'pn_3'))
+      const sfx = (id: string, patch: Partial<Panel['focusPoints'][number]>) => ({
+        id,
+        kind: 'sfx' as const,
+        label: 'ドン',
+        pos: { x: 0.25, y: 0.5 },
+        weight: 1,
+        ...patch,
+      })
+      const page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_3'
+            ? {
+                ...p,
+                focusPoints: [
+                  ...p.focusPoints,
+                  sfx('fp_sfx', {}),
+                  sfx('fp_empty', { label: '' }),
+                  sfx('fp_face', { kind: 'face' }),
+                ],
+              }
+            : p,
+        ),
+      }
+      const svg = await render({ page })
+      const lettered = [...svg.querySelectorAll('[data-sfx-id]')]
+      expect(lettered.map((g) => g.getAttribute('data-sfx-id'))).toEqual(['fp_sfx'])
+      const text = must(svg.querySelector('[data-sfx-id="fp_sfx"] text[data-dialogue]'))
+      const outline = must(svg.querySelector('[data-sfx-id="fp_sfx"] text[aria-hidden]'))
+      expect(text.textContent).toBe('ドン')
+      expect(text.getAttribute('font-weight')).toBe('700')
+      expect(text.getAttribute('fill')).toBe('#000')
+      expect(outline.getAttribute('stroke')).toBe('#fff')
+      expect(outline.getAttribute('paint-order')).toBe('stroke')
+      const { w, h } = project.settings.pageSize
+      const size = Math.min(panel.rect.w * w, panel.rect.h * h) * 0.25
+      expect(Number(text.getAttribute('font-size'))).toBeCloseTo(size)
+      const column = must(text.querySelector('tspan'))
+      const center = {
+        x: (panel.rect.x + panel.rect.w * 0.25) * w,
+        y: (panel.rect.y + panel.rect.h * 0.5) * h,
+      }
+      expect(Number(column.getAttribute('x'))).toBeCloseTo(center.x)
+      expect(Number(column.getAttribute('y'))).toBeCloseTo(center.y)
+
+      const lettering = must(svg.querySelector('[data-sfx-id="fp_sfx"]'))
+      expect(lettering.parentElement?.getAttribute('clip-path')).toMatch(/^url\(#/)
+      const later = (selector: string) =>
+        lettering.compareDocumentPosition(must(svg.querySelector(selector))) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+      expect(later('[data-bubble-id="bb_3"]')).toBeTruthy()
+      expect(later('[data-panel-id="pn_3"] > [data-panel-frame]')).toBeTruthy()
+      // 焦点の印はヒントのレイヤーに残る
+      expect(svg.querySelector('[data-focus-id="fp_sfx"]')).not.toBeNull()
+      // 傾けない描き文字は回さない
+      expect(lettering.getAttribute('transform')).toBeNull()
+    })
+
+    test('an sfx focus point letters with its own rotation, typeface and scale', async () => {
+      const panel = must(samplePage.panels.find((p) => p.id === 'pn_3'))
+      const focus = {
+        id: 'fp_sfx',
+        kind: 'sfx' as const,
+        label: 'ドン',
+        pos: { x: 0.25, y: 0.5 },
+        weight: 0,
+        rotation: -30,
+        typeface: 'hand' as const,
+        scale: 2,
+      }
+      const page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_3' ? { ...p, focusPoints: [...p.focusPoints, focus] } : p,
+        ),
+      }
+      const svg = await render({ page })
+      const { w, h } = project.settings.pageSize
+      const center = {
+        x: (panel.rect.x + panel.rect.w * 0.25) * w,
+        y: (panel.rect.y + panel.rect.h * 0.5) * h,
+      }
+      const lettering = must(svg.querySelector('[data-sfx-id="fp_sfx"]'))
+      const transform = must(lettering.getAttribute('transform'))
+      expect(transform).toMatch(/^rotate\(/)
+      const [angle, x, y] = transform
+        .replace(/^rotate\(|\)$/g, '')
+        .split(' ')
+        .map(Number)
+      expect(angle).toBe(-30)
+      expect(x).toBeCloseTo(center.x)
+      expect(y).toBeCloseTo(center.y)
+      const text = must(lettering.querySelector('text[writing-mode]'))
+      expect(text.getAttribute('font-family')).toContain('Yomogi')
+      const size = Math.min(panel.rect.w * w, panel.rect.h * h) * 0.08 * 2
+      expect(Number(text.getAttribute('font-size'))).toBeCloseTo(size)
     })
 
     test('the selected panel gets a guide-coloured frame', async () => {
@@ -2119,6 +2391,120 @@ if (import.meta.vitest) {
       expect(onSelect).not.toHaveBeenCalled()
     })
 
+    describe('rotating an sfx lettering', () => {
+      const sfx = {
+        id: 'fp_sfx',
+        kind: 'sfx' as const,
+        label: 'ドン',
+        pos: { x: 0.5, y: 0.5 },
+        weight: 0.5,
+      }
+      const withSfx = (patch: Partial<Panel['focusPoints'][number]> = {}): Page => ({
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_5' ? { ...p, focusPoints: [...p.focusPoints, { ...sfx, ...patch }] } : p,
+        ),
+      })
+      const sfxIndex = must(samplePage.panels.find((p) => p.id === 'pn_5')).focusPoints.length
+      const selection = { kind: 'focus' as const, id: 'fp_sfx' }
+      const shownRotation = (svg: SVGSVGElement) =>
+        must(svg.querySelector('[data-layer="sfx-tool"]')).getAttribute('data-rotation')
+      /** 回転のハンドルの画面座標 */
+      const handleAt = (svg: SVGSVGElement) => {
+        const handle = must(svg.querySelector('[data-rotate-handle]'))
+        return {
+          x: (Number(handle.getAttribute('cx')) - base.x) * 2,
+          y: (Number(handle.getAttribute('cy')) - base.y) * 2,
+        }
+      }
+
+      test('the selected sfx lettering gets a rotation handle above it, only with the focus tool', async () => {
+        const svg = await render({ tool: 'focus', page: withSfx(), selection })
+        const handle = must(svg.querySelector('[data-rotate-handle]'))
+        const { rect } = must(samplePage.panels.find((p) => p.id === 'pn_5'))
+        const { w, h } = project.settings.pageSize
+        expect(Number(handle.getAttribute('cx'))).toBeCloseTo((rect.x + rect.w * 0.5) * w)
+        expect(Number(handle.getAttribute('cy'))).toBeLessThan((rect.y + rect.h * 0.5) * h)
+
+        const handleWith = async (overrides: Partial<EditorCanvasProps>) => {
+          const other = await render({ tool: 'focus', page: withSfx(), selection, ...overrides })
+          return other.querySelector('[data-rotate-handle]')
+        }
+        expect(await handleWith({ tool: 'select' })).toBeNull()
+        expect(await handleWith({ selection: { kind: 'focus', id: 'fp_5_e' } })).toBeNull()
+        expect(await handleWith({ page: withSfx({ label: ' ' }) })).toBeNull()
+        expect(await handleWith({ page: withSfx({ locked: true }) })).toBeNull()
+        expect(await handleWith({ layers: { ...defaults.layers, hints: false } })).toBeNull()
+      })
+
+      test('dragging the handle draws the turned frame, then tilts the lettering in one patch', async () => {
+        const onChange = vi.fn()
+        const onSelect = vi.fn()
+        const svg = await render({ tool: 'focus', page: withSfx(), selection, onChange, onSelect })
+        layout(svg)
+        const centre = inPanel('pn_5', 0.5, 0.5)
+        const to = { x: centre.x + 40, y: centre.y }
+        drag(svg, handleAt(svg), to, { release: false })
+        expect(shownRotation(svg)).toBe('90')
+        expect(onChange).not.toHaveBeenCalled()
+        fire(svg, pointer('pointerup', { id: 1, ...to }))
+        expect(onChange).toHaveBeenCalledTimes(1)
+        expect(patchOf(onChange)).toEqual([
+          { op: 'add', path: `/panels/4/focusPoints/${sfxIndex}/rotation`, value: 90 },
+        ])
+        expect(onSelect).not.toHaveBeenCalled()
+      })
+
+      test('Shift snaps to 15 degrees, and turning back upright removes the rotation', async () => {
+        const onChange = vi.fn()
+        const svg = await render({
+          tool: 'focus',
+          page: withSfx({ rotation: 40 }),
+          selection,
+          onChange,
+        })
+        layout(svg)
+        const centre = inPanel('pn_5', 0.5, 0.5)
+        const to = { x: centre.x + 40 * Math.sin(0.3), y: centre.y - 40 * Math.cos(0.3) }
+        fire(svg, pointer('pointerdown', { id: 1, ...handleAt(svg) }))
+        fire(svg, pointer('pointermove', { id: 1, ...to, shiftKey: true }))
+        expect(shownRotation(svg)).toBe('15')
+        const upright = { x: centre.x, y: centre.y - 40 }
+        fire(svg, pointer('pointermove', { id: 1, ...upright }))
+        fire(svg, pointer('pointerup', { id: 1, ...upright }))
+        expect(patchOf(onChange)).toEqual([
+          { op: 'remove', path: `/panels/4/focusPoints/${sfxIndex}/rotation` },
+        ])
+      })
+
+      test('turning the lettering and back to where it was makes no patch', async () => {
+        const onChange = vi.fn()
+        const svg = await render({ tool: 'focus', page: withSfx(), selection, onChange })
+        layout(svg)
+        const centre = inPanel('pn_5', 0.5, 0.5)
+        const upright = { x: centre.x, y: centre.y - 40 }
+        fire(svg, pointer('pointerdown', { id: 1, ...handleAt(svg) }))
+        fire(svg, pointer('pointermove', { id: 1, x: centre.x + 40, y: centre.y }))
+        fire(svg, pointer('pointermove', { id: 1, ...upright }))
+        expect(shownRotation(svg)).toBe('0')
+        fire(svg, pointer('pointerup', { id: 1, ...upright }))
+        expect(onChange).not.toHaveBeenCalled()
+      })
+
+      test('Escape cancels a rotation without a patch', async () => {
+        const onChange = vi.fn()
+        const svg = await render({ tool: 'focus', page: withSfx(), selection, onChange })
+        layout(svg)
+        const centre = inPanel('pn_5', 0.5, 0.5)
+        const to = { x: centre.x + 40, y: centre.y }
+        drag(svg, handleAt(svg), to, { release: false })
+        key(svg, { key: 'Escape' })
+        expect(shownRotation(svg)).toBe('0')
+        fire(svg, pointer('pointerup', { id: 1, ...to }))
+        expect(onChange).not.toHaveBeenCalled()
+      })
+    })
+
     test('a vector drag draws a dashed draft, then creates one linked vector and selects it', async () => {
       const onChange = vi.fn()
       const onSelect = vi.fn()
@@ -2405,6 +2791,85 @@ if (import.meta.vitest) {
       // しっぽ 2 本と本体を、線と塗りで 2 回ずつ描く
       expect(bubble.querySelectorAll('path[fill="#fff"]:not([stroke])')).toHaveLength(3)
       expect(two.querySelectorAll('[data-tail-handle="set"]')).toHaveLength(2)
+    })
+
+    test('joined bubbles draw one outline with a neck, and each keeps its own text', async () => {
+      const joined: Page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_3'
+            ? {
+                ...p,
+                bubbles: [
+                  ...p.bubbles,
+                  {
+                    id: 'bb_3b',
+                    order: 2,
+                    text: 'まさか',
+                    shape: 'normal',
+                    pos: { x: 0.6, y: 0.7 },
+                    size: { w: 0.18, h: 0.4 },
+                    joinedTo: 'bb_3',
+                  },
+                ],
+              }
+            : p,
+        ),
+      }
+      const svg = await render({ page: joined })
+      const group = must(svg.querySelector('[data-bubble-group="bb_3 bb_3b"]'))
+      // bb_3 の本体としっぽ、bb_3b の本体と bb_3 への首を、線と塗りで 2 回ずつ描く
+      expect(group.querySelectorAll('path[fill="#fff"][stroke]')).toHaveLength(4)
+      expect(group.querySelectorAll('path[fill="#fff"]:not([stroke])')).toHaveLength(4)
+      const second = must(group.querySelector('.ec-bubble[data-bubble-id="bb_3b"]'))
+      expect(second.getAttribute('data-joined-to')).toBe('bb_3')
+      expect(second.querySelectorAll('path[fill="#fff"]')).toHaveLength(0)
+      expect(second.textContent).toContain('ま')
+
+      const apart = await render({
+        page: {
+          ...joined,
+          panels: joined.panels.map((p) => ({
+            ...p,
+            bubbles: p.bubbles.map(({ joinedTo: _, ...b }) => b),
+          })),
+        },
+      })
+      expect(apart.querySelector('[data-bubble-group]')).toBeNull()
+      expect(
+        must(apart.querySelector('.ec-bubble[data-bubble-id="bb_3b"]')).querySelectorAll(
+          'path[fill="#fff"]:not([stroke])',
+        ),
+      ).toHaveLength(1)
+    })
+
+    test('a joined group follows the overflow of its first bubble, whatever the line style', async () => {
+      const joined: Page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_3'
+            ? {
+                ...p,
+                bubbles: [
+                  ...p.bubbles.map((b) => ({ ...b, overflow: true, shape: 'whisper' as const })),
+                  {
+                    id: 'bb_3b',
+                    order: 2,
+                    text: 'まさか',
+                    shape: 'none' as const,
+                    pos: { x: 0.6, y: 0.7 },
+                    size: { w: 0.18, h: 0.4 },
+                    joinedTo: 'bb_3',
+                  },
+                ],
+              }
+            : p,
+        ),
+      }
+      const svg = await render({ page: joined, selection: { kind: 'bubble', id: 'bb_3b' } })
+      const group = must(svg.querySelector('[data-bubble-group="bb_3 bb_3b"]'))
+      expect(group.querySelectorAll('path[stroke-dasharray]').length).toBeGreaterThan(0)
+      expect(svg.querySelectorAll('[data-bubble-group]')).toHaveLength(1)
     })
 
     test('dragging one of two tails moves only that tail and makes it the last', async () => {

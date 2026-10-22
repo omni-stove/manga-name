@@ -2,6 +2,9 @@ import { m } from '@manga/i18n'
 import {
   BUBBLE_DASH,
   type Bubble,
+  type BubbleGeometry,
+  blackPanel,
+  bubbleGroups,
   bubbleTextBox,
   bubbleTypeface,
   clipTextBox,
@@ -9,6 +12,7 @@ import {
   currentArt,
   effectInk,
   effectLines,
+  type FocusPoint,
   frameOutline,
   groundColor,
   hasFrameLine,
@@ -20,22 +24,35 @@ import {
   type Point,
   paintOrder,
   panelTone,
+  type ReadingDirection,
   type Rect,
   type ReferenceImage,
+  SFX_OUTLINE,
+  sceneHeading,
+  sfxFontSize,
+  sfxLetterings,
+  sfxTypeface,
   softEdgeStrokes,
   TONE_MATRICES,
 } from '@manga/schema'
 import { memo, Suspense, use, useState } from 'react'
 import { type AssetState, loadAsset } from './asset'
-import { type Box, bubbleGeometry, bubblePaths } from './bubble-shape'
+import { type Box, type BubblePaths, bubbleGeometry, bubblePaths, neckPath } from './bubble-shape'
+import {
+  EMPHASIS_MARK,
+  layoutText,
+  layoutUnbroken,
+  RUBY_SCALE,
+  type TextLayout,
+} from './bubble-text'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
-import { EMPHASIS_MARK, layoutVertical, RUBY_SCALE } from './vertical-text'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
 /**
  * セリフの書体ごとの字族と太さ。太さは書き出しの @manga/render と揃える。書き出しは同梱のフォントで描く。
- * エディタは数 MB のフォントを読み込まずに開けるよう、入っていなければ OS の同じ系統の書体で代える
+ * エディタは数 MB のフォントを読み込まずに開けるよう、入っていなければ OS の同じ系統の書体で代える。
+ * 手書き風は OS にほぼ入っていないので、使うページを開いたときに apps/web が同じフォントを読み込む
  */
 const TYPEFACES: Record<NonNullable<Bubble['typeface']>, { family: string; weight: number }> = {
   gothic: { family: FONT_FAMILY, weight: 400 },
@@ -48,11 +65,15 @@ const TYPEFACES: Record<NonNullable<Bubble['typeface']>, { family: string; weigh
     family: '"M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", sans-serif',
     weight: 400,
   },
+  hand: { family: '"Yomogi", Klee, sans-serif', weight: 400 },
 }
 /** 選択やコマ番号など、出力に出ない作業用の色。値は @manga/ui の tokens.css が持つ */
 export const GUIDE = 'var(--guide)'
 const NOTE_COLOR = 'var(--note)'
 const NUMBER_RADIUS = 3.2
+/** 未生成のコマの指示メモとシーンの見出しの文字の大きさ（mm） */
+const NOTE_FONT = 2.6
+const NOTE_PAD = 1.5
 /**
  * これより小さいセリフは読めないとして警告する（mm）。印刷で読める下限とされる 7pt（約 2.47mm）。
  * 割り付けの下限 2mm まで縮めるのは、警告を出しつつ配置は崩さないため
@@ -67,6 +88,8 @@ interface PageLayerProps {
   /** ページの大きさ（mm）。SVG のユーザー単位 */
   width: number
   height: number
+  /** 綴じの向き。シーンの見出しを読み始めの側の隅に出す */
+  direction: ReadingDirection
   showArt: boolean
   /** 参考画像のレイヤーを出すか。出しても `page.reference.visible` が false なら隠す */
   showReference: boolean
@@ -80,8 +103,8 @@ interface PageLayerProps {
 }
 
 /**
- * ページの白地、参考画像、コマ、生成画像、フキダシと、紙面全体に重ねるトーンを描く。ズームとパンとドラッグでは props が変わらないので、
- * memo で再描画を飛ばす。コマ、フキダシ、オーバーレイもそれぞれ memo し、編集や選択の変更では
+ * ページの白地、参考画像、コマ、生成画像、sfx の焦点の描き文字、フキダシと、紙面全体に重ねるトーンを描く。
+ * ズームとパンとドラッグでは props が変わらないので、memo で再描画を飛ばす。コマ、フキダシ、オーバーレイもそれぞれ memo し、編集や選択の変更では
  * 変わった要素だけを描き直す
  */
 export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
@@ -129,6 +152,7 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
             panel={panel}
             width={width}
             height={height}
+            direction={props.direction}
             frame={frame}
             artRef={props.showArt ? ref : undefined}
             resolveAsset={props.resolveAsset}
@@ -150,15 +174,15 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
       })}
       {/* はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く。重なりの前後はレンダラと同じくコマの重なり順 */}
       {panels.map((panel) =>
-        byOrder(panel.bubbles.filter((b) => b.overflow)).map((bubble) => (
-          <BubbleView
-            key={bubble.id}
-            bubble={bubble}
+        overflowGroups(panel, true).map((group) => (
+          <BubbleGroupView
+            key={group[0]?.id}
+            group={group}
             panelRect={panel.rect}
             width={width}
             height={height}
             frame={frame}
-            selected={isSelected(props.selection, 'bubble', bubble.id)}
+            selectedId={props.selection?.kind === 'bubble' ? props.selection.id : undefined}
           />
         )),
       )}
@@ -211,12 +235,18 @@ const effectPath = (lines: readonly (readonly PagePoint[])[]): string =>
 const isSelected = (selection: Selection, kind: 'panel' | 'bubble', id: ID) =>
   selection?.kind === kind && selection.id === id
 
-const byOrder = (bubbles: Bubble[]) => [...bubbles].sort((a, b) => a.order - b.order)
+/**
+ * コマのフキダシの組（bubbleGroups）のうち、overflow が合うもの。つないだ組は 1 つの輪郭なので、
+ * 先頭のフキダシの overflow に従って組ごとに振り分ける（書き出しと同じ）
+ */
+const overflowGroups = (panel: Panel, overflow: boolean) =>
+  bubbleGroups(panel.bubbles).filter((group) => (group[0]?.overflow === true) === overflow)
 
 const PanelView = memo(function PanelView({
   panel,
   width,
   height,
+  direction,
   frame,
   artRef,
   resolveAsset,
@@ -232,6 +262,7 @@ const PanelView = memo(function PanelView({
   panel: Panel
   width: number
   height: number
+  direction: ReadingDirection
   frame: Rect
   artRef: string | undefined
   resolveAsset(ref: string): Promise<string>
@@ -252,6 +283,8 @@ const PanelView = memo(function PanelView({
   const outline = frameOutline(panelPolygon(panel, width, height), panel.frame, unit)
   const points = polygonPoints(outline)
   const line = hasFrameLine(panel.frame)
+  const scene = sceneHeading(panel)
+  const sfx = sfxLetterings(panel)
   const placeholder = (
     <g clipPath={`url(#${clipId})`}>
       <Placeholder panel={panel} rect={rect} error={false} />
@@ -262,7 +295,7 @@ const PanelView = memo(function PanelView({
       <clipPath id={clipId}>
         <polygon points={points} />
       </clipPath>
-      {panel.fill === 'black' ? (
+      {blackPanel(panel) ? (
         <polygon points={points} fill="#000" data-panel-fill="black" />
       ) : (
         opaque && <polygon points={points} fill="#fff" data-panel-fill="white" />
@@ -304,19 +337,31 @@ const PanelView = memo(function PanelView({
           ))}
         </g>
       )}
+      {sfx.length > 0 && (
+        <g clipPath={`url(#${clipId})`}>
+          {sfx.map((focus) => (
+            <SfxView key={focus.id} focus={focus} panel={rect} />
+          ))}
+        </g>
+      )}
       <PanelNumber order={panel.order} outline={outline} locked={panel.locked === true} />
+      {scene !== undefined && (
+        <g clipPath={`url(#${clipId})`}>
+          <SceneLabel heading={scene} outline={outline} direction={direction} />
+        </g>
+      )}
       {/* 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く */}
-      {byOrder(panel.bubbles.filter((b) => !b.overflow)).map((bubble) => (
-        <BubbleView
-          key={bubble.id}
-          bubble={bubble}
+      {overflowGroups(panel, false).map((group) => (
+        <BubbleGroupView
+          key={group[0]?.id}
+          group={group}
           panelRect={panel.rect}
           width={width}
           height={height}
           frame={frame}
-          selected={bubble.id === selectedBubble}
+          selectedId={selectedBubble}
           clipId={clipId}
-          onBlack={panel.fill === 'black' || (panel.frame === 'none' && ground === '#000')}
+          onBlack={blackPanel(panel) || (panel.frame === 'none' && ground === '#000')}
         />
       ))}
       {/* 枠線を引かないコマは出力に枠線が出ないが、選んで動かせるよう作業用の点線で輪郭を見せる */}
@@ -478,9 +523,13 @@ function ReferenceArt({
   )
 }
 
-/** 未生成コマの中身。camera と note を灰色の横書きで、コマに収まるぶんだけ出す */
+/**
+ * 未生成コマの中身。「間」の印、camera と note を灰色の横書きで、コマに収まるぶんだけ出す。
+ * シーンの見出しを持つコマでは、見出しの下から書く
+ */
 function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: boolean }) {
-  if (!panel.camera && !panel.note && !error) return null
+  if (!panel.beat && !panel.camera && !panel.note && !error) return null
+  const top = sceneHeading(panel) === undefined ? NOTE_PAD : NOTE_PAD * 2 + NOTE_FONT
   return (
     <foreignObject x={rect.x} y={rect.y} width={rect.w} height={rect.h} data-placeholder="">
       <div
@@ -488,10 +537,10 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
           boxSizing: 'border-box',
           height: '100%',
           overflow: 'hidden',
-          padding: `1.5px ${NUMBER_RADIUS * 2 + 2}px 1.5px 1.5px`,
+          padding: `${top}px ${NUMBER_RADIUS * 2 + 2}px ${NOTE_PAD}px ${NOTE_PAD}px`,
           color: NOTE_COLOR,
           fontFamily: FONT_FAMILY,
-          fontSize: '2.6px',
+          fontSize: `${NOTE_FONT}px`,
           lineHeight: 1.4,
           overflowWrap: 'anywhere',
         }}
@@ -499,10 +548,49 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
         {error && (
           <div style={{ color: 'var(--alert)' }}>{m.editor_canvas_panel_image_load_failed()}</div>
         )}
+        {panel.beat && <div data-beat="">{m.panel_beat_mark()}</div>}
         {panel.camera && <div>[{m[`panel_camera_${panel.camera}` as const]()}]</div>}
         {panel.note && <div>{panel.note}</div>}
       </div>
     </foreignObject>
+  )
+}
+
+/**
+ * シーンの見出し。出力に出ない作業用の印で、右綴じは左上、左綴じはコマ番号の左に出す。
+ * 絵の上でも読めるよう白で縁取る
+ */
+function SceneLabel({
+  heading,
+  outline,
+  direction,
+}: {
+  heading: string
+  outline: readonly PagePoint[]
+  direction: ReadingDirection
+}) {
+  const { x, y } =
+    direction === 'rtl'
+      ? cornerAnchor(outline, 'nw', NOTE_PAD, NOTE_PAD)
+      : cornerAnchor(outline, 'ne', -(NUMBER_RADIUS * 2 + 1 + NOTE_PAD), NOTE_PAD)
+  return (
+    <text
+      x={x}
+      y={y}
+      style={{ fill: GUIDE }}
+      stroke="#fff"
+      strokeWidth={NOTE_FONT * 0.25}
+      strokeLinejoin="round"
+      paintOrder="stroke"
+      fontFamily={FONT_FAMILY}
+      fontSize={NOTE_FONT}
+      fontWeight="bold"
+      textAnchor={direction === 'rtl' ? 'start' : 'end'}
+      dominantBaseline="hanging"
+      data-scene-label={heading}
+    >
+      {m.panel_scene_heading({ scene: heading })}
+    </text>
   )
 }
 
@@ -643,9 +731,124 @@ function GenerateButton({ outline, onClick }: { outline: readonly PagePoint[]; o
   )
 }
 
+/** 1 つのフキダシの輪郭の描き方。shapes はしっぽ、本体、首の path */
+interface OutlineItem {
+  shapes: string[]
+  paper: string
+  line: BubblePaths['line']
+  fill: boolean
+  ink: string | null
+}
+
+/** フキダシの path と地の色から輪郭の描き方を作る。neck は首の path で、無ければ null */
+function outlineItem(paths: BubblePaths, fill: Bubble['fill'], neck: string | null): OutlineItem {
+  return {
+    shapes: [...paths.tails, paths.body, ...(neck === null ? [] : [neck])],
+    paper: paths.fill && fill === 'black' ? '#000' : '#fff',
+    line: paths.line,
+    fill: paths.fill,
+    ink: paths.ink,
+  }
+}
+
+/**
+ * フキダシの輪郭。全部の線を太線で引いてから同じ形を地の色で塗り重ね、本体、しっぽ、首の継ぎ目の線を消す。
+ * items を並べると、どのフキダシの塗りも他のフキダシの継ぎ目の線を消し、1 つの輪郭に見せる
+ */
+function BubbleOutlines({ items }: { items: readonly OutlineItem[] }) {
+  return (
+    <>
+      {items.flatMap((item, i) =>
+        item.line === 'none'
+          ? []
+          : item.shapes.map((d, j) => (
+              <path
+                // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
+                key={`stroke-${i}-${j}`}
+                d={d}
+                fill={item.paper}
+                stroke="#000"
+                strokeWidth={BUBBLE_STROKE}
+                strokeDasharray={
+                  item.line === 'dashed'
+                    ? BUBBLE_DASH.map((n) => n * BUBBLE_STROKE).join(' ')
+                    : undefined
+                }
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+              />
+            )),
+      )}
+      {items.flatMap((item, i) =>
+        item.fill
+          ? item.shapes.map((d, j) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
+              <path key={`fill-${i}-${j}`} d={d} fill={item.paper} />
+            ))
+          : [],
+      )}
+      {items.map(
+        (item, i) =>
+          item.ink !== null && (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 組の中の並びは order 順で変わらない
+            <path key={`ink-${i}`} d={item.ink} fill="#000" />
+          ),
+      )}
+    </>
+  )
+}
+
+/**
+ * bubbleGroups の 1 組のフキダシ。1 つだけなら BubbleView のまま描き、つないだ組は輪郭をまとめて
+ * 1 つに描いてから、フキダシごとのセリフと印を重ねる
+ */
+function BubbleGroupView({
+  group,
+  selectedId,
+  ...rest
+}: {
+  group: readonly Bubble[]
+  selectedId: ID | undefined
+  panelRect: Rect
+  width: number
+  height: number
+  frame: Rect
+  clipId?: string
+  onBlack?: boolean
+}) {
+  const [first] = group
+  if (!first) return null
+  if (group.length === 1) {
+    return <BubbleView bubble={first} selected={first.id === selectedId} {...rest} />
+  }
+  const panel = panelBox({ rect: rest.panelRect }, rest.width, rest.height)
+  const geometries = new Map(group.map((b) => [b.id, bubbleGeometry(b, panel)]))
+  const items = group.map((b) => {
+    const g = geometries.get(b.id) as BubbleGeometry
+    const to = b.joinedTo === undefined ? undefined : geometries.get(b.joinedTo)
+    return outlineItem(bubblePaths(b.shape, g), b.fill, to ? neckPath(g, to) : null)
+  })
+  return (
+    <g data-bubble-group={group.map((b) => b.id).join(' ')}>
+      <g clipPath={rest.clipId && `url(#${rest.clipId})`}>
+        <BubbleOutlines items={items} />
+      </g>
+      {group.map((b) => (
+        <BubbleView
+          key={b.id}
+          bubble={b}
+          selected={b.id === selectedId}
+          outlined={false}
+          {...rest}
+        />
+      ))}
+    </g>
+  )
+}
+
 /**
  * フキダシ。太線で輪郭を描いてから同じ形を地の色（黒フキダシは黒、他は白）で塗り重ね、本体としっぽの継ぎ目の線を消す。
- * 黒フキダシのセリフは白で描く。
+ * 黒フキダシのセリフは白で描く。セリフは縦書きで、writing が horizontal なら横書きでルビを上に振る。
  * 外側に残る線は太線の半分になる。枠なしは何も描かない代わりに、選択していなくても薄い破線で範囲を示す。
  * clipId を渡すと、輪郭と文字をその clipPath で切る。フキダシは内枠の外に出てよいが、セリフは断裁で
  * 切れないよう内枠の内側に寄せる
@@ -659,6 +862,7 @@ const BubbleView = memo(function BubbleView({
   selected,
   clipId,
   onBlack = false,
+  outlined = true,
 }: {
   bubble: Bubble
   panelRect: Rect
@@ -668,8 +872,10 @@ const BubbleView = memo(function BubbleView({
   frame: Rect
   selected: boolean
   clipId?: string
-  /** 黒塗りのコマの中。白い地を持たないフキダシのセリフを白で描く */
+  /** 黒い地のコマの中。白い地を持たないフキダシのセリフを白で描く */
   onBlack?: boolean
+  /** 輪郭を描くか。連結フキダシは BubbleGroupView が組の輪郭をまとめて描くので false にする */
+  outlined?: boolean
 }) {
   const panel = panelBox({ rect: panelRect }, width, height)
   const g = bubbleGeometry(bubble, panel)
@@ -679,18 +885,12 @@ const BubbleView = memo(function BubbleView({
     clipId ? clipTextBox(text, panel) : text,
     panelBox({ rect: frame }, width, height),
   )
-  const layout = layoutVertical(bubble.text, box)
-  const right = box.x + box.w / 2 + layout.width / 2
-  const fs = layout.fontSize
-  const rubySize = fs * RUBY_SCALE
+  const horizontal = bubble.writing === 'horizontal'
+  const layout = layoutText(bubble.text, box, bubble.writing)
   const black = paths.fill && bubble.fill === 'black'
-  const paper = black ? '#000' : '#fff'
   const ink = black || (onBlack && !paths.fill) ? '#fff' : '#000'
   const typeface = bubbleTypeface(bubble)
-  const font = TYPEFACES[typeface]
-  const shapes = [...paths.tails, paths.body]
-  const illegible =
-    layout.columns.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
+  const illegible = layout.lines.length > 0 && (layout.truncated || layout.fontSize < LEGIBLE_FONT)
   return (
     <g
       className="ec-bubble"
@@ -698,96 +898,19 @@ const BubbleView = memo(function BubbleView({
       data-shape={bubble.shape}
       data-typeface={typeface}
       data-bubble-fill={black ? 'black' : undefined}
+      data-writing={horizontal ? 'horizontal' : undefined}
+      data-joined-to={bubble.joinedTo}
     >
       <g clipPath={clipId && `url(#${clipId})`}>
-        {paths.line !== 'none' &&
-          shapes.map((d, i) => (
-            <path
-              // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
-              key={`stroke-${i}`}
-              d={d}
-              fill={paper}
-              stroke="#000"
-              strokeWidth={BUBBLE_STROKE}
-              strokeDasharray={
-                paths.line === 'dashed'
-                  ? BUBBLE_DASH.map((n) => n * BUBBLE_STROKE).join(' ')
-                  : undefined
-              }
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-        {paths.fill &&
-          shapes.map((d, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 先端の重なったしっぽは同じ d になるので、位置で見分ける
-            <path key={`fill-${i}`} d={d} fill={paper} />
-          ))}
-        {paths.ink !== null && <path d={paths.ink} fill="#000" />}
-        {layout.columns.length > 0 && (
-          <>
-            <text
-              writingMode="vertical-rl"
-              fontFamily={font.family}
-              fontWeight={font.weight}
-              fontSize={fs}
-              textAnchor="middle"
-              fill={ink}
-              data-truncated={layout.truncated || undefined}
-            >
-              {layout.columns.map((column, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: 列は位置で決まり、同じ文字列の列も並びうる
-                <tspan key={i} x={right - column.offset} y={box.y + box.h / 2}>
-                  {column.text}
-                </tspan>
-              ))}
-            </text>
-            {layout.columns.flatMap((column, i) => {
-              // 列は中央揃えで、字は 1 字が文字サイズ 1 つぶんの高さとみなす
-              const top = box.y + box.h / 2 - (column.length * fs) / 2
-              return column.rubies.map((ruby) => (
-                <text
-                  // biome-ignore lint/suspicious/noArrayIndexKey: ルビは列と列の中の位置で決まる
-                  key={`${i}-${ruby.start}`}
-                  writingMode="vertical-rl"
-                  fontFamily={font.family}
-                  fontWeight={font.weight}
-                  fontSize={rubySize}
-                  textAnchor="middle"
-                  fill={ink}
-                  x={right - column.offset + (fs + rubySize) / 2}
-                  y={top + (ruby.start + ruby.length / 2) * fs}
-                  data-ruby
-                >
-                  {ruby.text}
-                </text>
-              ))
-            })}
-            {layout.columns.flatMap((column, i) => {
-              const top = box.y + box.h / 2 - (column.length * fs) / 2
-              const rows = column.emphases.flatMap(({ start, length }) =>
-                Array.from({ length }, (_, k) => start + k),
-              )
-              return rows.map((row) => (
-                <text
-                  // biome-ignore lint/suspicious/noArrayIndexKey: 傍点は列と列の中の位置で決まる
-                  key={`${i}-${row}`}
-                  writingMode="vertical-rl"
-                  fontFamily={font.family}
-                  fontWeight={font.weight}
-                  fontSize={rubySize}
-                  textAnchor="middle"
-                  fill={ink}
-                  x={right - column.offset + (fs + rubySize) / 2}
-                  y={top + (row + 0.5) * fs}
-                  data-emphasis
-                >
-                  {EMPHASIS_MARK}
-                </text>
-              ))
-            })}
-          </>
-        )}
+        {outlined && <BubbleOutlines items={[outlineItem(paths, bubble.fill, null)]} />}
+        <TextBlock
+          layout={layout}
+          cx={box.x + box.w / 2}
+          cy={box.y + box.h / 2}
+          typeface={typeface}
+          horizontal={horizontal}
+          fill={ink}
+        />
       </g>
       {selected ? (
         <path
@@ -828,6 +951,183 @@ const BubbleView = memo(function BubbleView({
     </g>
   )
 })
+
+const MARKS = /^[!?！？]+$/
+
+/**
+ * 組んだセリフを中心 (cx, cy) に置く。縦書きは右の列から左へ、horizontal なら上の行から下へ、行を中央に揃えて置く。
+ * ルビと傍点は親文字の右（横書きでは上）に置く。縦中横の組は横書きの字として 1 字分の幅に置く。halo を渡すと、その色と太さ（mm）のふちを字の下に敷く
+ */
+function TextBlock({
+  layout,
+  cx,
+  cy,
+  typeface,
+  fill,
+  horizontal = false,
+  halo,
+}: {
+  layout: TextLayout
+  cx: number
+  cy: number
+  typeface: NonNullable<Bubble['typeface']>
+  fill: string
+  horizontal?: boolean
+  halo?: { color: string; width: number }
+}) {
+  if (layout.lines.length === 0) return null
+  const fs = layout.fontSize
+  const rubySize = fs * RUBY_SCALE
+  const font = TYPEFACES[typeface]
+  const paint = {
+    ...(horizontal ? { dominantBaseline: 'central' as const } : { writingMode: 'vertical-rl' }),
+    fontFamily: font.family,
+    fontWeight: font.weight,
+    textAnchor: 'middle' as const,
+    fill,
+    ...(halo && {
+      stroke: halo.color,
+      strokeWidth: halo.width,
+      strokeLinejoin: 'round' as const,
+      paintOrder: 'stroke',
+    }),
+  }
+  // 実際の字幅は測らず、行の長さは layoutText の見積もった字の幅の和とみなす
+  const right = cx + layout.thickness / 2
+  const top = cy - layout.thickness / 2
+  const center = (line: TextLayout['lines'][number]) =>
+    horizontal ? { x: cx, y: top + line.offset } : { x: right - line.offset, y: cy }
+  const at = (line: TextLayout['lines'][number], along: number, aside: number) => {
+    const c = center(line)
+    const from = (along - line.length / 2) * fs
+    return horizontal ? { x: c.x + from, y: c.y - aside } : { x: c.x + aside, y: c.y + from }
+  }
+  const besideBase = (fs + rubySize) / 2
+  // 字ごとに縁取って塗ると隣の字のふちが字に掛かるので、halo があるときは全部のふちを先に敷いてから塗る
+  const body = (layer: 'stroke' | 'fill' | 'both') => {
+    const layerPaint =
+      layer === 'stroke'
+        ? { ...paint, fill: 'none' }
+        : layer === 'fill'
+          ? { ...paint, stroke: undefined, strokeWidth: undefined }
+          : paint
+    const main = layer !== 'stroke'
+    return (
+      <>
+        <text
+          {...layerPaint}
+          fontSize={fs}
+          aria-hidden={main ? undefined : true}
+          data-dialogue={main || undefined}
+          data-truncated={(main && layout.truncated) || undefined}
+        >
+          {layout.lines.flatMap((line, i) =>
+            line.runs
+              .filter((run) => !run.upright)
+              .map((run) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: 行は位置で決まり、同じ文字列の行も並びうる
+                <tspan key={`${i}-${run.start}`} {...at(line, run.start + run.length / 2, 0)}>
+                  {run.text}
+                </tspan>
+              )),
+          )}
+        </text>
+        {layout.lines.flatMap((line, i) =>
+          line.runs
+            .filter((run) => run.upright)
+            .map((run) => (
+              <text
+                // biome-ignore lint/suspicious/noArrayIndexKey: 縦中横の組は行と行の中の位置で決まる
+                key={`${i}-${run.start}`}
+                {...layerPaint}
+                writingMode={undefined}
+                dominantBaseline="central"
+                fontSize={fs}
+                {...at(line, run.start + run.length / 2, 0)}
+                // 感嘆符と疑問符は半角なら 2 字でも 1 字分の幅に収まるので、引き伸ばさないよう詰めない
+                {...(!MARKS.test(run.text) && {
+                  textLength: fs,
+                  lengthAdjust: 'spacingAndGlyphs',
+                })}
+                aria-hidden={main ? undefined : true}
+                data-upright={main || undefined}
+              >
+                {/* 全角の組は字の両脇のあきごと 1 字分に詰めると間が空くので、半角に直す */}
+                {run.text.normalize('NFKC')}
+              </text>
+            )),
+        )}
+      </>
+    )
+  }
+  return (
+    <>
+      {halo ? (
+        <>
+          {body('stroke')}
+          {body('fill')}
+        </>
+      ) : (
+        body('both')
+      )}
+      {layout.lines.flatMap((line, i) =>
+        line.rubies.map((ruby) => (
+          <text
+            // biome-ignore lint/suspicious/noArrayIndexKey: ルビは行と行の中の位置で決まる
+            key={`${i}-${ruby.start}`}
+            {...paint}
+            fontSize={rubySize}
+            {...at(line, ruby.start + ruby.length / 2, besideBase)}
+            data-ruby
+          >
+            {ruby.text}
+          </text>
+        )),
+      )}
+      {layout.lines.flatMap((line, i) =>
+        line.marks.map((mark) => (
+          <text
+            // biome-ignore lint/suspicious/noArrayIndexKey: 傍点は行と行の中の位置で決まる
+            key={`${i}-${mark}`}
+            {...paint}
+            fontSize={rubySize}
+            {...at(line, mark, besideBase)}
+            data-emphasis
+          >
+            {EMPHASIS_MARK}
+          </text>
+        )),
+      )}
+    </>
+  )
+}
+
+/**
+ * sfx の焦点の描き文字。焦点の位置を中心に、焦点の書体と大きさの縦書きの黒い字に白いふちを付けて置き、
+ * 焦点の傾きだけ中心で回す
+ */
+function SfxView({ focus, panel }: { focus: FocusPoint; panel: Box }) {
+  const fontSize = sfxFontSize(focus, panel.w, panel.h)
+  const cx = panel.x + focus.pos.x * panel.w
+  const cy = panel.y + focus.pos.y * panel.h
+  const rotation = focus.rotation ?? 0
+  return (
+    <g
+      data-sfx-id={focus.id}
+      transform={rotation === 0 ? undefined : `rotate(${rotation} ${cx} ${cy})`}
+      pointerEvents="none"
+    >
+      <TextBlock
+        layout={layoutUnbroken(focus.label, fontSize)}
+        cx={cx}
+        cy={cy}
+        typeface={sfxTypeface(focus)}
+        fill="#000"
+        halo={{ color: '#fff', width: fontSize * SFX_OUTLINE }}
+      />
+    </g>
+  )
+}
 
 /** 文字が小さすぎるか収まらないフキダシの左上に出す、出力に出ない警告の印 */
 function IllegibleAlert({ x, y, truncated }: { x: number; y: number; truncated: boolean }) {
