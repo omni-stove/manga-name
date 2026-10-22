@@ -64,9 +64,12 @@ function strokeAt(
   const mm = (q: Point): Mm => ({ x: q.x * width, y: q.y * height })
   for (let i = scribbles.length - 1; i >= 0; i--) {
     const stroke = scribbles[i] as Stroke
-    const thickest = stroke.pressure
-      ? pressureWidth(stroke.width, Math.max(DEFAULT_PRESSURE, ...stroke.pressure))
-      : stroke.width
+    let peak = DEFAULT_PRESSURE
+    if (stroke.pressure) {
+      // 展開すると引数の上限を超えて RangeError になりうるので、ループで points の範囲だけ見る
+      for (let k = 0; k < stroke.points.length; k++) peak = Math.max(peak, stroke.pressure[k] ?? 0)
+    }
+    const thickest = stroke.pressure ? pressureWidth(stroke.width, peak) : stroke.width
     const reach = tolerance + (thickest * width) / 2
     const pts = stroke.points.map(mm)
     for (let j = 0; j < pts.length; j++) {
