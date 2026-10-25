@@ -16,7 +16,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  precheck:
+    uses: omni-stove/.github/.github/workflows/precheck.yml@main
+    permissions:
+      pull-requests: read
+
   checks:
+    needs: precheck
+    if: needs.precheck.outputs.proceed == 'true'
     uses: omni-stove/.github/.github/workflows/ci.yml@main
     permissions:
       contents: read
@@ -26,13 +33,14 @@ jobs:
     with:
       run-review: true
       review-provider: "claude"
+      review-allowed-bots: ""  # 公開リポジトリでは外部 App の PR でもレビューが起動してしまうため
     secrets: inherit
 
   # push では前回の push との差分を取る手間に見合わないので、全部走らせる。
-  # checks が緊急避難口やコンフリクトで proceed を立てない run では、ここから下を全部 skipped にする
+  # precheck が緊急避難口やコンフリクトで proceed を立てない run では、ここから下を全部 skipped にする
   changes:
-    needs: checks
-    if: needs.checks.outputs.proceed == 'true'
+    needs: precheck
+    if: needs.precheck.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -215,7 +223,7 @@ jobs:
           retention-days: 14
 
   ci:
-    needs: [checks, changes, lint, typecheck, test, test-workers]
+    needs: [precheck, checks, changes, lint, typecheck, test, test-workers]
     if: always()
     uses: omni-stove/.github/.github/workflows/ci-gate.yml@main
     permissions:
@@ -226,7 +234,7 @@ jobs:
       actions: read
     with:
       results: ${{ toJSON(needs) }}
-      conflicted: ${{ needs.checks.outputs.conflicted }}
+      conflicted: ${{ needs.precheck.outputs.conflicted }}
       review-comments: ${{ needs.checks.outputs.review-comments }}
       review-result: ${{ needs.checks.outputs.review-result }}
       run-fix: true
