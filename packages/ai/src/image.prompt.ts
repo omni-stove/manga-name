@@ -46,7 +46,7 @@ export const CHARACTER_STYLE =
 /** キャラの参照画像では描き込みは要るが、色とトーンと背景は見分けの邪魔になるので除く */
 export const CHARACTER_NEGATIVE = 'color, screentone, background, text, letters'
 
-/** 描き込んだキャラの参照画像をコマに写させず、見分けにだけ使わせる。登場キャラのいる生成で画風の後に置く */
+/** 描き込んだキャラの参照画像をコマに写させず、見分けにだけ使わせる。登場キャラがいて、かつキャラの参照画像を送る生成でだけ、画風の後に置く */
 export const CHARACTER_REF_GUIDE =
   'the character reference images fix who each character is (face shape, hairstyle, build and outfit silhouette); draw them in the rough storyboard style above, not in the detail of the references.'
 

@@ -179,7 +179,9 @@ export type PageArtPromptRequest = Omit<PageArtRequest, 'layoutPng' | 'reference
 const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from + size).toFixed(2)}`
 
 /**
- * ページ全体の画像生成プロンプト。画風、配置図の説明、ページの登場キャラの外見、
+ * ページ全体の画像生成プロンプト。画風、配置図の説明、
+ * ページに登場キャラがいてキャラの参照画像を送るときだけ CHARACTER_REF_GUIDE、
+ * ページに登場キャラがいれば共通のデザインの行、ページの登場キャラの外見、
  * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで）、
  * 焦点か誘導線のあるコマがあれば配置の印の読み方、固定の末尾を改行で連結する。
  */
