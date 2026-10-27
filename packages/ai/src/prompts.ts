@@ -31,6 +31,9 @@ import {
   BEAT_PANEL,
   CAMERA_SHOTS,
   CHARACTER_ART_TAIL,
+  CHARACTER_NEGATIVE,
+  CHARACTER_REF_GUIDE,
+  CHARACTER_STYLE,
   NAME_NEGATIVE,
   NAME_STYLE,
   PAGE_ART_HEAD,
@@ -159,7 +162,9 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
   return {
     prompt: joinLines([
       NAME_STYLE,
-      panelCharacters(panel, characters).length > 0 ? characterDesign(settings) : undefined,
+      ...(panelCharacters(panel, characters).length > 0
+        ? [CHARACTER_REF_GUIDE, characterDesign(settings)]
+        : []),
       ...panelContent(panel, characters, { scene: req.scene, hint: req.hint }, true),
       req.instruction && `revise the previous image: ${req.instruction}`,
       hasPlacement(panel) ? PLACEMENT_GUIDE : undefined,
@@ -200,7 +205,7 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
     prompt: joinLines([
       NAME_STYLE,
       PAGE_ART_HEAD,
-      cast.length > 0 ? characterDesign(settings) : undefined,
+      ...(cast.length > 0 ? [CHARACTER_REF_GUIDE, characterDesign(settings)] : []),
       cast.length > 0 ? `characters: ${cast.map(describeCharacter).join('; ')}` : undefined,
       ...panels,
       req.page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
@@ -210,16 +215,16 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
   }
 }
 
-/** キャラの参照画像のプロンプト。画風、共通のデザイン、名前と外見、固定の末尾を改行で連結する */
+/** キャラの参照画像のプロンプト。参照画像の画風、共通のデザイン、名前と外見、固定の末尾を改行で連結する */
 function characterArt(req: CharacterArtRequest): { prompt: string; negative: string } {
   return {
     prompt: joinLines([
-      NAME_STYLE,
+      CHARACTER_STYLE,
       characterDesign(req.project.settings),
       describeCharacter(req.character),
       CHARACTER_ART_TAIL,
     ]),
-    negative: NAME_NEGATIVE,
+    negative: CHARACTER_NEGATIVE,
   }
 }
 
@@ -581,21 +586,25 @@ if (import.meta.vitest) {
       project: { settings: project.settings },
       character,
     })
-    expect(prompt.split('\n')).toEqual([NAME_STYLE, 'エル: 銀髪、黒いコート', CHARACTER_ART_TAIL])
-    expect(negative).toBe(NAME_NEGATIVE)
+    expect(prompt.split('\n')).toEqual([
+      CHARACTER_STYLE,
+      'エル: 銀髪、黒いコート',
+      CHARACTER_ART_TAIL,
+    ])
+    expect(negative).toBe(CHARACTER_NEGATIVE)
     const bare = prompts.characterArt({
       project: { settings: project.settings },
       character: { ...character, appearance: undefined },
     })
-    expect(bare.prompt.split('\n')).toEqual([NAME_STYLE, 'エル', CHARACTER_ART_TAIL])
+    expect(bare.prompt.split('\n')).toEqual([CHARACTER_STYLE, 'エル', CHARACTER_ART_TAIL])
   })
 
-  test('the shared character design goes before the characters only where characters are drawn', () => {
+  test('the reference guide and the shared character design go before the characters only where characters are drawn', () => {
     const settings = { ...project.settings, characterDesign: '6 頭身、太い眉' }
     const design = 'character design shared by every character: 6 頭身、太い眉'
     const character = { id: 'c', name: 'エル', shortName: 'L' }
     expect(prompts.characterArt({ project: { settings }, character }).prompt.split('\n')).toEqual([
-      NAME_STYLE,
+      CHARACTER_STYLE,
       design,
       'エル',
       CHARACTER_ART_TAIL,
@@ -605,24 +614,27 @@ if (import.meta.vitest) {
     const panelLines = prompts
       .panelArt({ project: { ...project, settings }, page, panelId: 'pn_1' })
       .prompt.split('\n')
-    expect(panelLines[1]).toBe(design)
+    expect(panelLines.slice(1, 3)).toEqual([CHARACTER_REF_GUIDE, design])
     const pageLines = prompts
       .pageArt({ project: { ...project, settings }, page })
       .prompt.split('\n')
-    expect(pageLines[2]).toBe(design)
-    expect(pageLines[3]?.startsWith('characters: ')).toBe(true)
+    expect(pageLines.slice(2, 4)).toEqual([CHARACTER_REF_GUIDE, design])
+    expect(pageLines[4]?.startsWith('characters: ')).toBe(true)
 
     const unpeopled = {
       ...page,
       panels: page.panels.map((p) => ({ ...p, bubbles: [], focusPoints: [], vectors: [] })),
     }
-    expect(
-      prompts.pageArt({ project: { ...project, settings }, page: unpeopled }).prompt,
-    ).not.toContain(design)
-    expect(
-      prompts.panelArt({ project: { ...project, settings }, page: unpeopled, panelId: 'pn_1' })
-        .prompt,
-    ).not.toContain(design)
+    const unpeopledPage = prompts.pageArt({ project: { ...project, settings }, page: unpeopled })
+    expect(unpeopledPage.prompt).not.toContain(design)
+    expect(unpeopledPage.prompt).not.toContain(CHARACTER_REF_GUIDE)
+    const unpeopledPanel = prompts.panelArt({
+      project: { ...project, settings },
+      page: unpeopled,
+      panelId: 'pn_1',
+    })
+    expect(unpeopledPanel.prompt).not.toContain(design)
+    expect(unpeopledPanel.prompt).not.toContain(CHARACTER_REF_GUIDE)
   })
 
   test('the acting of the characters in a panel goes into panelArt and pageArt with their names', () => {

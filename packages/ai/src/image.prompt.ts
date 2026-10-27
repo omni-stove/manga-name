@@ -36,6 +36,20 @@ export const PLACEMENT_GUIDE =
 export const PAGE_ART_HEAD =
   'one whole manga page drawn to the layout image: each grey area is a panel and the black lines are its border. Draw every panel inside its border and keep the gutters between panels white.'
 
+/**
+ * キャラの参照画像の画風。参照画像はコマの生成がキャラを見分ける拠り所なので、ネームの画風で略さず、
+ * 顔の造作、髪型、服を描き込ませる
+ */
+export const CHARACTER_STYLE =
+  'manga character design sheet, a clean pencil line drawing on white paper. The face in full detail: the shape of the eyes, eyebrows, nose and mouth, and the hairstyle with its parting and strands; the outfit with its seams, folds and accessories; the body in its stated proportions.'
+
+/** キャラの参照画像では描き込みは要るが、色とトーンと背景は見分けの邪魔になるので除く */
+export const CHARACTER_NEGATIVE = 'color, screentone, background, text, letters'
+
+/** 描き込んだキャラの参照画像をコマに写させず、見分けにだけ使わせる。登場キャラのいる生成で画風の後に置く */
+export const CHARACTER_REF_GUIDE =
+  'the character reference images fix who each character is (face shape, hairstyle, build and outfit silhouette); draw them in the rough storyboard style above, not in the detail of the references.'
+
 /** キャラの参照画像の固定の末尾。コマの生成で参照しやすいよう、1 人を全身で正面から描かせる */
 export const CHARACTER_ART_TAIL =
   'character reference sheet, a single character, full body, front view, standing, plain white background, no text, no letters'
