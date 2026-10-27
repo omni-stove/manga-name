@@ -31,6 +31,9 @@ import {
   BEAT_PANEL,
   CAMERA_SHOTS,
   CHARACTER_ART_TAIL,
+  CHARACTER_NEGATIVE,
+  CHARACTER_REF_GUIDE,
+  CHARACTER_STYLE,
   NAME_NEGATIVE,
   NAME_STYLE,
   PAGE_ART_HEAD,
@@ -70,7 +73,7 @@ export interface LlmPrompt<T> {
 
 export type PanelArtPromptRequest = Omit<
   PanelArtRequest,
-  'layoutPng' | 'referencePng' | 'characterRefs' | 'previous'
+  'layoutPng' | 'referencePng' | 'previous'
 > & {
   /** 再生成時の修正指示 */
   instruction?: string
@@ -159,7 +162,9 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
   return {
     prompt: joinLines([
       NAME_STYLE,
-      panelCharacters(panel, characters).length > 0 ? characterDesign(settings) : undefined,
+      ...(panelCharacters(panel, characters).length > 0
+        ? [req.characterRefs?.length ? CHARACTER_REF_GUIDE : undefined, characterDesign(settings)]
+        : []),
       ...panelContent(panel, characters, { scene: req.scene, hint: req.hint }, true),
       req.instruction && `revise the previous image: ${req.instruction}`,
       hasPlacement(panel) ? PLACEMENT_GUIDE : undefined,
@@ -169,15 +174,14 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
   }
 }
 
-export type PageArtPromptRequest = Omit<
-  PageArtRequest,
-  'layoutPng' | 'referencePng' | 'characterRefs'
->
+export type PageArtPromptRequest = Omit<PageArtRequest, 'layoutPng' | 'referencePng'>
 
 const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from + size).toFixed(2)}`
 
 /**
- * ページ全体の画像生成プロンプト。画風、配置図の説明、ページの登場キャラの外見、
+ * ページ全体の画像生成プロンプト。画風、配置図の説明、
+ * ページに登場キャラがいてキャラの参照画像を送るときだけ CHARACTER_REF_GUIDE、
+ * ページに登場キャラがいれば共通のデザインの行、ページの登場キャラの外見、
  * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで）、
  * 焦点か誘導線のあるコマがあれば配置の印の読み方、固定の末尾を改行で連結する。
  */
@@ -200,7 +204,9 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
     prompt: joinLines([
       NAME_STYLE,
       PAGE_ART_HEAD,
-      cast.length > 0 ? characterDesign(settings) : undefined,
+      ...(cast.length > 0
+        ? [req.characterRefs?.length ? CHARACTER_REF_GUIDE : undefined, characterDesign(settings)]
+        : []),
       cast.length > 0 ? `characters: ${cast.map(describeCharacter).join('; ')}` : undefined,
       ...panels,
       req.page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
@@ -210,16 +216,16 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
   }
 }
 
-/** キャラの参照画像のプロンプト。画風、共通のデザイン、名前と外見、固定の末尾を改行で連結する */
+/** キャラの参照画像のプロンプト。参照画像の画風、共通のデザイン、名前と外見、固定の末尾を改行で連結する */
 function characterArt(req: CharacterArtRequest): { prompt: string; negative: string } {
   return {
     prompt: joinLines([
-      NAME_STYLE,
+      CHARACTER_STYLE,
       characterDesign(req.project.settings),
       describeCharacter(req.character),
       CHARACTER_ART_TAIL,
     ]),
-    negative: NAME_NEGATIVE,
+    negative: CHARACTER_NEGATIVE,
   }
 }
 
@@ -581,48 +587,63 @@ if (import.meta.vitest) {
       project: { settings: project.settings },
       character,
     })
-    expect(prompt.split('\n')).toEqual([NAME_STYLE, 'エル: 銀髪、黒いコート', CHARACTER_ART_TAIL])
-    expect(negative).toBe(NAME_NEGATIVE)
+    expect(prompt.split('\n')).toEqual([
+      CHARACTER_STYLE,
+      'エル: 銀髪、黒いコート',
+      CHARACTER_ART_TAIL,
+    ])
+    expect(negative).toBe(CHARACTER_NEGATIVE)
     const bare = prompts.characterArt({
       project: { settings: project.settings },
       character: { ...character, appearance: undefined },
     })
-    expect(bare.prompt.split('\n')).toEqual([NAME_STYLE, 'エル', CHARACTER_ART_TAIL])
+    expect(bare.prompt.split('\n')).toEqual([CHARACTER_STYLE, 'エル', CHARACTER_ART_TAIL])
   })
 
-  test('the shared character design goes before the characters only where characters are drawn', () => {
+  test('the reference guide and the shared character design go before the characters only where characters are drawn', () => {
     const settings = { ...project.settings, characterDesign: '6 頭身、太い眉' }
     const design = 'character design shared by every character: 6 頭身、太い眉'
     const character = { id: 'c', name: 'エル', shortName: 'L' }
     expect(prompts.characterArt({ project: { settings }, character }).prompt.split('\n')).toEqual([
-      NAME_STYLE,
+      CHARACTER_STYLE,
       design,
       'エル',
       CHARACTER_ART_TAIL,
     ])
 
     const page = project.episodes[0]?.pages[0] as Page
+    const characterRefs = [{ characterId: 'chr_1', image: new Blob(['c']) }]
     const panelLines = prompts
-      .panelArt({ project: { ...project, settings }, page, panelId: 'pn_1' })
+      .panelArt({ project: { ...project, settings }, page, panelId: 'pn_1', characterRefs })
       .prompt.split('\n')
-    expect(panelLines[1]).toBe(design)
+    expect(panelLines.slice(1, 3)).toEqual([CHARACTER_REF_GUIDE, design])
     const pageLines = prompts
-      .pageArt({ project: { ...project, settings }, page })
+      .pageArt({ project: { ...project, settings }, page, characterRefs })
       .prompt.split('\n')
-    expect(pageLines[2]).toBe(design)
-    expect(pageLines[3]?.startsWith('characters: ')).toBe(true)
+    expect(pageLines.slice(2, 4)).toEqual([CHARACTER_REF_GUIDE, design])
+    expect(pageLines[4]?.startsWith('characters: ')).toBe(true)
+
+    expect(
+      prompts.panelArt({ project: { ...project, settings }, page, panelId: 'pn_1' }).prompt,
+    ).not.toContain(CHARACTER_REF_GUIDE)
+    expect(prompts.pageArt({ project: { ...project, settings }, page }).prompt).not.toContain(
+      CHARACTER_REF_GUIDE,
+    )
 
     const unpeopled = {
       ...page,
       panels: page.panels.map((p) => ({ ...p, bubbles: [], focusPoints: [], vectors: [] })),
     }
-    expect(
-      prompts.pageArt({ project: { ...project, settings }, page: unpeopled }).prompt,
-    ).not.toContain(design)
-    expect(
-      prompts.panelArt({ project: { ...project, settings }, page: unpeopled, panelId: 'pn_1' })
-        .prompt,
-    ).not.toContain(design)
+    const unpeopledPage = prompts.pageArt({ project: { ...project, settings }, page: unpeopled })
+    expect(unpeopledPage.prompt).not.toContain(design)
+    expect(unpeopledPage.prompt).not.toContain(CHARACTER_REF_GUIDE)
+    const unpeopledPanel = prompts.panelArt({
+      project: { ...project, settings },
+      page: unpeopled,
+      panelId: 'pn_1',
+    })
+    expect(unpeopledPanel.prompt).not.toContain(design)
+    expect(unpeopledPanel.prompt).not.toContain(CHARACTER_REF_GUIDE)
   })
 
   test('the acting of the characters in a panel goes into panelArt and pageArt with their names', () => {
