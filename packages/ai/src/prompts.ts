@@ -73,7 +73,7 @@ export interface LlmPrompt<T> {
 
 export type PanelArtPromptRequest = Omit<
   PanelArtRequest,
-  'layoutPng' | 'referencePng' | 'characterRefs' | 'previous'
+  'layoutPng' | 'referencePng' | 'previous'
 > & {
   /** 再生成時の修正指示 */
   instruction?: string
@@ -163,7 +163,7 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
     prompt: joinLines([
       NAME_STYLE,
       ...(panelCharacters(panel, characters).length > 0
-        ? [CHARACTER_REF_GUIDE, characterDesign(settings)]
+        ? [req.characterRefs?.length ? CHARACTER_REF_GUIDE : undefined, characterDesign(settings)]
         : []),
       ...panelContent(panel, characters, { scene: req.scene, hint: req.hint }, true),
       req.instruction && `revise the previous image: ${req.instruction}`,
@@ -174,10 +174,7 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
   }
 }
 
-export type PageArtPromptRequest = Omit<
-  PageArtRequest,
-  'layoutPng' | 'referencePng' | 'characterRefs'
->
+export type PageArtPromptRequest = Omit<PageArtRequest, 'layoutPng' | 'referencePng'>
 
 const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from + size).toFixed(2)}`
 
@@ -205,7 +202,9 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
     prompt: joinLines([
       NAME_STYLE,
       PAGE_ART_HEAD,
-      ...(cast.length > 0 ? [CHARACTER_REF_GUIDE, characterDesign(settings)] : []),
+      ...(cast.length > 0
+        ? [req.characterRefs?.length ? CHARACTER_REF_GUIDE : undefined, characterDesign(settings)]
+        : []),
       cast.length > 0 ? `characters: ${cast.map(describeCharacter).join('; ')}` : undefined,
       ...panels,
       req.page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
@@ -611,15 +610,23 @@ if (import.meta.vitest) {
     ])
 
     const page = project.episodes[0]?.pages[0] as Page
+    const characterRefs = [{ characterId: 'chr_1', image: new Blob(['c']) }]
     const panelLines = prompts
-      .panelArt({ project: { ...project, settings }, page, panelId: 'pn_1' })
+      .panelArt({ project: { ...project, settings }, page, panelId: 'pn_1', characterRefs })
       .prompt.split('\n')
     expect(panelLines.slice(1, 3)).toEqual([CHARACTER_REF_GUIDE, design])
     const pageLines = prompts
-      .pageArt({ project: { ...project, settings }, page })
+      .pageArt({ project: { ...project, settings }, page, characterRefs })
       .prompt.split('\n')
     expect(pageLines.slice(2, 4)).toEqual([CHARACTER_REF_GUIDE, design])
     expect(pageLines[4]?.startsWith('characters: ')).toBe(true)
+
+    expect(
+      prompts.panelArt({ project: { ...project, settings }, page, panelId: 'pn_1' }).prompt,
+    ).not.toContain(CHARACTER_REF_GUIDE)
+    expect(prompts.pageArt({ project: { ...project, settings }, page }).prompt).not.toContain(
+      CHARACTER_REF_GUIDE,
+    )
 
     const unpeopled = {
       ...page,
