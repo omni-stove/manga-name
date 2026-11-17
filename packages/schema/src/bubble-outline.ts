@@ -337,7 +337,6 @@ export function bubbleTextBox(
   g: BubbleGeometry,
 ): { x: number; y: number; w: number; h: number } {
   const f = isBoxShape(shape) ? { w: 0.85, h: 0.85 } : { w: 0.7, h: 0.75 }
-  // 輪郭が楕円より内へ入る形は、入る深さだけ半径を縮めてから割り付ける
   const inset = isBubbleMood(shape) ? unitOf(g) * moodInset(shape) : 0
   const w = Math.max(0, g.rx - inset) * 2 * f.w
   const h = Math.max(0, g.ry - inset) * 2 * f.h
