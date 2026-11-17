@@ -3,6 +3,7 @@ import { diagnosePage, panelHint } from '@manga/diagnosis'
 import { m } from '@manga/i18n'
 import { cropPanelArts, renderLayoutPng, renderPageLayoutPng } from '@manga/render'
 import {
+  blackPanel,
   type Character,
   currentArt,
   type ID,
@@ -19,6 +20,7 @@ import {
   panelCharacterIds,
   type ReferenceImage,
   sceneOf,
+  wantsArt,
 } from '@manga/schema'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { findPanel, panelPatch } from './inspector-ops'
@@ -326,6 +328,7 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     const page = found?.page
     const panel = page && findPanel(page, panelId)?.panel
     if (!found || !page || !panel) throw new Error(m.web_generate_panel_gone())
+    if (!wantsArt(panel)) throw new Error(m.web_generate_text_only_panel())
     const { settings, characters } = project
     const pageSize = pageSizeOf(page, settings.pageSize)
 
@@ -526,7 +529,10 @@ export function createPanelGeneration(deps: PanelGenerationDeps): PanelGeneratio
     pageIds.flatMap((pageId) => {
       const panelIds = (findPage(project, pageId)?.page.panels ?? [])
         .filter(
-          (panel) => panel.fill === undefined && (includeGenerated || panel.artId === undefined),
+          (panel) =>
+            wantsArt(panel) &&
+            !blackPanel(panel) &&
+            (includeGenerated || panel.artId === undefined),
         )
         .map((panel) => panel.id)
       return panelIds.length > 0 ? [{ pageId, panelIds }] : []
@@ -695,6 +701,19 @@ if (import.meta.vitest) {
       expect(store.state.getState().canUndo).toBe(false)
       expect(notify).toHaveBeenCalledWith(
         m.web_generate_panel_failed({ reason: m.web_generate_previous_art_required() }),
+        { signIn: false },
+      )
+    })
+
+    test('a text-only panel fails without a patch', async () => {
+      const { generate, panelNow, notify, store } = setup()
+      const index = store.get().episodes[0]?.pages[0]?.panels.findIndex((p) => p.id === panelId)
+      const path = `/episodes/0/pages/0/panels/${index}/noArt`
+      store.applyPatch([{ op: 'add', path, value: true }])
+      expect(await generate()).toBe('failed')
+      expect(panelNow().arts).toHaveLength(0)
+      expect(notify).toHaveBeenCalledWith(
+        m.web_generate_panel_failed({ reason: m.web_generate_text_only_panel() }),
         { signIn: false },
       )
     })
@@ -1011,12 +1030,17 @@ if (import.meta.vitest) {
       expect(pagePanels(store).map((p) => p.arts.length)).toEqual([2, 2, 2, 2, 2, 2])
     })
 
-    test('never fills a black panel, even with includeGenerated', async () => {
+    test('never fills a black, beta flash or text-only panel, even with includeGenerated', async () => {
       const { provider } = counting()
       const { generation, store } = setup(provider)
-      store.applyPatch([{ op: 'add', path: '/episodes/0/pages/0/panels/0/fill', value: 'black' }])
-      expect(await generation.generateAll(all(store, true))).toMatchObject({ done: 5 })
-      expect(pagePanels(store).map((p) => p.arts.length)).toEqual([0, 1, 1, 1, 1, 1])
+      const panel = '/episodes/0/pages/0/panels'
+      store.applyPatch([
+        { op: 'add', path: `${panel}/0/fill`, value: 'black' },
+        { op: 'add', path: `${panel}/1/effect`, value: 'beta_flash' },
+        { op: 'add', path: `${panel}/2/noArt`, value: true },
+      ])
+      expect(await generation.generateAll(all(store, true))).toMatchObject({ done: 3 })
+      expect(pagePanels(store).map((p) => p.arts.length)).toEqual([0, 0, 0, 1, 1, 1])
     })
 
     test('a panel being generated on its own is busy and gets no crop', async () => {

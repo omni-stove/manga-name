@@ -8,11 +8,13 @@ import {
   MAX_NAME_PANELS,
   type NamePanel,
   type Page,
+  PanelEffectSchema,
   type PlanLine,
   type Project,
 } from '@manga/schema'
 import {
   Button,
+  Checkbox,
   ConfirmDialog,
   IconButton,
   Select,
@@ -372,6 +374,45 @@ function NameEditor({
               {CameraSchema.options.map((camera) => (
                 <option key={camera} value={camera}>
                   {m[`panel_camera_${camera}`]()}
+                </option>
+              ))}
+            </Select>
+            <XStack wrap>
+              <Checkbox
+                label={m.panel_no_art()}
+                checked={panel.noArt === true}
+                onChange={(e) => {
+                  const on = e.currentTarget.checked
+                  editPanel(index, ({ noArt: _, ...rest }) =>
+                    on ? { ...rest, noArt: true } : rest,
+                  )
+                }}
+              />
+              <Checkbox
+                label={m.panel_fill_black()}
+                checked={panel.fill === 'black'}
+                onChange={(e) => {
+                  const on = e.currentTarget.checked
+                  editPanel(index, ({ fill: _, ...rest }) =>
+                    on ? { ...rest, fill: 'black' } : rest,
+                  )
+                }}
+              />
+            </XStack>
+            <Select
+              label={m.panel_effect()}
+              value={panel.effect ?? ''}
+              onChange={(e) => {
+                const effect = PanelEffectSchema.safeParse(e.currentTarget.value)
+                editPanel(index, ({ effect: _, ...rest }) =>
+                  effect.success ? { ...rest, effect: effect.data } : rest,
+                )
+              }}
+            >
+              <option value="">{m.none()}</option>
+              {PanelEffectSchema.options.map((effect) => (
+                <option key={effect} value={effect}>
+                  {m[`panel_effect_${effect}`]()}
                 </option>
               ))}
             </Select>

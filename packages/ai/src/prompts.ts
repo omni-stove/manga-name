@@ -24,6 +24,7 @@ import {
   panelCharacterIds,
   StrengthSchema,
   VectorKindSchema,
+  wantsArt,
 } from '@manga/schema'
 import type { z } from 'zod'
 import { critiqueSystem } from './critique.prompt'
@@ -187,16 +188,17 @@ const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from +
  */
 function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string } {
   const { characters, settings } = req.project
-  const cast = pageCharacterIds(req.page).flatMap((id) => characters.filter((c) => c.id === id))
-  const panels = [...req.page.panels]
+  const page = { ...req.page, panels: req.page.panels.filter(wantsArt) }
+  const cast = pageCharacterIds(page).flatMap((id) => characters.filter((c) => c.id === id))
+  const panels = [...page.panels]
     .sort((a, b) => a.order - b.order)
     .map((panel) => {
       const { x, y, w, h } = panel.rect
+      const where = `panel ${panel.order} (x ${formatSpan(x, w)}, y ${formatSpan(y, h)})`
       const context = { scene: req.scenes?.[panel.id], hint: req.hints?.[panel.id] }
       const content = panelContent(panel, characters, context, false)
         .filter((p): p is string => Boolean(p))
         .join('; ')
-      const where = `panel ${panel.order} (x ${formatSpan(x, w)}, y ${formatSpan(y, h)})`
       return content ? `${where}: ${content}` : where
     })
 
@@ -209,7 +211,7 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
         : []),
       cast.length > 0 ? `characters: ${cast.map(describeCharacter).join('; ')}` : undefined,
       ...panels,
-      req.page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
+      page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
       PANEL_ART_TAIL,
     ]),
     negative: NAME_NEGATIVE,
@@ -526,6 +528,21 @@ if (import.meta.vitest) {
     expect(panelLines[1]).toContain(BEAT_PANEL)
     expect(panelLines[2]).not.toContain('setting: ')
     expect(panelLines[0]).not.toContain(BEAT_PANEL)
+  })
+
+  test('pageArt leaves out a text-only panel and its characters', () => {
+    const sample = project.episodes[0]?.pages[0] as Page
+    const { cast: _, ...page } = sample
+    const texted: Page = {
+      ...page,
+      panels: page.panels.map((p) => (p.order === 1 ? p : { ...p, noArt: true as const })),
+    }
+    const lines = prompts.pageArt({ project, page: texted }).prompt.split('\n')
+    expect(lines.filter((l) => l.startsWith('panel ')).map((l) => l.split(' ')[1])).toEqual(['1'])
+    const first = page.panels.find((p) => p.order === 1) as Panel
+    expect(lines.some((l) => l.startsWith('characters: '))).toBe(
+      panelCharacterIds(first).length > 0,
+    )
   })
 
   test('pageArt lists the cast once and one line per panel in reading order with its span', () => {
