@@ -890,7 +890,7 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-sfx', png)
   })
 
-  test('形を持たない効果と漫符は何も描かず、冷たい声と弱々しい声のフキダシは普通の形で描く', async () => {
+  test('形を持たない効果と漫符は何も描かず、冷たい声と弱々しい声のフキダシは普通の形と違う輪郭で描く', async () => {
     const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
     const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
     const bubble = pn1.bubbles[0] as Bubble
@@ -912,7 +912,7 @@ if (import.meta.vitest) {
     )
     for (const shape of ['cold', 'weak'] as const) {
       const drawn = await draw(withPanel({ bubbles: [{ ...bubble, shape, typeface: 'gothic' }] }))
-      expect(drawn.every((v, i) => v === gothic[i])).toBe(true)
+      expect(drawn.every((v, i) => v === gothic[i])).toBe(false)
     }
   })
 

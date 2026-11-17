@@ -1,7 +1,7 @@
 import type { BubbleOutline } from './bubble-outline'
 import {
-  type BubbleGeometry,
   along,
+  type BubbleGeometry,
   countAlong,
   jitter,
   type PathCommand,

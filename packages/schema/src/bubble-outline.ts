@@ -1,7 +1,7 @@
 import { type BubbleMood, isBubbleMood, moodInset, moodOutline, moodReach } from './bubble-moods'
 import {
-  type BubbleGeometry,
   along,
+  type BubbleGeometry,
   countAlong,
   ellipseAt,
   jitter,
@@ -96,7 +96,6 @@ export const hasTail = (shape: Shape): boolean => SHAPE_STYLE[shape].tail
 
 /** 本体が楕円でなく、半径で囲む矩形そのものか */
 export const isBoxShape = (shape: Shape): boolean => SHAPE_STYLE[shape].box
-
 
 function ellipse(cx: number, cy: number, rx: number, ry: number): PathCommand[] {
   const kx = rx * KAPPA
