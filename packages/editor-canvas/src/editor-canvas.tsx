@@ -2336,6 +2336,30 @@ if (import.meta.vitest) {
       })
     })
 
+    test('a focus click with the mark kind places a mark, and the canvas draws it', async () => {
+      const onChange = vi.fn()
+      const svg = await render({ tool: 'focus', focusKind: 'mark', onChange })
+      layout(svg)
+      click(svg, inPanel('pn_5', 0.2, 0.3))
+      const patch = patchOf(onChange)
+      expect(patch).toEqual([
+        {
+          op: 'add',
+          path: '/panels/4/focusPoints/-',
+          value: expect.objectContaining({ kind: 'mark', label: '', pos: { x: 0.2, y: 0.3 } }),
+        },
+      ])
+      const placed = (patch[0] as { value: Panel['focusPoints'][number] }).value
+      const page: Page = {
+        ...samplePage,
+        panels: samplePage.panels.map((p) =>
+          p.id === 'pn_5' ? { ...p, focusPoints: [...p.focusPoints, placed] } : p,
+        ),
+      }
+      const drawn = await render({ tool: 'focus', page })
+      expect(drawn.querySelectorAll('[data-panel-marks]')).toHaveLength(1)
+    })
+
     test('focusKind defaults to face', async () => {
       const onChange = vi.fn()
       const svg = await render({ tool: 'focus', onChange })
@@ -2482,6 +2506,21 @@ if (import.meta.vitest) {
         expect(await handleWith({ page: withSfx({ label: ' ' }) })).toBeNull()
         expect(await handleWith({ page: withSfx({ locked: true }) })).toBeNull()
         expect(await handleWith({ layers: { ...defaults.layers, hints: false } })).toBeNull()
+      })
+
+      test('a selected mark gets the rotation handle too, and dragging it tilts the mark', async () => {
+        const onChange = vi.fn()
+        const mark = withSfx({ kind: 'mark', label: '', mark: 'anger' })
+        const svg = await render({ tool: 'focus', page: mark, selection, onChange })
+        layout(svg)
+        const centre = inPanel('pn_5', 0.5, 0.5)
+        const to = { x: centre.x + 40, y: centre.y }
+        drag(svg, handleAt(svg), to, { release: false })
+        expect(shownRotation(svg)).toBe('90')
+        fire(svg, pointer('pointerup', { id: 1, ...to }))
+        expect(patchOf(onChange)).toEqual([
+          { op: 'add', path: `/panels/4/focusPoints/${sfxIndex}/rotation`, value: 90 },
+        ])
       })
 
       test('dragging the handle draws the turned frame, then tilts the lettering in one patch', async () => {

@@ -1,6 +1,6 @@
 export { BUBBLE_SHAPES, BubbleInspector } from './bubble-inspector'
 export { CharacterInspector } from './character-inspector'
-export { FOCUS_KINDS, FocusInspector } from './focus-inspector'
+export { FOCUS_KINDS, FOCUS_MARKS, FocusInspector } from './focus-inspector'
 export { IssueList } from './issue-list'
 export { PageInspector } from './page-inspector'
 export { PageScriptInspector } from './page-script-inspector'

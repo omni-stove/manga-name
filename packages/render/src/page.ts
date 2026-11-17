@@ -991,6 +991,51 @@ if (import.meta.vitest) {
     }
   })
 
+  test('新しい演出: 縦線・カケアミ・キラキラ・花の効果、5 種の漫符、冷たい声と弱々しい声のフキダシ、柱を絵の入ったページに描く', async () => {
+    const { page, ctx } = withArts()
+    const mark = (id: string, kind: NonNullable<FocusPoint['mark']>, patch: Partial<FocusPoint> = {}) =>
+      sfxFocus(id, { kind: 'mark', label: '', mark: kind, pos: { x: 0.3, y: 0.3 }, ...patch })
+    const reshape = (panel: Panel, shape: Bubble['shape']) =>
+      panel.bubbles.map((b) => ({ ...b, shape }))
+    const staged: Page = {
+      ...page,
+      hashira: '次号、ついに対決！',
+      panels: page.panels.map((panel): Panel => {
+        switch (panel.id) {
+          case 'pn_1':
+            return { ...panel, effect: 'vertical_lines', focusPoints: [mark('fp_m1', 'sweat')] }
+          case 'pn_2':
+            return {
+              ...panel,
+              effect: 'crosshatch',
+              focusPoints: [mark('fp_m2', 'anger', { rotation: -20 })],
+            }
+          case 'pn_3':
+            return {
+              ...panel,
+              effect: 'sparkle',
+              bubbles: reshape(panel, 'cold'),
+              focusPoints: [mark('fp_m3', 'question', { pos: { x: 0.75, y: 0.3 } })],
+            }
+          case 'pn_4':
+            return { ...panel, effect: 'flowers', focusPoints: [mark('fp_m4', 'exclaim')] }
+          case 'pn_5':
+            return { ...panel, focusPoints: [mark('fp_m5', 'sigh', { pos: { x: 0.4, y: 0.6 } })] }
+          case 'pn_6':
+            return { ...panel, bubbles: reshape(panel, 'weak') }
+          default:
+            return panel
+        }
+      }),
+    }
+    const png = await renderPage(staged, ctx, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    await matchPngSnapshot('page-staging', png)
+  }, 60_000)
+
   test('描き文字は sfx の焦点にだけ、label があるときだけ描く', async () => {
     const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
     const [pn1, pn2, ...rest] = emptyPage.panels as [Panel, Panel, ...Panel[]]

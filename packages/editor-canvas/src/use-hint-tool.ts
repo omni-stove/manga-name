@@ -16,7 +16,14 @@ import {
   toPanelPoint,
 } from './hint-ops'
 import { type PagePoint, panelAt, panelBox } from './hit-test'
-import { rotateFocusPatch, rotationAt, type SfxFrame, sfxFrame, sfxRotateHandle } from './sfx-ops'
+import {
+  markFrame,
+  rotateFocusPatch,
+  rotationAt,
+  type SfxFrame,
+  sfxFrame,
+  sfxRotateHandle,
+} from './sfx-ops'
 import type { Selection, Tool } from './types'
 import { HANDLE_RATIO } from './use-panel-tool'
 import { CLICK_SLOP, sameSelection } from './use-selection'
@@ -47,7 +54,7 @@ export type HintDraft =
   | { kind: 'vector'; panelId: ID; from: Point; to: Point }
   | { kind: 'rotate'; focusId: ID; rotation: number }
 
-/** 回転のハンドルを出す、選択中の描き文字。frame はドラッグ中なら回した後の傾き */
+/** 回転のハンドルを出す、選択中の描き文字か漫符。frame はドラッグ中なら回した後の傾き */
 export interface SfxRotation {
   focusId: ID
   frame: SfxFrame
@@ -86,8 +93,8 @@ type Gesture =
     }
 
 /**
- * 選択中の描き文字の回転のハンドル。ハンドルは描き文字の上端から handleSize の 2 倍離す。
- * 選択が sfx の焦点でないか、描き文字が無いか、ロックしていれば undefined。ドラッグ中は draft の傾きで出す
+ * 選択中の描き文字か漫符の回転のハンドル。ハンドルは枠の上端から handleSize の 2 倍離す。
+ * 選択が文字のある sfx の焦点でも mark の焦点でもないか、ロックしていれば undefined。ドラッグ中は draft の傾きで出す
  */
 function sfxRotation(
   page: Page,
@@ -100,14 +107,13 @@ function sfxRotation(
   if (selection?.kind !== 'focus') return undefined
   const found = findFocus(page, selection.id)
   const focus = found?.panel.focusPoints[found.index]
-  if (!found || !focus || focus.kind !== 'sfx' || focus.label.trim() === '' || focus.locked) {
-    return undefined
-  }
+  if (!found || !focus || focus.locked) return undefined
+  const lettered = focus.kind === 'sfx' && focus.label.trim() !== ''
+  if (!lettered && focus.kind !== 'mark') return undefined
   const turning = draft?.kind === 'rotate' && draft.focusId === focus.id
-  const frame = sfxFrame(
-    turning ? { ...focus, rotation: draft.rotation } : focus,
-    panelBox(found.panel, width, height),
-  )
+  const turned = turning ? { ...focus, rotation: draft.rotation } : focus
+  const box = panelBox(found.panel, width, height)
+  const frame = lettered ? sfxFrame(turned, box) : markFrame(turned, box)
   return { focusId: focus.id, frame, handle: sfxRotateHandle(frame, handleSize * 2) }
 }
 
@@ -120,8 +126,8 @@ function boxOf(el: Element): ClientBox {
  * `focus` と `vector` ツールの操作。
  * `focus` はコマの上のクリックで既定の大きさの、ドラッグで押した点を中心に離した点までを半径にした大きさ
  * （weight）の `focusKind` の焦点を置いて選び、既存の焦点はドラッグで動かす。
- * 位置をロックした焦点は動かさない。選択中の sfx の焦点に描き文字があり、ロックしていなければ、描き文字の上に
- * 回転のハンドルを出し、そのドラッグで描き文字を中心のまわりに傾ける。Shift を押している間は 15 度ずつ傾ける。
+ * 位置をロックした焦点は動かさない。選択中の焦点が描き文字のある sfx か mark で、ロックしていなければ、
+ * 描き文字か漫符の上に回転のハンドルを出し、そのドラッグで焦点を中心に傾ける。Shift を押している間は 15 度ずつ傾ける。
  * `vector` はコマの上のドラッグで始点から終点へのベクトルを作って選ぶ。動かずに離したときは何もせず、
  * クリックの選択は useSelection に任せる。
  * ドラッグ中は `draft` を描くだけで、Patch は pointerup で 1 回だけ出す。Escape でドラッグを取り消す
@@ -358,6 +364,20 @@ if (import.meta.vitest) {
       expect(sfxRotation(base, 210, 297, select, null, 2)).toBeUndefined()
       expect(sfxRotation(withFocus({ label: ' ' }), 210, 297, select, null, 2)).toBeUndefined()
       expect(sfxRotation(withFocus({ locked: true }), 210, 297, select, null, 2)).toBeUndefined()
+      const face = withFocus({ kind: 'face' })
+      expect(sfxRotation(face, 210, 297, select, null, 2)).toBeUndefined()
+    })
+
+    test('turns a mark around its focus even without a label, unless locked', () => {
+      const mark = sfxRotation(withFocus({ kind: 'mark', label: '' }), 210, 297, select, null, 2)
+      const pn2 = base.panels.find((p) => p.focusPoints.some((f) => f.id === 'fp_2_vial'))
+      const vial = pn2?.focusPoints.find((f) => f.id === 'fp_2_vial')
+      if (!pn2 || !vial) throw new Error('fixture に fp_2_vial がない')
+      expect(mark?.frame.cx).toBeCloseTo((pn2.rect.x + vial.pos.x * pn2.rect.w) * 210)
+      expect(mark?.frame.cy).toBeCloseTo((pn2.rect.y + vial.pos.y * pn2.rect.h) * 297)
+      expect(mark?.frame.w).toBe(mark?.frame.h)
+      const locked = withFocus({ kind: 'mark', label: '', locked: true })
+      expect(sfxRotation(locked, 210, 297, select, null, 2)).toBeUndefined()
     })
 
     test('uses the draft rotation only for the focus being turned', () => {

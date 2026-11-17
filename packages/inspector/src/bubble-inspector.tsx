@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { m } from '@manga/i18n'
 import {
-  AVAILABLE_BUBBLE_SHAPES,
   type Bubble,
   BubbleSchema,
   BubbleTypefaceSchema,
@@ -14,9 +13,11 @@ import { optionalString, replace } from './patch'
 import section from './section.module.css'
 import type { BubbleInspectorProps } from './types'
 
-/** 選べるフキダシの形と、画面での呼び名 */
+/** フキダシの形と、画面での呼び名 */
 export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[] =
-  AVAILABLE_BUBBLE_SHAPES.map((shape) => option(shape, m[`bubble_shape_${shape}` as const]))
+  BubbleSchema.shape.shape.options.map((shape) =>
+    option(shape, m[`bubble_shape_${shape}` as const]),
+  )
 
 export const typefaceLabel = (typeface: NonNullable<Bubble['typeface']>) =>
   m[`bubble_typeface_${typeface}` as const]()
@@ -149,15 +150,23 @@ if (import.meta.vitest) {
       ])
     })
 
-    test('the shape select offers only the shapes that are drawn', async () => {
+    test('the shape select offers every shape, including cold and weak', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
       const bubble = must(samplePanel.bubbles[0])
       const { container } = await render(
-        <BubbleInspector bubble={bubble} characters={project.characters} onChange={() => {}} />,
+        <BubbleInspector bubble={bubble} characters={project.characters} onChange={onChange} />,
       )
-      const values = [...selectLabelled(container, m.bubble_shape()).options].map((o) => o.value)
-      expect(values).toContain('monologue')
-      expect(values).not.toContain('cold')
-      expect(values).not.toContain('weak')
+      const select = selectLabelled(container, m.bubble_shape())
+      expect([...select.options].map((o) => o.value)).toEqual([
+        ...BubbleSchema.shape.shape.options,
+      ])
+      for (const shape of ['cold', 'weak'] as const) {
+        expect(must([...select.options].find((o) => o.value === shape)).textContent).toBe(
+          m[`bubble_shape_${shape}`](),
+        )
+        await choose(select, shape)
+        expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/shape', value: shape }])
+      }
     })
 
     test('allowing overflow adds it, and disallowing it removes it', async () => {
