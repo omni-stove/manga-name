@@ -1,6 +1,13 @@
 import type { CritiqueResponse, LlmProvider } from '@manga/ai'
 import { m } from '@manga/i18n'
-import type { ID, Page, PageDiagnosis, Patch, ProjectSettings } from '@manga/schema'
+import {
+  currentArt,
+  type ID,
+  type Page,
+  type PageDiagnosis,
+  type Patch,
+  type ProjectSettings,
+} from '@manga/schema'
 import { Button, Typography, XStack, YStack } from '@manga/ui'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import {
@@ -101,7 +108,8 @@ export function CritiquePanel(props: CritiquePanelProps) {
       onPreview(null)
       setApplyError(undefined)
       const drawn = touchedPanelIds(page, patch).flatMap((panelId) => {
-        const artId = page.panels.find((p) => p.id === panelId)?.artId
+        const found = page.panels.find((p) => p.id === panelId)
+        const artId = found && currentArt(found)?.id
         return artId === undefined ? [] : [{ panelId, artId, suggestion: index }]
       })
       setRegenerate((prev) => [...prev, ...drawn])
@@ -188,7 +196,7 @@ function Result({
       regenerate
         .filter((r) => {
           const panel = page.panels.find((p) => p.id === r.panelId)
-          return panel?.artId === r.artId && states[r.suggestion]?.kind === 'applied'
+          return panel !== undefined && currentArt(panel)?.id === r.artId && states[r.suggestion]?.kind === 'applied'
         })
         .map((r) => [r.panelId, r] as const),
     ).values(),
