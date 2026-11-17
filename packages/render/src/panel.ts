@@ -149,10 +149,10 @@ type PanelNotes = Pick<Panel, 'order' | 'camera' | 'angle' | 'note' | 'scene' | 
 
 /** 寄りと角度の呼び名。どちらも無ければ空 */
 export function shotNames(panel: Pick<Panel, 'camera' | 'angle'>): string[] {
-  return [
-    panel.camera && m[`panel_camera_${panel.camera}` as const](),
-    panel.angle && m[`panel_angle_${panel.angle}` as const](),
-  ].filter((s): s is string => Boolean(s))
+  const names: string[] = []
+  if (panel.camera) names.push(m[`panel_camera_${panel.camera}` as const]())
+  if (panel.angle) names.push(m[`panel_angle_${panel.angle}` as const]())
+  return names
 }
 
 /**
@@ -254,11 +254,7 @@ export function drawNotesMargin(
   for (const panel of panels) {
     ctx.font = `bold ${fontPx}px "${FONT_FAMILY}"`
     const scene = sceneHeading(panel)
-    const head = [
-      String(panel.order),
-      ...shotNames(panel),
-      panel.beat && m.panel_beat_mark(),
-    ]
+    const head = [String(panel.order), ...shotNames(panel), panel.beat && m.panel_beat_mark()]
       .filter(Boolean)
       .join(' ')
     const heads = scene === undefined ? [head] : [m.panel_scene_heading({ scene }), head]
