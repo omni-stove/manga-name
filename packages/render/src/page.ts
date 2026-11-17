@@ -963,7 +963,7 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-sfx', png)
   })
 
-  test('形を持たない効果は何も描かず、漫符は 5 種とも描き、冷たい声と弱々しい声のフキダシは普通の形と違う輪郭で描く', async () => {
+  test('キラキラと花は描き、漫符は 5 種とも描き、冷たい声と弱々しい声のフキダシは普通の形と違う輪郭で描く', async () => {
     const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
     const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
     const bubble = pn1.bubbles[0] as Bubble
@@ -976,7 +976,7 @@ if (import.meta.vitest) {
     const same = (data: Uint8ClampedArray) => data.every((v, i) => v === plain[i])
 
     for (const effect of ['sparkle', 'flowers'] as const) {
-      expect(same(await draw(withPanel({ effect })))).toBe(true)
+      expect(same(await draw(withPanel({ effect })))).toBe(false)
     }
     for (const kind of ['sweat', 'anger', 'question', 'exclaim', 'sigh'] as const) {
       const mark = sfxFocus('fp_mark', { kind: 'mark', label: '', mark: kind, weight: 1 })

@@ -480,21 +480,8 @@ if (import.meta.vitest) {
     expect(effectLines(effectPanel('focus_lines'), { ...box, w: 0 }, 100)).toEqual([])
   })
 
-  const shapeless = ['sparkle', 'flowers'] as const
-  const drawn = PanelEffectSchema.options.filter(
-    (e) => !(shapeless as readonly string[]).includes(e),
-  )
-
-  test('effectLines draws nothing yet for the effects that have no shape', () => {
-    for (const effect of shapeless) expect(effectLines(effectPanel(effect), box, 100)).toEqual([])
-  })
-
-  test('every effect that can be chosen has a shape', () => {
-    for (const effect of AVAILABLE_PANEL_EFFECTS) expect(drawn).toContain(effect)
-  })
-
   test('effectLines gives the same lines for the same panel and different lines for another id', () => {
-    for (const effect of drawn) {
+    for (const effect of PanelEffectSchema.options) {
       const a = effectLines(effectPanel(effect), box, 100)
       expect(a.length).toBeGreaterThanOrEqual(MIN_EFFECT_LINES / 2)
       expect(effectLines(effectPanel(effect), box, 100)).toEqual(a)

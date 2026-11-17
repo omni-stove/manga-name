@@ -1,4 +1,5 @@
-import type { FocusPoint, Panel, Point, Rect } from '../project'
+import type { Panel, Point, Rect } from '../project'
+import { focusCenter } from './focus'
 
 /**
  * 焦点のある効果の中心（weight が最大の焦点、無ければコマの中心）と、そこから最も遠い角まで届く長さ。
@@ -8,12 +9,7 @@ export function radialCenter(
   panel: Pick<Panel, 'focusPoints'>,
   box: Rect,
 ): { c: Point; reach: number } {
-  const focus = panel.focusPoints.reduce<FocusPoint | undefined>(
-    (best, f) => (best === undefined || f.weight > best.weight ? f : best),
-    undefined,
-  )
-  const pos = focus?.pos ?? { x: 0.5, y: 0.5 }
-  const c = { x: box.x + pos.x * box.w, y: box.y + pos.y * box.h }
+  const c = focusCenter(panel, box)
   // 焦点がコマの端にあっても反対側の角まで届く長さ
   const reach =
     Math.max(
