@@ -12,9 +12,9 @@ import {
   SFX_SCALE_MIN,
   SFX_TYPEFACE,
 } from '@manga/schema'
-import { Field, Typography } from '@manga/ui'
+import { Button, Field, Typography } from '@manga/ui'
 import { typefaceLabel } from './bubble-inspector'
-import { NumberField, option, SelectField, TextField } from './fields'
+import { Group, NumberField, option, SelectField, TextField } from './fields'
 import styles from './hint-inspector.module.css'
 import { optionalNumber, optionalString, replace } from './patch'
 import section from './section.module.css'
@@ -48,6 +48,29 @@ function sfxTypefaceOptions(): SfxTypefaceOption[] {
     },
     ...BubbleTypefaceSchema.options.map((value) => ({ value, label: typefaceLabel(value) })),
   ]
+}
+
+/**
+ * sfx の焦点の文字に選べる定型の描き文字。紙面に描く文字そのものなので訳さない
+ */
+export const SFX_LABEL_PRESETS = ['つづく', 'ドン', 'ゴゴゴ', 'シーン', 'ザワ…', 'バーン'] as const
+
+/** 定型の描き文字のボタンの並び。押すとその語で label を置き換える */
+function SfxLabelPresets({ focus, onChange }: Pick<FocusInspectorProps, 'focus' | 'onChange'>) {
+  return (
+    <Group label={m.inspector_focus_sfx_presets()}>
+      {SFX_LABEL_PRESETS.map((preset) => (
+        <Button
+          key={preset}
+          size="small"
+          aria-pressed={focus.label === preset}
+          onClick={() => preset !== focus.label && onChange(replace('/label', preset))}
+        >
+          {preset}
+        </Button>
+      ))}
+    </Group>
+  )
 }
 
 const isRotation = (n: number) => FocusPointSchema.shape.rotation.safeParse(n).success
@@ -108,6 +131,7 @@ export function FocusInspector({ focus, characters, diagnosis, onChange }: Focus
         value={focus.label}
         onCommit={(v) => v !== focus.label && onChange(replace('/label', v))}
       />
+      {focus.kind === 'sfx' && <SfxLabelPresets focus={focus} onChange={onChange} />}
       <Field label={m.focus_point_weight()} hint={focus.weight.toFixed(2)}>
         {(described) => (
           <input
@@ -160,8 +184,17 @@ export function FocusInspector({ focus, characters, diagnosis, onChange }: Focus
 if (import.meta.vitest) {
   const { describe, expect, test, vi } = import.meta.vitest
   const { act } = await import('react')
-  const { choose, inputLabelled, must, project, render, samplePanel, selectLabelled, setValue } =
-    await import('./dom-harness')
+  const {
+    buttonNamed,
+    choose,
+    inputLabelled,
+    must,
+    project,
+    render,
+    samplePanel,
+    selectLabelled,
+    setValue,
+  } = await import('./dom-harness')
 
   describe('FocusInspector', () => {
     const focus = must(samplePanel.focusPoints.find((f) => f.characterId))
@@ -200,6 +233,32 @@ if (import.meta.vitest) {
       expect(container.querySelectorAll('input[type="range"]')).toHaveLength(1)
       const labels = Array.from(container.querySelectorAll('label'), (l) => l.textContent)
       expect(labels.join()).not.toContain(m.focus_point_typeface())
+      expect(container.querySelector('[role="group"]')).toBeNull()
+    })
+
+    test('an sfx label takes a preset lettering or free text', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const sfx = { ...focus, kind: 'sfx' as const, label: 'ドン' }
+      const { container } = await render(
+        <FocusInspector focus={sfx} characters={project.characters} onChange={onChange} />,
+      )
+      const group = must(container.querySelector('[role="group"]'))
+      expect(group.getAttribute('aria-label')).toBe(m.inspector_focus_sfx_presets())
+      const presets = [...group.querySelectorAll('button')]
+      expect(presets.map((b) => b.textContent)).toEqual([...SFX_LABEL_PRESETS])
+      expect(presets.filter((b) => b.getAttribute('aria-pressed') === 'true')).toEqual([
+        buttonNamed(container, 'ドン'),
+      ])
+
+      await act(async () => buttonNamed(container, 'つづく').click())
+      const relabel = (value: string) => [{ op: 'replace', path: '/label', value }]
+      expect(onChange).toHaveBeenLastCalledWith(relabel('つづく'))
+      onChange.mockClear()
+      await act(async () => buttonNamed(container, 'ドン').click())
+      expect(onChange).not.toHaveBeenCalled()
+
+      await act(async () => setValue(inputLabelled(container, m.focus_point_label()), 'ガガガ'))
+      expect(onChange).toHaveBeenLastCalledWith(relabel('ガガガ'))
     })
 
     test('the lettering fields emit add patches, and the defaults remove them', async () => {
