@@ -1064,6 +1064,37 @@ if (import.meta.vitest) {
       ).toBeTruthy()
     })
 
+    test('the hashira is written vertically in the outer margin at the end of the reading order, above the overlay', async () => {
+      expect((await render({})).querySelector('[data-hashira]')).toBeNull()
+      expect(
+        (await render({ page: { ...samplePage, hashira: ' ' } })).querySelector('[data-hashira]'),
+      ).toBeNull()
+
+      const hashira = '次号、ついに対決！'
+      const page = { ...samplePage, hashira, overlay: 'gray' as const }
+      const { w, h } = project.settings.pageSize
+      const textIn = (svg: SVGSVGElement) => must(svg.querySelector('[data-hashira] text'))
+
+      const rtl = await render({ page, settings: { ...project.settings, direction: 'rtl' } })
+      const rtlText = textIn(rtl)
+      expect(rtlText.textContent).toContain('次号、ついに対決')
+      expect(rtlText.getAttribute('writing-mode')).toBe('vertical-rl')
+      const column = must(rtlText.querySelector('tspan'))
+      expect(Number(column.getAttribute('x'))).toBeCloseTo((INNER_FRAME.x / 2) * w)
+      expect(Number(column.getAttribute('y'))).toBeGreaterThan(INNER_FRAME.y * h)
+      const overlay = must(rtl.querySelector('[data-overlay]'))
+      expect(
+        overlay.compareDocumentPosition(rtlText) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+
+      const ltr = await render({ page, settings: { ...project.settings, direction: 'ltr' } })
+      const ltrColumn = must(textIn(ltr).querySelector('tspan'))
+      expect(Number(ltrColumn.getAttribute('x'))).toBeCloseTo((1 - INNER_FRAME.x / 2) * w)
+
+      const black = await render({ page: { ...page, ground: 'black' } })
+      expect(textIn(black).getAttribute('fill')).toBe('#fff')
+    })
+
     test('the label of an sfx focus point is lettered in bold with a white outline, under the bubbles and the frame', async () => {
       const panel = must(samplePage.panels.find((p) => p.id === 'pn_3'))
       const sfx = (id: string, patch: Partial<Panel['focusPoints'][number]>) => ({

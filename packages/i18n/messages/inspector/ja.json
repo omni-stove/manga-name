@@ -19,6 +19,7 @@
   "inspector_page_reading_order_mismatch": "配置と食い違い",
   "inspector_page_focus_summary": "{total} 件: 良好 {ok} / 弱い {weak} / 外れ {miss}",
   "inspector_page_issues": "指摘",
+  "inspector_page_hashira_placeholder": "欄外に縦書きで出す。改行で列を分ける（例: 次号、ついに対決！）",
   "inspector_character_default_reference": "既定の画像",
   "inspector_character_untitled": "キャラクター",
   "inspector_character_appearance_placeholder": "生成プロンプトに入る",

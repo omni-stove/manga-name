@@ -12,7 +12,11 @@ import {
   type FocusPoint,
   frameOutline,
   groundColor,
+  HASHIRA_FONT,
+  HASHIRA_TYPEFACE,
   hasFrameLine,
+  hashiraArea,
+  hashiraText,
   innerFrameOf,
   markShapes,
   OVERLAY_COLORS,
@@ -89,6 +93,7 @@ async function loadArt(
  * sfx の焦点の label は、絵の上、フキダシと枠線の下に、コマの輪郭で切った描き文字として、焦点ごとの傾き・書体・大きさで描く。
  * mark の焦点は、描き文字の下にコマの輪郭で切った漫符（markShapes）として、効果線と同じ色で描く。
  * 紙面全体に重ねるトーンは、フキダシと間白まで描いた後に乗算で重ねる。
+ * 柱（Page.hashira）は、トーンを重ねた後に hashiraArea の余白の中央へ縦書きで書く。折り返さず、改行で列を分ける。
  * face と keyObject の焦点、ベクトル、診断、参考画像、手描きは描かない。
  */
 export async function renderPage(
@@ -105,10 +110,14 @@ export async function drawPage(
   ctx: RenderContext,
   opts: RenderOptions,
 ): Promise<Surface> {
-  const typefaces = page.panels.flatMap((panel) => [
-    ...panel.bubbles.map(bubbleTypeface),
-    ...sfxLetterings(panel).map(sfxTypeface),
-  ])
+  const hashira = hashiraText(page)
+  const typefaces = [
+    ...page.panels.flatMap((panel) => [
+      ...panel.bubbles.map(bubbleTypeface),
+      ...sfxLetterings(panel).map(sfxTypeface),
+    ]),
+    ...(hashira === undefined ? [] : [HASHIRA_TYPEFACE]),
+  ]
   const [backend] = await Promise.all([getBackend(), loadFonts(typefaces)])
   const unit = pagePixelSize(ctx.settings, opts.width)
   const pageSize = page.spread ? { w: unit.w * 2, h: unit.h } : unit
@@ -225,6 +234,18 @@ export async function drawPage(
     c.fillStyle = OVERLAY_COLORS[page.overlay]
     c.fillRect(pageRect.x, pageRect.y, pageRect.w, pageRect.h)
     c.restore()
+  }
+
+  // 柱は話の外の文なので、回想のトーンを掛けない
+  if (hashira !== undefined) {
+    drawVerticalText(
+      c,
+      unbrokenLines(hashira),
+      unit.w * HASHIRA_FONT,
+      rectToPx(hashiraArea(page, ctx.settings.direction), pageRect),
+      ground === '#000' ? '#fff' : '#000',
+      HASHIRA_TYPEFACE,
+    )
   }
 
   if (margin > 0) {
@@ -370,6 +391,58 @@ if (import.meta.vitest) {
       }
     }
     expect([...changed]).toEqual(['margin'])
+  })
+
+  test('柱は読み終わりの側の余白にだけ書き、空白だけなら書かない', async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const imageOf = async (page: Page) => {
+      const { ctx, width, height } = await drawPage(page, noAssets, opts)
+      return ctx.getImageData(0, 0, width, height)
+    }
+    const before = await imageOf(emptyPage)
+    const after = await imageOf({ ...emptyPage, hashira: '次号、ついに対決！' })
+    const area = rectToPx(hashiraArea(emptyPage, project.settings.direction), {
+      x: 0,
+      y: 0,
+      w: before.width,
+      h: before.height,
+    })
+    let inside = 0
+    let outside = 0
+    for (let i = 0; i < before.data.length; i += 4) {
+      if (before.data[i] === after.data[i]) continue
+      const x = (i / 4) % before.width
+      const y = Math.floor(i / 4 / before.width)
+      const within = x >= area.x && x < area.x + area.w && y >= area.y && y < area.y + area.h
+      if (within) inside++
+      else outside++
+    }
+    expect(inside).toBeGreaterThan(0)
+    expect(outside).toBe(0)
+
+    const blank = await imageOf({ ...emptyPage, hashira: '  ' })
+    expect(blank.data).toEqual(before.data)
+  })
+
+  test('黒い地のページの柱は白で書く', async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const black: Page = { ...emptyPage, ground: 'black', hashira: '次号、ついに対決！' }
+    const { ctx, width, height } = await drawPage(black, noAssets, opts)
+    const area = rectToPx(hashiraArea(black, project.settings.direction), {
+      x: 0,
+      y: 0,
+      w: width,
+      h: height,
+    })
+    const data = ctx.getImageData(
+      Math.floor(area.x),
+      Math.floor(area.y),
+      Math.floor(area.w),
+      Math.floor(area.h),
+    ).data
+    let white = 0
+    for (let i = 0; i < data.length; i += 4) if ((data[i] ?? 0) > 200) white++
+    expect(white).toBeGreaterThan(0)
   })
 
   test('多角形のコマは輪郭で絵を切り、枠も輪郭に沿って引く', async () => {
