@@ -38,11 +38,7 @@ export function markSize(focus: Pick<FocusPoint, 'weight'>, w: number, h: number
  * 呼び出し側は多角形をまとめて nonzero で塗るので、重なる部品で穴が開かないよう多角形の向きを揃えて返す。
  * unit（1 ページの幅）は effectLines と引数を揃えるために受け取り、大きさはコマから決めるので使わない
  */
-export function markShapes(
-  panel: Pick<Panel, 'focusPoints'>,
-  box: Rect,
-  _unit: number,
-): Point[][] {
+export function markShapes(panel: Pick<Panel, 'focusPoints'>, box: Rect, _unit: number): Point[][] {
   if (box.w <= 0 || box.h <= 0) return []
   return panel.focusPoints
     .filter((f) => f.kind === 'mark')
