@@ -11,6 +11,7 @@ export const planPagesSystem = (schema: JsonSchema) =>
     ...lineFields('on the page'),
     '- Put every line of the script on exactly one page, word for word; never drop, merge, shorten or paraphrase one.',
     '- Give the key scenes more pages and keep transitions short. Put a reveal at the top of a page.',
+    '- Each page is later broken into panels from its script alone, opening a scene with a wide shot of the place. So, where the page count allows, start a page where the script moves to a new place or time rather than in the middle of the page, and keep the stage direction that sets the place at the top of that page script.',
     'JSON Schema:',
     JSON.stringify(schema),
   ].join('\n')
