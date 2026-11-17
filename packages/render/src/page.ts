@@ -12,7 +12,11 @@ import {
   type FocusPoint,
   frameOutline,
   groundColor,
+  HASHIRA_FONT,
+  HASHIRA_TYPEFACE,
   hasFrameLine,
+  hashiraArea,
+  hashiraText,
   innerFrameOf,
   markShapes,
   OVERLAY_COLORS,
@@ -89,6 +93,7 @@ async function loadArt(
  * sfx の焦点の label は、絵の上、フキダシと枠線の下に、コマの輪郭で切った描き文字として、焦点ごとの傾き・書体・大きさで描く。
  * mark の焦点は、描き文字の下にコマの輪郭で切った漫符（markShapes）として、効果線と同じ色で描く。
  * 紙面全体に重ねるトーンは、フキダシと間白まで描いた後に乗算で重ねる。
+ * 柱（Page.hashira）は、トーンを重ねた後に hashiraArea の余白の中央へ縦書きで書く。折り返さず、改行で列を分ける。
  * face と keyObject の焦点、ベクトル、診断、参考画像、手描きは描かない。
  */
 export async function renderPage(
@@ -105,10 +110,14 @@ export async function drawPage(
   ctx: RenderContext,
   opts: RenderOptions,
 ): Promise<Surface> {
-  const typefaces = page.panels.flatMap((panel) => [
-    ...panel.bubbles.map(bubbleTypeface),
-    ...sfxLetterings(panel).map(sfxTypeface),
-  ])
+  const hashira = hashiraText(page)
+  const typefaces = [
+    ...page.panels.flatMap((panel) => [
+      ...panel.bubbles.map(bubbleTypeface),
+      ...sfxLetterings(panel).map(sfxTypeface),
+    ]),
+    ...(hashira === undefined ? [] : [HASHIRA_TYPEFACE]),
+  ]
   const [backend] = await Promise.all([getBackend(), loadFonts(typefaces)])
   const unit = pagePixelSize(ctx.settings, opts.width)
   const pageSize = page.spread ? { w: unit.w * 2, h: unit.h } : unit
@@ -225,6 +234,18 @@ export async function drawPage(
     c.fillStyle = OVERLAY_COLORS[page.overlay]
     c.fillRect(pageRect.x, pageRect.y, pageRect.w, pageRect.h)
     c.restore()
+  }
+
+  // 柱は話の外の文なので、回想のトーンを掛けない
+  if (hashira !== undefined) {
+    drawVerticalText(
+      c,
+      unbrokenLines(hashira),
+      unit.w * HASHIRA_FONT,
+      rectToPx(hashiraArea(page, ctx.settings.direction), pageRect),
+      ground === '#000' ? '#fff' : '#000',
+      HASHIRA_TYPEFACE,
+    )
   }
 
   if (margin > 0) {
@@ -370,6 +391,58 @@ if (import.meta.vitest) {
       }
     }
     expect([...changed]).toEqual(['margin'])
+  })
+
+  test('柱は読み終わりの側の余白にだけ書き、空白だけなら書かない', async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const imageOf = async (page: Page) => {
+      const { ctx, width, height } = await drawPage(page, noAssets, opts)
+      return ctx.getImageData(0, 0, width, height)
+    }
+    const before = await imageOf(emptyPage)
+    const after = await imageOf({ ...emptyPage, hashira: '次号、ついに対決！' })
+    const area = rectToPx(hashiraArea(emptyPage, project.settings.direction), {
+      x: 0,
+      y: 0,
+      w: before.width,
+      h: before.height,
+    })
+    let inside = 0
+    let outside = 0
+    for (let i = 0; i < before.data.length; i += 4) {
+      if (before.data[i] === after.data[i]) continue
+      const x = (i / 4) % before.width
+      const y = Math.floor(i / 4 / before.width)
+      const within = x >= area.x && x < area.x + area.w && y >= area.y && y < area.y + area.h
+      if (within) inside++
+      else outside++
+    }
+    expect(inside).toBeGreaterThan(0)
+    expect(outside).toBe(0)
+
+    const blank = await imageOf({ ...emptyPage, hashira: '  ' })
+    expect(blank.data).toEqual(before.data)
+  }, 60_000)
+
+  test('黒い地のページの柱は白で書く', async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const black: Page = { ...emptyPage, ground: 'black', hashira: '次号、ついに対決！' }
+    const { ctx, width, height } = await drawPage(black, noAssets, opts)
+    const area = rectToPx(hashiraArea(black, project.settings.direction), {
+      x: 0,
+      y: 0,
+      w: width,
+      h: height,
+    })
+    const data = ctx.getImageData(
+      Math.floor(area.x),
+      Math.floor(area.y),
+      Math.floor(area.w),
+      Math.floor(area.h),
+    ).data
+    let white = 0
+    for (let i = 0; i < data.length; i += 4) if ((data[i] ?? 0) > 200) white++
+    expect(white).toBeGreaterThan(0)
   })
 
   test('多角形のコマは輪郭で絵を切り、枠も輪郭に沿って引く', async () => {
@@ -902,7 +975,7 @@ if (import.meta.vitest) {
     const plain = await draw(withPanel({}))
     const same = (data: Uint8ClampedArray) => data.every((v, i) => v === plain[i])
 
-    for (const effect of ['vertical_lines', 'crosshatch', 'sparkle', 'flowers'] as const) {
+    for (const effect of ['sparkle', 'flowers'] as const) {
       expect(same(await draw(withPanel({ effect })))).toBe(true)
     }
     for (const kind of ['sweat', 'anger', 'question', 'exclaim', 'sigh'] as const) {
@@ -1091,6 +1164,59 @@ if (import.meta.vitest) {
     expect(black(light, 0, Infinity)).toBe(0)
     expect(blackFocused(light, 0, 0.95)).toBe(0)
     expect(blackFocused(light, 1.5, Infinity)).toBeGreaterThan(0)
+  })
+
+  test('縦線は上ほど濃く、カケアミは中心を空けて縁ほど濃く描き、黒塗りのコマでは白い線にする', async () => {
+    const pn5 = emptyPage.panels.find((p) => p.id === 'pn_5') as Panel
+    const bare: Panel = { ...pn5, bubbles: [], focusPoints: [], vectors: [] }
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const draw = async (panel: Panel) => {
+      const others = emptyPage.panels.filter((p) => p.id !== pn5.id)
+      const { width, data } = await pixels(
+        await renderPage({ ...emptyPage, panels: [...others, panel] }, noAssets, opts),
+      )
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      const rect = rectToPx(panel.rect, { x: 0, y: 0, w: width, h: pageH })
+      // コマの中で、u と v（コマの幅と高さに対する位置）が where を満たす画素のうち hit の数の割合
+      return (hit: (r: number) => boolean, where: (u: number, v: number) => boolean) => {
+        let n = 0
+        let all = 0
+        for (let y = Math.ceil(rect.y + 2); y < rect.y + rect.h - 2; y++) {
+          for (let x = Math.ceil(rect.x + 2); x < rect.x + rect.w - 2; x++) {
+            if (!where((x - rect.x) / rect.w, (y - rect.y) / rect.h)) continue
+            all++
+            if (hit(data[(y * width + x) * 4] ?? 0)) n++
+          }
+        }
+        return all === 0 ? 0 : n / all
+      }
+    }
+    // 線は 1〜2 画素の細さで中ほど以外は灰色に滲むので、半分の明るさではなく白から外れたかで線を数える
+    const dark = (r: number) => r < 200
+    const light = (r: number) => r > 55
+    const top = (_u: number, v: number) => v < 0.25
+    const bottom = (_u: number, v: number) => v > 0.75
+    // 網の線は空けた範囲の縁から升目 1 つ分ほど内へはみ出すので、中心のごく近くだけを見る
+    const centre = (u: number, v: number) => Math.hypot(u - 0.5, v - 0.5) < 0.02
+    const rim = (u: number, v: number) => Math.min(u, v, 1 - u, 1 - v) < 0.08
+
+    const plain = await draw(bare)
+    const vertical = await draw({ ...bare, effect: 'vertical_lines' })
+    expect(vertical(dark, top)).toBeGreaterThan(plain(dark, top) + 0.1)
+    expect(vertical(dark, bottom)).toBeLessThan(vertical(dark, top))
+    const again = await draw({ ...bare, effect: 'vertical_lines' })
+    expect(again(dark, () => true)).toBe(vertical(dark, () => true))
+
+    const hatched = await draw({ ...bare, effect: 'crosshatch' })
+    expect(hatched(dark, centre)).toBe(plain(dark, centre))
+    expect(hatched(dark, rim)).toBeGreaterThan(plain(dark, rim) + 0.05)
+
+    for (const effect of ['vertical_lines', 'crosshatch'] as const) {
+      const black = await draw({ ...bare, fill: 'black' })
+      const inked = await draw({ ...bare, fill: 'black', effect })
+      expect(black(light, () => true)).toBe(0)
+      expect(inked(light, () => true)).toBeGreaterThan(0)
+    }
   })
 
   test('ベタフラ: コマの地を黒で塗り、焦点から白い線を描き、フキダシのセリフを白抜きにする', async () => {
