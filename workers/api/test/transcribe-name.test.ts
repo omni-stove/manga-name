@@ -53,7 +53,13 @@ describe('POST /v1/ai/transcribe-name', () => {
   test('returns the fake name and records usage', async () => {
     const res = await post(createApp())
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual(aiFixtures.nameDraft)
+    const body = (await res.json()) as NameDraftResponse
+    expect(body).toEqual(aiFixtures.nameDraft)
+    expect(body.panels.map((p) => [p.camera, p.angle])).toEqual([
+      ['extreme_long', undefined],
+      ['bust', 'dutch'],
+      ['insert', 'pov'],
+    ])
     expect((await usageRows()).results).toEqual([{ kind: 'transcribe-name', cost_units: 1 }])
   })
 
