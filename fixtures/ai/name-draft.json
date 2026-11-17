@@ -2,20 +2,21 @@
   "panels": [
     {
       "note": "結晶の森の全景。小さな E が奥へ歩いていく。",
-      "camera": "long",
+      "camera": "extreme_long",
       "lines": [{ "speakerId": "chr_e", "text": "……ここか", "shape": "normal" }],
       "acting": [{ "characterId": "chr_e", "text": "辺りを見回しながら歩く" }]
     },
     {
       "note": "E が足を止めて下を見る。",
       "camera": "bust",
-      "angle": "high",
+      "angle": "dutch",
       "lines": [],
       "acting": [{ "characterId": "chr_e", "text": "はっと足を止めて目を落とす" }]
     },
     {
-      "note": "E の足元で何かが光る。",
-      "camera": "close_up",
+      "note": "E の足元で光る結晶のかけら。",
+      "camera": "insert",
+      "angle": "pov",
       "lines": [{ "text": "その足元に、光るものがあった。", "shape": "narration" }]
     }
   ]
