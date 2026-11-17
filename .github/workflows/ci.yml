@@ -33,7 +33,8 @@ jobs:
     with:
       run-review: true
       review-provider: "claude"
-      review-allowed-bots: ""  # 公開リポジトリでは外部 App の PR でもレビューが起動してしまうため
+      # 公開リポジトリでは "*" だと外部 App の PR でもレビューが起動してしまうため、自前の bot だけを列挙する
+      review-allowed-bots: "omni-stove-agent"
     secrets: inherit
 
   # push では前回の push との差分を取る手間に見合わないので、全部走らせる。
