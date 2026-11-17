@@ -168,7 +168,9 @@ function sigh(): Point[][] {
     return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }
   })
   const path = [...tail, ...curl]
-  return [stroke(path, (u) => (u < 0.3 ? 0.012 + (0.028 * u) / 0.3 : 0.04 - (0.02 * (u - 0.3)) / 0.7))]
+  return [
+    stroke(path, (u) => (u < 0.3 ? 0.012 + (0.028 * u) / 0.3 : 0.04 - (0.02 * (u - 0.3)) / 0.7)),
+  ]
 }
 
 /** 0 から 1 までを n 等分した値。last が false なら 1 を含めない */
