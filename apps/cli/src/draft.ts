@@ -2,7 +2,17 @@ import { normalizePlan, plannedPage } from '@manga/ai'
 import { type Episode, newId, type PagePlan, type PageTemplate, type Project } from '@manga/schema'
 
 /** `--template` に渡せる組み込みのコマ割り。並びは Web のテンプレートの選択肢と揃える */
-export const TEMPLATES: readonly PageTemplate[] = ['2rows', '3rows', '4rows', 'blank']
+export const TEMPLATES: readonly PageTemplate[] = [
+  '2rows',
+  '3rows',
+  '4rows',
+  '3rows-split-middle',
+  '3rows-split-top',
+  'diagonal',
+  'inset',
+  '1panel',
+  'blank',
+]
 
 /**
  * ページ割りを template のページにした、title の話。

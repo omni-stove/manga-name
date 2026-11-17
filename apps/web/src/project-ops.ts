@@ -67,6 +67,11 @@ const PAGE_TEMPLATES: readonly { value: PageTemplate; label: () => string }[] = 
   { value: '2rows', label: () => m.web_page_template_2rows() },
   { value: '3rows', label: () => m.web_page_template_3rows() },
   { value: '4rows', label: () => m.web_page_template_4rows() },
+  { value: '3rows-split-middle', label: () => m.web_page_template_3rows_split_middle() },
+  { value: '3rows-split-top', label: () => m.web_page_template_3rows_split_top() },
+  { value: 'diagonal', label: () => m.web_page_template_diagonal() },
+  { value: 'inset', label: () => m.web_page_template_inset() },
+  { value: '1panel', label: () => m.web_page_template_one_panel() },
   { value: 'blank', label: () => m.web_page_template_blank() },
 ]
 
