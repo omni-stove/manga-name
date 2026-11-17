@@ -1,5 +1,6 @@
 import { crosshatch } from './effects/crosshatch'
 import { flowers } from './effects/flowers'
+import { focusCenter } from './effects/focus'
 import { sparkle } from './effects/sparkle'
 import { verticalLines } from './effects/vertical-lines'
 import type { FocusPoint, Page, Panel, Point, Rect } from './project'
@@ -224,8 +225,7 @@ export function effectLines(
 }
 
 /**
- * 形を描けるようになった効果。画面で選べる効果と生成に選ばせる効果はこの一覧から作り、
- * 描くと空になる効果を選ばせない
+ * 画面で選べる効果と生成に選ばせる効果。描くと空になる効果を選ばせないので、形を描けるようになった効果だけを載せる
  */
 export const AVAILABLE_PANEL_EFFECTS = [
   'focus_lines',
@@ -235,12 +235,7 @@ export const AVAILABLE_PANEL_EFFECTS = [
 
 /** 放射状の効果線の中心（weight が最大の焦点、無ければコマの中心）と、そこから最も遠い角まで届く長さ */
 function radialCenter(panel: Pick<Panel, 'focusPoints'>, box: Rect): { c: Point; reach: number } {
-  const focus = panel.focusPoints.reduce<FocusPoint | undefined>(
-    (best, f) => (best === undefined || f.weight > best.weight ? f : best),
-    undefined,
-  )
-  const pos = focus?.pos ?? { x: 0.5, y: 0.5 }
-  const c = { x: box.x + pos.x * box.w, y: box.y + pos.y * box.h }
+  const c = focusCenter(panel, box)
   // 焦点がコマの端にあっても反対側の角まで届く長さ
   const reach =
     Math.max(
@@ -495,15 +490,17 @@ if (import.meta.vitest) {
     expect(effectLines(effectPanel('focus_lines'), { ...box, w: 0 }, 100)).toEqual([])
   })
 
-  test('effectLines draws nothing yet for the effects that are not available', () => {
+  test('effectLines draws nothing yet for the effects without a shape', () => {
     const available: readonly string[] = AVAILABLE_PANEL_EFFECTS
     const pending = PanelEffectSchema.options.filter((e) => !available.includes(e))
     expect(pending).toEqual(['vertical_lines', 'crosshatch', 'sparkle', 'flowers'])
-    for (const effect of pending) expect(effectLines(effectPanel(effect), box, 100)).toEqual([])
+    for (const effect of ['vertical_lines', 'crosshatch'] as const) {
+      expect(effectLines(effectPanel(effect), box, 100)).toEqual([])
+    }
   })
 
   test('effectLines gives the same lines for the same panel and different lines for another id', () => {
-    for (const effect of AVAILABLE_PANEL_EFFECTS) {
+    for (const effect of [...AVAILABLE_PANEL_EFFECTS, 'sparkle', 'flowers'] as const) {
       const a = effectLines(effectPanel(effect), box, 100)
       expect(a.length).toBeGreaterThanOrEqual(MIN_EFFECT_LINES / 2)
       expect(effectLines(effectPanel(effect), box, 100)).toEqual(a)
