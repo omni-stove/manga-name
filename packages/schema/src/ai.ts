@@ -1,14 +1,14 @@
 import { z } from 'zod'
+import { AVAILABLE_PANEL_EFFECTS } from './appearance'
+import { AVAILABLE_BUBBLE_SHAPES } from './bubble-outline'
 import { PatchSchema } from './patch'
 import {
   AngleSchema,
-  BubbleSchema,
   CameraSchema,
   CharacterSchema,
   IdSchema,
   PageSchema,
   PanelActingSchema,
-  PanelEffectSchema,
   PanelFillSchema,
   ProjectBaseSchema,
 } from './project'
@@ -58,7 +58,8 @@ export const PlanLineSchema = z.object({
   speakerId: IdSchema.optional(),
   /** 脚本のセリフそのまま */
   text: z.string().min(1),
-  shape: BubbleSchema.shape.shape,
+  /** Bubble.shape になる。描けない形を選ばせないよう、描ける形に限る */
+  shape: z.enum(AVAILABLE_BUBBLE_SHAPES),
 })
 
 /** 「脚本から下書き」の前段で作る 1 ページ分の割り振り */
@@ -98,8 +99,8 @@ export const NamePanelSchema = z.object({
   noArt: z.literal(true).optional(),
   /** Panel.fill になる */
   fill: PanelFillSchema.optional(),
-  /** Panel.effect になる */
-  effect: PanelEffectSchema.optional(),
+  /** Panel.effect になる。描けない効果を選ばせないよう、描ける効果に限る */
+  effect: z.enum(AVAILABLE_PANEL_EFFECTS).optional(),
 })
 
 /** ネームの書き起こしの応答。1 ページの脚本を読む順のコマに割ったもの */

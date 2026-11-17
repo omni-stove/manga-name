@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SFX_SCALE_MAX, SFX_SCALE_MIN } from './sfx-lettering'
 
-export const SCHEMA_VERSION = 32 as const
+export const SCHEMA_VERSION = 33 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -55,6 +55,7 @@ export const BubbleSchema = z.object({
   order,
   speakerId: IdSchema.optional(),
   text: z.string(),
+  /** cold は角の尖った冷たい声、weak はしぼんだ弱々しい声。画面には messages/schema の `bubble_shape_<値>` で出す */
   shape: z.enum([
     'normal',
     'shout',
@@ -66,6 +67,8 @@ export const BubbleSchema = z.object({
     'narration',
     'monologue',
     'none',
+    'cold',
+    'weak',
   ]),
   pos: PointSchema,
   size: SizeSchema,
@@ -101,12 +104,18 @@ export const SweepSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('polyline'), points: z.array(PointSchema) }),
 ])
 
-export const FocusKindSchema = z.enum(['face', 'keyObject', 'sfx'])
+export const FocusKindSchema = z.enum(['face', 'keyObject', 'sfx', 'mark'])
+
+/**
+ * 漫符の種類。sweat は汗、anger は怒りマーク、question はハテナ、exclaim はビックリ、sigh はため息。
+ * 画面には messages/schema の `focus_point_mark_<値>` で出す
+ */
+export const FocusMarkSchema = z.enum(['sweat', 'anger', 'question', 'exclaim', 'sigh'])
 
 /**
  * コマの中で目を引く点。pos はコマ内座標、weight は目の引き具合。
- * sfx の label は描き文字として紙面に描く（sfxLetterings）。face と keyObject は紙面に描かない。
- * rotation、typeface、scale は描き文字にだけ効く
+ * sfx の label は描き文字として（sfxLetterings）、mark は漫符として（markShapes）紙面に描く。
+ * face と keyObject は紙面に描かない。rotation、typeface、scale は描き文字にだけ、mark は漫符にだけ効く
  */
 export const FocusPointSchema = z.object({
   id: IdSchema,
@@ -121,6 +130,8 @@ export const FocusPointSchema = z.object({
   typeface: BubbleTypefaceSchema.optional(),
   /** weight から決めた描き文字の大きさに掛ける倍率。省略は 1 */
   scale: z.number().min(SFX_SCALE_MIN).max(SFX_SCALE_MAX).optional(),
+  /** 漫符の種類。省略は DEFAULT_MARK */
+  mark: FocusMarkSchema.optional(),
   locked: z.boolean().optional(),
 })
 
@@ -143,19 +154,43 @@ export const PanelFillSchema = z.enum(['black'])
 /**
  * コマに描く効果線。focus_lines（集中線）は焦点へ向かう放射状の線、speed_lines（スピード線）は動きの向きに平行な線、
  * beta_flash（ベタフラ）はコマの地を黒で塗り、焦点から放射状に白い線を描くフラッシュ。
- * 画面には messages/schema の `panel_effect_<値>` で出す
+ * vertical_lines（縦線）は落胆や気まずさ、crosshatch（カケアミ）は暗い心理、sparkle（キラキラ）と flowers（花）は
+ * ときめきや華やかさに使う。画面には messages/schema の `panel_effect_<値>` で出す
  */
-export const PanelEffectSchema = z.enum(['focus_lines', 'speed_lines', 'beta_flash'])
+export const PanelEffectSchema = z.enum([
+  'focus_lines',
+  'speed_lines',
+  'beta_flash',
+  'vertical_lines',
+  'crosshatch',
+  'sparkle',
+  'flowers',
+])
 /** コマの絵に掛ける色調。sepia は茶色、faded は色を抜いて薄くし、回想に使う。画面には `page_tone_<値>` で出す */
 export const PageToneSchema = z.enum(['sepia', 'faded'])
 /** コマの絵に掛ける色調。none はページに色調があってもそのコマには掛けない。画面には `panel_tone_<値>` で出す */
 export const PanelToneSchema = z.enum([...PageToneSchema.options, 'none'])
 
 export const VectorKindSchema = z.enum(['gaze', 'motion', 'speed'])
-/** コマの寄り（画面に人物をどこまで入れるか）。画面には messages/schema の `panel_camera_<値>` で出す */
-export const CameraSchema = z.enum(['long', 'middle', 'bust', 'close_up'])
-/** コマのカメラの角度。low はアオリ、high は俯瞰。画面には messages/schema の `panel_angle_<値>` で出す */
-export const AngleSchema = z.enum(['low', 'high'])
+/**
+ * コマの寄り（画面に人物をどこまで入れるか）。extreme_long は人物が点になる超ロング、extreme_close_up は顔の一部だけの大アップ、
+ * insert は物のアップ。画面には messages/schema の `panel_camera_<値>` で出す
+ */
+export const CameraSchema = z.enum([
+  'extreme_long',
+  'long',
+  'middle',
+  'bust',
+  'close_up',
+  'extreme_close_up',
+  'insert',
+])
+/**
+ * コマのカメラの角度。low はアオリ、high は俯瞰、bird は真上からの真俯瞰、worm は真下からの真アオリ、
+ * dutch は画面を傾けた構図、pov は人物の目から見た主観、over_shoulder は人物の肩越し。
+ * 画面には messages/schema の `panel_angle_<値>` で出す
+ */
+export const AngleSchema = z.enum(['low', 'high', 'bird', 'worm', 'dutch', 'pov', 'over_shoulder'])
 export const StrengthSchema = z.enum(['strong', 'weak'])
 
 export const VectorSchema = z.object({
@@ -315,6 +350,8 @@ const PageBaseSchema = z.object({
   note: z.string().optional(),
   /** このページに当たる脚本の原文（ト書きとセリフ）。`note` は作業のメモで、脚本とは分けて持つ */
   script: z.string().optional(),
+  /** 柱。ページの欄外に置く、あおりや作者の言葉の短い文。省略は置かない */
+  hashira: z.string().optional(),
   cast: z.array(IdSchema).optional(),
 })
 
@@ -418,6 +455,7 @@ export type Bubble = z.infer<typeof BubbleSchema>
 export type PanelArt = z.infer<typeof PanelArtSchema>
 export type Sweep = z.infer<typeof SweepSchema>
 export type FocusKind = z.infer<typeof FocusKindSchema>
+export type FocusMark = z.infer<typeof FocusMarkSchema>
 export type FocusPoint = z.infer<typeof FocusPointSchema>
 export type VectorKind = z.infer<typeof VectorKindSchema>
 export type Camera = z.infer<typeof CameraSchema>

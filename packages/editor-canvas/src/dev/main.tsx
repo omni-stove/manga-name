@@ -1,5 +1,6 @@
 import {
   type FocusKind,
+  FocusKindSchema,
   fixtures,
   type ID,
   type Page,
@@ -137,7 +138,7 @@ function Playground() {
         </select>
         {tool === 'focus' && (
           <select value={focusKind} onChange={(e) => setFocusKind(e.target.value as FocusKind)}>
-            {(['face', 'keyObject', 'sfx'] as const).map((k) => (
+            {FocusKindSchema.options.map((k) => (
               <option key={k} value={k}>
                 {k}
               </option>

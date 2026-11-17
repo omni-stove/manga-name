@@ -477,7 +477,7 @@ export const prompts = {
 
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
-  const { fixtures } = await import('@manga/schema')
+  const { AngleSchema, CameraSchema, fixtures } = await import('@manga/schema')
 
   const project = fixtures.samplePage01
 
@@ -776,8 +776,9 @@ if (import.meta.vitest) {
       items: {
         properties: {
           acting: { type: 'array' },
-          camera: { enum: ['long', 'middle', 'bust', 'close_up'] },
-          angle: { enum: ['low', 'high'] },
+          camera: { enum: CameraSchema.options },
+          angle: { enum: AngleSchema.options },
+          effect: { enum: ['focus_lines', 'speed_lines', 'beta_flash'] },
         },
       },
     })

@@ -14,7 +14,7 @@ export const SFX_SCALE_MAX = 4
 /** 描き文字の白いふちの線の太さ。文字の高さに対する比率。線の半分が字の外に出る */
 export const SFX_OUTLINE = 0.2
 
-/** 紙面に描き文字として描く焦点。label が空白だけの sfx と、face と keyObject の焦点は描かない */
+/** 紙面に描き文字として描く焦点。label が空白だけの sfx と、sfx 以外の焦点は描かない */
 export function sfxLetterings(panel: Pick<Panel, 'focusPoints'>): FocusPoint[] {
   return panel.focusPoints.filter((f) => f.kind === 'sfx' && f.label.trim() !== '')
 }

@@ -13,16 +13,24 @@ export const NAME_NEGATIVE =
 
 /** Panel.camera を画像生成に渡す呼び名 */
 export const CAMERA_SHOTS: Record<Camera, string> = {
+  extreme_long: 'extreme long shot',
   long: 'long shot',
   middle: 'medium shot',
   bust: 'bust shot',
   close_up: 'close-up',
+  extreme_close_up: 'extreme close-up',
+  insert: 'insert shot of an object',
 }
 
 /** Panel.angle を画像生成に渡す呼び名 */
 export const ANGLE_SHOTS: Record<Angle, string> = {
   low: 'low-angle shot',
   high: 'high-angle shot',
+  bird: "bird's-eye view from directly above",
+  worm: "worm's-eye view from directly below",
+  dutch: 'dutch angle',
+  pov: 'point-of-view shot',
+  over_shoulder: 'over-the-shoulder shot',
 }
 
 /** Panel.beat のコマの行。セリフも動きも無い「間」なので、芝居をさせず止まった絵にさせる */

@@ -18,6 +18,7 @@ import {
   hasFrameLine,
   type ID,
   innerFrameOf,
+  markShapes,
   OVERLAY_COLORS,
   type Page,
   type Panel,
@@ -285,6 +286,7 @@ const PanelView = memo(function PanelView({
   const line = hasFrameLine(panel.frame)
   const scene = sceneHeading(panel)
   const sfx = sfxLetterings(panel)
+  const marks = markShapes(panel, rect, unit)
   const placeholder = (
     <g clipPath={`url(#${clipId})`}>
       <Placeholder panel={panel} rect={rect} error={false} />
@@ -336,6 +338,14 @@ const PanelView = memo(function PanelView({
             />
           ))}
         </g>
+      )}
+      {marks.length > 0 && (
+        <path
+          d={effectPath(marks)}
+          fill={effectInk(panel)}
+          clipPath={`url(#${clipId})`}
+          data-panel-marks=""
+        />
       )}
       {sfx.length > 0 && (
         <g clipPath={`url(#${clipId})`}>

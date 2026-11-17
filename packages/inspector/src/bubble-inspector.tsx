@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { m } from '@manga/i18n'
 import {
+  AVAILABLE_BUBBLE_SHAPES,
   type Bubble,
   BubbleSchema,
   BubbleTypefaceSchema,
@@ -13,19 +14,9 @@ import { optionalString, replace } from './patch'
 import section from './section.module.css'
 import type { BubbleInspectorProps } from './types'
 
-/** フキダシの形と、画面での呼び名 */
-export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[] = [
-  option('normal', m.bubble_shape_normal),
-  option('shout', m.bubble_shape_shout),
-  option('thought', m.bubble_shape_thought),
-  option('whisper', m.bubble_shape_whisper),
-  option('tremble', m.bubble_shape_tremble),
-  option('electronic', m.bubble_shape_electronic),
-  option('urchin', m.bubble_shape_urchin),
-  option('narration', m.bubble_shape_narration),
-  option('monologue', m.bubble_shape_monologue),
-  option('none', m.bubble_shape_none),
-]
+/** 選べるフキダシの形と、画面での呼び名 */
+export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[] =
+  AVAILABLE_BUBBLE_SHAPES.map((shape) => option(shape, m[`bubble_shape_${shape}` as const]))
 
 export const typefaceLabel = (typeface: NonNullable<Bubble['typeface']>) =>
   m[`bubble_typeface_${typeface}` as const]()
@@ -156,6 +147,17 @@ if (import.meta.vitest) {
       expect(onChange).toHaveBeenLastCalledWith([
         { op: 'replace', path: '/text', value: '新しいセリフ' },
       ])
+    })
+
+    test('the shape select offers only the shapes that are drawn', async () => {
+      const bubble = must(samplePanel.bubbles[0])
+      const { container } = await render(
+        <BubbleInspector bubble={bubble} characters={project.characters} onChange={() => {}} />,
+      )
+      const values = [...selectLabelled(container, m.bubble_shape()).options].map((o) => o.value)
+      expect(values).toContain('monologue')
+      expect(values).not.toContain('cold')
+      expect(values).not.toContain('weak')
     })
 
     test('allowing overflow adds it, and disallowing it removes it', async () => {

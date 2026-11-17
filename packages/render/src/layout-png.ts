@@ -123,12 +123,20 @@ if (import.meta.vitest) {
     expect(at(0.6, 0.4 + (0.09 * 0.2) / 0.37)).toEqual([0x2f, 0x9e, 0x6a])
   })
 
-  test('焦点も誘導線も無いコマには印を描かない', async () => {
+  test('漫符のほかに焦点も誘導線も無いコマには印を描かない', async () => {
     const page = fixtures.samplePage01.episodes[0]?.pages[0] as Page
+    const mark = {
+      id: 'fp_mark',
+      kind: 'mark' as const,
+      label: '汗',
+      pos: { x: 0.4, y: 0.5 },
+      weight: 1,
+      mark: 'sweat' as const,
+    }
     const bare: Page = {
       ...page,
       panels: page.panels.map((p) =>
-        p.id === 'pn_6' ? { ...p, focusPoints: [], vectors: [] } : p,
+        p.id === 'pn_6' ? { ...p, focusPoints: [mark], vectors: [] } : p,
       ),
     }
     const png = await renderLayoutPng(bare, 'pn_6', { width: 400 })
