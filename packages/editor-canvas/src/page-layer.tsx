@@ -524,11 +524,15 @@ function ReferenceArt({
 }
 
 /**
- * 未生成コマの中身。「間」の印、camera と note を灰色の横書きで、コマに収まるぶんだけ出す。
+ * 未生成コマの中身。「間」の印、寄りと角度、note を灰色の横書きで、コマに収まるぶんだけ出す。
  * シーンの見出しを持つコマでは、見出しの下から書く
  */
 function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: boolean }) {
-  if (!panel.beat && !panel.camera && !panel.note && !error) return null
+  const shot = [
+    panel.camera && m[`panel_camera_${panel.camera}` as const](),
+    panel.angle && m[`panel_angle_${panel.angle}` as const](),
+  ].filter(Boolean)
+  if (!panel.beat && shot.length === 0 && !panel.note && !error) return null
   const top = sceneHeading(panel) === undefined ? NOTE_PAD : NOTE_PAD * 2 + NOTE_FONT
   return (
     <foreignObject x={rect.x} y={rect.y} width={rect.w} height={rect.h} data-placeholder="">
@@ -549,7 +553,7 @@ function Placeholder({ panel, rect, error }: { panel: Panel; rect: Box; error: b
           <div style={{ color: 'var(--alert)' }}>{m.editor_canvas_panel_image_load_failed()}</div>
         )}
         {panel.beat && <div data-beat="">{m.panel_beat_mark()}</div>}
-        {panel.camera && <div>[{m[`panel_camera_${panel.camera}` as const]()}]</div>}
+        {shot.length > 0 && <div data-shot="">[{shot.join('・')}]</div>}
         {panel.note && <div>{panel.note}</div>}
       </div>
     </foreignObject>

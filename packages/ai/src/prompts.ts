@@ -28,6 +28,7 @@ import {
 import type { z } from 'zod'
 import { critiqueSystem } from './critique.prompt'
 import {
+  ANGLE_SHOTS,
   BEAT_PANEL,
   CAMERA_SHOTS,
   CHARACTER_ART_TAIL,
@@ -117,8 +118,14 @@ const actingOf = (panel: Panel, characters: Character[]) =>
     )
     .join('; ')
 
+/** 寄りと角度の呼び名を、寄り、角度の順に `, ` でつなぐ。どちらも無ければ空 */
+const shotOf = (panel: Pick<Panel, 'camera' | 'angle'>) =>
+  [panel.camera && CAMERA_SHOTS[panel.camera], panel.angle && ANGLE_SHOTS[panel.angle]]
+    .filter(Boolean)
+    .join(', ')
+
 /**
- * コマの中身を表す行。舞台（コマが属するシーン）、カメラ、「間」、指示メモ、登場キャラ、芝居、焦点（重い順）、誘導線、ヒント。空の行も含む。
+ * コマの中身を表す行。舞台（コマが属するシーン）、カメラ（寄りと角度）、「間」、指示メモ、登場キャラ、芝居、焦点（重い順）、誘導線、ヒント。空の行も含む。
  * `appearance` が false なら登場キャラは名前だけにする
  */
 function panelContent(
@@ -128,9 +135,10 @@ function panelContent(
   appearance: boolean,
 ): (string | undefined)[] {
   const focusByWeight = [...panel.focusPoints].sort((a, b) => b.weight - a.weight)
+  const shot = shotOf(panel)
   return [
     context.scene && `setting: ${context.scene}`,
-    panel.camera && `camera: ${CAMERA_SHOTS[panel.camera]}`,
+    shot && `camera: ${shot}`,
     panel.beat && BEAT_PANEL,
     panel.note,
     panelCharacters(panel, characters)
@@ -309,9 +317,9 @@ function transcribeName(req: NameDraftRequest): LlmPrompt<NameDraftResponse> {
  * 話し手と芝居のキャラは枠の大きさに効かないので書かない
  */
 function namePanelLines(panel: NamePanel, index: number): string[] {
-  const camera = panel.camera === undefined ? '' : ` (${CAMERA_SHOTS[panel.camera]})`
+  const shot = shotOf(panel)
   return [
-    `${index + 1}. ${panel.note}${camera}`,
+    `${index + 1}. ${panel.note}${shot && ` (${shot})`}`,
     ...(panel.lines.length > 0 ? panel.lines.map((l) => `   - ${l.text}`) : ['   - (no lines)']),
     ...(panel.acting ?? []).map((a) => `   * ${a.text}`),
   ]
@@ -413,7 +421,7 @@ function critique(req: CritiqueRequest): LlmPrompt<CritiqueResponse> {
   const system = critiqueSystem(MAX_SUGGESTIONS, schema)
 
   const panels = page.panels.flatMap((panel, i) => [
-    `[${i}] panel ${panel.id}, order ${panel.order}, rect x ${panel.rect.x.toFixed(2)} y ${panel.rect.y.toFixed(2)} w ${panel.rect.w.toFixed(2)} h ${panel.rect.h.toFixed(2)}${panel.camera ? `, camera ${panel.camera}` : ''}`,
+    `[${i}] panel ${panel.id}, order ${panel.order}, rect x ${panel.rect.x.toFixed(2)} y ${panel.rect.y.toFixed(2)} w ${panel.rect.w.toFixed(2)} h ${panel.rect.h.toFixed(2)}${panel.camera ? `, camera ${panel.camera}` : ''}${panel.angle ? `, angle ${panel.angle}` : ''}`,
     ...panel.focusPoints.map(
       (f, j) =>
         `  focusPoints[${j}] ${f.id}: ${f.kind} "${f.label}" at ${formatPoint(f.pos)}, weight ${f.weight.toFixed(2)}`,
@@ -507,6 +515,23 @@ if (import.meta.vitest) {
     const plain = prompts.panelArt({ project, page, panelId: 'pn_1' }).prompt
     expect(plain).not.toContain('setting: ')
     expect(plain).not.toContain(BEAT_PANEL)
+  })
+
+  test('panelArt and pageArt put the camera and the angle on the camera line', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const shot = (camera: Panel['camera'], angle: Panel['angle']): Page => ({
+      ...page,
+      panels: page.panels.map((p) => (p.id === 'pn_1' ? { ...p, camera, angle } : p)),
+    })
+    const panelLines = (from: Page) =>
+      prompts.panelArt({ project, page: from, panelId: 'pn_1' }).prompt.split('\n')
+    expect(panelLines(shot('bust', 'high'))).toContain('camera: bust shot, high-angle shot')
+    expect(panelLines(shot(undefined, 'low'))).toContain('camera: low-angle shot')
+    const pageLine = prompts
+      .pageArt({ project, page: shot('bust', 'high') })
+      .prompt.split('\n')
+      .find((l) => l.startsWith('panel 1 '))
+    expect(pageLine).toContain('camera: bust shot, high-angle shot; ')
   })
 
   test('pageArt gives each panel its own scene and marks the beat panels', () => {
@@ -729,8 +754,15 @@ if (import.meta.vitest) {
       ].join('\n'),
     )
     expect(system).toContain('- acting: ')
+    expect(system).toContain('- angle: ')
     expect(nameDraftJsonSchema().properties?.panels).toMatchObject({
-      items: { properties: { acting: { type: 'array' } } },
+      items: {
+        properties: {
+          acting: { type: 'array' },
+          camera: { enum: ['long', 'middle', 'bust', 'close_up'] },
+          angle: { enum: ['low', 'high'] },
+        },
+      },
     })
   })
 
@@ -815,7 +847,7 @@ if (import.meta.vitest) {
           camera: 'long',
           lines: [{ speakerId: 'chr_e', text: 'こんにちは', shape: 'normal' }],
         },
-        { note: '足元', lines: [] },
+        { note: '足元', angle: 'high', lines: [] },
       ],
     })
     expect(schema).toEqual(layoutSuggestionJsonSchema())
@@ -825,7 +857,7 @@ if (import.meta.vitest) {
         'Panels: exactly 2, in reading order.',
         '1. 森の全景 (long shot)',
         '   - こんにちは',
-        '2. 足元',
+        '2. 足元 (high-angle shot)',
         '   - (no lines)',
       ].join('\n'),
     )
@@ -887,6 +919,17 @@ if (import.meta.vitest) {
     expect(user).toContain('- fp_4_e (face) in pn_4: miss, distance 0.210')
     expect(user).toContain('- [error] FOCUS_MISS (pn_4 fp_4_e): 焦点が視線経路から外れています')
     expect(user).toContain('Focus points: 1 total, 0 ok, 0 weak, 1 miss.')
+  })
+
+  test('critique lists the camera and the angle of a panel', () => {
+    const shot: Page = {
+      ...page,
+      panels: page.panels.map((p) =>
+        p.id === 'pn_4' ? { ...p, camera: 'bust' as const, angle: 'low' as const } : p,
+      ),
+    }
+    const { user } = prompts.critique({ page: shot, diagnosis })
+    expect(user).toMatch(/\[3\] panel pn_4, order 4, rect [^\n]*, camera bust, angle low\n/)
   })
 
   test('critique says so when there are no issues', () => {

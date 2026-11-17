@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { getLocale, m } from '@manga/i18n'
 import {
+  type Angle,
+  AngleSchema,
   type Bubble,
   type Camera,
   CameraSchema,
@@ -46,6 +48,11 @@ import type { PanelInspectorProps } from './types'
 const CAMERAS: readonly { value: Camera | ''; label: string }[] = [
   option('', m.none),
   ...CameraSchema.options.map((camera) => option(camera, m[`panel_camera_${camera}` as const])),
+]
+
+const ANGLES: readonly { value: Angle | ''; label: string }[] = [
+  option('', m.none),
+  ...AngleSchema.options.map((angle) => option(angle, m[`panel_angle_${angle}` as const])),
 ]
 
 const FRAMES: readonly { value: NonNullable<Panel['frame']> | ''; label: string }[] = [
@@ -127,6 +134,12 @@ export function PanelInspector({
         value={panel.camera ?? ''}
         options={CAMERAS}
         onCommit={(v) => onChange(optionalString('/camera', panel.camera, v))}
+      />
+      <SelectField
+        label={m.panel_angle()}
+        value={panel.angle ?? ''}
+        options={ANGLES}
+        onCommit={(v) => onChange(optionalString('/angle', panel.angle, v))}
       />
       <TextField
         label={m.panel_note()}
@@ -833,6 +846,40 @@ if (import.meta.vitest) {
       expect(select().value).toBe('none')
       await choose(select(), '')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/tone' }])
+    })
+
+    test('the camera and angle selects are set independently', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = {
+        characters: project.characters,
+        onChange,
+        onGenerate: () => {},
+        resolveAsset,
+      }
+      const { camera: _, angle: __, ...bare } = samplePanel
+      const { container, root } = await render(<PanelInspector panel={bare} {...props} />)
+      const camera = () => selectLabelled(container, m.panel_camera())
+      const angle = () => selectLabelled(container, m.panel_angle())
+      expect([...camera().options].map((o) => o.value)).toEqual([
+        '',
+        'long',
+        'middle',
+        'bust',
+        'close_up',
+      ])
+      expect([...angle().options].map((o) => o.value)).toEqual(['', 'low', 'high'])
+      await choose(camera(), 'bust')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/camera', value: 'bust' }])
+      await choose(angle(), 'high')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/angle', value: 'high' }])
+
+      await act(async () =>
+        root.render(<PanelInspector panel={{ ...bare, angle: 'low' }} {...props} />),
+      )
+      expect(camera().value).toBe('')
+      expect(angle().value).toBe('low')
+      await choose(angle(), '')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/angle' }])
     })
 
     test('the effect select adds, replaces and removes effect', async () => {
