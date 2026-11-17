@@ -196,7 +196,11 @@ function Result({
       regenerate
         .filter((r) => {
           const panel = page.panels.find((p) => p.id === r.panelId)
-          return panel !== undefined && currentArt(panel)?.id === r.artId && states[r.suggestion]?.kind === 'applied'
+          return (
+            panel !== undefined &&
+            currentArt(panel)?.id === r.artId &&
+            states[r.suggestion]?.kind === 'applied'
+          )
         })
         .map((r) => [r.panelId, r] as const),
     ).values(),
