@@ -145,10 +145,7 @@ function exclaim(): Point[][] {
     const a = Math.PI * (1 + u)
     return { x: 0.1 * Math.cos(a), y: -0.4 + 0.1 * Math.sin(a) }
   })
-  return [
-    [...cap, { x: 0.045, y: 0.22 }, { x: -0.045, y: 0.22 }],
-    circle(0, 0.39, 0.09),
-  ]
+  return [[...cap, { x: 0.045, y: 0.22 }, { x: -0.045, y: 0.22 }], circle(0, 0.39, 0.09)]
 }
 
 /**
