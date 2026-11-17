@@ -8,6 +8,8 @@ import {
   IdSchema,
   PageSchema,
   PanelActingSchema,
+  PanelEffectSchema,
+  PanelFillSchema,
   ProjectBaseSchema,
 } from './project'
 
@@ -92,6 +94,12 @@ export const NamePanelSchema = z.object({
   lines: z.array(PlanLineSchema),
   /** 登場キャラの芝居。Panel.acting になる */
   acting: z.array(PanelActingSchema.extend({ text: z.string().min(1) })).optional(),
+  /** 絵を持たない文字だけのコマか。Panel.noArt になる */
+  noArt: z.literal(true).optional(),
+  /** Panel.fill になる */
+  fill: PanelFillSchema.optional(),
+  /** Panel.effect になる */
+  effect: PanelEffectSchema.optional(),
 })
 
 /** ネームの書き起こしの応答。1 ページの脚本を読む順のコマに割ったもの */
@@ -188,6 +196,11 @@ if (import.meta.vitest) {
     expect(
       NameDraftResponseSchema.parse({ panels: [{ ...panel, acting }] }).panels[0]?.acting,
     ).toEqual(acting)
+    const texted = { ...panel, noArt: true, fill: 'black', effect: 'speed_lines' }
+    expect(NameDraftResponseSchema.parse({ panels: [texted] }).panels[0]).toEqual(texted)
+    expect(
+      NameDraftResponseSchema.safeParse({ panels: [{ ...panel, noArt: false }] }).success,
+    ).toBe(false)
     expect(
       NameDraftSchema.parse([
         {

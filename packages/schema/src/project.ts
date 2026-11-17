@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SFX_SCALE_MAX, SFX_SCALE_MIN } from './sfx-lettering'
 
-export const SCHEMA_VERSION = 31 as const
+export const SCHEMA_VERSION = 32 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -138,6 +138,8 @@ export const PanelFrameSchema = z.enum([
   'soft',
   'cloud',
 ])
+/** コマの地の色。黒は暗転や無音の間に使う。絵があれば絵が上に乗る。effect が beta_flash のコマは省略でも黒い */
+export const PanelFillSchema = z.enum(['black'])
 /**
  * コマに描く効果線。focus_lines（集中線）は焦点へ向かう放射状の線、speed_lines（スピード線）は動きの向きに平行な線、
  * beta_flash（ベタフラ）はコマの地を黒で塗り、焦点から放射状に白い線を描くフラッシュ。
@@ -212,8 +214,7 @@ const PanelBaseSchema = z.object({
   order,
   rect: RectSchema,
   shape: z.array(PointSchema).min(3).optional(),
-  /** コマの地の色。黒は暗転や無音の間に使う。絵があれば絵が上に乗る。effect が beta_flash のコマは省略でも黒い */
-  fill: z.enum(['black']).optional(),
+  fill: PanelFillSchema.optional(),
   /** 枠線。省略は実線の枠 */
   frame: PanelFrameSchema.optional(),
   /**
@@ -223,6 +224,11 @@ const PanelBaseSchema = z.object({
   scene: z.string().optional(),
   /** セリフも動きも無い「間」のコマ */
   beat: z.literal(true).optional(),
+  /**
+   * 絵を持たない、文字だけのコマ。arts と artId は残すが描かず（currentArt）、絵を生成しない。
+   * 地は fill と effect で、文字は shape が none か narration のフキダシで表す
+   */
+  noArt: z.literal(true).optional(),
   /** 絵の上、フキダシと枠線の下に描く効果線。省略は描かない */
   effect: PanelEffectSchema.optional(),
   /** 絵に掛ける色調。ページの tone を上書きし、ページの一部のコマだけを回想にする。省略はページの tone に従う */

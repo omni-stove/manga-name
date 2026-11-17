@@ -1,4 +1,4 @@
-import { bubbleGroups, type ID, type Page, panelOutline } from '@manga/schema'
+import { bubbleGroups, type ID, type Page, panelOutline, wantsArt } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
 import { bubbleGeometry, fillBubble, joinedGeometry } from './bubble'
 import { type PxRect, pointToPx, rectToPx } from './geometry'
@@ -15,6 +15,7 @@ const FRAME_WIDTH = 0.003
  * ページ全体の生成に渡す配置図。白地に各コマの輪郭の内側を薄灰で塗ってフキダシ領域を白にし、輪郭に黒い枠線を引く。
  * overflow でないフキダシは輪郭の外を切り、overflow のフキダシは枠線の上に塗る。
  * 最後に焦点と誘導線のあるコマへ配置の印（drawPlacement）を重ねる。
+ * 文字だけのコマ（noArt）は描かず、紙の白のままにする。
  * 幅は `width`、高さは判型の縦横比から決める。セリフは描かない。`pageSize` の既定は 182x257。
  */
 export async function renderPageLayoutPng(
@@ -44,7 +45,8 @@ export async function renderPageLayoutPng(
   }
   const outlineOf = (panel: Page['panels'][number]) =>
     panelOutline(panel).map((p) => pointToPx(p, pageRect))
-  for (const panel of page.panels) {
+  const panels = page.panels.filter(wantsArt)
+  for (const panel of panels) {
     const outline = outlineOf(panel)
     c.fillStyle = GRAY
     c.beginPath()
@@ -57,11 +59,11 @@ export async function renderPageLayoutPng(
     withClip(c, outline, () => fillBubbles(panel, false))
   }
   const lineWidth = Math.max(1, Math.round(width * FRAME_WIDTH))
-  for (const panel of page.panels) drawFrame(c, outlineOf(panel), lineWidth, undefined)
+  for (const panel of panels) drawFrame(c, outlineOf(panel), lineWidth, undefined)
   // はみ出したフキダシを後ろのコマの塗りと枠線が隠さないよう、全コマの後に塗る
-  for (const panel of page.panels) fillBubbles(panel, true)
+  for (const panel of panels) fillBubbles(panel, true)
   const mm = width / pageSize.w
-  for (const panel of page.panels) {
+  for (const panel of panels) {
     if (hasPlacement(panel)) drawPlacement(c, panel, rectToPx(panel.rect, pageRect), mm)
   }
   return surface.toPng()
@@ -133,6 +135,20 @@ if (import.meta.vitest) {
     expect(b).toBeLessThan(100)
     // pn_3 と pn_2 の間の隙間
     expect(png.at(0.49, 0.39)).toEqual([255, 255, 255])
+  })
+
+  test('文字だけのコマは配置図に描かず、紙の白のままにする', async () => {
+    const pn6 = page.panels.find((p) => p.id === 'pn_6')
+    if (!pn6) throw new Error('fixture has no pn_6')
+    const texted = {
+      ...page,
+      panels: page.panels.map((p) => (p.id === 'pn_6' ? { ...p, noArt: true as const } : p)),
+    }
+    const png = await pixels(await renderPageLayoutPng(texted, { width: 364 }))
+    const inPanel = (x: number, y: number) =>
+      png.at(pn6.rect.x + x * pn6.rect.w, pn6.rect.y + y * pn6.rect.h)
+    expect(inPanel(0.1, 0.15)).toEqual([255, 255, 255])
+    expect(inPanel(0.4, 0.5)).toEqual([255, 255, 255])
   })
 
   test('切り抜きは各コマの rect の範囲を、画像の幅と高さに合わせて取る', async () => {

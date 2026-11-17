@@ -261,7 +261,7 @@ export function diagnosePage(page: Page, settings: ProjectSettings): PageDiagnos
 
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
-  const { fixtures, PageDiagnosisSchema } = await import('@manga/schema')
+  const { createPage, fixtures, PageDiagnosisSchema } = await import('@manga/schema')
 
   const project = fixtures.samplePage01
   const settings = project.settings
@@ -500,6 +500,25 @@ if (import.meta.vitest) {
     base.frame = 'none'
     expect(diagnosePage(page, settings).issues.map((i) => i.code)).toContain('OVERLAP')
   })
+
+  for (const template of [
+    '1panel',
+    '2rows',
+    '3rows',
+    '4rows',
+    '3rows-split-middle',
+    '3rows-split-top',
+    'diagonal',
+    'inset',
+  ] as const) {
+    for (const direction of ['rtl', 'ltr'] as const) {
+      test(`built-in ${template} ${direction}: no overlap, reads in order`, () => {
+        const d = diagnosePage(createPage(template, direction), { ...settings, direction })
+        expect(d.readingOrderOk).toBe(true)
+        expect(d.issues.map((i) => i.code)).not.toContain('OVERLAP')
+      })
+    }
+  }
 
   test('panels cut along a diagonal do not overlap even though their rects do', () => {
     const page = samplePage()

@@ -154,7 +154,7 @@ describe('PUT /v1/projects/:id', () => {
     expect(await chunkCount()).toBe(1)
   })
 
-  test('a v30 project is saved with its angled cameras moved to the angle', async () => {
+  test('a v31 project is saved with its angled cameras moved to the angle', async () => {
     const { project, etag } = await create()
     const [episode] = fixtures.samplePage01.episodes
     const [page] = episode?.pages ?? []
@@ -163,7 +163,7 @@ describe('PUT /v1/projects/:id', () => {
     const old = {
       ...fixtures.samplePage01,
       id: project.id,
-      schemaVersion: 30,
+      schemaVersion: 31,
       episodes: [
         {
           ...episode,
@@ -178,7 +178,7 @@ describe('PUT /v1/projects/:id', () => {
     })
     expect(res.status).toBe(200)
     const got = (await (await call(`/v1/projects/${project.id}`)).json()) as Project
-    expect(got.schemaVersion).toBe(31)
+    expect(got.schemaVersion).toBe(32)
     const panel = got.episodes[0]?.pages[0]?.panels[0]
     expect(panel?.angle).toBe('low')
     expect(panel).not.toHaveProperty('camera')

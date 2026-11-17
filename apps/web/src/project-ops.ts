@@ -17,6 +17,7 @@ import {
   pageSlots,
   panelCharacterIds,
   spreadStartsAt,
+  wantsArt,
 } from '@manga/schema'
 
 /**
@@ -49,11 +50,16 @@ export function pagePatch(project: Project, pageId: ID, patch: Patch): Patch {
 
 type ArtStatus = 'none' | 'partial' | 'all'
 
-/** ページ内のコマのうち、現在の絵が選ばれているものの割合で 3 段階に分ける。コマが無いページは none */
+/**
+ * ページ内の絵の要るコマ（wantsArt）のうち、現在の絵が選ばれているものの割合で 3 段階に分ける。
+ * コマが無いページは none、文字だけのコマしか無いページは all
+ */
 export function artStatus(page: Page): ArtStatus {
-  const done = page.panels.filter((panel) => panel.artId !== undefined).length
+  if (page.panels.length === 0) return 'none'
+  const wanted = page.panels.filter(wantsArt)
+  const done = wanted.filter((panel) => panel.artId !== undefined).length
+  if (done === wanted.length) return 'all'
   if (done === 0) return 'none'
-  if (done === page.panels.length) return 'all'
   return 'partial'
 }
 
@@ -67,6 +73,11 @@ const PAGE_TEMPLATES: readonly { value: PageTemplate; label: () => string }[] = 
   { value: '2rows', label: () => m.web_page_template_2rows() },
   { value: '3rows', label: () => m.web_page_template_3rows() },
   { value: '4rows', label: () => m.web_page_template_4rows() },
+  { value: '3rows-split-middle', label: () => m.web_page_template_3rows_split_middle() },
+  { value: '3rows-split-top', label: () => m.web_page_template_3rows_split_top() },
+  { value: 'diagonal', label: () => m.web_page_template_diagonal() },
+  { value: 'inset', label: () => m.web_page_template_inset() },
+  { value: '1panel', label: () => m.web_page_template_one_panel() },
   { value: 'blank', label: () => m.web_page_template_blank() },
 ]
 
@@ -422,6 +433,18 @@ if (import.meta.vitest) {
         ...page,
         panels: page.panels.map((p) => ({ ...p, arts: [art], artId: art.id })),
       }),
+    ).toBe('all')
+    expect(
+      artStatus({
+        ...page,
+        panels: [
+          { ...first, arts: [art], artId: art.id },
+          ...rest.map((p) => ({ ...p, noArt: true as const })),
+        ],
+      }),
+    ).toBe('all')
+    expect(
+      artStatus({ ...page, panels: page.panels.map((p) => ({ ...p, noArt: true as const })) }),
     ).toBe('all')
   })
 

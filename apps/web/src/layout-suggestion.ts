@@ -90,7 +90,7 @@ export function layoutRequest(panels: readonly NamePanel[]): LayoutSuggestionReq
 
 /**
  * 案の枠にネームのコマを読む順に当てたコマにする。枠は createRowPanels で段とコマの比から割り、
- * 描くものを指示メモ、寄りを camera、角度を angle、セリフを lineBubbles のフキダシ、芝居を acting にする。
+ * 描くものを指示メモ、寄りを camera、角度を angle、セリフを lineBubbles のフキダシ、芝居を acting にし、noArt、fill、effect はそのまま写す。
  * 芝居だけのキャラは cast に足す。panelActing は登場キャラの芝居しか拾わず、セリフの無いキャラは cast でしか登場キャラにならないため。
  * 居ない話し手と居ないキャラの芝居は落とし、空のセリフと空の芝居は捨てる。ネームより枠が多ければ余りの枠は空のままにする
  */
@@ -127,6 +127,9 @@ export function suggestedPanels(
       ...(panel.note !== '' && { note: panel.note }),
       ...(panel.camera !== undefined && { camera: panel.camera }),
       ...(panel.angle !== undefined && { angle: panel.angle }),
+      ...(panel.noArt && { noArt: true as const }),
+      ...(panel.fill !== undefined && { fill: panel.fill }),
+      ...(panel.effect !== undefined && { effect: panel.effect }),
       ...(cast.length > 0 && { cast }),
       ...(acting.length > 0 && { acting }),
       bubbles: lineBubbles(frame, lines, {
@@ -150,7 +153,7 @@ export function suggestedPage(
 
 const nameKey = (pageId: ID) => `manga.name.${pageId}`
 
-/** schemaVersion 30 まで camera に入れていた角度と、それに当たる angle */
+/** schemaVersion 31 まで camera に入れていた角度と、それに当たる angle */
 const CAMERA_ANGLES: Record<string, NonNullable<NamePanel['angle']>> = {
   low_angle: 'low',
   high_angle: 'high',
@@ -306,6 +309,25 @@ if (import.meta.vitest) {
     if (!second || !third) throw new Error('2 段目のコマが 2 つない')
     // rtl なので、2 段目は読む順の先のコマが右に来る
     expect(second.rect.x).toBeGreaterThan(third.rect.x)
+  })
+
+  test('suggestedPanels keeps a text-only panel with its fill and effect', () => {
+    const texted = name.map((p, i) =>
+      i === 0
+        ? { ...p, noArt: true as const, fill: 'black' as const, effect: 'speed_lines' as const }
+        : p,
+    )
+    const [first, second] = suggestedPanels(
+      {},
+      option,
+      texted,
+      project.settings,
+      project.characters,
+    )
+    expect(first).toMatchObject({ noArt: true, fill: 'black', effect: 'speed_lines' })
+    expect(second?.noArt).toBeUndefined()
+    expect(second?.fill).toBeUndefined()
+    expect(second?.effect).toBeUndefined()
   })
 
   test('suggestedPanels casts the characters who only act and drops unknown or repeated acting', () => {

@@ -1,4 +1,4 @@
-import { currentArt, type ID, type Page, type Project } from '@manga/schema'
+import { currentArt, type ID, type Page, type Project, wantsArt } from '@manga/schema'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { findPage } from '../project-ops'
 
@@ -97,7 +97,7 @@ const DONE: Partial<Record<TourStep, Check>> = {
   generate: (_, page) =>
     page !== undefined &&
     page.panels.length > 0 &&
-    page.panels.every((p) => currentArt(p) !== undefined),
+    page.panels.every((p) => !wantsArt(p) || currentArt(p) !== undefined),
 }
 
 /** 手順の並びでの位置。`done` は最後の手順の後ろ */
