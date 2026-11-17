@@ -23,7 +23,7 @@ jobs:
 
   checks:
     needs: precheck
-    if: needs.precheck.outputs.proceed == 'true'
+    if: needs.precheck.outputs.review == 'true'
     uses: omni-stove/.github/.github/workflows/ci.yml@main
     permissions:
       contents: read
@@ -150,10 +150,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # エージェントは依存を入れずに package.json を編集するので、ずれた lockfile は落とさず作り直して PR に積む
       - name: Setup pnpm & Node.js
         uses: omni-stove/.github/actions/setup-pnpm-node@main
         with:
           node-version: "26"
+          frozen-lockfile: false
+
+      - uses: omni-stove/.github/actions/regen-diff@main
+        with:
+          pathspec: pnpm-lock.yaml
+          app-id: ${{ secrets.AGENT_GH_APP_ID }}
+          app-private-key: ${{ secrets.AGENT_GH_APP_PRIVATE_KEY }}
 
       - name: Type check
         run: pnpm typecheck
@@ -190,7 +198,7 @@ jobs:
       - name: Bundle size
         run: pnpm --filter @manga/web size
 
-      # テストが fixtures/art を、vite build が routeTree.gen.ts を作り直すので、ソースと食い違う生成物はここで差分になる
+      # 生成物 (fixtures/art, routeTree.gen.ts) は追跡していないので、ここで差分になるのはテストやビルドが追跡中のファイルを書き換えたとき
       - name: Generated files are up to date
         run: |
           git status --porcelain
@@ -239,6 +247,5 @@ jobs:
       review-result: ${{ needs.checks.outputs.review-result }}
       run-fix: true
       fix-provider: "claude"
-      regen-command: 'pnpm install --lockfile-only --no-frozen-lockfile'
-      node-version: "26"
+      run-merge: true
     secrets: inherit
