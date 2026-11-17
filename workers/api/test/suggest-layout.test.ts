@@ -64,6 +64,17 @@ describe('POST /v1/ai/suggest-layout', () => {
     expect(request.panels.some((p) => p.angle !== undefined)).toBe(true)
   })
 
+  test('accepts every camera and angle of a name panel', async () => {
+    const { provider, calls } = scripted([async () => aiFixtures.layoutSuggestion])
+    const panels = [
+      { note: '森の全景', camera: 'extreme_long', lines: [] },
+      { note: '目元', camera: 'extreme_close_up', angle: 'worm', lines: [] },
+      { note: '結晶のかけら', camera: 'insert', angle: 'over_shoulder', lines: [] },
+    ]
+    expect((await post(createApp({ llmProvider: () => provider }), { panels })).status).toBe(200)
+    expect(calls).toEqual([{ panels }])
+  })
+
   test('400 on a body without name panels', async () => {
     const app = createApp()
     expect((await post(app, '{')).status).toBe(400)
