@@ -16,6 +16,7 @@ import {
   panelOutline,
   polygonArea,
   type ReadingDirection,
+  stripRuby,
 } from '@manga/schema'
 import { type Focus, panelFoci } from './focus'
 import { panelDistance, toPage } from './geometry'
@@ -37,6 +38,30 @@ const OVERLAP_MIN = 0.01
 
 /** 距離や重なりは 2 進小数で丸まるので、閾値ちょうどの値を仕様どおり閾値側に入れる余裕 */
 const EPSILON = 1e-9
+
+/** フキダシ 1 つのセリフがこの字数を超えると TOO_MUCH_TEXT。1 行 10 字ほどで 4 行を超すと、フキダシが絵を隠すほど大きくなる */
+const BUBBLE_TEXT_MAX = 40
+
+/** 1 コマのセリフの合計がこの字数を超えると TOO_MUCH_TEXT。フキダシ 2 つ分を超すと、絵より文字を読むコマになる */
+const PANEL_TEXT_MAX = 80
+
+/** 1 ページのコマ数がこれ以上だと PANEL_COUNT。9 コマ以上になると 1 コマが小さく、絵もフキダシも詰まる。見開きはその 2 倍 */
+const PANEL_COUNT_MAX = 9
+
+let segmenter: Intl.Segmenter | undefined
+
+/**
+ * セリフの字数。ルビと傍点の書式を除いた本文を書記素で数え、空白と改行は数えない。
+ * 「……」のような記号は読者が目で追う字なので数える
+ */
+function textLength(text: string): number {
+  segmenter ??= new Intl.Segmenter('ja', { granularity: 'grapheme' })
+  let count = 0
+  for (const { segment } of segmenter.segment(stripRuby(text))) {
+    if (!/^\s+$/u.test(segment)) count += 1
+  }
+  return count
+}
 
 type Counts = { strong: number; weak: number }
 
@@ -101,6 +126,60 @@ const judge = (
   return { status: 'miss', reason: m.diagnosis_focus_off_path_without_vector({ distance: off }) }
 }
 
+/**
+ * セリフの多いフキダシ（Bubble.order 順）と、セリフの合計が多いコマの TOO_MUCH_TEXT。
+ * フキダシの Issue は focusPointId にフキダシの id を持つ。フキダシが 1 つのコマは合計が
+ * そのフキダシの字数と同じで、フキダシの Issue で足りるので、コマの合計は 2 つ以上のときだけ見る
+ */
+const textIssues = (panel: Panel): Issue[] => {
+  const issues: Issue[] = []
+  let total = 0
+  for (const bubble of byOrder(panel.bubbles)) {
+    const count = textLength(bubble.text)
+    total += count
+    if (count > BUBBLE_TEXT_MAX) {
+      issues.push({
+        severity: 'warning',
+        code: 'TOO_MUCH_TEXT',
+        panelId: panel.id,
+        focusPointId: bubble.id,
+        message: m.diagnosis_too_much_text_bubble({
+          count: String(count),
+          limit: String(BUBBLE_TEXT_MAX),
+        }),
+      })
+    }
+  }
+  if (panel.bubbles.length >= 2 && total > PANEL_TEXT_MAX) {
+    issues.push({
+      severity: 'warning',
+      code: 'TOO_MUCH_TEXT',
+      panelId: panel.id,
+      message: m.diagnosis_too_much_text_panel({
+        count: String(total),
+        limit: String(PANEL_TEXT_MAX),
+      }),
+    })
+  }
+  return issues
+}
+
+/** コマが多すぎるページの PANEL_COUNT。少ない方は扉や大ゴマの演出として普通にあるので出さない */
+const panelCountIssues = (page: Page): Issue[] => {
+  const limit = page.spread ? PANEL_COUNT_MAX * 2 : PANEL_COUNT_MAX
+  if (page.panels.length < limit) return []
+  return [
+    {
+      severity: 'info',
+      code: 'PANEL_COUNT',
+      message: m.diagnosis_panel_count({
+        count: String(page.panels.length),
+        limit: String(limit),
+      }),
+    },
+  ]
+}
+
 const diagnosePanel = (
   panel: Panel,
   direction: ReadingDirection,
@@ -118,6 +197,7 @@ const diagnosePanel = (
       message: m.diagnosis_empty_panel(),
     })
   }
+  issues.push(...textIssues(panel))
 
   const focus = foci.map((f): FocusDiagnosis => {
     const { t, distance } = projectOntoSweep(panel, f.pos, direction)
@@ -218,7 +298,7 @@ export function bubbleChain(page: Page): Point[] {
 /**
  * ページを診断する。Bubble を合成焦点に加えてから、
  * 読み順、焦点の t・距離・誘導線・ステータス、フキダシ順、bubble chain、Issue、集計、ヒントを返す。
- * panels は Panel.order 順。issues はページ単位の Issue（READING_ORDER、OVERLAP）の後に
+ * panels は Panel.order 順。issues はページ単位の Issue（READING_ORDER、OVERLAP、PANEL_COUNT）の後に
  * Panel.order 順の Panel ごとの Issue が続く。純粋関数で、入力は変更しない。
  */
 export function diagnosePage(page: Page, settings: ProjectSettings): PageDiagnosis {
@@ -237,6 +317,7 @@ export function diagnosePage(page: Page, settings: ProjectSettings): PageDiagnos
     })
   }
   issues.push(...overlapIssues(panels))
+  issues.push(...panelCountIssues(page))
 
   const panelDiagnoses = panels.map((p) => diagnosePanel(p, settings.direction, config, issues))
 
@@ -547,6 +628,89 @@ if (import.meta.vitest) {
     })
     const d = diagnosePage(page, settings)
     expect(d.issues.map((i) => i.code)).not.toContain('OVERLAP')
+  })
+
+  describe('TOO_MUCH_TEXT', () => {
+    const textIssuesOf = (page: Page) =>
+      diagnosePage(page, settings).issues.filter((i) => i.code === 'TOO_MUCH_TEXT')
+    const withBubbles = (texts: readonly string[]): Page => {
+      const page = samplePage()
+      const panel = findPanel(page, 'pn_6')
+      const first = panel.bubbles[0]
+      if (!first) throw new Error('no bubble')
+      panel.bubbles = texts.map((text, i) => ({
+        ...first,
+        id: `bb_t${i}`,
+        order: i + 1,
+        text,
+        pos: { x: 0.95 - i * 0.1, y: 0.2 },
+      }))
+      return page
+    }
+
+    test('a 50-character bubble warns on that bubble and its panel', () => {
+      const issues = textIssuesOf(withBubbles(['あ'.repeat(50)]))
+      expect(issues).toEqual([
+        expect.objectContaining({
+          severity: 'warning',
+          panelId: 'pn_6',
+          focusPointId: 'bb_t0',
+          message: expect.stringContaining('50'),
+        }),
+      ])
+    })
+
+    test('40 characters is within the limit', () => {
+      expect(textIssuesOf(withBubbles(['あ'.repeat(40)]))).toEqual([])
+    })
+
+    test('ruby and emphasis markup, spaces and line breaks are not counted', () => {
+      const text = `${'あ'.repeat(36)}|魔法《まほうじんのじゅもん》《《本》》\n　 `
+      expect(textIssuesOf(withBubbles([text]))).toEqual([])
+      expect(textIssuesOf(withBubbles([`${text}いい`]))).toHaveLength(1)
+    })
+
+    test('the panel total over 80 warns once without a bubble id', () => {
+      const issues = textIssuesOf(withBubbles(['あ'.repeat(30), 'い'.repeat(30), 'う'.repeat(21)]))
+      expect(issues).toHaveLength(1)
+      expect(issues[0]).toMatchObject({ severity: 'warning', panelId: 'pn_6' })
+      expect(issues[0]?.message).toContain('81')
+      expect(issues[0]?.focusPointId).toBeUndefined()
+      expect(textIssuesOf(withBubbles(['あ'.repeat(40), 'い'.repeat(40)]))).toEqual([])
+    })
+  })
+
+  describe('PANEL_COUNT', () => {
+    const withPanelCount = (count: number, spread?: true): Page => {
+      const page = samplePage()
+      const base = findPanel(page, 'pn_1')
+      page.panels = Array.from({ length: count }, (_, i) => ({
+        ...base,
+        id: `pn_c${i}`,
+        order: i + 1,
+        bubbles: [],
+        focusPoints: [],
+        vectors: [],
+        rect: { x: 0, y: i / count, w: 1, h: 1 / count },
+      }))
+      return spread ? { ...page, spread } : page
+    }
+    const countIssues = (page: Page) =>
+      diagnosePage(page, settings).issues.filter((i) => i.code === 'PANEL_COUNT')
+
+    test('9 or more panels give one info issue, fewer give none', () => {
+      expect(countIssues(withPanelCount(10))).toEqual([
+        expect.objectContaining({ severity: 'info', message: expect.stringContaining('10') }),
+      ])
+      expect(countIssues(withPanelCount(9))).toHaveLength(1)
+      expect(countIssues(withPanelCount(8))).toEqual([])
+      expect(countIssues(withPanelCount(1))).toEqual([])
+    })
+
+    test('a spread allows twice as many panels', () => {
+      expect(countIssues(withPanelCount(17, true))).toEqual([])
+      expect(countIssues(withPanelCount(18, true))).toHaveLength(1)
+    })
   })
 
   test('a page without bubbles has an empty bubble chain', () => {

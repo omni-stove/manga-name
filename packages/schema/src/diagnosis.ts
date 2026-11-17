@@ -34,7 +34,7 @@ export const IssueSchema = z.object({
     'OVERLAP',
     /** フキダシかコマの文字数が多い */
     'TOO_MUCH_TEXT',
-    /** 1 ページのコマ数が多すぎるか少なすぎる */
+    /** 1 ページのコマ数が多すぎる */
     'PANEL_COUNT',
     /** 同じ寄りのコマが続く */
     'MONOTONOUS_CAMERA',
