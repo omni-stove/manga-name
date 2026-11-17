@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { m } from '@manga/i18n'
 import {
+  AVAILABLE_FOCUS_KINDS,
   BubbleTypefaceSchema,
   type FocusKind,
   type FocusPoint,
@@ -19,11 +20,16 @@ import { optionalNumber, optionalString, replace } from './patch'
 import section from './section.module.css'
 import type { FocusInspectorProps } from './types'
 
-export const FOCUS_KINDS: readonly { value: FocusKind; label: string }[] = [
-  option('face', m.focus_point_kind_face),
-  option('keyObject', m.focus_point_kind_key_object),
-  option('sfx', m.focus_point_kind_sfx),
-]
+const KIND_LABELS: Record<FocusKind, () => string> = {
+  face: m.focus_point_kind_face,
+  keyObject: m.focus_point_kind_key_object,
+  sfx: m.focus_point_kind_sfx,
+  mark: m.focus_point_kind_mark,
+}
+
+/** 選べる焦点の種類と、画面での呼び名 */
+export const FOCUS_KINDS: readonly { value: FocusKind; label: string }[] =
+  AVAILABLE_FOCUS_KINDS.map((kind) => option(kind, KIND_LABELS[kind]))
 
 const STATUS_LABELS: Record<FocusStatus, () => string> = {
   ok: m.focus_status_ok,
@@ -165,7 +171,9 @@ if (import.meta.vitest) {
       const { container } = await render(
         <FocusInspector focus={focus} characters={project.characters} onChange={onChange} />,
       )
-      await choose(selectLabelled(container, m.focus_point_kind()), 'sfx')
+      const kind = selectLabelled(container, m.focus_point_kind())
+      expect([...kind.options].map((o) => o.value)).toEqual(['face', 'keyObject', 'sfx'])
+      await choose(kind, 'sfx')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/kind', value: 'sfx' }])
 
       await act(async () => setValue(inputLabelled(container, m.focus_point_label()), 'E'))

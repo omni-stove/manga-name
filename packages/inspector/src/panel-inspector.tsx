@@ -3,6 +3,7 @@ import { getLocale, m } from '@manga/i18n'
 import {
   type Angle,
   AngleSchema,
+  AVAILABLE_PANEL_EFFECTS,
   type Bubble,
   type Camera,
   CameraSchema,
@@ -11,7 +12,6 @@ import {
   type ID,
   type Panel,
   type PanelArt,
-  PanelEffectSchema,
   PanelFrameSchema,
   PanelSchema,
   PanelToneSchema,
@@ -67,9 +67,7 @@ const TONES: readonly { value: NonNullable<Panel['tone']> | ''; label: string }[
 
 const EFFECTS: readonly { value: NonNullable<Panel['effect']> | ''; label: string }[] = [
   option('', m.none),
-  ...PanelEffectSchema.options.map((effect) =>
-    option(effect, m[`panel_effect_${effect}` as const]),
-  ),
+  ...AVAILABLE_PANEL_EFFECTS.map((effect) => option(effect, m[`panel_effect_${effect}` as const])),
 ]
 
 const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
@@ -909,16 +907,34 @@ if (import.meta.vitest) {
       const angle = () => selectLabelled(container, m.panel_angle())
       expect([...camera().options].map((o) => o.value)).toEqual([
         '',
+        'extreme_long',
         'long',
         'middle',
         'bust',
         'close_up',
+        'extreme_close_up',
+        'insert',
       ])
-      expect([...angle().options].map((o) => o.value)).toEqual(['', 'low', 'high'])
+      expect([...angle().options].map((o) => o.value)).toEqual([
+        '',
+        'low',
+        'high',
+        'bird',
+        'worm',
+        'dutch',
+        'pov',
+        'over_shoulder',
+      ])
       await choose(camera(), 'bust')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/camera', value: 'bust' }])
       await choose(angle(), 'high')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/angle', value: 'high' }])
+      await choose(camera(), 'insert')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/camera', value: 'insert' }])
+      await choose(angle(), 'over_shoulder')
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'add', path: '/angle', value: 'over_shoulder' },
+      ])
 
       await act(async () =>
         root.render(<PanelInspector panel={{ ...bare, angle: 'low' }} {...props} />),
@@ -940,6 +956,12 @@ if (import.meta.vitest) {
       const { container, root } = await render(<PanelInspector panel={samplePanel} {...props} />)
       const select = () => selectLabelled(container, m.panel_effect())
       expect(select().value).toBe('')
+      expect([...select().options].map((o) => o.value)).toEqual([
+        '',
+        'focus_lines',
+        'speed_lines',
+        'beta_flash',
+      ])
       await choose(select(), 'focus_lines')
       expect(onChange).toHaveBeenLastCalledWith([
         { op: 'add', path: '/effect', value: 'focus_lines' },

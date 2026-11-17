@@ -14,10 +14,12 @@ const SHAPE_TYPEFACE: Record<Bubble['shape'], Typeface> = {
   narration: 'mincho',
   monologue: 'gothic',
   none: 'gothic',
+  cold: 'mincho',
+  weak: 'gothic',
 }
 
 /**
- * セリフを描く書体。指定が無ければ形から決める。叫びとウニフラは太ゴシック、ナレーションは明朝、
+ * セリフを描く書体。指定が無ければ形から決める。叫びとウニフラは太ゴシック、ナレーションと冷たい声は明朝、
  * 電子音は丸ゴシック、ほかはゴシック
  */
 export function bubbleTypeface(bubble: Pick<Bubble, 'shape' | 'typeface'>): Typeface {
@@ -33,6 +35,8 @@ if (import.meta.vitest) {
     expect(bubbleTypeface({ shape: 'monologue' })).toBe('gothic')
     expect(bubbleTypeface({ shape: 'shout' })).toBe('bold')
     expect(bubbleTypeface({ shape: 'electronic' })).toBe('rounded')
+    expect(bubbleTypeface({ shape: 'cold' })).toBe('mincho')
+    expect(bubbleTypeface({ shape: 'weak' })).toBe('gothic')
     expect(bubbleTypeface({ shape: 'narration', typeface: 'gothic' })).toBe('gothic')
     expect(bubbleTypeface({ shape: 'whisper', typeface: 'hand' })).toBe('hand')
   })

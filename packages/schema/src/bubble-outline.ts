@@ -1,3 +1,4 @@
+import { type BubbleMood, isBubbleMood, moodOutline } from './bubble-moods'
 import type { Bubble, Point } from './project'
 
 type Shape = Bubble['shape']
@@ -72,7 +73,26 @@ const SHAPE_STYLE: Record<Shape, { tail: boolean; box: boolean }> = {
   narration: { tail: false, box: true },
   monologue: { tail: false, box: true },
   none: { tail: false, box: true },
+  cold: { tail: true, box: false },
+  weak: { tail: true, box: false },
 }
+
+/**
+ * 形を描けるようになったフキダシの形。画面で選べる形と生成に選ばせる形はこの一覧から作り、
+ * 普通の形で描かれる形を選ばせない
+ */
+export const AVAILABLE_BUBBLE_SHAPES = [
+  'normal',
+  'shout',
+  'thought',
+  'whisper',
+  'tremble',
+  'electronic',
+  'urchin',
+  'narration',
+  'monologue',
+  'none',
+] as const satisfies readonly Shape[]
 
 /** その形にしっぽが付くか。ナレーション、モノローグ、枠なし、ウニフラは話し手を指さない */
 export const hasTail = (shape: Shape): boolean => SHAPE_STYLE[shape].tail
@@ -179,7 +199,7 @@ function roundedBox(g: BubbleGeometry, r: number): PathCommand[] {
   ]
 }
 
-function body(shape: Shape, g: BubbleGeometry): PathCommand[] {
+function body(shape: Exclude<Shape, BubbleMood>, g: BubbleGeometry): PathCommand[] {
   const unit = unitOf(g)
   switch (shape) {
     case 'normal':
@@ -318,8 +338,9 @@ function tailOf(shape: Shape, g: BubbleGeometry, tail: Point): PathCommand[] {
   )
 }
 
-/** shape の形で g に置いたフキダシの描き方 */
+/** shape の形で g に置いたフキダシの描き方。cold と weak は bubble-moods が普通の形を崩して描く */
 export function bubbleOutline(shape: Shape, g: BubbleGeometry): BubbleOutline {
+  if (isBubbleMood(shape)) return moodOutline(shape, g, bubbleOutline('normal', g))
   return {
     body: body(shape, g),
     tails: hasTail(shape) ? (g.tails ?? []).map((tail) => tailOf(shape, g, tail)) : [],
@@ -434,7 +455,16 @@ if (import.meta.vitest) {
     'narration',
     'monologue',
     'none',
+    'cold',
+    'weak',
   ] as const
+
+  test('cold and weak are not available yet and draw as normal', () => {
+    const available: readonly Shape[] = AVAILABLE_BUBBLE_SHAPES
+    expect(SHAPES.filter((s) => !available.includes(s))).toEqual(['cold', 'weak'])
+    expect(bubbleOutline('cold', g)).toEqual(bubbleOutline('normal', g))
+    expect(bubbleOutline('weak', g)).toEqual(bubbleOutline('normal', g))
+  })
 
   test('every outline is made of closed subpaths', () => {
     for (const shape of SHAPES) {

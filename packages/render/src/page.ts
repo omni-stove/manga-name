@@ -14,6 +14,7 @@ import {
   groundColor,
   hasFrameLine,
   innerFrameOf,
+  markShapes,
   OVERLAY_COLORS,
   type Page,
   type Panel,
@@ -86,6 +87,7 @@ async function loadArt(
 /**
  * ページ 1 枚を PNG に合成する。同じ Page と同じアセットからは同じバイト列が出る。
  * sfx の焦点の label は、絵の上、フキダシと枠線の下に、コマの輪郭で切った描き文字として、焦点ごとの傾き・書体・大きさで描く。
+ * mark の焦点は、描き文字の下にコマの輪郭で切った漫符（markShapes）として、効果線と同じ色で描く。
  * 紙面全体に重ねるトーンは、フキダシと間白まで描いた後に乗算で重ねる。
  * face と keyObject の焦点、ベクトル、診断、参考画像、手描きは描かない。
  */
@@ -204,6 +206,7 @@ export async function drawPage(
     drawEffectLines(c, outline, effectLines(panel, rect, unit.w), effectInk(panel))
     // フキダシまでぼかさないよう、絵の直後にぼかす
     if (panel.frame === 'soft') drawSoftEdge(c, outline, unit.w, ground)
+    drawEffectLines(c, outline, markShapes(panel, rect, unit.w), effectInk(panel))
     withClip(c, outline, () => drawSfx(panel))
     if (opts.panelNumbers) {
       drawPanelNumber(c, panel.order, outline, unit.w * NOTE_FONT * 1.5)
@@ -885,6 +888,32 @@ if (import.meta.vitest) {
       panelNumbers: false,
     })
     await matchPngSnapshot('page-sfx', png)
+  })
+
+  test('形を持たない効果と漫符は何も描かず、冷たい声と弱々しい声のフキダシは普通の形で描く', async () => {
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const [pn1, ...rest] = emptyPage.panels as [Panel, ...Panel[]]
+    const bubble = pn1.bubbles[0] as Bubble
+    const withPanel = (patch: Partial<Panel>): Page => ({
+      ...emptyPage,
+      panels: [{ ...pn1, ...patch }, ...rest],
+    })
+    const draw = async (page: Page) => (await pixels(await renderPage(page, noAssets, opts))).data
+    const plain = await draw(withPanel({}))
+    const same = (data: Uint8ClampedArray) => data.every((v, i) => v === plain[i])
+
+    for (const effect of ['vertical_lines', 'crosshatch', 'sparkle', 'flowers'] as const) {
+      expect(same(await draw(withPanel({ effect })))).toBe(true)
+    }
+    const mark = sfxFocus('fp_mark', { kind: 'mark', label: '汗', mark: 'sweat', weight: 1 })
+    expect(same(await draw(withPanel({ focusPoints: [mark] })))).toBe(true)
+    const gothic = await draw(
+      withPanel({ bubbles: [{ ...bubble, shape: 'normal', typeface: 'gothic' }] }),
+    )
+    for (const shape of ['cold', 'weak'] as const) {
+      const drawn = await draw(withPanel({ bubbles: [{ ...bubble, shape, typeface: 'gothic' }] }))
+      expect(drawn.every((v, i) => v === gothic[i])).toBe(true)
+    }
   })
 
   test('描き文字は sfx の焦点にだけ、label があるときだけ描く', async () => {

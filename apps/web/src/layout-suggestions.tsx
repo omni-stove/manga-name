@@ -2,6 +2,7 @@ import type { LayoutSuggestionResponse, LlmProvider } from '@manga/ai'
 import { m } from '@manga/i18n'
 import {
   AngleSchema,
+  AVAILABLE_PANEL_EFFECTS,
   CameraSchema,
   type Character,
   type ID,
@@ -9,7 +10,6 @@ import {
   MAX_NAME_PANELS,
   type NamePanel,
   type Page,
-  PanelEffectSchema,
   type PlanLine,
   type Project,
 } from '@manga/schema'
@@ -421,14 +421,15 @@ function NameEditor({
               label={m.panel_effect()}
               value={panel.effect ?? ''}
               onChange={(e) => {
-                const effect = PanelEffectSchema.safeParse(e.currentTarget.value)
+                const value = e.currentTarget.value
+                const effect = AVAILABLE_PANEL_EFFECTS.find((v) => v === value)
                 editPanel(index, ({ effect: _, ...rest }) =>
-                  effect.success ? { ...rest, effect: effect.data } : rest,
+                  effect === undefined ? rest : { ...rest, effect },
                 )
               }}
             >
               <option value="">{m.none()}</option>
-              {PanelEffectSchema.options.map((effect) => (
+              {AVAILABLE_PANEL_EFFECTS.map((effect) => (
                 <option key={effect} value={effect}>
                   {m[`panel_effect_${effect}`]()}
                 </option>
