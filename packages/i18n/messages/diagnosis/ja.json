@@ -8,5 +8,9 @@
   "diagnosis_empty_panel": "焦点もフキダシもメモもない",
   "diagnosis_bubble_order": "フキダシの順が視線経路の向きと逆転している",
   "diagnosis_overlap": "{a} と {b} のコマが重なっている",
-  "diagnosis_reading_order": "配置から推定した読み順は {order}"
+  "diagnosis_reading_order": "配置から推定した読み順は {order}",
+  "diagnosis_too_much_text_bubble": "フキダシのセリフが {count} 字ある（目安は {limit} 字まで）",
+  "diagnosis_too_much_text_panel": "コマのセリフが合わせて {count} 字ある（目安は {limit} 字まで）",
+  "diagnosis_panel_count": "ページのコマが {count} ある（目安は {limit} 未満）",
+  "diagnosis_monotonous_camera": "{shot} のコマが {count} 続いていて、寄りが単調になっている"
 }
