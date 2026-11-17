@@ -229,7 +229,6 @@ export function effectLines(
 /**
  * 画面で選べる効果と生成に選ばせる効果。どちらもこの一覧から作り、描くと空になる効果を選ばせない。
  * 形を描けても、選ばせる準備が整うまではここに入れない
->>>>>>> origin/main
  */
 export const AVAILABLE_PANEL_EFFECTS = [
   'focus_lines',

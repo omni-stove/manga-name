@@ -115,7 +115,8 @@ export const FocusMarkSchema = z.enum(['sweat', 'anger', 'question', 'exclaim', 
 /**
  * コマの中で目を引く点。pos はコマ内座標、weight は目の引き具合。
  * sfx の label は描き文字として（sfxLetterings）、mark は漫符として（markShapes）紙面に描く。
- * face と keyObject は紙面に描かない。rotation、typeface、scale は描き文字にだけ、mark は漫符にだけ効く
+ * face と keyObject は紙面に描かない。rotation は描き文字と漫符に、typeface と scale は描き文字にだけ、
+ * mark は漫符にだけ効く
  */
 export const FocusPointSchema = z.object({
   id: IdSchema,
@@ -124,7 +125,7 @@ export const FocusPointSchema = z.object({
   pos: PointSchema,
   weight: unit,
   characterId: IdSchema.optional(),
-  /** 描き文字の傾き。度で、正は時計回り。省略は 0 */
+  /** 描き文字と漫符の傾き。度で、正は時計回り。省略は 0 */
   rotation: z.number().min(-180).max(180).optional(),
   /** 描き文字の書体。省略は SFX_TYPEFACE */
   typeface: BubbleTypefaceSchema.optional(),
