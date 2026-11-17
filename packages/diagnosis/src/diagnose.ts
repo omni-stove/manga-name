@@ -48,6 +48,9 @@ const PANEL_TEXT_MAX = 80
 /** 1 ページのコマ数がこれ以上だと PANEL_COUNT。9 コマ以上になると 1 コマが小さく、絵もフキダシも詰まる。見開きはその 2 倍 */
 const PANEL_COUNT_MAX = 9
 
+/** 同じ寄りと角度のコマがこれだけ続くと MONOTONOUS_CAMERA。2 コマなら切り返しや間でよく使うが、3 コマ目からは画面に変化が無く単調に読める */
+const MONOTONOUS_CAMERA_RUN = 3
+
 let segmenter: Intl.Segmenter | undefined
 
 /**
@@ -180,6 +183,35 @@ const panelCountIssues = (page: Page): Issue[] => {
   ]
 }
 
+/**
+ * Panel.order 順に並んだコマで、同じ camera と angle（angle は無いどうしも同じ）が MONOTONOUS_CAMERA_RUN 以上続く箇所ごとの
+ * MONOTONOUS_CAMERA。panelId は続いた最初のコマ。camera の無いコマは寄りを決めていないので数えず、続きもそこで切る
+ */
+const monotonousCameraIssues = (panels: readonly Panel[]): Issue[] => {
+  const issues: Issue[] = []
+  let start = 0
+  for (let i = 1; i <= panels.length; i++) {
+    const prev = panels[i - 1]
+    const panel = panels[i]
+    if (panel?.camera && panel.camera === prev?.camera && panel.angle === prev.angle) continue
+    const first = panels[start]
+    const count = i - start
+    start = i
+    if (!first?.camera || count < MONOTONOUS_CAMERA_RUN) continue
+    const camera = m[`panel_camera_${first.camera}`]()
+    issues.push({
+      severity: 'info',
+      code: 'MONOTONOUS_CAMERA',
+      panelId: first.id,
+      message: m.diagnosis_monotonous_camera({
+        shot: first.angle ? `${camera}・${m[`panel_angle_${first.angle}`]()}` : camera,
+        count: String(count),
+      }),
+    })
+  }
+  return issues
+}
+
 const diagnosePanel = (
   panel: Panel,
   direction: ReadingDirection,
@@ -298,7 +330,7 @@ export function bubbleChain(page: Page): Point[] {
 /**
  * ページを診断する。Bubble を合成焦点に加えてから、
  * 読み順、焦点の t・距離・誘導線・ステータス、フキダシ順、bubble chain、Issue、集計、ヒントを返す。
- * panels は Panel.order 順。issues はページ単位の Issue（READING_ORDER、OVERLAP、PANEL_COUNT）の後に
+ * panels は Panel.order 順。issues はページ単位の Issue（READING_ORDER、OVERLAP、PANEL_COUNT、MONOTONOUS_CAMERA）の後に
  * Panel.order 順の Panel ごとの Issue が続く。純粋関数で、入力は変更しない。
  */
 export function diagnosePage(page: Page, settings: ProjectSettings): PageDiagnosis {
@@ -318,6 +350,7 @@ export function diagnosePage(page: Page, settings: ProjectSettings): PageDiagnos
   }
   issues.push(...overlapIssues(panels))
   issues.push(...panelCountIssues(page))
+  issues.push(...monotonousCameraIssues(panels))
 
   const panelDiagnoses = panels.map((p) => diagnosePanel(p, settings.direction, config, issues))
 
@@ -710,6 +743,62 @@ if (import.meta.vitest) {
     test('a spread allows twice as many panels', () => {
       expect(countIssues(withPanelCount(17, true))).toEqual([])
       expect(countIssues(withPanelCount(18, true))).toHaveLength(1)
+    })
+  })
+
+  describe('MONOTONOUS_CAMERA', () => {
+    type Shot = Pick<Panel, 'camera' | 'angle'>
+    const withShots = (shots: readonly Shot[]): Page => {
+      const page = samplePage()
+      const { camera: _camera, angle: _angle, ...base } = findPanel(page, 'pn_1')
+      page.panels = shots.map((shot, i) => ({
+        ...base,
+        ...shot,
+        id: `pn_s${i}`,
+        order: i + 1,
+        rect: { x: 0, y: i / shots.length, w: 1, h: 1 / shots.length },
+      }))
+      return page
+    }
+    const cameraIssues = (page: Page) =>
+      diagnosePage(page, settings).issues.filter((i) => i.code === 'MONOTONOUS_CAMERA')
+    const bust: Shot = { camera: 'bust' }
+
+    test('three bust shots in a row give one info issue on the first of them', () => {
+      expect(cameraIssues(withShots([{ camera: 'long' }, bust, bust, bust]))).toEqual([
+        expect.objectContaining({
+          severity: 'info',
+          panelId: 'pn_s1',
+          message: expect.stringContaining('バストアップ'),
+        }),
+      ])
+      expect(cameraIssues(withShots([bust, bust]))).toEqual([])
+    })
+
+    test('a different angle or camera in the middle breaks the run', () => {
+      expect(cameraIssues(withShots([bust, { camera: 'bust', angle: 'low' }, bust]))).toEqual([])
+      expect(cameraIssues(withShots([bust, { camera: 'close_up' }, bust]))).toEqual([])
+    })
+
+    test('the same angle on every panel still counts as monotonous', () => {
+      const low: Shot = { camera: 'bust', angle: 'low' }
+      expect(cameraIssues(withShots([low, low, low]))).toEqual([
+        expect.objectContaining({ message: expect.stringContaining('アオリ') }),
+      ])
+    })
+
+    test('a panel without camera is not counted and breaks the run', () => {
+      expect(cameraIssues(withShots([bust, bust, {}, bust]))).toEqual([])
+      expect(cameraIssues(withShots([{}, {}, {}]))).toEqual([])
+    })
+
+    test('runs follow Panel.order and each run is reported once with its length', () => {
+      const page = withShots([bust, bust, bust, bust, { camera: 'long' }, bust, bust, bust])
+      page.panels.reverse()
+      expect(cameraIssues(page).map((i) => [i.panelId, i.message])).toEqual([
+        ['pn_s0', expect.stringContaining('4')],
+        ['pn_s5', expect.stringContaining('3')],
+      ])
     })
   })
 
