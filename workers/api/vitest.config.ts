@@ -10,6 +10,16 @@ export default defineConfig(async () => {
   const anthropicApiKey = processEnv.ANTHROPIC_API_KEY
   return {
     plugins: [
+      // Vitest はテストファイルが読む全モジュールの変換結果を 1 通の WebSocket メッセージで workerd に送る。
+      // 依存パッケージに埋め込まれるソースマップがその 3/4 を占め、workerd の上限 32 MiB を超えると worker が落ちる。
+      // 依存のコードはテストの対象でもカバレッジの対象でもないので、そのソースマップを捨てる
+      {
+        name: 'strip-dependency-sourcemaps',
+        enforce: 'post' as const,
+        transform(code: string, id: string) {
+          if (id.includes('/node_modules/')) return { code, map: { mappings: '' } }
+        },
+      },
       cloudflareTest({
         wrangler: { configPath: './wrangler.jsonc' },
         miniflare: {
