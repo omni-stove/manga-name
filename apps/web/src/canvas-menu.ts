@@ -541,11 +541,9 @@ if (import.meta.vitest) {
       const items = elementMenuItems(target, ctx)
       expect(() => item(items, m.focus_point_mark_anger())).toThrow()
       item(items, m.focus_point_kind_mark()).onSelect()
-      expect(ctx.edit).toHaveBeenCalledWith(
-        m.web_canvas_menu_history_change_focus_kind(),
-        target,
-        [{ op: 'replace', path: '/kind', value: 'mark' }],
-      )
+      expect(ctx.edit).toHaveBeenCalledWith(m.web_canvas_menu_history_change_focus_kind(), target, [
+        { op: 'replace', path: '/kind', value: 'mark' },
+      ])
 
       const asMark = (mark?: 'sigh'): Page => ({
         ...page,

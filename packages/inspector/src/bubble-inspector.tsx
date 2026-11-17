@@ -157,9 +157,7 @@ if (import.meta.vitest) {
         <BubbleInspector bubble={bubble} characters={project.characters} onChange={onChange} />,
       )
       const select = selectLabelled(container, m.bubble_shape())
-      expect([...select.options].map((o) => o.value)).toEqual([
-        ...BubbleSchema.shape.shape.options,
-      ])
+      expect([...select.options].map((o) => o.value)).toEqual([...BubbleSchema.shape.shape.options])
       for (const shape of ['cold', 'weak'] as const) {
         expect(must([...select.options].find((o) => o.value === shape)).textContent).toBe(
           m[`bubble_shape_${shape}`](),

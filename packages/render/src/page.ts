@@ -993,8 +993,11 @@ if (import.meta.vitest) {
 
   test('新しい演出: 縦線・カケアミ・キラキラ・花の効果、5 種の漫符、冷たい声と弱々しい声のフキダシ、柱を絵の入ったページに描く', async () => {
     const { page, ctx } = withArts()
-    const mark = (id: string, kind: NonNullable<FocusPoint['mark']>, patch: Partial<FocusPoint> = {}) =>
-      sfxFocus(id, { kind: 'mark', label: '', mark: kind, pos: { x: 0.3, y: 0.3 }, ...patch })
+    const mark = (
+      id: string,
+      kind: NonNullable<FocusPoint['mark']>,
+      patch: Partial<FocusPoint> = {},
+    ) => sfxFocus(id, { kind: 'mark', label: '', mark: kind, pos: { x: 0.3, y: 0.3 }, ...patch })
     const reshape = (panel: Panel, shape: Bubble['shape']) =>
       panel.bubbles.map((b) => ({ ...b, shape }))
     const staged: Page = {
