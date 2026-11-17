@@ -1,23 +1,22 @@
-import { type BubbleMood, isBubbleMood, moodOutline } from './bubble-moods'
+import { type BubbleMood, isBubbleMood, moodInset, moodOutline, moodReach } from './bubble-moods'
+import {
+  type BubbleGeometry,
+  along,
+  countAlong,
+  ellipseAt,
+  jitter,
+  type PathCommand,
+  pathPoints,
+  polygon,
+  type Station,
+  stations,
+  unitOf,
+} from './bubble-path'
 import type { Bubble, Point } from './project'
 
+export type { BubbleGeometry, PathCommand } from './bubble-path'
+
 type Shape = Bubble['shape']
-
-/** 単位を問わない座標のフキダシ。rx, ry は本体の楕円の半径、tails はしっぽごとの先端 */
-export interface BubbleGeometry {
-  cx: number
-  cy: number
-  rx: number
-  ry: number
-  tails?: readonly Point[]
-}
-
-/** 輪郭の描画命令。SVG の path 命令と Canvas の moveTo などに 1 対 1 で写せる */
-export type PathCommand =
-  | { op: 'M' | 'L'; x: number; y: number }
-  | { op: 'Q'; x1: number; y1: number; x: number; y: number }
-  | { op: 'C'; x1: number; y1: number; x2: number; y2: number; x: number; y: number }
-  | { op: 'Z' }
 
 /** フキダシの描き方。どの命令列も閉じたサブパスだけからなる */
 export interface BubbleOutline {
@@ -60,7 +59,6 @@ const TAIL_INSET = 0.5
 /** 連結フキダシの首の幅の半分。小さい方のフキダシの短い半径に対する比率 */
 const NECK_HALF_WIDTH = 0.18
 const KAPPA = 0.5522847498
-const ARC_SAMPLES = 256
 
 const SHAPE_STYLE: Record<Shape, { tail: boolean; box: boolean }> = {
   normal: { tail: true, box: false },
@@ -78,8 +76,7 @@ const SHAPE_STYLE: Record<Shape, { tail: boolean; box: boolean }> = {
 }
 
 /**
- * 形を描けるようになったフキダシの形。画面で選べる形と生成に選ばせる形はこの一覧から作り、
- * 普通の形で描かれる形を選ばせない
+ * 画面で選べる形と生成に選ばせる形。cold と weak は描けるが、インスペクタと生成へのつなぎ込みでまとめて足す
  */
 export const AVAILABLE_BUBBLE_SHAPES = [
   'normal',
@@ -100,70 +97,6 @@ export const hasTail = (shape: Shape): boolean => SHAPE_STYLE[shape].tail
 /** 本体が楕円でなく、半径で囲む矩形そのものか */
 export const isBoxShape = (shape: Shape): boolean => SHAPE_STYLE[shape].box
 
-/** 0 以上 1 未満の、i ごとに決まった揺らぎ。同じフキダシは毎回同じ形に描く */
-function jitter(i: number): number {
-  const s = Math.sin(i * 12.9898 + 78.233) * 43758.5453
-  return s - Math.floor(s)
-}
-
-const unitOf = (g: BubbleGeometry) => Math.min(g.rx, g.ry)
-
-interface Station {
-  p: Point
-  /** 外向きの単位法線 */
-  n: Point
-}
-
-function ellipseAt(g: BubbleGeometry, t: number): Station {
-  const nx = Math.cos(t) / (g.rx || 1)
-  const ny = Math.sin(t) / (g.ry || 1)
-  const len = Math.hypot(nx, ny)
-  return {
-    p: { x: g.cx + g.rx * Math.cos(t), y: g.cy + g.ry * Math.sin(t) },
-    n: { x: nx / len, y: ny / len },
-  }
-}
-
-/** 楕円の周を count 等分した点。角度 0 から時計回り（y 下向き） */
-function stations(g: BubbleGeometry, count: number): Station[] {
-  const lengths = [0]
-  let prev = ellipseAt(g, 0).p
-  for (let i = 1; i <= ARC_SAMPLES; i++) {
-    const p = ellipseAt(g, (i / ARC_SAMPLES) * Math.PI * 2).p
-    lengths.push((lengths[i - 1] as number) + Math.hypot(p.x - prev.x, p.y - prev.y))
-    prev = p
-  }
-  const total = lengths[ARC_SAMPLES] as number
-  let j = 0
-  return Array.from({ length: count }, (_, i) => {
-    const target = (total * i) / count
-    while (j < ARC_SAMPLES - 1 && (lengths[j + 1] as number) < target) j++
-    const a = lengths[j] as number
-    const b = lengths[j + 1] as number
-    const f = b > a ? (target - a) / (b - a) : 0
-    return ellipseAt(g, ((j + f) / ARC_SAMPLES) * Math.PI * 2)
-  })
-}
-
-/** 周を unit * spacing ごとに区切った数。min..max に収める */
-function countAlong(g: BubbleGeometry, spacing: number, min: number, max: number): number {
-  const unit = unitOf(g)
-  if (!(unit > 0)) return min
-  const a = Math.max(g.rx, g.ry)
-  const b = unit
-  // Ramanujan の近似
-  const perimeter = Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)))
-  return Math.min(max, Math.max(min, Math.round(perimeter / (unit * spacing))))
-}
-
-const along = (s: Station, d: number): Point => ({ x: s.p.x + s.n.x * d, y: s.p.y + s.n.y * d })
-
-function polygon(points: readonly Point[]): PathCommand[] {
-  return [
-    ...points.map((p, i) => ({ op: i === 0 ? ('M' as const) : ('L' as const), x: p.x, y: p.y })),
-    { op: 'Z' },
-  ]
-}
 
 function ellipse(cx: number, cy: number, rx: number, ry: number): PathCommand[] {
   const kx = rx * KAPPA
@@ -405,8 +338,10 @@ export function bubbleTextBox(
   g: BubbleGeometry,
 ): { x: number; y: number; w: number; h: number } {
   const f = isBoxShape(shape) ? { w: 0.85, h: 0.85 } : { w: 0.7, h: 0.75 }
-  const w = g.rx * 2 * f.w
-  const h = g.ry * 2 * f.h
+  // 輪郭が楕円より内へ入る形は、入る深さだけ半径を縮めてから割り付ける
+  const inset = isBubbleMood(shape) ? unitOf(g) * moodInset(shape) : 0
+  const w = Math.max(0, g.rx - inset) * 2 * f.w
+  const h = Math.max(0, g.ry - inset) * 2 * f.h
   return { x: g.cx - w / 2, y: g.cy - h / 2, w, h }
 }
 
@@ -435,15 +370,15 @@ export function bubbleReach(shape: Shape, rx: number, ry: number, n: Point): num
     tremble: TREMBLE_AMPLITUDE,
     urchin: URCHIN_GAP + URCHIN_LENGTH,
   }
-  return Math.hypot(n.x * rx, n.y * ry) + unit * (extra[shape] ?? 0)
+  const out = isBubbleMood(shape) ? moodReach(shape) : (extra[shape] ?? 0)
+  return Math.hypot(n.x * rx, n.y * ry) + unit * out
 }
 
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
 
   const g = { cx: 100, cy: 100, rx: 60, ry: 40, tails: [{ x: 100, y: 190 }] }
-  const points = (cmds: PathCommand[]) =>
-    cmds.flatMap((c) => (c.op === 'Z' ? [] : [{ x: c.x, y: c.y }]))
+  const points = pathPoints
   const SHAPES = [
     'normal',
     'shout',
@@ -459,11 +394,11 @@ if (import.meta.vitest) {
     'weak',
   ] as const
 
-  test('cold and weak are not available yet and draw as normal', () => {
+  test('cold and weak are not offered yet, but draw their own body', () => {
     const available: readonly Shape[] = AVAILABLE_BUBBLE_SHAPES
     expect(SHAPES.filter((s) => !available.includes(s))).toEqual(['cold', 'weak'])
-    expect(bubbleOutline('cold', g)).toEqual(bubbleOutline('normal', g))
-    expect(bubbleOutline('weak', g)).toEqual(bubbleOutline('normal', g))
+    expect(bubbleOutline('cold', g).body).not.toEqual(bubbleOutline('normal', g).body)
+    expect(bubbleOutline('weak', g).body).not.toEqual(bubbleOutline('normal', g).body)
   })
 
   test('every outline is made of closed subpaths', () => {
