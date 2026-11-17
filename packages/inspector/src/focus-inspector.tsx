@@ -53,7 +53,7 @@ function sfxTypefaceOptions(): SfxTypefaceOption[] {
 /**
  * sfx の焦点の文字に選べる定型の描き文字。紙面に描く文字そのものなので訳さない
  */
-export const SFX_LABEL_PRESETS = ['つづく', 'ドン', 'ゴゴゴ', 'シーン', 'ザワ…', 'バーン'] as const
+const SFX_LABEL_PRESETS = ['つづく', 'ドン', 'ゴゴゴ', 'シーン', 'ザワ…', 'バーン'] as const
 
 /** 定型の描き文字のボタンの並び。押すとその語で label を置き換える */
 function SfxLabelPresets({ focus, onChange }: Pick<FocusInspectorProps, 'focus' | 'onChange'>) {
