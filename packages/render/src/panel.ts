@@ -145,10 +145,18 @@ export function applyColorMatrix(data: Uint8ClampedArray, matrix: readonly numbe
 }
 
 /** 指示メモに載せるコマの項目 */
-type PanelNotes = Pick<Panel, 'order' | 'camera' | 'note' | 'scene' | 'beat'>
+type PanelNotes = Pick<Panel, 'order' | 'camera' | 'angle' | 'note' | 'scene' | 'beat'>
+
+/** 寄りと角度の呼び名。どちらも無ければ空 */
+export function shotNames(panel: Pick<Panel, 'camera' | 'angle'>): string[] {
+  const names: string[] = []
+  if (panel.camera) names.push(m[`panel_camera_${panel.camera}` as const]())
+  if (panel.angle) names.push(m[`panel_angle_${panel.angle}` as const]())
+  return names
+}
 
 /**
- * 未生成コマの中身。rect の左上にコマ番号、その下に「間」の印、camera と note を横書きで小さく。
+ * 未生成コマの中身。rect の左上にコマ番号、その下に「間」の印、寄りと角度、note を横書きで小さく。
  * 輪郭 outline の外に出る部分は切る
  */
 export function drawPlaceholder(
@@ -174,9 +182,10 @@ export function drawPlaceholder(
   const lineHeight = fontPx * 1.4
   let y = rect.y + pad + numberPx * 1.3
   const bottom = rect.y + rect.h - pad
+  const shot = shotNames(panel)
   const text = [
     panel.beat && m.panel_beat_mark(),
-    panel.camera && `[${m[`panel_camera_${panel.camera}` as const]()}]`,
+    shot.length > 0 && `[${shot.join('・')}]`,
     panel.note,
   ]
     .filter(Boolean)
@@ -223,7 +232,7 @@ export function actingNotes(panel: Panel, characters: readonly Character[]): str
 }
 
 /**
- * 余白のメモ。シーンの始まるコマではまず見出しの行、続けてコマ番号と camera と「間」の印の行、note と芝居（actingNotes）を横書きで列挙する
+ * 余白のメモ。シーンの始まるコマではまず見出しの行、続けてコマ番号と寄りと角度と「間」の印の行、note と芝居（actingNotes）を横書きで列挙する
  */
 export function drawNotesMargin(
   ctx: Ctx,
@@ -245,11 +254,7 @@ export function drawNotesMargin(
   for (const panel of panels) {
     ctx.font = `bold ${fontPx}px "${FONT_FAMILY}"`
     const scene = sceneHeading(panel)
-    const head = [
-      String(panel.order),
-      panel.camera && m[`panel_camera_${panel.camera}` as const](),
-      panel.beat && m.panel_beat_mark(),
-    ]
+    const head = [String(panel.order), ...shotNames(panel), panel.beat && m.panel_beat_mark()]
       .filter(Boolean)
       .join(' ')
     const heads = scene === undefined ? [head] : [m.panel_scene_heading({ scene }), head]
@@ -481,6 +486,15 @@ if (import.meta.vitest) {
       ).then(({ darkPixels }) => darkPixels((_, y) => y >= 31).inside)
     expect(await below()).toBe(0)
     expect(await below(['E：振り向いて驚く', 'ケイ：笑う'])).toBeGreaterThan(0)
+  })
+
+  test('shotNames names the camera and then the angle, and skips the missing ones', () => {
+    expect(shotNames({ camera: 'bust', angle: 'high' })).toEqual([
+      m.panel_camera_bust(),
+      m.panel_angle_high(),
+    ])
+    expect(shotNames({ angle: 'low' })).toEqual([m.panel_angle_low()])
+    expect(shotNames({})).toEqual([])
   })
 
   test('actingNotes writes one line per acting character with the name', () => {

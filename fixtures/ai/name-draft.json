@@ -9,6 +9,7 @@
     {
       "note": "E が足を止めて下を見る。",
       "camera": "bust",
+      "angle": "high",
       "lines": [],
       "acting": [{ "characterId": "chr_e", "text": "はっと足を止めて目を落とす" }]
     },

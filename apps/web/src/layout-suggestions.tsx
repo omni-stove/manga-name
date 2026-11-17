@@ -1,6 +1,7 @@
 import type { LayoutSuggestionResponse, LlmProvider } from '@manga/ai'
 import { m } from '@manga/i18n'
 import {
+  AngleSchema,
   CameraSchema,
   type Character,
   type ID,
@@ -377,6 +378,23 @@ function NameEditor({
                 </option>
               ))}
             </Select>
+            <Select
+              label={m.panel_angle()}
+              value={panel.angle ?? ''}
+              onChange={(e) => {
+                const angle = AngleSchema.safeParse(e.currentTarget.value)
+                editPanel(index, ({ angle: _, ...rest }) =>
+                  angle.success ? { ...rest, angle: angle.data } : rest,
+                )
+              }}
+            >
+              <option value="">{m.none()}</option>
+              {AngleSchema.options.map((angle) => (
+                <option key={angle} value={angle}>
+                  {m[`panel_angle_${angle}`]()}
+                </option>
+              ))}
+            </Select>
             <XStack wrap>
               <Checkbox
                 label={m.panel_no_art()}
@@ -553,6 +571,13 @@ if (import.meta.vitest) {
       }
       expect(markup).toContain(m.web_name_line_to_next_panel())
       expect(markup).toContain(m.web_name_line_to_previous_panel())
+    })
+
+    test('selects the camera and the angle of each panel', () => {
+      const markup = html([{ note: 'n', camera: 'bust', angle: 'high', lines: [] }])
+      expect(markup).toContain(m.panel_angle())
+      expect(markup).toMatch(/<option value="bust" selected="">/)
+      expect(markup).toMatch(/<option value="high" selected="">/)
     })
 
     test('says so for a panel without lines', () => {

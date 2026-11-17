@@ -742,6 +742,22 @@ if (import.meta.vitest) {
       expect(first.textContent).toContain('ガラス結晶の森')
     })
 
+    test('a panel without art shows its camera and angle together, or the angle alone', async () => {
+      const [pn1, ...rest] = samplePage.panels as [Panel, ...Panel[]]
+      const shotOf = async (panel: Panel) =>
+        must(
+          (await render({ page: { ...samplePage, panels: [panel, ...rest] } })).querySelector(
+            '[data-panel-id="pn_1"] [data-shot]',
+          ),
+        ).textContent
+      expect(await shotOf({ ...pn1, camera: 'bust', angle: 'high' })).toBe(
+        `[${m.panel_camera_bust()}・${m.panel_angle_high()}]`,
+      )
+      expect(await shotOf({ ...pn1, camera: undefined, note: undefined, angle: 'low' })).toBe(
+        `[${m.panel_angle_low()}]`,
+      )
+    })
+
     test('a panel with a scene shows the heading at the top-left, or at the top-right left of the number in ltr', async () => {
       const [pn1, pn2, ...rest] = samplePage.panels as [Panel, Panel, ...Panel[]]
       const page = { ...samplePage, panels: [{ ...pn1, scene: '放課後・屋上' }, pn2, ...rest] }

@@ -90,7 +90,7 @@ export function layoutRequest(panels: readonly NamePanel[]): LayoutSuggestionReq
 
 /**
  * 案の枠にネームのコマを読む順に当てたコマにする。枠は createRowPanels で段とコマの比から割り、
- * 描くものを指示メモ、カメラを camera、セリフを lineBubbles のフキダシ、芝居を acting にし、noArt、fill、effect はそのまま写す。
+ * 描くものを指示メモ、寄りを camera、角度を angle、セリフを lineBubbles のフキダシ、芝居を acting にし、noArt、fill、effect はそのまま写す。
  * 芝居だけのキャラは cast に足す。panelActing は登場キャラの芝居しか拾わず、セリフの無いキャラは cast でしか登場キャラにならないため。
  * 居ない話し手と居ないキャラの芝居は落とし、空のセリフと空の芝居は捨てる。ネームより枠が多ければ余りの枠は空のままにする
  */
@@ -126,6 +126,7 @@ export function suggestedPanels(
       ...frame,
       ...(panel.note !== '' && { note: panel.note }),
       ...(panel.camera !== undefined && { camera: panel.camera }),
+      ...(panel.angle !== undefined && { angle: panel.angle }),
       ...(panel.noArt && { noArt: true as const }),
       ...(panel.fill !== undefined && { fill: panel.fill }),
       ...(panel.effect !== undefined && { effect: panel.effect }),
@@ -152,12 +153,33 @@ export function suggestedPage(
 
 const nameKey = (pageId: ID) => `manga.name.${pageId}`
 
+/** schemaVersion 31 まで camera に入れていた角度と、それに当たる angle */
+const CAMERA_ANGLES: Record<string, NonNullable<NamePanel['angle']>> = {
+  low_angle: 'low',
+  high_angle: 'high',
+}
+
+/**
+ * camera に角度を入れた、角度を分ける前に残したネームを angle に移す。
+ * 残したネームは版を持たず migrate を通らないので、移さないと NameDraftSchema に断られて下書きごと消える
+ */
+const splitStoredAngles = (json: unknown): unknown =>
+  Array.isArray(json)
+    ? json.map((panel) => {
+        if (typeof panel !== 'object' || panel === null) return panel
+        const { camera, ...rest } = panel as Record<string, unknown>
+        return typeof camera === 'string' && Object.hasOwn(CAMERA_ANGLES, camera)
+          ? { ...rest, angle: CAMERA_ANGLES[camera] }
+          : panel
+      })
+    : json
+
 /** このブラウザに残したページのネーム。無いか読めなければ undefined */
 export function loadName(pageId: ID): NamePanel[] | undefined {
   const stored = readStorage(nameKey(pageId))
   if (stored === null) return undefined
   try {
-    const parsed = NameDraftSchema.safeParse(JSON.parse(stored))
+    const parsed = NameDraftSchema.safeParse(splitStoredAngles(JSON.parse(stored)))
     return parsed.success ? parsed.data : undefined
   } catch {
     return undefined
@@ -277,6 +299,8 @@ if (import.meta.vitest) {
     expect(panels.map((p) => p.order)).toEqual(name.map((_, i) => i + 1))
     expect(panels.map((p) => p.note)).toEqual(name.map((p) => p.note))
     expect(panels.map((p) => p.camera)).toEqual(name.map((p) => p.camera))
+    expect(panels.map((p) => p.angle)).toEqual(name.map((p) => p.angle))
+    expect(panels.some((p) => p.angle !== undefined)).toBe(true)
     expect(panels.map((p) => p.bubbles.map((b) => [b.text, b.shape, b.speakerId]))).toEqual(
       name.map((p) => p.lines.map((l) => [l.text, l.shape, l.speakerId])),
     )
@@ -409,6 +433,15 @@ if (import.meta.vitest) {
     expect(loadName(pageId)).toEqual(editing)
     localStorage.setItem(`manga.name.${pageId}`, '{')
     expect(loadName(pageId)).toBeUndefined()
+    const old = [
+      { note: 'a', camera: 'low_angle', lines: [] },
+      { note: 'b', camera: 'bust', lines: [] },
+    ]
+    localStorage.setItem(`manga.name.${pageId}`, JSON.stringify(old))
+    expect(loadName(pageId)).toEqual([
+      { note: 'a', angle: 'low', lines: [] },
+      { note: 'b', camera: 'bust', lines: [] },
+    ])
   })
 
   test('hasPanelContent and hasLockedPanel', () => {

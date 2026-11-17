@@ -61,6 +61,7 @@ describe('POST /v1/ai/suggest-layout', () => {
     expect((await post(createApp({ llmProvider: () => provider }))).status).toBe(200)
     expect(calls).toEqual([request])
     expect(request.panels.some((p) => (p.acting ?? []).length > 0)).toBe(true)
+    expect(request.panels.some((p) => p.angle !== undefined)).toBe(true)
   })
 
   test('400 on a body without name panels', async () => {
@@ -72,6 +73,9 @@ describe('POST /v1/ai/suggest-layout', () => {
     expect(
       (await post(app, { panels: [{ note: 'n', lines: [], acting: blankActing }] })).status,
     ).toBe(400)
+    // 角度は angle に分けたので、camera に角度を入れた要求は断る
+    const angledCamera = { panels: [{ note: 'n', lines: [], camera: 'low_angle' }] }
+    expect((await post(app, angledCamera)).status).toBe(400)
     expect((await usageRows()).results).toHaveLength(0)
   })
 

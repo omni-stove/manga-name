@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { PatchSchema } from './patch'
 import {
+  AngleSchema,
   BubbleSchema,
   CameraSchema,
   CharacterSchema,
@@ -87,6 +88,8 @@ export const NamePanelSchema = z.object({
   note: z.string().min(1),
   /** Panel.camera になる */
   camera: CameraSchema.optional(),
+  /** Panel.angle になる */
+  angle: AngleSchema.optional(),
   /** このコマのセリフ。読む順。Bubble になる */
   lines: z.array(PlanLineSchema),
   /** 登場キャラの芝居。Panel.acting になる */
@@ -180,9 +183,15 @@ if (import.meta.vitest) {
       { panels: Array.from({ length: MAX_NAME_PANELS + 1 }, () => panel) },
       { panels: [{ ...panel, note: '' }] },
       { panels: [{ ...panel, camera: '' }] },
+      { panels: [{ ...panel, camera: 'low_angle' }] },
+      { panels: [{ ...panel, angle: 'low_angle' }] },
       { panels: [{ ...panel, acting: [{ characterId: 'chr_e', text: '' }] }] },
     ]
     for (const res of invalid) expect(NameDraftResponseSchema.safeParse(res).success).toBe(false)
+    expect(
+      NameDraftResponseSchema.parse({ panels: [{ ...panel, camera: 'bust', angle: 'high' }] })
+        .panels[0],
+    ).toMatchObject({ camera: 'bust', angle: 'high' })
     const acting = [{ characterId: 'chr_e', text: '振り向く' }]
     expect(
       NameDraftResponseSchema.parse({ panels: [{ ...panel, acting }] }).panels[0]?.acting,

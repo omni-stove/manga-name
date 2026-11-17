@@ -22,7 +22,7 @@ import {
 import { FONT_FAMILY, getBackend, loadFonts } from './backend'
 import { pagePixelSize } from './geometry'
 import { drawPage } from './page'
-import { actingNotes } from './panel'
+import { actingNotes, shotNames } from './panel'
 import { alphabeticY, wrapHorizontal } from './text'
 import type { RenderContext, RenderOptions, Surface } from './types'
 
@@ -256,7 +256,7 @@ function layoutSheets(
 }
 
 /**
- * ページ 1 枚分の指示メモ（シーンの見出し、コマ番号、camera、「間」の印、note、芝居、セリフ）を横書きで並べた Surface。収まらなければ複数枚。
+ * ページ 1 枚分の指示メモ（シーンの見出し、コマ番号、寄りと角度、「間」の印、note、芝居、セリフ）を横書きで並べた Surface。収まらなければ複数枚。
  * pdf-lib に Noto Sans JP を埋め込んで文字で書かないのは、@pdf-lib/fontkit のサブセット化で字が欠け、
  * サブセットしないと PDF ごとに約 6MB 増えるうえ可変フォントの既定の太さ（Thin）になるため
  */
@@ -312,7 +312,7 @@ interface NotesBlock {
 
 /**
  * 指示メモのページに並べる段落。ノンブルの見出しの後に、読み順のコマごとに空行、シーンの始まるコマならその見出し、
- * コマ番号と camera と「間」の印の行、note、芝居（actingNotes）、話し手つきのセリフ
+ * コマ番号と寄りと角度と「間」の印の行、note、芝居（actingNotes）、話し手つきのセリフ
  */
 function notesBlocks(page: Page, number: number, characters: readonly Character[]): NotesBlock[] {
   const names = new Map(characters.map((c) => [c.id, c.name]))
@@ -326,7 +326,7 @@ function notesBlocks(page: Page, number: number, characters: readonly Character[
     blocks.push({
       text: [
         String(panel.order),
-        panel.camera && `[${m[`panel_camera_${panel.camera}` as const]()}]`,
+        ...shotNames(panel).map((name) => `[${name}]`),
         panel.beat && m.panel_beat_mark(),
       ]
         .filter(Boolean)
@@ -526,6 +526,21 @@ if (import.meta.vitest) {
     expect(texts[heading + 1]?.startsWith(`${pn1.order}`)).toBe(true)
     expect(texts).toContain(`${pn2.order}  ${m.panel_beat_mark()}`)
     expect(texts.filter((t) => t === scene)).toHaveLength(1)
+  })
+
+  test('指示メモはコマ番号の行に寄りと角度を並べる', () => {
+    const [pn1, pn2, ...rest] = template.panels as [Panel, Panel, ...Panel[]]
+    const page: Page = {
+      ...template,
+      panels: [
+        { ...pn1, camera: 'bust', angle: 'high' },
+        { ...pn2, camera: undefined, angle: 'low' },
+        ...rest,
+      ],
+    }
+    const texts = notesBlocks(page, 3, base.characters).map((b) => b.text)
+    expect(texts).toContain(`${pn1.order}  [${m.panel_camera_bust()}]  [${m.panel_angle_high()}]`)
+    expect(texts).toContain(`${pn2.order}  [${m.panel_angle_low()}]`)
   })
 
   // 共有ランナーの CPU で所要時間がぶれ、コードと無関係に落ちるので、PERF=1（mise run perf）のときだけ測る

@@ -415,7 +415,7 @@ export function cutChord(panel: Pick<Panel, 'rect' | 'shape'>, cut: Cut): [Point
 
 /**
  * コマ panelId を分割線 cut で SPLIT_GUTTER を空けて 2 つに割る Patch。線は 2 点の外へも伸ばし、
- * 斜めの線なら台形や三角形のコマになる。読む順で先に来る半分が元の id、絵の履歴、note と camera を
+ * 斜めの線なら台形や三角形のコマになる。読む順で先に来る半分が元の id、絵の履歴、note、camera と angle を
  * 引き継ぎ、もう一方は新しい空のコマになる。フキダシ、焦点、ベクトルは線のどちら側にあるかで振り分ける。
  * 割った後はページの全コマの order を読む順に振り直す。線がコマを横切らないか、
  * 割った片方が MIN_PANEL_SIZE を下回るなら空
@@ -533,7 +533,7 @@ export function reshapePanelPatch(page: Page, panelId: ID, outline: readonly Poi
 
 /**
  * コマ keepId と otherId を 1 コマにする Patch。2 つとも矩形なら 2 つを囲む矩形、どちらかが多角形なら
- * 2 つの輪郭の凸包にする（斜めに割った 2 コマは元の形に戻る）。keepId の id、note、camera、シーンの見出し、
+ * 2 つの輪郭の凸包にする（斜めに割った 2 コマは元の形に戻る）。keepId の id、note、camera、angle、シーンの見出し、
  * 採用中の絵を残し（無ければ otherId のもの）、絵の履歴、フキダシ、焦点、ベクトルは両方を移す。
  * 「間」は両方が「間」のときだけ残す。otherId のフキダシの order は
  * keepId の後ろに続ける。結合後はページの全コマの order を読む順に振り直す。
@@ -575,6 +575,7 @@ export function mergePanelsPatch(
   const artId = shownArt(keep) ?? shownArt(other) ?? keep.artId ?? other.artId
   const note = keep.note ?? other.note
   const camera = keep.camera ?? other.camera
+  const angle = keep.angle ?? other.angle
   // 見出しを落とすと、後ろのコマが前のシーンに入ってしまう
   const scene = keep.scene ?? other.scene
   const sweep = keep.sweep
@@ -591,6 +592,7 @@ export function mergePanelsPatch(
     ...(artId !== undefined && { artId }),
     ...(note !== undefined && { note }),
     ...(camera !== undefined && { camera }),
+    ...(angle !== undefined && { angle }),
     ...(scene !== undefined && { scene }),
     ...(keep.beat && other.beat && { beat: true as const }),
     ...(keep.noArt && other.noArt && { noArt: true as const }),
@@ -877,6 +879,20 @@ if (import.meta.vitest) {
       expect(bottom.bubbles[0]).not.toHaveProperty('joinedTo')
     })
 
+    test('the kept half takes over the camera and the angle, and the new half has neither', () => {
+      const shot: Page = {
+        ...page,
+        panels: page.panels.map((p) =>
+          p.id === 'pn_2' ? { ...p, camera: 'bust' as const, angle: 'high' as const } : p,
+        ),
+      }
+      const next = apply(shot, splitPanelPatch(shot, 'pn_2', 'vertical', 'rtl'))
+      const [kept, added] = [next.panels[1] as Panel, next.panels[2] as Panel]
+      expect(kept).toMatchObject({ id: 'pn_2', camera: 'bust', angle: 'high' })
+      expect(added).not.toHaveProperty('camera')
+      expect(added).not.toHaveProperty('angle')
+    })
+
     test('does nothing when the halves would be too small or the panel is missing', () => {
       const tiny: Page = {
         ...page,
@@ -1118,6 +1134,24 @@ if (import.meta.vitest) {
       const beats = mergedOf(marked({ pn_2: { beat: true }, pn_3: { beat: true } }))
       expect(beats.beat).toBe(true)
       expect(beats.scene).toBeUndefined()
+    })
+
+    test('keeps the camera and the angle of keepId, or of otherId when keepId has none', () => {
+      const shot = (patch: Partial<Record<ID, Partial<Panel>>>): Page => ({
+        ...page,
+        panels: page.panels.map(({ camera: _, angle: __, ...p }) => ({ ...p, ...patch[p.id] })),
+      })
+      const mergedOf = (from: Page) =>
+        apply(from, mergePanelsPatch(from, 'pn_3', 'pn_2', 'rtl')).panels.find(
+          (p) => p.id === 'pn_3',
+        ) as Panel
+      const both = mergedOf(
+        shot({ pn_2: { camera: 'long', angle: 'low' }, pn_3: { camera: 'bust', angle: 'high' } }),
+      )
+      expect(both).toMatchObject({ camera: 'bust', angle: 'high' })
+      const other = mergedOf(shot({ pn_2: { angle: 'low' }, pn_3: { camera: 'bust' } }))
+      expect(other).toMatchObject({ camera: 'bust', angle: 'low' })
+      expect(mergedOf(shot({}))).not.toHaveProperty('angle')
     })
 
     test('stays text-only only when both are, and shows the art of the panel with art', () => {

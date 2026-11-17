@@ -1,4 +1,4 @@
-import type { Camera } from '@manga/schema'
+import type { Angle, Camera } from '@manga/schema'
 
 /**
  * 画像生成の画風。ネームは本原稿の下描きの前段なので、構図と芝居が読める線だけを描かせ、
@@ -17,8 +17,12 @@ export const CAMERA_SHOTS: Record<Camera, string> = {
   middle: 'medium shot',
   bust: 'bust shot',
   close_up: 'close-up',
-  low_angle: 'low-angle shot',
-  high_angle: 'high-angle shot',
+}
+
+/** Panel.angle を画像生成に渡す呼び名 */
+export const ANGLE_SHOTS: Record<Angle, string> = {
+  low: 'low-angle shot',
+  high: 'high-angle shot',
 }
 
 /** Panel.beat のコマの行。セリフも動きも無い「間」なので、芝居をさせず止まった絵にさせる */

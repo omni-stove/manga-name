@@ -1122,6 +1122,7 @@ function ElementOutline({
               >
                 {m.web_editor_outline_panel({ order: panel.order })}
                 {panel.camera && ` [${m[`panel_camera_${panel.camera}` as const]()}]`}
+                {panel.angle && ` [${m[`panel_angle_${panel.angle}` as const]()}]`}
               </button>
               {badges(by)}
               {panel.bubbles.length > 0 && (

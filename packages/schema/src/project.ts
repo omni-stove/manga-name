@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SFX_SCALE_MAX, SFX_SCALE_MIN } from './sfx-lettering'
 
-export const SCHEMA_VERSION = 31 as const
+export const SCHEMA_VERSION = 32 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -152,15 +152,10 @@ export const PageToneSchema = z.enum(['sepia', 'faded'])
 export const PanelToneSchema = z.enum([...PageToneSchema.options, 'none'])
 
 export const VectorKindSchema = z.enum(['gaze', 'motion', 'speed'])
-/** コマの画面の切り取り方。画面には messages/schema の `panel_camera_<値>` で出す */
-export const CameraSchema = z.enum([
-  'long',
-  'middle',
-  'bust',
-  'close_up',
-  'low_angle',
-  'high_angle',
-])
+/** コマの寄り（画面に人物をどこまで入れるか）。画面には messages/schema の `panel_camera_<値>` で出す */
+export const CameraSchema = z.enum(['long', 'middle', 'bust', 'close_up'])
+/** コマのカメラの角度。low はアオリ、high は俯瞰。画面には messages/schema の `panel_angle_<値>` で出す */
+export const AngleSchema = z.enum(['low', 'high'])
 export const StrengthSchema = z.enum(['strong', 'weak'])
 
 export const VectorSchema = z.object({
@@ -241,6 +236,8 @@ const PanelBaseSchema = z.object({
   bubbles: z.array(BubbleSchema),
   note: z.string().optional(),
   camera: CameraSchema.optional(),
+  /** 省略は目の高さ */
+  angle: AngleSchema.optional(),
   arts: z.array(PanelArtSchema),
   artId: IdSchema.optional(),
   focusPoints: z.array(FocusPointSchema),
@@ -424,6 +421,7 @@ export type FocusKind = z.infer<typeof FocusKindSchema>
 export type FocusPoint = z.infer<typeof FocusPointSchema>
 export type VectorKind = z.infer<typeof VectorKindSchema>
 export type Camera = z.infer<typeof CameraSchema>
+export type Angle = z.infer<typeof AngleSchema>
 export type Strength = z.infer<typeof StrengthSchema>
 export type Vector = z.infer<typeof VectorSchema>
 export type ReferenceImage = z.infer<typeof ReferenceImageSchema>
