@@ -147,6 +147,17 @@ export function PanelInspector({
         }
       />
       <Checkbox
+        label={m.panel_no_art()}
+        checked={panel.noArt === true}
+        onChange={(e) =>
+          onChange(
+            e.target.checked
+              ? [{ op: 'add', path: '/noArt', value: true }]
+              : [{ op: 'remove', path: '/noArt' }],
+          )
+        }
+      />
+      <Checkbox
         label={m.panel_fill_black()}
         checked={panel.fill === 'black'}
         onChange={(e) =>
@@ -239,52 +250,57 @@ export function PanelInspector({
         </YStack>
       )}
 
-      <Typography variant="label" tone="muted" className={section.heading}>
-        {m.generate()}
-      </Typography>
-      {diagnosis && (
+      {/* 履歴の欄は隠さない。文字だけを外したときに前の絵を選び直せるように */}
+      {panel.noArt !== true && (
         <>
-          <p className={styles.hint} data-hint data-used={useHint}>
-            {diagnosis.hint || (
-              <Typography as="span" tone="muted">
-                {m.inspector_panel_hint_empty()}
-              </Typography>
-            )}
-          </p>
-          <Checkbox
-            label={m.inspector_panel_use_hint()}
-            checked={useHint}
-            onChange={(e) => onUseHintChange?.(e.target.checked)}
+          <Typography variant="label" tone="muted" className={section.heading}>
+            {m.generate()}
+          </Typography>
+          {diagnosis && (
+            <>
+              <p className={styles.hint} data-hint data-used={useHint}>
+                {diagnosis.hint || (
+                  <Typography as="span" tone="muted">
+                    {m.inspector_panel_hint_empty()}
+                  </Typography>
+                )}
+              </p>
+              <Checkbox
+                label={m.inspector_panel_use_hint()}
+                checked={useHint}
+                onChange={(e) => onUseHintChange?.(e.target.checked)}
+              />
+            </>
+          )}
+          {useReference !== undefined && (
+            <Checkbox
+              label={m.inspector_panel_use_reference()}
+              checked={useReference}
+              onChange={(e) => onUseReferenceChange?.(e.target.checked)}
+            />
+          )}
+          <XStack wrap className={section.group}>
+            <Button variant="primary" disabled={generating} onClick={() => onGenerate()}>
+              {generating ? m.generating() : m.generate()}
+            </Button>
+          </XStack>
+          <TextArea
+            label={m.inspector_panel_instruction()}
+            rows={3}
+            value={instruction}
+            placeholder={m.inspector_panel_instruction_placeholder()}
+            onChange={(e) => setInstruction(e.target.value)}
           />
+          <XStack wrap className={section.group}>
+            <Button
+              disabled={generating || !current || instruction.trim() === ''}
+              onClick={() => onGenerate(instruction.trim())}
+            >
+              {m.inspector_panel_regenerate()}
+            </Button>
+          </XStack>
         </>
       )}
-      {useReference !== undefined && (
-        <Checkbox
-          label={m.inspector_panel_use_reference()}
-          checked={useReference}
-          onChange={(e) => onUseReferenceChange?.(e.target.checked)}
-        />
-      )}
-      <XStack wrap className={section.group}>
-        <Button variant="primary" disabled={generating} onClick={() => onGenerate()}>
-          {generating ? m.generating() : m.generate()}
-        </Button>
-      </XStack>
-      <TextArea
-        label={m.inspector_panel_instruction()}
-        rows={3}
-        value={instruction}
-        placeholder={m.inspector_panel_instruction_placeholder()}
-        onChange={(e) => setInstruction(e.target.value)}
-      />
-      <XStack wrap className={section.group}>
-        <Button
-          disabled={generating || !current || instruction.trim() === ''}
-          onClick={() => onGenerate(instruction.trim())}
-        >
-          {m.inspector_panel_regenerate()}
-        </Button>
-      </XStack>
 
       <Typography variant="label" tone="muted" className={section.heading}>
         {m.history()}
@@ -786,6 +802,37 @@ if (import.meta.vitest) {
       expect(checkboxIn(container).checked).toBe(true)
       await act(async () => checkboxIn(container).click())
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/beat' }])
+    })
+
+    test('the text-only checkbox adds and removes noArt, and hides generation while on', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = {
+        characters: project.characters,
+        onChange,
+        onGenerate: () => {},
+        resolveAsset,
+      }
+      const checkboxIn = (container: HTMLElement) =>
+        must(
+          [...container.querySelectorAll('label')]
+            .find((el) => el.textContent === m.panel_no_art())
+            ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+        )
+      const generateButton = (container: HTMLElement) =>
+        [...container.querySelectorAll('button')].find((b) => b.textContent === m.generate())
+      const { container, root } = await render(<PanelInspector panel={samplePanel} {...props} />)
+      expect(checkboxIn(container).checked).toBe(false)
+      expect(generateButton(container)).toBeDefined()
+      await act(async () => checkboxIn(container).click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/noArt', value: true }])
+
+      await act(async () =>
+        root.render(<PanelInspector panel={{ ...samplePanel, noArt: true }} {...props} />),
+      )
+      expect(checkboxIn(container).checked).toBe(true)
+      expect(generateButton(container)).toBeUndefined()
+      await act(async () => checkboxIn(container).click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/noArt' }])
     })
 
     test('the frame select adds, replaces and removes frame', async () => {

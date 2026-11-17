@@ -190,11 +190,14 @@ export function createBubble(init: Partial<Bubble> & Pick<Bubble, 'pos'>): Bubbl
   }
 }
 
-/** 採用中の PanelArt。artId が未設定、または arts に無ければ undefined */
+/** 採用中の PanelArt。文字だけのコマ（noArt）、artId が未設定、または arts に無ければ undefined */
 export function currentArt(panel: Panel): PanelArt | undefined {
-  if (panel.artId === undefined) return undefined
+  if (panel.noArt || panel.artId === undefined) return undefined
   return panel.arts.find((a) => a.id === panel.artId)
 }
+
+/** 絵を要るコマか。文字だけのコマ（noArt）は絵が無くても欠けていない */
+export const wantsArt = (panel: Pick<Panel, 'noArt'>): boolean => panel.noArt !== true
 
 /**
  * コマに登場するキャラの id。`cast`、フキダシの `speakerId`、焦点の `characterId` の順に、重複なく集める。
@@ -371,6 +374,9 @@ if (import.meta.vitest) {
     expect(currentArt(panel)).toBeUndefined()
     panel.artId = 'a1'
     expect(currentArt(panel)).toBe(art)
+    expect(currentArt({ ...panel, noArt: true })).toBeUndefined()
+    expect(wantsArt(panel)).toBe(true)
+    expect(wantsArt({ noArt: true })).toBe(false)
   })
 
   test('panelCharacterIds lists cast, speakers and focus characters once, in that order', () => {

@@ -33,6 +33,7 @@ import {
   CHARACTER_ART_TAIL,
   NAME_NEGATIVE,
   NAME_STYLE,
+  NO_ART_PANEL,
   PAGE_ART_HEAD,
   PANEL_ART_TAIL,
   PLACEMENT_GUIDE,
@@ -178,7 +179,7 @@ const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from +
 
 /**
  * ページ全体の画像生成プロンプト。画風、配置図の説明、ページの登場キャラの外見、
- * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで）、
+ * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで。文字だけのコマは空けさせる行）、
  * 焦点か誘導線のあるコマがあれば配置の印の読み方、固定の末尾を改行で連結する。
  */
 function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string } {
@@ -188,11 +189,12 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
     .sort((a, b) => a.order - b.order)
     .map((panel) => {
       const { x, y, w, h } = panel.rect
+      const where = `panel ${panel.order} (x ${formatSpan(x, w)}, y ${formatSpan(y, h)})`
+      if (panel.noArt) return `${where}: ${NO_ART_PANEL}`
       const context = { scene: req.scenes?.[panel.id], hint: req.hints?.[panel.id] }
       const content = panelContent(panel, characters, context, false)
         .filter((p): p is string => Boolean(p))
         .join('; ')
-      const where = `panel ${panel.order} (x ${formatSpan(x, w)}, y ${formatSpan(y, h)})`
       return content ? `${where}: ${content}` : where
     })
 
@@ -520,6 +522,20 @@ if (import.meta.vitest) {
     expect(panelLines[1]).toContain(BEAT_PANEL)
     expect(panelLines[2]).not.toContain('setting: ')
     expect(panelLines[0]).not.toContain(BEAT_PANEL)
+  })
+
+  test('pageArt has a text-only panel left blank instead of its content', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const texted: Page = {
+      ...page,
+      panels: page.panels.map((p) => (p.order === 1 ? { ...p, noArt: true as const } : p)),
+    }
+    const panelLines = prompts
+      .pageArt({ project, page: texted })
+      .prompt.split('\n')
+      .filter((l) => l.startsWith('panel '))
+    expect(panelLines[0]?.endsWith(`): ${NO_ART_PANEL}`)).toBe(true)
+    expect(panelLines[1]).not.toContain(NO_ART_PANEL)
   })
 
   test('pageArt lists the cast once and one line per panel in reading order with its span', () => {

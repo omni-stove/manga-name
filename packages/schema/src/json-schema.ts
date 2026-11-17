@@ -26,10 +26,10 @@ export const layoutSuggestionJsonSchema = (): JsonSchema =>
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('projectJsonSchema describes Project as an object with schemaVersion 30', () => {
+  test('projectJsonSchema describes Project as an object with schemaVersion 31', () => {
     const schema = projectJsonSchema()
     expect(schema.type).toBe('object')
-    expect(schema.properties?.schemaVersion).toMatchObject({ const: 30 })
+    expect(schema.properties?.schemaVersion).toMatchObject({ const: 31 })
   })
 
   test('pagePlanJsonSchema describes an object holding the array of pages', () => {

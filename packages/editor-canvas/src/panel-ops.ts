@@ -570,7 +570,9 @@ export function mergePanelsPatch(
   const ck = contentIn(keep, union, all)
   const co = contentIn(other, union, all)
   const offset = Math.max(0, ...keep.bubbles.map((b) => b.order))
-  const artId = keep.artId ?? other.artId
+  // 文字だけのコマが隠している絵を、絵のあるコマとの結合で表に出さない
+  const shownArt = (p: Panel) => (p.noArt ? undefined : p.artId)
+  const artId = shownArt(keep) ?? shownArt(other) ?? keep.artId ?? other.artId
   const note = keep.note ?? other.note
   const camera = keep.camera ?? other.camera
   // 見出しを落とすと、後ろのコマが前のシーンに入ってしまう
@@ -591,6 +593,7 @@ export function mergePanelsPatch(
     ...(camera !== undefined && { camera }),
     ...(scene !== undefined && { scene }),
     ...(keep.beat && other.beat && { beat: true as const }),
+    ...(keep.noArt && other.noArt && { noArt: true as const }),
     ...(sweep && { sweep }),
     ...(keep.frame && { frame: keep.frame }),
     ...(keep.effect && { effect: keep.effect }),
@@ -1115,6 +1118,34 @@ if (import.meta.vitest) {
       const beats = mergedOf(marked({ pn_2: { beat: true }, pn_3: { beat: true } }))
       expect(beats.beat).toBe(true)
       expect(beats.scene).toBeUndefined()
+    })
+
+    test('stays text-only only when both are, and shows the art of the panel with art', () => {
+      const art = (id: ID) => ({
+        id,
+        ref: `blob:${id}`,
+        provider: 'fake',
+        prompt: '',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      })
+      const marked = (patch: Partial<Record<ID, Partial<Panel>>>): Page => ({
+        ...page,
+        panels: page.panels.map((p) => ({ ...p, ...patch[p.id] })),
+      })
+      const mergedOf = (from: Page) =>
+        apply(from, mergePanelsPatch(from, 'pn_3', 'pn_2', 'rtl')).panels.find(
+          (p) => p.id === 'pn_3',
+        ) as Panel
+      const mixed = mergedOf(
+        marked({
+          pn_3: { noArt: true, arts: [art('a3')], artId: 'a3' },
+          pn_2: { arts: [art('a2')], artId: 'a2' },
+        }),
+      )
+      expect(mixed.noArt).toBeUndefined()
+      expect(mixed.artId).toBe('a2')
+      const both = mergedOf(marked({ pn_2: { noArt: true }, pn_3: { noArt: true } }))
+      expect(both.noArt).toBe(true)
     })
 
     test('refuses a merge that would cover another panel', () => {

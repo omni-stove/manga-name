@@ -220,6 +220,7 @@
   "web_page_cast_add_option": "キャラを追加…",
   "web_page_cast_edit_hint": "で設定と参照画像を編集できます",
   "web_generate_panel_gone": "生成中にコマが消えました",
+  "web_generate_text_only_panel": "文字だけのコマには絵を生成しません",
   "web_generate_previous_art_required": "修正指示つきの再生成には採用中の絵が要ります",
   "web_generate_project_deleted": "生成中にプロジェクトが削除されました",
   "web_generate_history_regenerate_panel": "コマ {order} を修正して再生成",
