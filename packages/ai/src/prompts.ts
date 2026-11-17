@@ -24,6 +24,7 @@ import {
   panelCharacterIds,
   StrengthSchema,
   VectorKindSchema,
+  wantsArt,
 } from '@manga/schema'
 import type { z } from 'zod'
 import { critiqueSystem } from './critique.prompt'
@@ -36,7 +37,6 @@ import {
   CHARACTER_STYLE,
   NAME_NEGATIVE,
   NAME_STYLE,
-  NO_ART_PANEL,
   PAGE_ART_HEAD,
   PANEL_ART_TAIL,
   PLACEMENT_GUIDE,
@@ -183,18 +183,18 @@ const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from +
  * ページ全体の画像生成プロンプト。画風、配置図の説明、
  * ページに登場キャラがいてキャラの参照画像を送るときだけ CHARACTER_REF_GUIDE、
  * ページに登場キャラがいれば共通のデザインの行、ページの登場キャラの外見、
- * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで。文字だけのコマは空けさせる行）、
+ * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで）、
  * 焦点か誘導線のあるコマがあれば配置の印の読み方、固定の末尾を改行で連結する。
  */
 function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string } {
   const { characters, settings } = req.project
-  const cast = pageCharacterIds(req.page).flatMap((id) => characters.filter((c) => c.id === id))
-  const panels = [...req.page.panels]
+  const page = { ...req.page, panels: req.page.panels.filter(wantsArt) }
+  const cast = pageCharacterIds(page).flatMap((id) => characters.filter((c) => c.id === id))
+  const panels = [...page.panels]
     .sort((a, b) => a.order - b.order)
     .map((panel) => {
       const { x, y, w, h } = panel.rect
       const where = `panel ${panel.order} (x ${formatSpan(x, w)}, y ${formatSpan(y, h)})`
-      if (panel.noArt) return `${where}: ${NO_ART_PANEL}`
       const context = { scene: req.scenes?.[panel.id], hint: req.hints?.[panel.id] }
       const content = panelContent(panel, characters, context, false)
         .filter((p): p is string => Boolean(p))
@@ -211,7 +211,7 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
         : []),
       cast.length > 0 ? `characters: ${cast.map(describeCharacter).join('; ')}` : undefined,
       ...panels,
-      req.page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
+      page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
       PANEL_ART_TAIL,
     ]),
     negative: NAME_NEGATIVE,
@@ -530,18 +530,19 @@ if (import.meta.vitest) {
     expect(panelLines[0]).not.toContain(BEAT_PANEL)
   })
 
-  test('pageArt has a text-only panel left blank instead of its content', () => {
-    const page = project.episodes[0]?.pages[0] as Page
+  test('pageArt leaves out a text-only panel and its characters', () => {
+    const sample = project.episodes[0]?.pages[0] as Page
+    const { cast: _, ...page } = sample
     const texted: Page = {
       ...page,
-      panels: page.panels.map((p) => (p.order === 1 ? { ...p, noArt: true as const } : p)),
+      panels: page.panels.map((p) => (p.order === 1 ? p : { ...p, noArt: true as const })),
     }
-    const panelLines = prompts
-      .pageArt({ project, page: texted })
-      .prompt.split('\n')
-      .filter((l) => l.startsWith('panel '))
-    expect(panelLines[0]?.endsWith(`): ${NO_ART_PANEL}`)).toBe(true)
-    expect(panelLines[1]).not.toContain(NO_ART_PANEL)
+    const lines = prompts.pageArt({ project, page: texted }).prompt.split('\n')
+    expect(lines.filter((l) => l.startsWith('panel ')).map((l) => l.split(' ')[1])).toEqual(['1'])
+    const first = page.panels.find((p) => p.order === 1) as Panel
+    expect(lines.some((l) => l.startsWith('characters: '))).toBe(
+      panelCharacterIds(first).length > 0,
+    )
   })
 
   test('pageArt lists the cast once and one line per panel in reading order with its span', () => {
