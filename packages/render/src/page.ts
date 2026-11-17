@@ -975,7 +975,7 @@ if (import.meta.vitest) {
     const plain = await draw(withPanel({}))
     const same = (data: Uint8ClampedArray) => data.every((v, i) => v === plain[i])
 
-    for (const effect of ['vertical_lines', 'crosshatch', 'sparkle', 'flowers'] as const) {
+    for (const effect of ['sparkle', 'flowers'] as const) {
       expect(same(await draw(withPanel({ effect })))).toBe(true)
     }
     const mark = sfxFocus('fp_mark', { kind: 'mark', label: '汗', mark: 'sweat', weight: 1 })
@@ -1162,6 +1162,59 @@ if (import.meta.vitest) {
     expect(black(light, 0, Infinity)).toBe(0)
     expect(blackFocused(light, 0, 0.95)).toBe(0)
     expect(blackFocused(light, 1.5, Infinity)).toBeGreaterThan(0)
+  })
+
+  test('縦線は上ほど濃く、カケアミは中心を空けて縁ほど濃く描き、黒塗りのコマでは白い線にする', async () => {
+    const pn5 = emptyPage.panels.find((p) => p.id === 'pn_5') as Panel
+    const bare: Panel = { ...pn5, bubbles: [], focusPoints: [], vectors: [] }
+    const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
+    const draw = async (panel: Panel) => {
+      const others = emptyPage.panels.filter((p) => p.id !== pn5.id)
+      const { width, data } = await pixels(
+        await renderPage({ ...emptyPage, panels: [...others, panel] }, noAssets, opts),
+      )
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      const rect = rectToPx(panel.rect, { x: 0, y: 0, w: width, h: pageH })
+      // コマの中で、u と v（コマの幅と高さに対する位置）が where を満たす画素のうち hit の数の割合
+      return (hit: (r: number) => boolean, where: (u: number, v: number) => boolean) => {
+        let n = 0
+        let all = 0
+        for (let y = Math.ceil(rect.y + 2); y < rect.y + rect.h - 2; y++) {
+          for (let x = Math.ceil(rect.x + 2); x < rect.x + rect.w - 2; x++) {
+            if (!where((x - rect.x) / rect.w, (y - rect.y) / rect.h)) continue
+            all++
+            if (hit(data[(y * width + x) * 4] ?? 0)) n++
+          }
+        }
+        return all === 0 ? 0 : n / all
+      }
+    }
+    // 線は 1〜2 画素の細さで中ほど以外は灰色に滲むので、半分の明るさではなく白から外れたかで線を数える
+    const dark = (r: number) => r < 200
+    const light = (r: number) => r > 55
+    const top = (_u: number, v: number) => v < 0.25
+    const bottom = (_u: number, v: number) => v > 0.75
+    // 網の線は空けた範囲の縁から升目 1 つ分ほど内へはみ出すので、中心のごく近くだけを見る
+    const centre = (u: number, v: number) => Math.hypot(u - 0.5, v - 0.5) < 0.02
+    const rim = (u: number, v: number) => Math.min(u, v, 1 - u, 1 - v) < 0.08
+
+    const plain = await draw(bare)
+    const vertical = await draw({ ...bare, effect: 'vertical_lines' })
+    expect(vertical(dark, top)).toBeGreaterThan(plain(dark, top) + 0.1)
+    expect(vertical(dark, bottom)).toBeLessThan(vertical(dark, top))
+    const again = await draw({ ...bare, effect: 'vertical_lines' })
+    expect(again(dark, () => true)).toBe(vertical(dark, () => true))
+
+    const hatched = await draw({ ...bare, effect: 'crosshatch' })
+    expect(hatched(dark, centre)).toBe(plain(dark, centre))
+    expect(hatched(dark, rim)).toBeGreaterThan(plain(dark, rim) + 0.05)
+
+    for (const effect of ['vertical_lines', 'crosshatch'] as const) {
+      const black = await draw({ ...bare, fill: 'black' })
+      const inked = await draw({ ...bare, fill: 'black', effect })
+      expect(black(light, () => true)).toBe(0)
+      expect(inked(light, () => true)).toBeGreaterThan(0)
+    }
   })
 
   test('ベタフラ: コマの地を黒で塗り、焦点から白い線を描き、フキダシのセリフを白抜きにする', async () => {
