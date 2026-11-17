@@ -425,7 +425,7 @@ if (import.meta.vitest) {
     test('marks a beat panel under the order number', async () => {
       const rect = { x: 0, y: 0, w: 100, h: 100 }
       // 余白 8px、数字は 14.4px なので、数字の下の行は y 26.72 から
-      const below = (x: number, y: number) => y >= 26
+      const below = (_x: number, y: number) => y >= 26
       const draw = (beat?: true) =>
         paint(100, 100, (ctx) =>
           drawPlaceholder(ctx, { order: 1, beat }, rect, square(0, 0, 100), 8),
