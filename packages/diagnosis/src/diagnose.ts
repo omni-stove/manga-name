@@ -45,7 +45,7 @@ const BUBBLE_TEXT_MAX = 40
 /** 1 コマのセリフの合計がこの字数を超えると TOO_MUCH_TEXT。フキダシ 2 つ分を超すと、絵より文字を読むコマになる */
 const PANEL_TEXT_MAX = 80
 
-/** 1 ページのコマ数がこれ以上だと PANEL_COUNT。9 コマを超えると 1 コマが小さく、絵もフキダシも詰まる。見開きはその 2 倍 */
+/** 1 ページのコマ数がこれ以上だと PANEL_COUNT。9 コマ以上になると 1 コマが小さく、絵もフキダシも詰まる。見開きはその 2 倍 */
 const PANEL_COUNT_MAX = 9
 
 let segmenter: Intl.Segmenter | undefined
