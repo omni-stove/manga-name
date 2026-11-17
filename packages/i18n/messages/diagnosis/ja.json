@@ -11,5 +11,6 @@
   "diagnosis_reading_order": "配置から推定した読み順は {order}",
   "diagnosis_too_much_text_bubble": "フキダシのセリフが {count} 字ある（目安は {limit} 字まで）",
   "diagnosis_too_much_text_panel": "コマのセリフが合わせて {count} 字ある（目安は {limit} 字まで）",
-  "diagnosis_panel_count": "ページのコマが {count} ある（目安は {limit} 未満）"
+  "diagnosis_panel_count": "ページのコマが {count} ある（目安は {limit} 未満）",
+  "diagnosis_monotonous_camera": "{shot} のコマが {count} 続いていて、寄りが単調になっている"
 }
