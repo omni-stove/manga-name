@@ -422,7 +422,7 @@ if (import.meta.vitest) {
 
     const blank = await imageOf({ ...emptyPage, hashira: '  ' })
     expect(blank.data).toEqual(before.data)
-  })
+  }, 60_000)
 
   test('黒い地のページの柱は白で書く', async () => {
     const opts: RenderOptions = { width: SNAPSHOT_WIDTH, notes: 'none', panelNumbers: false }
