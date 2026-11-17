@@ -1,5 +1,6 @@
 import { crosshatch } from './effects/crosshatch'
 import { flowers } from './effects/flowers'
+import { radialCenter } from './effects/radial-center'
 import { sparkle } from './effects/sparkle'
 import { verticalLines } from './effects/vertical-lines'
 import type { FocusPoint, Page, Panel, Point, Rect } from './project'
@@ -196,7 +197,9 @@ export const effectInk = (panel: Pick<Panel, 'fill' | 'effect'>): string =>
  *   （無ければ最初のもの）の from から to、ベクトルが無ければ横
  * - beta_flash: focus_lines と同じ中心から外へ伸び、根元が太く先が尖る三角形。長さを不揃いにし、
  *   中心のまわりは線が重なって白く抜ける。黒い地の上に effectInk の白で塗る
- * - vertical_lines、crosshatch、sparkle、flowers: effects/ の同じ名前のファイルが形を決める
+ * - vertical_lines: コマの上の縁から垂れる細い縦線。長さを不揃いにし、下へ行くほど疎らにする
+ * - crosshatch: 交差する短い線の網。焦点（focus_lines と同じ中心）のまわりを空け、コマの縁ほど濃くする
+ * - vertical_lines、crosshatch、sparkle、flowers の形は effects/ の同じ名前のファイルが決める
  */
 export function effectLines(
   panel: Pick<Panel, 'id' | 'effect' | 'focusPoints' | 'vectors'>,
@@ -224,32 +227,14 @@ export function effectLines(
 }
 
 /**
- * 形を描けるようになった効果。画面で選べる効果と生成に選ばせる効果はこの一覧から作り、
- * 描くと空になる効果を選ばせない
+ * 画面で選べる効果と生成に選ばせる効果。どちらもこの一覧から作り、描くと空になる効果を選ばせない。
+ * 形を描けても、選ばせる準備が整うまではここに入れない
  */
 export const AVAILABLE_PANEL_EFFECTS = [
   'focus_lines',
   'speed_lines',
   'beta_flash',
 ] as const satisfies readonly NonNullable<Panel['effect']>[]
-
-/** 放射状の効果線の中心（weight が最大の焦点、無ければコマの中心）と、そこから最も遠い角まで届く長さ */
-function radialCenter(panel: Pick<Panel, 'focusPoints'>, box: Rect): { c: Point; reach: number } {
-  const focus = panel.focusPoints.reduce<FocusPoint | undefined>(
-    (best, f) => (best === undefined || f.weight > best.weight ? f : best),
-    undefined,
-  )
-  const pos = focus?.pos ?? { x: 0.5, y: 0.5 }
-  const c = { x: box.x + pos.x * box.w, y: box.y + pos.y * box.h }
-  // 焦点がコマの端にあっても反対側の角まで届く長さ
-  const reach =
-    Math.max(
-      ...[box.x, box.x + box.w].flatMap((x) =>
-        [box.y, box.y + box.h].map((y) => Math.hypot(x - c.x, y - c.y)),
-      ),
-    ) * 1.05
-  return { c, reach }
-}
 
 function focusLines(
   panel: Pick<Panel, 'focusPoints'>,
@@ -495,15 +480,21 @@ if (import.meta.vitest) {
     expect(effectLines(effectPanel('focus_lines'), { ...box, w: 0 }, 100)).toEqual([])
   })
 
-  test('effectLines draws nothing yet for the effects that are not available', () => {
-    const available: readonly string[] = AVAILABLE_PANEL_EFFECTS
-    const pending = PanelEffectSchema.options.filter((e) => !available.includes(e))
-    expect(pending).toEqual(['vertical_lines', 'crosshatch', 'sparkle', 'flowers'])
-    for (const effect of pending) expect(effectLines(effectPanel(effect), box, 100)).toEqual([])
+  const shapeless = ['sparkle', 'flowers'] as const
+  const drawn = PanelEffectSchema.options.filter(
+    (e) => !(shapeless as readonly string[]).includes(e),
+  )
+
+  test('effectLines draws nothing yet for the effects that have no shape', () => {
+    for (const effect of shapeless) expect(effectLines(effectPanel(effect), box, 100)).toEqual([])
+  })
+
+  test('every effect that can be chosen has a shape', () => {
+    for (const effect of AVAILABLE_PANEL_EFFECTS) expect(drawn).toContain(effect)
   })
 
   test('effectLines gives the same lines for the same panel and different lines for another id', () => {
-    for (const effect of AVAILABLE_PANEL_EFFECTS) {
+    for (const effect of drawn) {
       const a = effectLines(effectPanel(effect), box, 100)
       expect(a.length).toBeGreaterThanOrEqual(MIN_EFFECT_LINES / 2)
       expect(effectLines(effectPanel(effect), box, 100)).toEqual(a)
