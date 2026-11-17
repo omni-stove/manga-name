@@ -37,6 +37,14 @@ export function PageInspector({
           delayMs={DEBOUNCE_MS}
           onCommit={(v) => onChange(optionalString('/note', page.note, v))}
         />
+        <TextField
+          label={m.page_hashira()}
+          value={page.hashira ?? ''}
+          rows={2}
+          placeholder={m.inspector_page_hashira_placeholder()}
+          delayMs={DEBOUNCE_MS}
+          onCommit={(v) => onChange(optionalString('/hashira', page.hashira, v))}
+        />
         <Checkbox
           label={m.page_ground_black()}
           checked={page.ground === 'black'}
@@ -192,6 +200,23 @@ if (import.meta.vitest) {
       expect(onChange).toHaveBeenLastCalledWith([
         { op: 'add', path: '/note', value: '見開きの導入' },
       ])
+    })
+
+    test('hashira is debounced and clearing it removes it', async () => {
+      vi.useFakeTimers()
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const props = { onChange, onGenerateAll: () => {}, onPickReference: () => {} }
+      const hashira = '次号、ついに対決！'
+      const { container, root } = await render(<PageInspector page={page} {...props} />)
+      await act(async () => setValue(inputLabelled(container, m.page_hashira()), hashira))
+      expect(onChange).not.toHaveBeenCalled()
+      await act(async () => vi.advanceTimersByTime(DEBOUNCE_MS))
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/hashira', value: hashira }])
+
+      await act(async () => root.render(<PageInspector page={{ ...page, hashira }} {...props} />))
+      await act(async () => setValue(inputLabelled(container, m.page_hashira()), ''))
+      await act(async () => vi.advanceTimersByTime(DEBOUNCE_MS))
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/hashira' }])
     })
 
     test('without a reference only offers to load one', async () => {

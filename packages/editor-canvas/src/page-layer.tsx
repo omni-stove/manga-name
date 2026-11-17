@@ -15,7 +15,11 @@ import {
   type FocusPoint,
   frameOutline,
   groundColor,
+  HASHIRA_FONT,
+  HASHIRA_TYPEFACE,
   hasFrameLine,
+  hashiraArea,
+  hashiraText,
   type ID,
   innerFrameOf,
   markShapes,
@@ -104,7 +108,7 @@ interface PageLayerProps {
 }
 
 /**
- * ページの白地、参考画像、コマ、生成画像、sfx の焦点の描き文字、フキダシと、紙面全体に重ねるトーンを描く。
+ * ページの白地、参考画像、コマ、生成画像、sfx の焦点の描き文字、フキダシ、紙面全体に重ねるトーンと柱を描く。
  * ズームとパンとドラッグでは props が変わらないので、memo で再描画を飛ばす。コマ、フキダシ、オーバーレイもそれぞれ memo し、編集や選択の変更では
  * 変わった要素だけを描き直す
  */
@@ -198,6 +202,15 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
           style={{ mixBlendMode: 'multiply', pointerEvents: 'none' }}
         />
       )}
+      {/* 書き出しと同じく、柱には回想のトーンを掛けない */}
+      <HashiraView
+        page={page}
+        direction={props.direction}
+        width={width}
+        height={height}
+        unit={unit}
+        fill={ground === '#000' ? '#fff' : '#000'}
+      />
       {/* スピナーと生成ボタンはエディタだけの UI なので、フキダシに隠れないよう最後に描く */}
       {panels.map((panel) => (
         <PanelOverlay
@@ -1138,6 +1151,41 @@ function SfxView({ focus, panel }: { focus: FocusPoint; panel: Box }) {
         typeface={sfxTypeface(focus)}
         fill="#000"
         halo={{ color: '#fff', width: fontSize * SFX_OUTLINE }}
+      />
+    </g>
+  )
+}
+
+/**
+ * 柱。書き出しと同じく、hashiraArea の余白の中央に、折り返さず改行で列を分けた縦書きで書く。
+ * width と height は紙面の大きさ（mm）、unit は 1 ページの幅（mm）
+ */
+function HashiraView({
+  page,
+  direction,
+  width,
+  height,
+  unit,
+  fill,
+}: {
+  page: Page
+  direction: ReadingDirection
+  width: number
+  height: number
+  unit: number
+  fill: string
+}) {
+  const text = hashiraText(page)
+  if (text === undefined) return null
+  const area = hashiraArea(page, direction)
+  return (
+    <g data-hashira pointerEvents="none">
+      <TextBlock
+        layout={layoutUnbroken(text, unit * HASHIRA_FONT)}
+        cx={(area.x + area.w / 2) * width}
+        cy={(area.y + area.h / 2) * height}
+        typeface={HASHIRA_TYPEFACE}
+        fill={fill}
       />
     </g>
   )
