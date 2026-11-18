@@ -20,15 +20,22 @@ import {
   type ProjectSettings,
   pageCharacterIds,
   pagePlanJsonSchema,
+  panelActing,
   panelCharacterIds,
   StrengthSchema,
   VectorKindSchema,
+  wantsArt,
 } from '@manga/schema'
 import type { z } from 'zod'
 import { critiqueSystem } from './critique.prompt'
 import {
+  ANGLE_SHOTS,
+  BEAT_PANEL,
   CAMERA_SHOTS,
   CHARACTER_ART_TAIL,
+  CHARACTER_NEGATIVE,
+  CHARACTER_REF_GUIDE,
+  CHARACTER_STYLE,
   NAME_NEGATIVE,
   NAME_STYLE,
   PAGE_ART_HEAD,
@@ -38,10 +45,12 @@ import {
 import { suggestLayoutSystem } from './layout.prompt'
 import { lineFields } from './lines.prompt'
 import { transcribeNameSystem } from './name.prompt'
+import { MAX_PAGE_COUNT } from './page-plan'
 import { planPagesSystem } from './plan-pages.prompt'
 import {
   type CharacterArtRequest,
   type CritiqueRequest,
+  type CurrentPanelActing,
   findPanel,
   type LayoutSuggestionRequest,
   type NameDraftRequest,
@@ -49,9 +58,6 @@ import {
   type PagePlanRequest,
   type PanelArtRequest,
 } from './provider'
-
-/** ページ割りで割り振らせるページ数の上限。Workers が受け付けるページ数の上限と揃える */
-const MAX_PLANNED_PAGES = 64
 
 /** コマ割りの提案で出させる案の数。LayoutSuggestionResponseSchema の上限と揃える */
 const LAYOUT_OPTIONS = 3
@@ -69,7 +75,7 @@ export interface LlmPrompt<T> {
 
 export type PanelArtPromptRequest = Omit<
   PanelArtRequest,
-  'layoutPng' | 'referencePng' | 'characterRefs' | 'previous'
+  'layoutPng' | 'referencePng' | 'previous'
 > & {
   /** 再生成時の修正指示 */
   instruction?: string
@@ -103,22 +109,43 @@ const characterDesign = (settings: ProjectSettings) =>
   `character design shared by every character: ${settings.characterDesign}`
 
 /**
- * コマの中身を表す行。カメラ、指示メモ、登場キャラ、焦点（重い順）、誘導線、ヒント。空の行も含む。
+ * 登場キャラの芝居。1 人ずつ名前を添えるのは、pageArt がコマの中身を `; ` でつなぐ中でも誰の芝居か読めるようにするため。
+ * 芝居は利用者の書いた言葉のまま渡す
+ */
+const actingOf = (panel: Panel, characters: Character[]) =>
+  panelActing(panel)
+    .flatMap(({ characterId, text }) =>
+      characters.filter((c) => c.id === characterId).map((c) => `${c.name} acts: ${text.trim()}`),
+    )
+    .join('; ')
+
+/** 寄りと角度の呼び名を、寄り、角度の順に `, ` でつなぐ。どちらも無ければ空 */
+const shotOf = (panel: Pick<Panel, 'camera' | 'angle'>) =>
+  [panel.camera && CAMERA_SHOTS[panel.camera], panel.angle && ANGLE_SHOTS[panel.angle]]
+    .filter(Boolean)
+    .join(', ')
+
+/**
+ * コマの中身を表す行。舞台（コマが属するシーン）、カメラ（寄りと角度）、「間」、指示メモ、登場キャラ、芝居、焦点（重い順）、誘導線、ヒント。空の行も含む。
  * `appearance` が false なら登場キャラは名前だけにする
  */
 function panelContent(
   panel: Panel,
   characters: Character[],
-  hint: string | undefined,
+  context: { scene: string | undefined; hint: string | undefined },
   appearance: boolean,
 ): (string | undefined)[] {
   const focusByWeight = [...panel.focusPoints].sort((a, b) => b.weight - a.weight)
+  const shot = shotOf(panel)
   return [
-    panel.camera && `camera: ${CAMERA_SHOTS[panel.camera]}`,
+    context.scene && `setting: ${context.scene}`,
+    shot && `camera: ${shot}`,
+    panel.beat && BEAT_PANEL,
     panel.note,
     panelCharacters(panel, characters)
       .map((c) => (appearance ? describeCharacter(c) : c.name))
       .join('; '),
+    actingOf(panel, characters),
     focusByWeight.map((f) => f.label).join('; '),
     panel.vectors
       .map(
@@ -126,7 +153,7 @@ function panelContent(
           `${v.kind} from ${endpointLabel(panel, v.sourceFocusId, v.from)} to ${endpointLabel(panel, v.targetFocusId, v.to)}`,
       )
       .join('; '),
-    hint,
+    context.hint,
   ]
 }
 
@@ -144,8 +171,10 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
   return {
     prompt: joinLines([
       NAME_STYLE,
-      panelCharacters(panel, characters).length > 0 ? characterDesign(settings) : undefined,
-      ...panelContent(panel, characters, req.hint, true),
+      ...(panelCharacters(panel, characters).length > 0
+        ? [req.characterRefs?.length ? CHARACTER_REF_GUIDE : undefined, characterDesign(settings)]
+        : []),
+      ...panelContent(panel, characters, { scene: req.scene, hint: req.hint }, true),
       req.instruction && `revise the previous image: ${req.instruction}`,
       hasPlacement(panel) ? PLACEMENT_GUIDE : undefined,
       PANEL_ART_TAIL,
@@ -154,29 +183,30 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
   }
 }
 
-export type PageArtPromptRequest = Omit<
-  PageArtRequest,
-  'layoutPng' | 'referencePng' | 'characterRefs'
->
+export type PageArtPromptRequest = Omit<PageArtRequest, 'layoutPng' | 'referencePng'>
 
 const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from + size).toFixed(2)}`
 
 /**
- * ページ全体の画像生成プロンプト。画風、配置図の説明、ページの登場キャラの外見、
+ * ページ全体の画像生成プロンプト。画風、配置図の説明、
+ * ページに登場キャラがいてキャラの参照画像を送るときだけ CHARACTER_REF_GUIDE、
+ * ページに登場キャラがいれば共通のデザインの行、ページの登場キャラの外見、
  * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで）、
  * 焦点か誘導線のあるコマがあれば配置の印の読み方、固定の末尾を改行で連結する。
  */
 function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string } {
   const { characters, settings } = req.project
-  const cast = pageCharacterIds(req.page).flatMap((id) => characters.filter((c) => c.id === id))
-  const panels = [...req.page.panels]
+  const page = { ...req.page, panels: req.page.panels.filter(wantsArt) }
+  const cast = pageCharacterIds(page).flatMap((id) => characters.filter((c) => c.id === id))
+  const panels = [...page.panels]
     .sort((a, b) => a.order - b.order)
     .map((panel) => {
       const { x, y, w, h } = panel.rect
-      const content = panelContent(panel, characters, req.hints?.[panel.id], false)
+      const where = `panel ${panel.order} (x ${formatSpan(x, w)}, y ${formatSpan(y, h)})`
+      const context = { scene: req.scenes?.[panel.id], hint: req.hints?.[panel.id] }
+      const content = panelContent(panel, characters, context, false)
         .filter((p): p is string => Boolean(p))
         .join('; ')
-      const where = `panel ${panel.order} (x ${formatSpan(x, w)}, y ${formatSpan(y, h)})`
       return content ? `${where}: ${content}` : where
     })
 
@@ -184,26 +214,28 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
     prompt: joinLines([
       NAME_STYLE,
       PAGE_ART_HEAD,
-      cast.length > 0 ? characterDesign(settings) : undefined,
+      ...(cast.length > 0
+        ? [req.characterRefs?.length ? CHARACTER_REF_GUIDE : undefined, characterDesign(settings)]
+        : []),
       cast.length > 0 ? `characters: ${cast.map(describeCharacter).join('; ')}` : undefined,
       ...panels,
-      req.page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
+      page.panels.some(hasPlacement) ? PLACEMENT_GUIDE : undefined,
       PANEL_ART_TAIL,
     ]),
     negative: NAME_NEGATIVE,
   }
 }
 
-/** キャラの参照画像のプロンプト。画風、共通のデザイン、名前と外見、固定の末尾を改行で連結する */
+/** キャラの参照画像のプロンプト。参照画像の画風、共通のデザイン、名前と外見、固定の末尾を改行で連結する */
 function characterArt(req: CharacterArtRequest): { prompt: string; negative: string } {
   return {
     prompt: joinLines([
-      NAME_STYLE,
+      CHARACTER_STYLE,
       characterDesign(req.project.settings),
       describeCharacter(req.character),
       CHARACTER_ART_TAIL,
     ]),
-    negative: NAME_NEGATIVE,
+    negative: CHARACTER_NEGATIVE,
   }
 }
 
@@ -229,7 +261,7 @@ function planPages(req: PagePlanRequest): LlmPrompt<PagePlanResponse> {
   const user = [
     ...characterList(req.project.characters),
     req.pageCount === undefined
-      ? `Pages: as many as the script needs, at most ${MAX_PLANNED_PAGES}.`
+      ? `Pages: as many as the script needs, at most ${MAX_PAGE_COUNT}.`
       : `Pages: exactly ${req.pageCount}.`,
     'Script:',
     req.script,
@@ -246,31 +278,58 @@ const POINT_JSON_SCHEMA: JsonSchema = {
 }
 
 /**
- * ネームの書き起こしのプロンプト。1 ページの脚本を、読む順のコマごとの描くもの、カメラ、セリフに割らせる。
- * system に出力規則と JSON Schema、user にキャラ一覧とページの脚本を入れる
+ * ページに今あるコマの芝居の行。読む順のコマごとに番号と指示メモ、その下にキャラの id と芝居。
+ * 芝居が 1 つも無ければ見出しごと出さない
+ */
+function currentActingLines(current: CurrentPanelActing[] | undefined): string[] {
+  const panels = (current ?? [])
+    .map((p) => ({ ...p, acting: p.acting.filter((a) => a.text.trim() !== '') }))
+    .filter((p) => p.acting.length > 0)
+  if (panels.length === 0) return []
+  return [
+    'Current acting:',
+    ...panels.flatMap((p, i) => [
+      `${i + 1}. ${p.note?.replaceAll('\n', ' ').trim() || '(no note)'}`,
+      ...p.acting.map((a) => `   - ${a.characterId}: ${a.text.trim()}`),
+    ]),
+  ]
+}
+
+/**
+ * ネームの書き起こしのプロンプト。1 ページの脚本を、読む順のコマごとの描くもの、カメラ、セリフ、芝居に割らせる。
+ * system に出力規則と JSON Schema、user にキャラ一覧、ページに今あるコマの芝居、ページの脚本を入れる
  */
 function transcribeName(req: NameDraftRequest): LlmPrompt<NameDraftResponse> {
   const schema = nameDraftJsonSchema()
 
   const system = transcribeNameSystem(schema)
 
-  const user = [...characterList(req.project.characters), 'Script:', req.script].join('\n')
+  const user = [
+    ...characterList(req.project.characters),
+    ...currentActingLines(req.current),
+    'Script:',
+    req.script,
+  ].join('\n')
 
   return { system, user, schema, output: NameDraftResponseSchema }
 }
 
-/** ネームの 1 コマを、番号、描くもの、カメラ、セリフの行にする。話し手は枠の大きさに効かないので書かない */
+/**
+ * ネームの 1 コマを、番号、描くもの、カメラ、セリフ、芝居の行にする。
+ * 話し手と芝居のキャラは枠の大きさに効かないので書かない
+ */
 function namePanelLines(panel: NamePanel, index: number): string[] {
-  const camera = panel.camera === undefined ? '' : ` (${CAMERA_SHOTS[panel.camera]})`
+  const shot = shotOf(panel)
   return [
-    `${index + 1}. ${panel.note}${camera}`,
+    `${index + 1}. ${panel.note}${shot && ` (${shot})`}`,
     ...(panel.lines.length > 0 ? panel.lines.map((l) => `   - ${l.text}`) : ['   - (no lines)']),
+    ...(panel.acting ?? []).map((a) => `   * ${a.text}`),
   ]
 }
 
 /**
  * コマ割りの提案のプロンプト。ネームのコマを段に割った案を LAYOUT_OPTIONS 個返させる。
- * system に出力規則と JSON Schema、user にコマの数と、読む順のコマごとの描くもの、カメラ、セリフを入れる
+ * system に出力規則と JSON Schema、user にコマの数と、読む順のコマごとの描くもの、カメラ、セリフ、芝居を入れる
  */
 function suggestLayout(req: LayoutSuggestionRequest): LlmPrompt<LayoutSuggestionResponse> {
   const schema = layoutSuggestionJsonSchema()
@@ -364,7 +423,7 @@ function critique(req: CritiqueRequest): LlmPrompt<CritiqueResponse> {
   const system = critiqueSystem(MAX_SUGGESTIONS, schema)
 
   const panels = page.panels.flatMap((panel, i) => [
-    `[${i}] panel ${panel.id}, order ${panel.order}, rect x ${panel.rect.x.toFixed(2)} y ${panel.rect.y.toFixed(2)} w ${panel.rect.w.toFixed(2)} h ${panel.rect.h.toFixed(2)}${panel.camera ? `, camera ${panel.camera}` : ''}`,
+    `[${i}] panel ${panel.id}, order ${panel.order}, rect x ${panel.rect.x.toFixed(2)} y ${panel.rect.y.toFixed(2)} w ${panel.rect.w.toFixed(2)} h ${panel.rect.h.toFixed(2)}${panel.camera ? `, camera ${panel.camera}` : ''}${panel.angle ? `, angle ${panel.angle}` : ''}`,
     ...panel.focusPoints.map(
       (f, j) =>
         `  focusPoints[${j}] ${f.id}: ${f.kind} "${f.label}" at ${formatPoint(f.pos)}, weight ${f.weight.toFixed(2)}`,
@@ -418,7 +477,7 @@ export const prompts = {
 
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
-  const { fixtures } = await import('@manga/schema')
+  const { AngleSchema, CameraSchema, fixtures } = await import('@manga/schema')
 
   const project = fixtures.samplePage01
 
@@ -439,6 +498,76 @@ if (import.meta.vitest) {
     expect(lines.at(-2)).toBe(PLACEMENT_GUIDE)
     expect(lines.at(-1)).toBe(PANEL_ART_TAIL)
     expect(negative).toBe(NAME_NEGATIVE)
+  })
+
+  test('panelArt puts the scene as the setting first and marks a beat panel', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const beat: Page = {
+      ...page,
+      panels: page.panels.map((p) => (p.id === 'pn_1' ? { ...p, beat: true as const } : p)),
+    }
+    const lines = prompts
+      .panelArt({ project, page: beat, panelId: 'pn_1', scene: '放課後・屋上' })
+      .prompt.split('\n')
+    const setting = lines.indexOf('setting: 放課後・屋上')
+    expect(setting).toBeGreaterThan(0)
+    expect(lines[setting + 1]).toBe('camera: long shot')
+    expect(lines[setting + 2]).toBe(BEAT_PANEL)
+
+    const plain = prompts.panelArt({ project, page, panelId: 'pn_1' }).prompt
+    expect(plain).not.toContain('setting: ')
+    expect(plain).not.toContain(BEAT_PANEL)
+  })
+
+  test('panelArt and pageArt put the camera and the angle on the camera line', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const shot = (camera: Panel['camera'], angle: Panel['angle']): Page => ({
+      ...page,
+      panels: page.panels.map((p) => (p.id === 'pn_1' ? { ...p, camera, angle } : p)),
+    })
+    const panelLines = (from: Page) =>
+      prompts.panelArt({ project, page: from, panelId: 'pn_1' }).prompt.split('\n')
+    expect(panelLines(shot('bust', 'high'))).toContain('camera: bust shot, high-angle shot')
+    expect(panelLines(shot(undefined, 'low'))).toContain('camera: low-angle shot')
+    const pageLine = prompts
+      .pageArt({ project, page: shot('bust', 'high') })
+      .prompt.split('\n')
+      .find((l) => l.startsWith('panel 1 '))
+    expect(pageLine).toContain('camera: bust shot, high-angle shot; ')
+  })
+
+  test('pageArt gives each panel its own scene and marks the beat panels', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const beat: Page = {
+      ...page,
+      panels: page.panels.map((p) => (p.order === 2 ? { ...p, beat: true as const } : p)),
+    }
+    const ids = [...page.panels].sort((a, b) => a.order - b.order).map((p) => p.id)
+    const scenes = { [ids[0] as ID]: '放課後・屋上', [ids[1] as ID]: '夜・帰り道' }
+    const panelLines = prompts
+      .pageArt({ project, page: beat, scenes })
+      .prompt.split('\n')
+      .filter((l) => l.startsWith('panel '))
+    expect(panelLines[0]).toContain('): setting: 放課後・屋上; ')
+    expect(panelLines[1]).toContain('): setting: 夜・帰り道; ')
+    expect(panelLines[1]).toContain(BEAT_PANEL)
+    expect(panelLines[2]).not.toContain('setting: ')
+    expect(panelLines[0]).not.toContain(BEAT_PANEL)
+  })
+
+  test('pageArt leaves out a text-only panel and its characters', () => {
+    const sample = project.episodes[0]?.pages[0] as Page
+    const { cast: _, ...page } = sample
+    const texted: Page = {
+      ...page,
+      panels: page.panels.map((p) => (p.order === 1 ? p : { ...p, noArt: true as const })),
+    }
+    const lines = prompts.pageArt({ project, page: texted }).prompt.split('\n')
+    expect(lines.filter((l) => l.startsWith('panel ')).map((l) => l.split(' ')[1])).toEqual(['1'])
+    const first = page.panels.find((p) => p.order === 1) as Panel
+    expect(lines.some((l) => l.startsWith('characters: '))).toBe(
+      panelCharacterIds(first).length > 0,
+    )
   })
 
   test('pageArt lists the cast once and one line per panel in reading order with its span', () => {
@@ -500,48 +629,97 @@ if (import.meta.vitest) {
       project: { settings: project.settings },
       character,
     })
-    expect(prompt.split('\n')).toEqual([NAME_STYLE, 'エル: 銀髪、黒いコート', CHARACTER_ART_TAIL])
-    expect(negative).toBe(NAME_NEGATIVE)
+    expect(prompt.split('\n')).toEqual([
+      CHARACTER_STYLE,
+      'エル: 銀髪、黒いコート',
+      CHARACTER_ART_TAIL,
+    ])
+    expect(negative).toBe(CHARACTER_NEGATIVE)
     const bare = prompts.characterArt({
       project: { settings: project.settings },
       character: { ...character, appearance: undefined },
     })
-    expect(bare.prompt.split('\n')).toEqual([NAME_STYLE, 'エル', CHARACTER_ART_TAIL])
+    expect(bare.prompt.split('\n')).toEqual([CHARACTER_STYLE, 'エル', CHARACTER_ART_TAIL])
   })
 
-  test('the shared character design goes before the characters only where characters are drawn', () => {
+  test('the reference guide and the shared character design go before the characters only where characters are drawn', () => {
     const settings = { ...project.settings, characterDesign: '6 頭身、太い眉' }
     const design = 'character design shared by every character: 6 頭身、太い眉'
     const character = { id: 'c', name: 'エル', shortName: 'L' }
     expect(prompts.characterArt({ project: { settings }, character }).prompt.split('\n')).toEqual([
-      NAME_STYLE,
+      CHARACTER_STYLE,
       design,
       'エル',
       CHARACTER_ART_TAIL,
     ])
 
     const page = project.episodes[0]?.pages[0] as Page
+    const characterRefs = [{ characterId: 'chr_1', image: new Blob(['c']) }]
     const panelLines = prompts
-      .panelArt({ project: { ...project, settings }, page, panelId: 'pn_1' })
+      .panelArt({ project: { ...project, settings }, page, panelId: 'pn_1', characterRefs })
       .prompt.split('\n')
-    expect(panelLines[1]).toBe(design)
+    expect(panelLines.slice(1, 3)).toEqual([CHARACTER_REF_GUIDE, design])
     const pageLines = prompts
-      .pageArt({ project: { ...project, settings }, page })
+      .pageArt({ project: { ...project, settings }, page, characterRefs })
       .prompt.split('\n')
-    expect(pageLines[2]).toBe(design)
-    expect(pageLines[3]?.startsWith('characters: ')).toBe(true)
+    expect(pageLines.slice(2, 4)).toEqual([CHARACTER_REF_GUIDE, design])
+    expect(pageLines[4]?.startsWith('characters: ')).toBe(true)
+
+    expect(
+      prompts.panelArt({ project: { ...project, settings }, page, panelId: 'pn_1' }).prompt,
+    ).not.toContain(CHARACTER_REF_GUIDE)
+    expect(prompts.pageArt({ project: { ...project, settings }, page }).prompt).not.toContain(
+      CHARACTER_REF_GUIDE,
+    )
 
     const unpeopled = {
       ...page,
       panels: page.panels.map((p) => ({ ...p, bubbles: [], focusPoints: [], vectors: [] })),
     }
-    expect(
-      prompts.pageArt({ project: { ...project, settings }, page: unpeopled }).prompt,
-    ).not.toContain(design)
-    expect(
-      prompts.panelArt({ project: { ...project, settings }, page: unpeopled, panelId: 'pn_1' })
-        .prompt,
-    ).not.toContain(design)
+    const unpeopledPage = prompts.pageArt({ project: { ...project, settings }, page: unpeopled })
+    expect(unpeopledPage.prompt).not.toContain(design)
+    expect(unpeopledPage.prompt).not.toContain(CHARACTER_REF_GUIDE)
+    const unpeopledPanel = prompts.panelArt({
+      project: { ...project, settings },
+      page: unpeopled,
+      panelId: 'pn_1',
+    })
+    expect(unpeopledPanel.prompt).not.toContain(design)
+    expect(unpeopledPanel.prompt).not.toContain(CHARACTER_REF_GUIDE)
+  })
+
+  test('the acting of the characters in a panel goes into panelArt and pageArt with their names', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const characters = [...project.characters, { id: 'chr_k', name: 'ケイ', shortName: 'K' }]
+    const acted: Page = {
+      ...page,
+      panels: page.panels.map((p) =>
+        p.id === 'pn_1'
+          ? {
+              ...p,
+              cast: ['chr_k'],
+              acting: [
+                { characterId: 'chr_e', text: '振り向いて驚く' },
+                { characterId: 'chr_k', text: ' 笑う ' },
+              ],
+            }
+          : p,
+      ),
+    }
+    const acting = 'ケイ acts: 笑う; E acts: 振り向いて驚く'
+    const panelLines = prompts
+      .panelArt({ project: { ...project, characters }, page: acted, panelId: 'pn_1' })
+      .prompt.split('\n')
+    const cast = `ケイ; E: ${project.characters[0]?.appearance}`
+    expect(panelLines.indexOf(acting)).toBe(panelLines.indexOf(cast) + 1)
+    const pageLine = prompts
+      .pageArt({ project: { ...project, characters }, page: acted })
+      .prompt.split('\n')
+      .find((l) => l.startsWith('panel 1 '))
+    expect(pageLine).toContain(`; ${acting}`)
+
+    const unacted = prompts.panelArt({ project: { ...project, characters }, page, panelId: 'pn_1' })
+    expect(unacted.prompt).not.toContain(' acts: ')
   })
 
   test('planPages embeds the page plan JSON Schema and lists characters, the page count and the script', () => {
@@ -569,7 +747,13 @@ if (import.meta.vitest) {
     )
     expect(
       prompts.planPages({ project: { ...project, characters: [] }, script: 's' }).user,
-    ).toContain(`- (none)\nPages: as many as the script needs, at most ${MAX_PLANNED_PAGES}.`)
+    ).toContain(`- (none)\nPages: as many as the script needs, at most ${MAX_PAGE_COUNT}.`)
+  })
+
+  test('planPages starts a page where the script moves to a new place, for the wide opening shot', () => {
+    const { system } = prompts.planPages({ project, script: 's' })
+    expect(system).toContain('opening a scene with a wide shot of the place')
+    expect(system).toContain('start a page where the script moves to a new place or time')
   })
 
   test('transcribeName embeds the name JSON Schema and lists characters and the page script', () => {
@@ -592,6 +776,109 @@ if (import.meta.vitest) {
         '森を歩く。',
       ].join('\n'),
     )
+    expect(system).toContain('- acting: ')
+    expect(system).toContain('- angle: ')
+    expect(nameDraftJsonSchema().properties?.panels).toMatchObject({
+      items: {
+        properties: {
+          acting: { type: 'array' },
+          camera: { enum: CameraSchema.options },
+          angle: { enum: AngleSchema.options },
+          effect: { enum: ['focus_lines', 'speed_lines', 'beta_flash'] },
+        },
+      },
+    })
+  })
+
+  test('transcribeName tells what every camera and angle is for', () => {
+    const { system } = prompts.transcribeName({
+      project: { settings: project.settings, characters: [] },
+      script: 's',
+    })
+    const lines = system.split('\n')
+    /** field の行の直後に続く `  - <値>: ` の行の値 */
+    const uses = (field: string) => {
+      const rest = lines.slice(lines.findIndex((l) => l.startsWith(`- ${field}: `)) + 1)
+      const end = rest.findIndex((l) => !l.startsWith('  - '))
+      return rest.slice(0, end).map((l) => l.slice(4).split(':')[0])
+    }
+    expect(uses('camera')).toEqual(CameraSchema.options)
+    expect(uses('angle')).toEqual(AngleSchema.options)
+    expect(system).toContain('Open a new scene or place with extreme_long or long')
+    expect(system).toContain('with insert')
+  })
+
+  test('transcribeName lists the acting of the current panels before the script', () => {
+    const { system, user } = prompts.transcribeName({
+      project: {
+        settings: project.settings,
+        characters: [{ id: 'chr_e', name: 'エリ', shortName: 'E' }],
+      },
+      script: 'E「こんにちは」',
+      current: [
+        { note: '森の\n全景', acting: [{ characterId: 'chr_e', text: ' 振り向いて驚く ' }] },
+        { note: '空', acting: [{ characterId: 'chr_e', text: '  ' }] },
+        { acting: [{ characterId: 'chr_e', text: '笑う' }] },
+      ],
+    })
+    expect(system).toContain('Current acting, when given, ')
+    expect(user).toBe(
+      [
+        'Characters:',
+        '- id: chr_e, name: エリ, shortName: E',
+        'Current acting:',
+        '1. 森の 全景',
+        '   - chr_e: 振り向いて驚く',
+        '2. (no note)',
+        '   - chr_e: 笑う',
+        'Script:',
+        'E「こんにちは」',
+      ].join('\n'),
+    )
+    const blank = prompts.transcribeName({
+      project: { settings: project.settings, characters: [] },
+      script: 's',
+      current: [{ note: '空', acting: [] }],
+    })
+    expect(blank.user).not.toContain('Current acting:')
+  })
+
+  test('transcribeName validates the acting the model gives a panel', () => {
+    const { output } = prompts.transcribeName({
+      project: { settings: project.settings, characters: [] },
+      script: 's',
+    })
+    const panel = { note: 'n', lines: [] }
+    const acting = [{ characterId: 'chr_e', text: '振り向く' }]
+    expect(output.parse({ panels: [{ ...panel, acting }] }).panels[0]?.acting).toEqual(acting)
+    expect(
+      output.safeParse({ panels: [{ ...panel, acting: [{ characterId: 'chr_e', text: '' }] }] })
+        .success,
+    ).toBe(false)
+    expect(output.safeParse({ panels: [{ ...panel, acting: [{ text: 'a' }] }] }).success).toBe(
+      false,
+    )
+  })
+
+  test('suggestLayout puts the acting of a name panel under its lines', () => {
+    const { system, user } = prompts.suggestLayout({
+      panels: [
+        {
+          note: '森の全景',
+          lines: [{ text: 'こんにちは', shape: 'normal' }],
+          acting: [{ characterId: 'chr_e', text: '振り向いて驚く' }],
+        },
+      ],
+    })
+    expect(system).toContain('one starting with "* " is the acting')
+    expect(user).toBe(
+      [
+        'Panels: exactly 1, in reading order.',
+        '1. 森の全景',
+        '   - こんにちは',
+        '   * 振り向いて驚く',
+      ].join('\n'),
+    )
   })
 
   test('suggestLayout embeds the layout JSON Schema and lists the name panels in reading order', () => {
@@ -599,23 +886,40 @@ if (import.meta.vitest) {
       panels: [
         {
           note: '森の全景',
-          camera: 'long',
+          camera: 'extreme_long',
           lines: [{ speakerId: 'chr_e', text: 'こんにちは', shape: 'normal' }],
         },
-        { note: '足元', lines: [] },
+        { note: '足元', angle: 'high', lines: [] },
+        { note: '結晶のかけら', camera: 'insert', angle: 'dutch', lines: [] },
       ],
     })
     expect(schema).toEqual(layoutSuggestionJsonSchema())
     expect(system).toContain(`JSON Schema:\n${JSON.stringify(layoutSuggestionJsonSchema())}`)
     expect(user).toBe(
       [
-        'Panels: exactly 2, in reading order.',
-        '1. 森の全景 (long shot)',
+        'Panels: exactly 3, in reading order.',
+        '1. 森の全景 (extreme long shot)',
         '   - こんにちは',
-        '2. 足元',
+        '2. 足元 (high-angle shot)',
+        '   - (no lines)',
+        '3. 結晶のかけら (insert shot of an object, dutch angle)',
         '   - (no lines)',
       ].join('\n'),
     )
+  })
+
+  test('suggestLayout sizes the panels by their shot in the names the user prompt gives them', () => {
+    const { system } = prompts.suggestLayout({ panels: [{ note: 'n', lines: [] }] })
+    const sizing = system.split('\n').find((l) => l.startsWith('- Size a panel for its shot: '))
+    for (const shot of [
+      CAMERA_SHOTS.extreme_long,
+      CAMERA_SHOTS.insert,
+      CAMERA_SHOTS.extreme_close_up,
+      ANGLE_SHOTS.bird,
+      ANGLE_SHOTS.worm,
+    ]) {
+      expect(sizing).toContain(shot)
+    }
   })
 
   const page = project.episodes[0]?.pages[0] as Page
@@ -674,6 +978,32 @@ if (import.meta.vitest) {
     expect(user).toContain('- fp_4_e (face) in pn_4: miss, distance 0.210')
     expect(user).toContain('- [error] FOCUS_MISS (pn_4 fp_4_e): 焦点が視線経路から外れています')
     expect(user).toContain('Focus points: 1 total, 0 ok, 0 weak, 1 miss.')
+  })
+
+  test('critique lists the camera and the angle of a panel', () => {
+    const shot: Page = {
+      ...page,
+      panels: page.panels.map((p) =>
+        p.id === 'pn_4' ? { ...p, camera: 'bust' as const, angle: 'low' as const } : p,
+      ),
+    }
+    const { user } = prompts.critique({ page: shot, diagnosis })
+    expect(user).toMatch(/\[3\] panel pn_4, order 4, rect [^\n]*, camera bust, angle low\n/)
+  })
+
+  test('critique keeps the fixes true to the shot of a panel', () => {
+    const shot: Page = {
+      ...page,
+      panels: page.panels.map((p) =>
+        p.id === 'pn_4' ? { ...p, camera: 'insert' as const, angle: 'over_shoulder' as const } : p,
+      ),
+    }
+    const { system, user } = prompts.critique({ page: shot, diagnosis })
+    expect(user).toContain(', camera insert, angle over_shoulder\n')
+    const rule = system.split('\n').find((l) => l.startsWith('- A panel may list its camera'))
+    for (const value of ['extreme_long', 'insert', 'bird', 'over_shoulder', 'pov', 'dutch']) {
+      expect(rule).toContain(value)
+    }
   })
 
   test('critique says so when there are no issues', () => {

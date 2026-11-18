@@ -110,7 +110,7 @@ function withoutCharacters<T extends { speakerId?: ID; characterId?: ID }>(item:
   return rest as T
 }
 
-/** 中身ごと新しい id にしたコマ。ベクトルの焦点参照と絵の親子は新しい id に付け替える */
+/** 中身ごと新しい id にしたコマ。ベクトルの焦点参照、フキダシのつなぎ先、絵の親子は新しい id に付け替える */
 function renewPanel(panel: Panel, sameProject: boolean): Panel {
   const ids = new Map<ID, ID>()
   const renew = (id: ID) => {
@@ -118,10 +118,14 @@ function renewPanel(panel: Panel, sameProject: boolean): Panel {
     ids.set(id, next)
     return next
   }
-  const bubbles = panel.bubbles.map((b) => ({
+  const renewed = panel.bubbles.map((b) => ({
     ...(sameProject ? b : withoutCharacters(b)),
     id: renew(b.id),
   }))
+  const bubbles = renewed.map(({ joinedTo, ...b }) => {
+    const to = joinedTo === undefined ? undefined : ids.get(joinedTo)
+    return to === undefined ? b : { ...b, joinedTo: to }
+  })
   const focusPoints = panel.focusPoints.map((f) => ({
     ...(sameProject ? f : withoutCharacters(f)),
     id: renew(f.id),
@@ -136,7 +140,7 @@ function renewPanel(panel: Panel, sameProject: boolean): Panel {
       ...(target !== undefined && { targetFocusId: target }),
     }
   })
-  const { arts, artId, cast, ...rest } = panel
+  const { arts, artId, cast, acting, ...rest } = panel
   const base = { ...rest, id: newId(), bubbles, focusPoints, vectors }
   // 絵の ref はプロジェクトのアセットを指すので、別のプロジェクトでは開けない
   if (!sameProject) return { ...base, arts: [] }
@@ -150,13 +154,14 @@ function renewPanel(panel: Panel, sameProject: boolean): Panel {
     })),
     ...(artId !== undefined && { artId: artIds.get(artId) }),
     ...(cast && { cast }),
+    ...(acting && { acting }),
   }
 }
 
 /**
  * コピーした要素を新しい id でページに足す Patch と、足した要素の選択。
  * 同じ位置に同じ種類の要素があれば、無い位置まで右下へ PASTE_OFFSET ずつずらす。
- * 位置のロックは外し、order はそれぞれの並びの最大の次にする。ベクトルの焦点参照は貼った先で指す先が無いので外す。
+ * 位置のロックは外し、order はそれぞれの並びの最大の次にする。ベクトルの焦点参照とフキダシのつなぎ先は貼った先で指す先が無いので外す。
  * フキダシを別のコマへ貼るときはページ上の大きさを保ち、その枠に収める。
  * フキダシ、焦点、ベクトルを貼るコマがページに無ければ null
  */
@@ -202,9 +207,11 @@ export function pastePatch(
   const base = `/panels/${i}`
 
   if (copied.kind === 'bubble') {
-    const { locked: _, ...source } = opts.sameProject
-      ? copied.bubble
-      : withoutCharacters(copied.bubble)
+    const {
+      locked: _,
+      joinedTo: _j,
+      ...source
+    } = opts.sameProject ? copied.bubble : withoutCharacters(copied.bubble)
     const { dx, dy } = freeShift(
       (dx, dy) => panel.bubbles.some((b) => samePoint(b.pos, shifted(source.pos, dx, dy))),
       { x: 1, y: 1, at: source.pos },
@@ -327,6 +334,34 @@ if (import.meta.vitest) {
       expect(pasted.rect).not.toMatchObject({ x: source.rect.x, y: source.rect.y })
     })
 
+    test('joined bubbles keep their join in a pasted panel, and a pasted bubble drops it', () => {
+      const [pn1, ...rest] = page.panels as [Panel, ...Panel[]]
+      const first = pn1.bubbles[0] as Bubble
+      const joined: Page = {
+        ...page,
+        panels: [
+          { ...pn1, bubbles: [first, { ...first, id: 'bb_1b', order: 2, joinedTo: first.id }] },
+          ...rest,
+        ],
+      }
+      const panel = copyElement(joined, { kind: 'panel', id: pn1.id })
+      if (!panel) throw new Error('コピーできなかった')
+      const pastedPanel = PageSchema.parse(
+        apply(joined, pastePatch(joined, panel, opts)?.patch ?? []),
+      ).panels.at(-1) as Panel
+      const [a, b] = pastedPanel.bubbles as [Bubble, Bubble]
+      expect(b.joinedTo).toBe(a.id)
+      expect(a.id).not.toBe(first.id)
+
+      const bubble = copyElement(joined, { kind: 'bubble', id: 'bb_1b' })
+      if (!bubble) throw new Error('コピーできなかった')
+      const pasted = PageSchema.parse(apply(joined, pastePatch(joined, bubble, opts)?.patch ?? []))
+      expect(pasted.panels[0]?.bubbles.at(-1)).not.toHaveProperty('joinedTo')
+      const other = pastePatch(joined, bubble, { ...opts, sameProject: false })?.patch ?? []
+      const elsewhere = PageSchema.parse(apply(joined, other))
+      expect(elsewhere.panels[0]?.bubbles.at(-1)).not.toHaveProperty('joinedTo')
+    })
+
     test('a panel pasted between a single page and a spread keeps its width in mm', () => {
       const source = page.panels[0] as Panel
       const shaped: Panel = {
@@ -354,12 +389,18 @@ if (import.meta.vitest) {
     test('a panel pasted into another project drops its art and character references', () => {
       const source = page.panels.find((p) => p.bubbles.some((b) => b.speakerId))
       if (!source) throw new Error('fixture に話者のあるフキダシがない')
-      const copied = copyElement(page, { kind: 'panel', id: source.id })
+      const acting = [{ characterId: 'chr_e', text: '振り向いて驚く' }]
+      const copied = copyElement(
+        { ...page, panels: page.panels.map((p) => (p.id === source.id ? { ...p, acting } : p)) },
+        { kind: 'panel', id: source.id },
+      )
       if (!copied) throw new Error('コピーできなかった')
       const pasted = paste(copied, { sameProject: false }).page.panels.at(-1) as Panel
       expect(pasted.arts).toEqual([])
       expect(pasted.artId).toBeUndefined()
       expect(pasted.bubbles.every((b) => b.speakerId === undefined)).toBe(true)
+      expect(pasted.acting).toBeUndefined()
+      expect((paste(copied).page.panels.at(-1) as Panel).acting).toEqual(acting)
     })
 
     test('a bubble goes into the given panel, unlocked and next in order', () => {

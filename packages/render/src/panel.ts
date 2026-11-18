@@ -1,5 +1,12 @@
 import { m } from '@manga/i18n'
-import { type Camera, cornerAnchor, type Panel, softEdgeStrokes } from '@manga/schema'
+import {
+  type Character,
+  cornerAnchor,
+  type Panel,
+  panelActing,
+  sceneHeading,
+  softEdgeStrokes,
+} from '@manga/schema'
 import { FONT_FAMILY } from './backend'
 import type { PxPoint, PxRect } from './geometry'
 import { alphabeticY, wrapHorizontal } from './text'
@@ -137,13 +144,24 @@ export function applyColorMatrix(data: Uint8ClampedArray, matrix: readonly numbe
   }
 }
 
+/** 指示メモに載せるコマの項目 */
+type PanelNotes = Pick<Panel, 'order' | 'camera' | 'angle' | 'note' | 'scene' | 'beat'>
+
+/** 寄りと角度の呼び名。どちらも無ければ空 */
+export function shotNames(panel: Pick<Panel, 'camera' | 'angle'>): string[] {
+  const names: string[] = []
+  if (panel.camera) names.push(m[`panel_camera_${panel.camera}` as const]())
+  if (panel.angle) names.push(m[`panel_angle_${panel.angle}` as const]())
+  return names
+}
+
 /**
- * 未生成コマの中身。rect の左上にコマ番号、その下に camera と note を横書きで小さく。
+ * 未生成コマの中身。rect の左上にコマ番号、その下に「間」の印、寄りと角度、note を横書きで小さく。
  * 輪郭 outline の外に出る部分は切る
  */
 export function drawPlaceholder(
   ctx: Ctx,
-  panel: { order: number; camera?: Camera; note?: string },
+  panel: Omit<PanelNotes, 'scene'>,
   rect: PxRect,
   outline: readonly PxPoint[],
   fontPx: number,
@@ -164,7 +182,12 @@ export function drawPlaceholder(
   const lineHeight = fontPx * 1.4
   let y = rect.y + pad + numberPx * 1.3
   const bottom = rect.y + rect.h - pad
-  const text = [panel.camera && `[${m[`panel_camera_${panel.camera}` as const]()}]`, panel.note]
+  const shot = shotNames(panel)
+  const text = [
+    panel.beat && m.panel_beat_mark(),
+    shot.length > 0 && `[${shot.join('・')}]`,
+    panel.note,
+  ]
     .filter(Boolean)
     .join('\n')
   for (const line of wrapHorizontal(ctx, text, rect.w - pad * 2)) {
@@ -201,10 +224,19 @@ export function drawPanelNumber(
   ctx.restore()
 }
 
-/** 余白のメモ。コマ番号と camera の行、続けて note を横書きで列挙する */
+/** 指示メモに書く芝居。1 人 1 行で「名前：芝居」 */
+export function actingNotes(panel: Panel, characters: readonly Character[]): string[] {
+  return panelActing(panel).flatMap(({ characterId, text }) =>
+    characters.filter((c) => c.id === characterId).map((c) => `${c.name}：${text.trim()}`),
+  )
+}
+
+/**
+ * 余白のメモ。シーンの始まるコマではまず見出しの行、続けてコマ番号と寄りと角度と「間」の印の行、note と芝居（actingNotes）を横書きで列挙する
+ */
 export function drawNotesMargin(
   ctx: Ctx,
-  panels: { order: number; camera?: Camera; note?: string }[],
+  panels: (PanelNotes & { acting?: readonly string[] })[],
   area: PxRect,
   fontPx: number,
 ): void {
@@ -221,17 +253,21 @@ export function drawNotesMargin(
   let y = area.y + pad
   for (const panel of panels) {
     ctx.font = `bold ${fontPx}px "${FONT_FAMILY}"`
-    const head = [String(panel.order), panel.camera && m[`panel_camera_${panel.camera}` as const]()]
+    const scene = sceneHeading(panel)
+    const head = [String(panel.order), ...shotNames(panel), panel.beat && m.panel_beat_mark()]
       .filter(Boolean)
       .join(' ')
-    for (const line of wrapHorizontal(ctx, head, area.w - pad * 2)) {
+    const heads = scene === undefined ? [head] : [m.panel_scene_heading({ scene }), head]
+    for (const line of heads.flatMap((h) => wrapHorizontal(ctx, h, area.w - pad * 2))) {
       ctx.fillText(line, area.x + pad, alphabeticY(y, fontPx, 'top'))
       y += lineHeight
     }
     ctx.font = `${fontPx}px "${FONT_FAMILY}"`
-    for (const line of wrapHorizontal(ctx, panel.note ?? '', area.w - pad * 2)) {
-      ctx.fillText(line, area.x + pad, alphabeticY(y, fontPx, 'top'))
-      y += lineHeight
+    for (const text of [panel.note ?? '', ...(panel.acting ?? [])]) {
+      for (const line of wrapHorizontal(ctx, text, area.w - pad * 2)) {
+        ctx.fillText(line, area.x + pad, alphabeticY(y, fontPx, 'top'))
+        y += lineHeight
+      }
     }
     y += lineHeight * 0.5
     if (y > bottom) break
@@ -386,6 +422,18 @@ if (import.meta.vitest) {
       expect(count.outside).toBe(0)
     })
 
+    test('marks a beat panel under the order number', async () => {
+      const rect = { x: 0, y: 0, w: 100, h: 100 }
+      // 余白 8px、数字は 14.4px なので、数字の下の行は y 26.72 から
+      const below = (_x: number, y: number) => y >= 26
+      const draw = (beat?: true) =>
+        paint(100, 100, (ctx) =>
+          drawPlaceholder(ctx, { order: 1, beat }, rect, square(0, 0, 100), 8),
+        )
+      expect((await draw()).darkPixels(below).inside).toBe(0)
+      expect((await draw(true)).darkPixels(below).inside).toBeGreaterThan(0)
+    })
+
     test('stops writing lines before the bottom padding', async () => {
       const rect = { x: 0, y: 0, w: 100, h: 60 }
       const { darkPixels } = await paint(100, 100, (ctx) =>
@@ -416,5 +464,59 @@ if (import.meta.vitest) {
     const count = darkPixels((x, y) => x >= 100 && x < 160 && y < 120)
     expect(count.inside).toBeGreaterThan(0)
     expect(count.outside).toBe(0)
+  })
+
+  test('drawNotesMargin puts the scene heading on its own line before the panel', async () => {
+    const area = { x: 0, y: 0, w: 100, h: 100 }
+    // 余白 8px、行送り 12px なので、2 行目は y 20 から
+    const second = (_: number, y: number) => y >= 20
+    const draw = (panel: PanelNotes) =>
+      paint(100, 100, (ctx) => drawNotesMargin(ctx, [panel], area, 8))
+    expect((await draw({ order: 1, beat: true })).darkPixels(second).inside).toBe(0)
+    const scened = await draw({ order: 1, scene: '放課後・屋上', beat: true })
+    expect(scened.darkPixels(second).inside).toBeGreaterThan(0)
+  })
+
+  test('drawNotesMargin writes the acting on the lines after the note', async () => {
+    const area = { x: 0, y: 0, w: 200, h: 120 }
+    // 余白 8、fontPx 8、行の高さ 12 なので、番号の行は y 8、note の行は y 20 から 8px の高さに描く
+    const below = (acting?: string[]) =>
+      paint(200, 120, (ctx) =>
+        drawNotesMargin(ctx, [{ order: 1, note: '見上げる', acting }], area, 8),
+      ).then(({ darkPixels }) => darkPixels((_, y) => y >= 31).inside)
+    expect(await below()).toBe(0)
+    expect(await below(['E：振り向いて驚く', 'ケイ：笑う'])).toBeGreaterThan(0)
+  })
+
+  test('shotNames names the camera and then the angle, and skips the missing ones', () => {
+    expect(shotNames({ camera: 'bust', angle: 'high' })).toEqual([
+      m.panel_camera_bust(),
+      m.panel_angle_high(),
+    ])
+    expect(shotNames({ angle: 'low' })).toEqual([m.panel_angle_low()])
+    expect(shotNames({})).toEqual([])
+  })
+
+  test('actingNotes writes one line per acting character with the name', () => {
+    const panel = {
+      id: 'pn',
+      order: 1,
+      rect: { x: 0, y: 0, w: 1, h: 1 },
+      bubbles: [],
+      focusPoints: [],
+      vectors: [],
+      arts: [],
+      cast: ['a', 'b'],
+      acting: [
+        { characterId: 'b', text: ' 笑う ' },
+        { characterId: 'a', text: '振り向いて驚く' },
+      ],
+    }
+    const characters = [
+      { id: 'a', name: 'エル', shortName: 'L' },
+      { id: 'b', name: 'ケイ', shortName: 'K' },
+    ]
+    expect(actingNotes(panel, characters)).toEqual(['エル：振り向いて驚く', 'ケイ：笑う'])
+    expect(actingNotes({ ...panel, acting: undefined }, characters)).toEqual([])
   })
 }

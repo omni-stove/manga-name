@@ -1,4 +1,4 @@
-import type { Page, Patch, Rect } from '@manga/schema'
+import type { Bubble, Page, Panel, Patch, Rect } from '@manga/schema'
 import { findFocus, findVector, moveFocusPatch } from './hint-ops'
 import { compactOrderOps } from './panel-ops'
 import type { Selection } from './types'
@@ -62,6 +62,12 @@ export function removePatch(page: Page, selection: Selection): Patch {
           if (vector[key] === selection.id) {
             patch.push({ op: 'remove', path: `/panels/${i}/vectors/${j}/${key}` })
           }
+        }
+      }
+      // 連結フキダシの相手の joinedTo も同じく実在を要求される
+      for (const [j, bubble] of panel.bubbles.entries()) {
+        if (bubble.joinedTo === selection.id && bubble.id !== selection.id) {
+          patch.push({ op: 'remove', path: `/panels/${i}/bubbles/${j}/joinedTo` })
         }
       }
     }
@@ -157,6 +163,32 @@ if (import.meta.vitest) {
       { op: 'remove', path: '/panels/5/bubbles/0' },
     ])
     expect(removePatch(page, null)).toEqual([])
+  })
+
+  test('removePatch unjoins the bubbles joined to the removed bubble first', () => {
+    const [pn1, ...rest] = page.panels as [Panel, ...Panel[]]
+    const first = pn1.bubbles[0] as Bubble
+    const joined: Page = {
+      ...page,
+      panels: [
+        {
+          ...pn1,
+          bubbles: [
+            first,
+            { ...first, id: 'bb_1b', order: 2, joinedTo: 'bb_1' },
+            { ...first, id: 'bb_1c', order: 3, joinedTo: 'bb_1b' },
+          ],
+        },
+        ...rest,
+      ],
+    }
+    expect(removePatch(joined, { kind: 'bubble', id: 'bb_1' })).toEqual([
+      { op: 'remove', path: '/panels/0/bubbles/1/joinedTo' },
+      { op: 'remove', path: '/panels/0/bubbles/0' },
+    ])
+    expect(removePatch(joined, { kind: 'bubble', id: 'bb_1c' })).toEqual([
+      { op: 'remove', path: '/panels/0/bubbles/2' },
+    ])
   })
 
   test('removePatch closes the gap the removed panel leaves in the reading order', () => {

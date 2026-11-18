@@ -1,6 +1,7 @@
 import { z } from 'zod'
+import { SFX_SCALE_MAX, SFX_SCALE_MIN } from './sfx-lettering'
 
-export const SCHEMA_VERSION = 20 as const
+export const SCHEMA_VERSION = 33 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -44,16 +45,17 @@ export const CharacterSchema = z.object({
 const order = z.number().int().min(1)
 
 /**
- * セリフの書体。gothic はゴシック、bold は太ゴシック、mincho は明朝、rounded は丸ゴシック。
+ * セリフの書体。gothic はゴシック、bold は太ゴシック、mincho は明朝、rounded は丸ゴシック、hand は手書き風。
  * 画面には messages/schema の `bubble_typeface_<値>` で出す
  */
-export const BubbleTypefaceSchema = z.enum(['gothic', 'bold', 'mincho', 'rounded'])
+export const BubbleTypefaceSchema = z.enum(['gothic', 'bold', 'mincho', 'rounded', 'hand'])
 
 export const BubbleSchema = z.object({
   id: IdSchema,
   order,
   speakerId: IdSchema.optional(),
   text: z.string(),
+  /** cold は角の尖った冷たい声、weak はしぼんだ弱々しい声。画面には messages/schema の `bubble_shape_<値>` で出す */
   shape: z.enum([
     'normal',
     'shout',
@@ -63,7 +65,10 @@ export const BubbleSchema = z.object({
     'electronic',
     'urchin',
     'narration',
+    'monologue',
     'none',
+    'cold',
+    'weak',
   ]),
   pos: PointSchema,
   size: SizeSchema,
@@ -73,6 +78,13 @@ export const BubbleSchema = z.object({
   typeface: BubbleTypefaceSchema.optional(),
   /** フキダシの地の色。黒は体としっぽを黒で塗り、セリフを白で描く。地を持たない形（none）では無視する。省略は白 */
   fill: z.enum(['black']).optional(),
+  /** セリフの組み方向。横書きは左から右へ書き、上から下へ行を送る。省略は縦書き */
+  writing: z.enum(['horizontal']).optional(),
+  /**
+   * 細い首でつなぐ、同じコマのフキダシの id。同じ話者が間を置いて続けて喋るときに使う。
+   * joinedTo で辿れるフキダシを 1 つの輪郭に描く（bubbleGroups）。首はこのフキダシの地の色と線で描く
+   */
+  joinedTo: IdSchema.optional(),
   overflow: z.boolean().optional(),
   locked: z.boolean().optional(),
 })
@@ -92,8 +104,20 @@ export const SweepSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('polyline'), points: z.array(PointSchema) }),
 ])
 
-export const FocusKindSchema = z.enum(['face', 'keyObject', 'sfx'])
+export const FocusKindSchema = z.enum(['face', 'keyObject', 'sfx', 'mark'])
 
+/**
+ * 漫符の種類。sweat は汗、anger は怒りマーク、question はハテナ、exclaim はビックリ、sigh はため息。
+ * 画面には messages/schema の `focus_point_mark_<値>` で出す
+ */
+export const FocusMarkSchema = z.enum(['sweat', 'anger', 'question', 'exclaim', 'sigh'])
+
+/**
+ * コマの中で目を引く点。pos はコマ内座標、weight は目の引き具合。
+ * sfx の label は描き文字として（sfxLetterings）、mark は漫符として（markShapes）紙面に描く。
+ * face と keyObject は紙面に描かない。rotation は描き文字と漫符に、typeface と scale は描き文字にだけ、
+ * mark は漫符にだけ効く
+ */
 export const FocusPointSchema = z.object({
   id: IdSchema,
   kind: FocusKindSchema,
@@ -101,6 +125,14 @@ export const FocusPointSchema = z.object({
   pos: PointSchema,
   weight: unit,
   characterId: IdSchema.optional(),
+  /** 描き文字と漫符の傾き。度で、正は時計回り。省略は 0 */
+  rotation: z.number().min(-180).max(180).optional(),
+  /** 描き文字の書体。省略は SFX_TYPEFACE */
+  typeface: BubbleTypefaceSchema.optional(),
+  /** weight から決めた描き文字の大きさに掛ける倍率。省略は 1 */
+  scale: z.number().min(SFX_SCALE_MIN).max(SFX_SCALE_MAX).optional(),
+  /** 漫符の種類。省略は DEFAULT_MARK */
+  mark: FocusMarkSchema.optional(),
   locked: z.boolean().optional(),
 })
 
@@ -118,24 +150,48 @@ export const PanelFrameSchema = z.enum([
   'soft',
   'cloud',
 ])
+/** コマの地の色。黒は暗転や無音の間に使う。絵があれば絵が上に乗る。effect が beta_flash のコマは省略でも黒い */
+export const PanelFillSchema = z.enum(['black'])
 /**
- * コマに描く効果線。focus_lines（集中線）は焦点へ向かう放射状の線、speed_lines（スピード線）は動きの向きに平行な線。
- * 画面には messages/schema の `panel_effect_<値>` で出す
+ * コマに描く効果線。focus_lines（集中線）は焦点へ向かう放射状の線、speed_lines（スピード線）は動きの向きに平行な線、
+ * beta_flash（ベタフラ）はコマの地を黒で塗り、焦点から放射状に白い線を描くフラッシュ。
+ * vertical_lines（縦線）は落胆や気まずさ、crosshatch（カケアミ）は暗い心理、sparkle（キラキラ）と flowers（花）は
+ * ときめきや華やかさに使う。画面には messages/schema の `panel_effect_<値>` で出す
  */
-export const PanelEffectSchema = z.enum(['focus_lines', 'speed_lines'])
+export const PanelEffectSchema = z.enum([
+  'focus_lines',
+  'speed_lines',
+  'beta_flash',
+  'vertical_lines',
+  'crosshatch',
+  'sparkle',
+  'flowers',
+])
 /** コマの絵に掛ける色調。sepia は茶色、faded は色を抜いて薄くし、回想に使う。画面には `page_tone_<値>` で出す */
 export const PageToneSchema = z.enum(['sepia', 'faded'])
+/** コマの絵に掛ける色調。none はページに色調があってもそのコマには掛けない。画面には `panel_tone_<値>` で出す */
+export const PanelToneSchema = z.enum([...PageToneSchema.options, 'none'])
 
 export const VectorKindSchema = z.enum(['gaze', 'motion', 'speed'])
-/** コマの画面の切り取り方。画面には messages/schema の `panel_camera_<値>` で出す */
+/**
+ * コマの寄り（画面に人物をどこまで入れるか）。extreme_long は人物が点になる超ロング、extreme_close_up は顔の一部だけの大アップ、
+ * insert は物のアップ。画面には messages/schema の `panel_camera_<値>` で出す
+ */
 export const CameraSchema = z.enum([
+  'extreme_long',
   'long',
   'middle',
   'bust',
   'close_up',
-  'low_angle',
-  'high_angle',
+  'extreme_close_up',
+  'insert',
 ])
+/**
+ * コマのカメラの角度。low はアオリ、high は俯瞰、bird は真上からの真俯瞰、worm は真下からの真アオリ、
+ * dutch は画面を傾けた構図、pov は人物の目から見た主観、over_shoulder は人物の肩越し。
+ * 画面には messages/schema の `panel_angle_<値>` で出す
+ */
+export const AngleSchema = z.enum(['low', 'high', 'bird', 'worm', 'dutch', 'pov', 'over_shoulder'])
 export const StrengthSchema = z.enum(['strong', 'weak'])
 
 export const VectorSchema = z.object({
@@ -160,6 +216,17 @@ export const StrokeSchema = z.object({
   points: z.array(PointSchema),
   width: z.number().positive(),
   color: z.enum(['ink', 'red', 'blue']),
+  /**
+   * ペンで描いた線の点ごとの筆圧（0..1）。points と同じ並びで、無い線と足りない点は一定の太さ（筆圧 0.5）で描く。
+   * Point に持たせないのは、コマやフキダシの頂点にも使う Point の形を変えずに済ませるため
+   */
+  pressure: z.array(unit).optional(),
+})
+
+/** コマの中のキャラの芝居（表情・動き）。例「振り向いて驚く」 */
+export const PanelActingSchema = z.object({
+  characterId: IdSchema,
+  text: z.string(),
 })
 
 type RefineCtx = z.RefinementCtx
@@ -183,21 +250,38 @@ const PanelBaseSchema = z.object({
   order,
   rect: RectSchema,
   shape: z.array(PointSchema).min(3).optional(),
-  /** コマの地の色。黒は暗転や無音の間に使う。絵があれば絵が上に乗る */
-  fill: z.enum(['black']).optional(),
+  fill: PanelFillSchema.optional(),
   /** 枠線。省略は実線の枠 */
   frame: PanelFrameSchema.optional(),
+  /**
+   * シーンの見出し（場所と時間帯）。シーンが変わる最初のコマにだけ持たせ、読み順で次に持つコマの手前までが同じシーン。
+   * コマが属するシーンは sceneOf で引く。空白だけの見出しは持たないものとみなす
+   */
+  scene: z.string().optional(),
+  /** セリフも動きも無い「間」のコマ */
+  beat: z.literal(true).optional(),
+  /**
+   * 絵を持たない、文字だけのコマ。arts と artId は残すが描かず（currentArt）、絵を生成しない。
+   * 地は fill と effect で、文字は shape が none か narration のフキダシで表す
+   */
+  noArt: z.literal(true).optional(),
   /** 絵の上、フキダシと枠線の下に描く効果線。省略は描かない */
   effect: PanelEffectSchema.optional(),
+  /** 絵に掛ける色調。ページの tone を上書きし、ページの一部のコマだけを回想にする。省略はページの tone に従う */
+  tone: PanelToneSchema.optional(),
   bubbles: z.array(BubbleSchema),
   note: z.string().optional(),
   camera: CameraSchema.optional(),
+  /** 省略は目の高さ */
+  angle: AngleSchema.optional(),
   arts: z.array(PanelArtSchema),
   artId: IdSchema.optional(),
   focusPoints: z.array(FocusPointSchema),
   vectors: z.array(VectorSchema),
   sweep: SweepSchema.optional(),
   cast: z.array(IdSchema).optional(),
+  /** 登場キャラごとの芝居。空の芝居は要素ごと持たない */
+  acting: z.array(PanelActingSchema).optional(),
   locked: z.boolean().optional(),
 })
 
@@ -229,6 +313,20 @@ export const PanelSchema = PanelBaseSchema.superRefine((panel, ctx) => {
     }
   })
 
+  const bubbleIds = new Set(panel.bubbles.map((b) => b.id))
+  panel.bubbles.forEach((b, i) => {
+    if (b.joinedTo === undefined) return
+    if (b.joinedTo === b.id) {
+      addIssue(ctx, ['bubbles', i, 'joinedTo'], `joinedTo ${b.joinedTo} is the bubble itself`)
+    } else if (!bubbleIds.has(b.joinedTo)) {
+      addIssue(
+        ctx,
+        ['bubbles', i, 'joinedTo'],
+        `joinedTo ${b.joinedTo} is not a Bubble of this panel`,
+      )
+    }
+  })
+
   checkUniqueOrder(ctx, panel.bubbles, ['bubbles'])
 })
 
@@ -253,6 +351,8 @@ const PageBaseSchema = z.object({
   note: z.string().optional(),
   /** このページに当たる脚本の原文（ト書きとセリフ）。`note` は作業のメモで、脚本とは分けて持つ */
   script: z.string().optional(),
+  /** 柱。ページの欄外に置く、あおりや作者の言葉の短い文。省略は置かない */
+  hashira: z.string().optional(),
   cast: z.array(IdSchema).optional(),
 })
 
@@ -329,6 +429,15 @@ export const ProjectSchema = ProjectBaseSchema.superRefine((project, ctx) => {
             addIssue(ctx, [...base, 'cast', ci], `cast ${id} is not in characters`)
           }
         })
+        panel.acting?.forEach((a, ai) => {
+          if (!characterIds.has(a.characterId)) {
+            addIssue(
+              ctx,
+              [...base, 'acting', ai, 'characterId'],
+              `characterId ${a.characterId} is not in characters`,
+            )
+          }
+        })
       })
     })
   })
@@ -347,13 +456,16 @@ export type Bubble = z.infer<typeof BubbleSchema>
 export type PanelArt = z.infer<typeof PanelArtSchema>
 export type Sweep = z.infer<typeof SweepSchema>
 export type FocusKind = z.infer<typeof FocusKindSchema>
+export type FocusMark = z.infer<typeof FocusMarkSchema>
 export type FocusPoint = z.infer<typeof FocusPointSchema>
 export type VectorKind = z.infer<typeof VectorKindSchema>
 export type Camera = z.infer<typeof CameraSchema>
+export type Angle = z.infer<typeof AngleSchema>
 export type Strength = z.infer<typeof StrengthSchema>
 export type Vector = z.infer<typeof VectorSchema>
 export type ReferenceImage = z.infer<typeof ReferenceImageSchema>
 export type Stroke = z.infer<typeof StrokeSchema>
+export type PanelActing = z.infer<typeof PanelActingSchema>
 export type Panel = z.infer<typeof PanelSchema>
 export type Page = z.infer<typeof PageSchema>
 export type LayoutTemplate = z.infer<typeof LayoutTemplateSchema>
@@ -415,7 +527,7 @@ if (import.meta.vitest) {
       expect(issuePaths(project)).toContain(panelPath(0, 'vectors.0.targetFocusId'))
     })
 
-    test('Bubble.speakerId, FocusPoint.characterId, Panel.cast and Page.cast must be in characters', async () => {
+    test('Bubble.speakerId, FocusPoint.characterId, Panel.cast, Panel.acting and Page.cast must be in characters', async () => {
       const project = await loadFixture()
       const bubble = panel(project, 5).bubbles[0]
       const focus = panel(project, 0).focusPoints[1]
@@ -423,6 +535,10 @@ if (import.meta.vitest) {
       bubble.speakerId = 'chr_missing'
       focus.characterId = 'chr_missing'
       panel(project, 2).cast = ['chr_missing']
+      panel(project, 3).acting = [
+        { characterId: 'chr_e', text: '振り向く' },
+        { characterId: 'chr_missing', text: '驚く' },
+      ]
       const page = project.episodes[0]?.pages[0]
       if (!page) throw new Error('fixture has no page')
       page.cast = ['chr_e', 'chr_missing']
@@ -430,8 +546,26 @@ if (import.meta.vitest) {
       expect(paths).toContain(panelPath(5, 'bubbles.0.speakerId'))
       expect(paths).toContain(panelPath(0, 'focusPoints.1.characterId'))
       expect(paths).toContain(panelPath(2, 'cast.0'))
+      expect(paths).toContain(panelPath(3, 'acting.1.characterId'))
+      expect(paths).not.toContain(panelPath(3, 'acting.0.characterId'))
       expect(paths).toContain('episodes.0.pages.0.cast.1')
       expect(paths).not.toContain('episodes.0.pages.0.cast.0')
+    })
+
+    test('Bubble.joinedTo must be another Bubble of the same panel', async () => {
+      const project = await loadFixture()
+      const first = panel(project, 0).bubbles[0]
+      const other = panel(project, 2).bubbles[0]
+      if (!first || !other) throw new Error('fixture is missing the expected bubbles')
+      panel(project, 0).bubbles.push({ ...first, id: 'bb_next', order: 2, joinedTo: first.id })
+      expect(ProjectSchema.safeParse(project).success).toBe(true)
+
+      first.joinedTo = first.id
+      panel(project, 0).bubbles.push({ ...first, id: 'bb_far', order: 3, joinedTo: other.id })
+      const paths = issuePaths(project)
+      expect(paths).toContain(panelPath(0, 'bubbles.0.joinedTo'))
+      expect(paths).toContain(panelPath(0, 'bubbles.2.joinedTo'))
+      expect(paths).not.toContain(panelPath(0, 'bubbles.1.joinedTo'))
     })
 
     test('Panel.order and Bubble.order must be unique', async () => {
@@ -481,6 +615,21 @@ if (import.meta.vitest) {
       expect(paths).toContain(panelPath(0, 'bubbles.0.pos.x'))
       expect(paths).toContain(panelPath(1, 'rect.w'))
       expect(paths).toContain(panelPath(1, 'bubbles.0.size.w'))
+    })
+
+    test('FocusPoint.rotation is -180..180 and FocusPoint.scale is 0.25..4', async () => {
+      const project = await loadFixture()
+      const [first, second] = panel(project, 0).focusPoints
+      if (!first || !second) throw new Error('fixture panel 1 has fewer than 2 focus points')
+      Object.assign(first, { kind: 'sfx', rotation: 180, typeface: 'hand', scale: 4 })
+      expect(ProjectSchema.safeParse(project).success).toBe(true)
+      Object.assign(first, { rotation: 181, scale: 0.2 })
+      Object.assign(second, { rotation: -181, scale: 4.5 })
+      const paths = issuePaths(project)
+      expect(paths).toContain(panelPath(0, 'focusPoints.0.rotation'))
+      expect(paths).toContain(panelPath(0, 'focusPoints.0.scale'))
+      expect(paths).toContain(panelPath(0, 'focusPoints.1.rotation'))
+      expect(paths).toContain(panelPath(0, 'focusPoints.1.scale'))
     })
   })
 }

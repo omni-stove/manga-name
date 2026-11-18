@@ -58,6 +58,26 @@ test('コマを右クリックして分割し、サイズを変えるハンド�
   await expect(page.locator('[data-handle]')).toHaveCount(8)
 })
 
+test('フキダシのツールのままコマを右クリックして、コマを動かせる選択ツールに戻せる', async ({
+  page,
+}) => {
+  await importProject(page, FIXTURE_PROJECT)
+  await openPage(page, 1)
+  const tools = page.getByRole('group', { name: m.web_editor_tools() })
+  await page.keyboard.press('b')
+  await expect(tools.getByRole('radio', { name: m.bubble() })).toBeChecked()
+
+  const box = await page.locator('[data-panel-id]').first().boundingBox()
+  if (!box) throw new Error('panel is not rendered')
+  await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.3, { button: 'right' })
+  await page
+    .getByRole('menu', { name: m.web_editor_menu_panel() })
+    .getByRole('menuitem', { name: m.web_canvas_menu_panel_move() })
+    .click()
+  await expect(tools.getByRole('radio', { name: m.web_editor_tool_select() })).toBeChecked()
+  await expect(panelInspector(page)).toBeVisible()
+})
+
 test('フキダシを右クリックして形を変えられる', async ({ page }) => {
   await importProject(page, FIXTURE_PROJECT)
   await openPage(page, 1)

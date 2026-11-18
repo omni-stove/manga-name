@@ -1,4 +1,4 @@
-import { createFakeSyncServer } from './fake-sync-server'
+import { createFakeSyncServer } from '@manga/collab'
 import type { TabSyncReply, TabSyncRequest } from './tab-sync-protocol'
 
 // lib が DOM なので self は Window の型になる。SharedWorker として使う分だけ型を付ける

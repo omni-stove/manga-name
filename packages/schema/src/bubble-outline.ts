@@ -1,22 +1,22 @@
+import { type BubbleMood, isBubbleMood, moodInset, moodOutline, moodReach } from './bubble-moods'
+import {
+  along,
+  type BubbleGeometry,
+  countAlong,
+  ellipseAt,
+  jitter,
+  type PathCommand,
+  pathPoints,
+  polygon,
+  type Station,
+  stations,
+  unitOf,
+} from './bubble-path'
 import type { Bubble, Point } from './project'
 
+export type { BubbleGeometry, PathCommand } from './bubble-path'
+
 type Shape = Bubble['shape']
-
-/** 単位を問わない座標のフキダシ。rx, ry は本体の楕円の半径、tails はしっぽごとの先端 */
-export interface BubbleGeometry {
-  cx: number
-  cy: number
-  rx: number
-  ry: number
-  tails?: readonly Point[]
-}
-
-/** 輪郭の描画命令。SVG の path 命令と Canvas の moveTo などに 1 対 1 で写せる */
-export type PathCommand =
-  | { op: 'M' | 'L'; x: number; y: number }
-  | { op: 'Q'; x1: number; y1: number; x: number; y: number }
-  | { op: 'C'; x1: number; y1: number; x2: number; y2: number; x: number; y: number }
-  | { op: 'Z' }
 
 /** フキダシの描き方。どの命令列も閉じたサブパスだけからなる */
 export interface BubbleOutline {
@@ -51,11 +51,14 @@ const URCHIN_SPACING = 0.1
 const URCHIN_GAP = 0.04
 const URCHIN_LENGTH = 0.35
 const URCHIN_WIDTH = 0.03
+/** モノローグ枠の角の半径。短辺に対する比率 */
+const MONOLOGUE_CORNER = 0.1
 /** しっぽの付け根の開き（ラジアン）と、付け根を輪郭から中心へ入れる深さ。深さは最も深い凹みより深くする */
 const TAIL_SPREAD = 0.35
 const TAIL_INSET = 0.5
+/** 連結フキダシの首の幅の半分。小さい方のフキダシの短い半径に対する比率 */
+const NECK_HALF_WIDTH = 0.18
 const KAPPA = 0.5522847498
-const ARC_SAMPLES = 256
 
 const SHAPE_STYLE: Record<Shape, { tail: boolean; box: boolean }> = {
   normal: { tail: true, box: false },
@@ -66,79 +69,34 @@ const SHAPE_STYLE: Record<Shape, { tail: boolean; box: boolean }> = {
   electronic: { tail: true, box: false },
   urchin: { tail: false, box: false },
   narration: { tail: false, box: true },
+  monologue: { tail: false, box: true },
   none: { tail: false, box: true },
+  cold: { tail: true, box: false },
+  weak: { tail: true, box: false },
 }
 
-/** その形にしっぽが付くか。ナレーション、枠なし、ウニフラは話し手を指さない */
+/**
+ * LLM の書き起こしとページ割りに選ばせる形。画面ではすべての形を選べるが、cold と weak はプロンプトに
+ * 使い分けをまだ教えていないので、LLM にはこの一覧に限って返させる
+ */
+export const AVAILABLE_BUBBLE_SHAPES = [
+  'normal',
+  'shout',
+  'thought',
+  'whisper',
+  'tremble',
+  'electronic',
+  'urchin',
+  'narration',
+  'monologue',
+  'none',
+] as const satisfies readonly Shape[]
+
+/** その形にしっぽが付くか。ナレーション、モノローグ、枠なし、ウニフラは話し手を指さない */
 export const hasTail = (shape: Shape): boolean => SHAPE_STYLE[shape].tail
 
 /** 本体が楕円でなく、半径で囲む矩形そのものか */
 export const isBoxShape = (shape: Shape): boolean => SHAPE_STYLE[shape].box
-
-/** 0 以上 1 未満の、i ごとに決まった揺らぎ。同じフキダシは毎回同じ形に描く */
-function jitter(i: number): number {
-  const s = Math.sin(i * 12.9898 + 78.233) * 43758.5453
-  return s - Math.floor(s)
-}
-
-const unitOf = (g: BubbleGeometry) => Math.min(g.rx, g.ry)
-
-interface Station {
-  p: Point
-  /** 外向きの単位法線 */
-  n: Point
-}
-
-function ellipseAt(g: BubbleGeometry, t: number): Station {
-  const nx = Math.cos(t) / (g.rx || 1)
-  const ny = Math.sin(t) / (g.ry || 1)
-  const len = Math.hypot(nx, ny)
-  return {
-    p: { x: g.cx + g.rx * Math.cos(t), y: g.cy + g.ry * Math.sin(t) },
-    n: { x: nx / len, y: ny / len },
-  }
-}
-
-/** 楕円の周を count 等分した点。角度 0 から時計回り（y 下向き） */
-function stations(g: BubbleGeometry, count: number): Station[] {
-  const lengths = [0]
-  let prev = ellipseAt(g, 0).p
-  for (let i = 1; i <= ARC_SAMPLES; i++) {
-    const p = ellipseAt(g, (i / ARC_SAMPLES) * Math.PI * 2).p
-    lengths.push((lengths[i - 1] as number) + Math.hypot(p.x - prev.x, p.y - prev.y))
-    prev = p
-  }
-  const total = lengths[ARC_SAMPLES] as number
-  let j = 0
-  return Array.from({ length: count }, (_, i) => {
-    const target = (total * i) / count
-    while (j < ARC_SAMPLES - 1 && (lengths[j + 1] as number) < target) j++
-    const a = lengths[j] as number
-    const b = lengths[j + 1] as number
-    const f = b > a ? (target - a) / (b - a) : 0
-    return ellipseAt(g, ((j + f) / ARC_SAMPLES) * Math.PI * 2)
-  })
-}
-
-/** 周を unit * spacing ごとに区切った数。min..max に収める */
-function countAlong(g: BubbleGeometry, spacing: number, min: number, max: number): number {
-  const unit = unitOf(g)
-  if (!(unit > 0)) return min
-  const a = Math.max(g.rx, g.ry)
-  const b = unit
-  // Ramanujan の近似
-  const perimeter = Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)))
-  return Math.min(max, Math.max(min, Math.round(perimeter / (unit * spacing))))
-}
-
-const along = (s: Station, d: number): Point => ({ x: s.p.x + s.n.x * d, y: s.p.y + s.n.y * d })
-
-function polygon(points: readonly Point[]): PathCommand[] {
-  return [
-    ...points.map((p, i) => ({ op: i === 0 ? ('M' as const) : ('L' as const), x: p.x, y: p.y })),
-    { op: 'Z' },
-  ]
-}
 
 function ellipse(cx: number, cy: number, rx: number, ry: number): PathCommand[] {
   const kx = rx * KAPPA
@@ -153,7 +111,28 @@ function ellipse(cx: number, cy: number, rx: number, ry: number): PathCommand[] 
   ]
 }
 
-function body(shape: Shape, g: BubbleGeometry): PathCommand[] {
+/** 角を半径 r の四分円で丸めた矩形。右上の角の終わりから時計回り（y 下向き） */
+function roundedBox(g: BubbleGeometry, r: number): PathCommand[] {
+  const k = r * (1 - KAPPA)
+  const l = g.cx - g.rx
+  const t = g.cy - g.ry
+  const rt = g.cx + g.rx
+  const b = g.cy + g.ry
+  return [
+    { op: 'M', x: rt, y: t + r },
+    { op: 'L', x: rt, y: b - r },
+    { op: 'C', x1: rt, y1: b - k, x2: rt - k, y2: b, x: rt - r, y: b },
+    { op: 'L', x: l + r, y: b },
+    { op: 'C', x1: l + k, y1: b, x2: l, y2: b - k, x: l, y: b - r },
+    { op: 'L', x: l, y: t + r },
+    { op: 'C', x1: l, y1: t + k, x2: l + k, y2: t, x: l + r, y: t },
+    { op: 'L', x: rt - r, y: t },
+    { op: 'C', x1: rt - k, y1: t, x2: rt, y2: t + k, x: rt, y: t + r },
+    { op: 'Z' },
+  ]
+}
+
+function body(shape: Exclude<Shape, BubbleMood>, g: BubbleGeometry): PathCommand[] {
   const unit = unitOf(g)
   switch (shape) {
     case 'normal':
@@ -168,6 +147,8 @@ function body(shape: Shape, g: BubbleGeometry): PathCommand[] {
         { x: g.cx + g.rx, y: g.cy + g.ry },
         { x: g.cx - g.rx, y: g.cy + g.ry },
       ])
+    case 'monologue':
+      return roundedBox(g, 2 * unit * MONOLOGUE_CORNER)
     case 'shout': {
       // 先と谷の深さを揺らし、均一な星形（値札のような形）に見えないようにする
       const s = stations(g, countAlong(g, SHOUT_SPACING, 10, 40) * 2)
@@ -290,8 +271,9 @@ function tailOf(shape: Shape, g: BubbleGeometry, tail: Point): PathCommand[] {
   )
 }
 
-/** shape の形で g に置いたフキダシの描き方 */
+/** shape の形で g に置いたフキダシの描き方。cold と weak は bubble-moods が普通の形を崩して描く */
 export function bubbleOutline(shape: Shape, g: BubbleGeometry): BubbleOutline {
+  if (isBubbleMood(shape)) return moodOutline(shape, g, bubbleOutline('normal', g))
   return {
     body: body(shape, g),
     tails: hasTail(shape) ? (g.tails ?? []).map((tail) => tailOf(shape, g, tail)) : [],
@@ -302,14 +284,63 @@ export function bubbleOutline(shape: Shape, g: BubbleGeometry): BubbleOutline {
   }
 }
 
+/**
+ * 連結フキダシの a と b をつなぐ首。両方の中心を結ぶ線上の細い帯で、両端は中心に置いて本体の塗りに隠す。
+ * 中心が重なれば空
+ */
+export function bubbleNeck(a: BubbleGeometry, b: BubbleGeometry): PathCommand[] {
+  const dx = b.cx - a.cx
+  const dy = b.cy - a.cy
+  const len = Math.hypot(dx, dy)
+  if (!(len > 0)) return []
+  const half = Math.min(unitOf(a), unitOf(b)) * NECK_HALF_WIDTH
+  const nx = (-dy / len) * half
+  const ny = (dx / len) * half
+  return polygon([
+    { x: a.cx + nx, y: a.cy + ny },
+    { x: b.cx + nx, y: b.cy + ny },
+    { x: b.cx - nx, y: b.cy - ny },
+    { x: a.cx - nx, y: a.cy - ny },
+  ])
+}
+
+/**
+ * コマのフキダシを、joinedTo で辿れるものどうしの組に分ける。つないでいないフキダシは 1 つだけの組。
+ * 組の中は order 順で、組は先頭のフキダシの order 順。コマに無いフキダシや自分自身を指す joinedTo は無視する
+ */
+export function bubbleGroups<B extends Pick<Bubble, 'id' | 'order' | 'joinedTo'>>(
+  bubbles: readonly B[],
+): B[][] {
+  const sorted = [...bubbles].sort((a, b) => a.order - b.order)
+  const parent = new Map(sorted.map((b) => [b.id, b.id]))
+  const root = (id: string): string => {
+    let r = id
+    while (parent.get(r) !== r) r = parent.get(r) as string
+    return r
+  }
+  for (const b of sorted) {
+    if (b.joinedTo === undefined || !parent.has(b.joinedTo)) continue
+    parent.set(root(b.joinedTo), root(b.id))
+  }
+  const groups = new Map<string, B[]>()
+  for (const b of sorted) {
+    const r = root(b.id)
+    const group = groups.get(r)
+    if (group) group.push(b)
+    else groups.set(r, [b])
+  }
+  return [...groups.values()]
+}
+
 /** セリフを置く箱。輪郭の内側に収まるよう shape ごとに縮める */
 export function bubbleTextBox(
   shape: Shape,
   g: BubbleGeometry,
 ): { x: number; y: number; w: number; h: number } {
   const f = isBoxShape(shape) ? { w: 0.85, h: 0.85 } : { w: 0.7, h: 0.75 }
-  const w = g.rx * 2 * f.w
-  const h = g.ry * 2 * f.h
+  const inset = isBubbleMood(shape) ? unitOf(g) * moodInset(shape) : 0
+  const w = Math.max(0, g.rx - inset) * 2 * f.w
+  const h = Math.max(0, g.ry - inset) * 2 * f.h
   return { x: g.cx - w / 2, y: g.cy - h / 2, w, h }
 }
 
@@ -338,15 +369,15 @@ export function bubbleReach(shape: Shape, rx: number, ry: number, n: Point): num
     tremble: TREMBLE_AMPLITUDE,
     urchin: URCHIN_GAP + URCHIN_LENGTH,
   }
-  return Math.hypot(n.x * rx, n.y * ry) + unit * (extra[shape] ?? 0)
+  const out = isBubbleMood(shape) ? moodReach(shape) : (extra[shape] ?? 0)
+  return Math.hypot(n.x * rx, n.y * ry) + unit * out
 }
 
 if (import.meta.vitest) {
   const { describe, expect, test } = import.meta.vitest
 
   const g = { cx: 100, cy: 100, rx: 60, ry: 40, tails: [{ x: 100, y: 190 }] }
-  const points = (cmds: PathCommand[]) =>
-    cmds.flatMap((c) => (c.op === 'Z' ? [] : [{ x: c.x, y: c.y }]))
+  const points = pathPoints
   const SHAPES = [
     'normal',
     'shout',
@@ -356,8 +387,18 @@ if (import.meta.vitest) {
     'electronic',
     'urchin',
     'narration',
+    'monologue',
     'none',
+    'cold',
+    'weak',
   ] as const
+
+  test('cold and weak are not offered to the LLM, but draw their own body', () => {
+    const available: readonly Shape[] = AVAILABLE_BUBBLE_SHAPES
+    expect(SHAPES.filter((s) => !available.includes(s))).toEqual(['cold', 'weak'])
+    expect(bubbleOutline('cold', g).body).not.toEqual(bubbleOutline('normal', g).body)
+    expect(bubbleOutline('weak', g).body).not.toEqual(bubbleOutline('normal', g).body)
+  })
 
   test('every outline is made of closed subpaths', () => {
     for (const shape of SHAPES) {
@@ -381,11 +422,30 @@ if (import.meta.vitest) {
     expect(o.tails).toEqual([])
   })
 
-  test('narration, none and urchin take no tail; the rest do', () => {
+  test('monologue is a box with corners rounded by a tenth of the short side, and no tail', () => {
+    const o = bubbleOutline('monologue', g)
+    expect(isBoxShape('monologue')).toBe(true)
+    expect(o.body.filter((c) => c.op === 'C')).toHaveLength(4)
+    const ps = points(o.body)
+    // 短辺 80 の 0.1 倍の半径で、角の点は各辺から 8 だけ内に入る
+    expect(ps).toContainEqual({ x: 160, y: 68 })
+    expect(ps).toContainEqual({ x: 152, y: 140 })
+    expect(ps).toContainEqual({ x: 40, y: 132 })
+    expect(ps).toContainEqual({ x: 48, y: 60 })
+    for (const p of ps) {
+      expect(p.x).toBeGreaterThanOrEqual(40)
+      expect(p.x).toBeLessThanOrEqual(160)
+      expect(p.y).toBeGreaterThanOrEqual(60)
+      expect(p.y).toBeLessThanOrEqual(140)
+    }
+    expect(o.tails).toEqual([])
+  })
+
+  test('narration, monologue, none and urchin take no tail; the rest do', () => {
     for (const shape of SHAPES) {
       expect(bubbleOutline(shape, g).tails.length > 0).toBe(hasTail(shape))
     }
-    expect(SHAPES.filter((s) => !hasTail(s))).toEqual(['urchin', 'narration', 'none'])
+    expect(SHAPES.filter((s) => !hasTail(s))).toEqual(['urchin', 'narration', 'monologue', 'none'])
   })
 
   test('how each shape is painted', () => {
@@ -396,6 +456,7 @@ if (import.meta.vitest) {
     expect(style('normal')).toEqual({ fill: true, line: 'solid', ink: false })
     expect(style('whisper')).toEqual({ fill: true, line: 'dashed', ink: false })
     expect(style('urchin')).toEqual({ fill: true, line: 'none', ink: true })
+    expect(style('monologue')).toEqual({ fill: true, line: 'solid', ink: false })
     expect(style('none')).toEqual({ fill: false, line: 'none', ink: false })
   })
 
@@ -462,8 +523,42 @@ if (import.meta.vitest) {
     expect(bubbleOutline('narration', { ...g, tails: tips }).tails).toEqual([])
   })
 
+  test('bubbleNeck is a thin band along the line between the two centres', () => {
+    const left = { cx: 40, cy: 100, rx: 30, ry: 20 }
+    const right = { cx: 160, cy: 100, rx: 40, ry: 50 }
+    const rounded = (cmds: PathCommand[]) =>
+      points(cmds)
+        .map((p) => ({ x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 }))
+        .sort((p, q) => p.x - q.x || p.y - q.y)
+    const neck = bubbleNeck(left, right)
+    expect(neck[0]?.op).toBe('M')
+    expect(neck.at(-1)?.op).toBe('Z')
+    // 幅の半分は小さい方の短い半径 20 の 0.18 倍
+    expect(rounded(neck)).toEqual([
+      { x: 40, y: 96.4 },
+      { x: 40, y: 103.6 },
+      { x: 160, y: 96.4 },
+      { x: 160, y: 103.6 },
+    ])
+    expect(rounded(bubbleNeck(right, left))).toEqual(rounded(neck))
+    expect(bubbleNeck(left, { ...left, rx: 10 })).toEqual([])
+  })
+
+  test('bubbleGroups gathers the bubbles reached by joinedTo, in order', () => {
+    const b = (id: string, order: number, joinedTo?: string) => ({ id, order, joinedTo })
+    const [a, c, d, e, f] = [b('a', 1), b('c', 3, 'a'), b('d', 4), b('e', 5, 'd'), b('f', 2)]
+    expect(bubbleGroups([e, d, c, a, f])).toEqual([[a, c], [f], [d, e]])
+    // 鎖になったつなぎも 1 組にし、互いを指し合っても 1 組のまま
+    const g = b('g', 6, 'e')
+    const ids = (groups: { id: string }[][]) => groups.map((group) => group.map((x) => x.id))
+    expect(ids(bubbleGroups([a, d, e, g]))).toEqual([['a'], ['d', 'e', 'g']])
+    expect(ids(bubbleGroups([b('x', 1, 'y'), b('y', 2, 'x')]))).toEqual([['x', 'y']])
+    expect(ids(bubbleGroups([b('x', 1, 'x'), b('y', 2, 'missing')]))).toEqual([['x'], ['y']])
+  })
+
   test('bubbleTextBox keeps more of a box-shaped body', () => {
     expect(bubbleTextBox('narration', g)).toEqual({ x: 49, y: 66, w: 102, h: 68 })
+    expect(bubbleTextBox('monologue', g)).toEqual({ x: 49, y: 66, w: 102, h: 68 })
     expect(bubbleTextBox('none', g)).toEqual({ x: 49, y: 66, w: 102, h: 68 })
     expect(bubbleTextBox('normal', g)).toEqual({ x: 58, y: 70, w: 84, h: 60 })
   })

@@ -1,5 +1,5 @@
 import { exportPdf, type RenderContext, type RenderOptions, renderPage } from '@manga/render'
-import { currentArt, type ID, type Page, type Project } from '@manga/schema'
+import { currentArt, type ID, type Page, type Project, wantsArt } from '@manga/schema'
 import { createZip } from './zip'
 
 export type ExportFormat = 'png' | 'pdf'
@@ -56,9 +56,12 @@ export async function collectExportJob(
   }
 }
 
-/** 採用中の絵が無いコマの数。書き出しは止めず、ダイアログで警告するのに使う */
+/** 絵の要るコマ（wantsArt）のうち、採用中の絵が無いものの数。書き出しは止めず、ダイアログで警告するのに使う */
 export function countMissingArts(pages: readonly Page[]): number {
-  return pages.reduce((sum, page) => sum + page.panels.filter((p) => !currentArt(p)).length, 0)
+  return pages.reduce(
+    (sum, page) => sum + page.panels.filter((p) => wantsArt(p) && !currentArt(p)).length,
+    0,
+  )
 }
 
 /**
@@ -224,7 +227,12 @@ if (import.meta.vitest) {
     await expect(runExportJob({ ...job, assets: {} })).rejects.toThrow(/not bundled/)
   })
 
-  test('countMissingArts counts panels without an adopted art', () => {
+  test('countMissingArts counts panels without an adopted art, but not text-only panels', () => {
     expect(countMissingArts([emptyPage, pageWithArts])).toBe(emptyPage.panels.length)
+    const texted = {
+      ...emptyPage,
+      panels: emptyPage.panels.map((p, i) => (i === 0 ? { ...p, noArt: true as const } : p)),
+    }
+    expect(countMissingArts([texted])).toBe(emptyPage.panels.length - 1)
   })
 }
