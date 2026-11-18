@@ -18,6 +18,7 @@ import {
   useRef,
 } from 'react'
 import type { Root } from 'react-dom/client'
+import { BreakoutToolLayer } from './breakout-tool-layer'
 import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { BubbleToolLayer } from './bubble-tool-layer'
 import { DiagnosisLayer } from './diagnosis-layer'
@@ -32,6 +33,7 @@ import { pressurePath } from './pressure-stroke'
 import { SfxToolLayer } from './sfx-tool-layer'
 import { TurnLayer } from './turn-layer'
 import type { EditorCanvasProps, Selection } from './types'
+import { useBreakoutTool } from './use-breakout-tool'
 import { useBubbleTool } from './use-bubble-tool'
 import { useHintTool } from './use-hint-tool'
 import { useLongPress } from './use-long-press'
@@ -85,6 +87,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * `layers.hints` を切ると描画も選択も操作もしない。
  * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
  * `sketch` ツールも同じ操作で、線は `Page.sketch` に足す。下描きのレイヤーが非表示なら何もしない。
+ * `breakoutPanelId` を渡すと、ツールによらずクリックでそのコマのはみ出しの頂点を置き、最初の頂点のクリックか Enter で閉じる。
  * `diagnosis` があり `layers.diagnosis` が立っていれば、視線経路、bubble chain、焦点ごとの診断ラベル、
  * ページ下の集計行と凡例を重ねる。そのとき焦点の素のラベルは診断ラベルに譲る。
  * `turn` があれば、めくりの直前のページの最後のコマに「めくり」、直後のページの最初のコマに「めくり後」の印を重ねる。
@@ -144,6 +147,16 @@ export function EditorCanvas(props: EditorCanvasProps) {
     selection: props.selection,
     onChange: props.onChange,
     onSelect: props.onSelect,
+  })
+  const breakoutTool = useBreakoutTool({
+    page,
+    width: pageW,
+    height: pageH,
+    view,
+    panning,
+    panelId: props.breakoutPanelId ?? null,
+    onChange: props.onChange,
+    onEnd: () => props.onBreakoutEnd?.(),
   })
   const move = useMove({
     page,
@@ -238,7 +251,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
     ? 'grabbing'
     : spaceHeld
       ? 'grab'
-      : props.tool === 'panel' || hintTool.active || scribbling
+      : breakoutTool.draft || props.tool === 'panel' || hintTool.active || scribbling
         ? 'crosshair'
         : props.tool === 'bubble'
           ? selection.hovered?.kind === 'bubble'
@@ -282,6 +295,8 @@ export function EditorCanvas(props: EditorCanvasProps) {
       }}
       onPointerDown={(e) => {
         if (props.onContextMenu && !scribbling) longPress.onPointerDown(e)
+        // 頂点を置くクリックを、パンや他のツールより先に取る
+        breakoutTool.handlers.onPointerDown(e)
         viewport.handlers.onPointerDown(e)
         panelTool.handlers.onPointerDown(e)
         bubbleTool.handlers.onPointerDown(e)
@@ -300,6 +315,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
           return
         }
         longPress.onPointerMove(e)
+        breakoutTool.handlers.onPointerMove(e)
         viewport.handlers.onPointerMove(e)
         panelTool.handlers.onPointerMove(e)
         bubbleTool.handlers.onPointerMove(e)
@@ -334,6 +350,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
       }}
       onKeyDown={(e) => {
         if (
+          breakoutTool.handlers.onKeyDown(e) ||
           panelTool.handlers.onKeyDown(e) ||
           bubbleTool.handlers.onKeyDown(e) ||
           hintTool.handlers.onKeyDown(e) ||
@@ -451,6 +468,14 @@ export function EditorCanvas(props: EditorCanvasProps) {
         draft={bubbleTool.draft ?? move.bubbleDraft}
         handleSize={bubbleTool.handleSize}
       />
+      {breakoutTool.draft && breakoutTool.draft.points.length > 0 && (
+        <BreakoutToolLayer
+          draft={breakoutTool.draft}
+          width={pageW}
+          height={pageH}
+          closeSize={breakoutTool.closeSize}
+        />
+      )}
       <SfxToolLayer rotation={hintTool.rotation} handleSize={hintTool.handleSize} />
     </svg>
   )
@@ -3074,6 +3099,71 @@ if (import.meta.vitest) {
       fire(svg, pointer('pointerup', { id: 1, ...to }))
       expect(onChange).not.toHaveBeenCalled()
       expect(onSelect).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('breakout tool', () => {
+    const triangle = [clientAt(0.1, 0.1), clientAt(0.4, 0.1), clientAt(0.25, 0.3)]
+    const expected = [
+      { x: 0.1, y: 0.1 },
+      { x: 0.4, y: 0.1 },
+      { x: 0.25, y: 0.3 },
+    ]
+
+    test('clicks place vertices, and a click on the first vertex closes the polygon with one patch', async () => {
+      const onChange = vi.fn()
+      const onBreakoutEnd = vi.fn()
+      const svg = await render({ breakoutPanelId: 'pn_2', onChange, onBreakoutEnd })
+      layout(svg)
+      for (const at of triangle) click(svg, at)
+      fire(svg, pointer('pointermove', { id: 1, ...clientAt(0.3, 0.4) }))
+      expect(svg.querySelectorAll('[data-breakout-vertex]')).toHaveLength(3)
+      expect(svg.querySelector('[data-breakout-close]')).not.toBeNull()
+      expect(onChange).not.toHaveBeenCalled()
+      click(svg, triangle[0] as { x: number; y: number })
+      expect(patchOf(onChange)).toEqual([
+        { op: 'add', path: '/panels/1/breakout', value: expected },
+      ])
+      expect(onBreakoutEnd).toHaveBeenCalledTimes(1)
+      expect(svg.querySelector('[data-layer="breakout-tool"]')).toBeNull()
+    })
+
+    test('Backspace removes the last vertex and Enter closes with three or more', async () => {
+      const onChange = vi.fn()
+      const onBreakoutEnd = vi.fn()
+      const svg = await render({ breakoutPanelId: 'pn_2', onChange, onBreakoutEnd })
+      layout(svg)
+      for (const at of triangle) click(svg, at)
+      key(svg, { key: 'Backspace' })
+      expect(svg.querySelectorAll('[data-breakout-vertex]')).toHaveLength(2)
+      key(svg, { key: 'Enter' })
+      expect(onChange).not.toHaveBeenCalled()
+      click(svg, triangle[2] as { x: number; y: number })
+      key(svg, { key: 'Enter' })
+      expect(patchOf(onChange)).toEqual([
+        { op: 'add', path: '/panels/1/breakout', value: expected },
+      ])
+      expect(onBreakoutEnd).toHaveBeenCalledTimes(1)
+    })
+
+    test('Escape cancels without a patch, and other keys are left to the canvas', async () => {
+      const onChange = vi.fn()
+      const onBreakoutEnd = vi.fn()
+      const svg = await render({ breakoutPanelId: 'pn_2', onChange, onBreakoutEnd })
+      layout(svg)
+      click(svg, triangle[0] as { x: number; y: number })
+      expect(key(svg, { key: 'a' }).defaultPrevented).toBe(false)
+      key(svg, { key: 'Escape' })
+      expect(onChange).not.toHaveBeenCalled()
+      expect(onBreakoutEnd).toHaveBeenCalledTimes(1)
+      expect(svg.querySelector('[data-layer="breakout-tool"]')).toBeNull()
+    })
+
+    test('a click outside the page places nothing', async () => {
+      const svg = await render({ breakoutPanelId: 'pn_2' })
+      layout(svg)
+      click(svg, { x: -10, y: -10 })
+      expect(svg.querySelector('[data-breakout-vertex]')).toBeNull()
     })
   })
 
