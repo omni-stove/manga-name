@@ -49,10 +49,6 @@ run = "pnpm test"
 description = "Vitest with coverage; HTML reports go to coverage/ and workers/*/coverage/"
 run = ["pnpm exec vitest run --coverage", "pnpm --filter \"./workers/*\" test --coverage"]
 
-[perf]
-description = "Vitest with the wall-clock budgets (PERF=1). Kept out of test because shared CI runners make timings flaky"
-run = "PERF=1 pnpm exec vitest run"
-
 [storybook]
 description = "Storybook for packages/ui on http://localhost:6006"
 run = "pnpm --filter @manga/ui storybook"

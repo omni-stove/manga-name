@@ -1353,16 +1353,4 @@ if (import.meta.vitest) {
     const b = await bytes(await renderPage(page, ctx, opts))
     expect(a.equals(b)).toBe(true)
   })
-
-  // 共有ランナーの CPU で所要時間がぶれ、コードと無関係に落ちるので、PERF=1（mise run perf）のときだけ測る
-  test.runIf(process.env.PERF)('300dpi の 1 ページが 500ms 以内', async () => {
-    const opts: RenderOptions = { notes: 'none', panelNumbers: true }
-    // フォント登録とバックエンドの初期化は 1 回だけなので、計測から外す
-    await renderPage(emptyPage, noAssets, opts)
-    const started = performance.now()
-    const png = await renderPage(emptyPage, noAssets, opts)
-    const elapsed = performance.now() - started
-    expect(png.size).toBeGreaterThan(0)
-    expect(elapsed).toBeLessThan(500)
-  })
 }

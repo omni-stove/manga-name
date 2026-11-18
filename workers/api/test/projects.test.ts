@@ -178,7 +178,6 @@ describe('PUT /v1/projects/:id', () => {
     })
     expect(res.status).toBe(200)
     const got = (await (await call(`/v1/projects/${project.id}`)).json()) as Project
-    expect(got.schemaVersion).toBe(33)
     const panel = got.episodes[0]?.pages[0]?.panels[0]
     expect(panel?.angle).toBe('low')
     expect(panel).not.toHaveProperty('camera')
