@@ -27,7 +27,9 @@ test('見開きは右ページから足せ、見開きを割る追加、削除�
   )
   // 次は 5 ページ目（左）なので見開きを始められない
   await expect(spread).toBeDisabled()
+  await page.getByRole('button', { name: m.web_episode_settings() }).click()
   await expect(startsRight).toBeDisabled()
+  await page.getByRole('button', { name: m.cancel() }).click()
   await expect(
     card(m.web_episode_page_number({ number: 1 })).getByRole('button', { name: m.remove() }),
   ).toBeDisabled()
