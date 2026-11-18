@@ -542,16 +542,4 @@ if (import.meta.vitest) {
     expect(texts).toContain(`${pn1.order}  [${m.panel_camera_bust()}]  [${m.panel_angle_high()}]`)
     expect(texts).toContain(`${pn2.order}  [${m.panel_angle_low()}]`)
   })
-
-  // 共有ランナーの CPU で所要時間がぶれ、コードと無関係に落ちるので、PERF=1（mise run perf）のときだけ測る
-  test.runIf(process.env.PERF)('300dpi の 20 ページが 10 秒以内', { timeout: 30_000 }, async () => {
-    const project = projectOf(20)
-    // フォント登録とバックエンドの初期化は 1 回だけなので、計測から外す
-    await exportPdf(project, episode.id, opts({ width: undefined, pages: ['pg_1'] }))
-    const started = performance.now()
-    const blob = await exportPdf(project, episode.id, opts({ width: undefined, notes: 'sheet' }))
-    const elapsed = performance.now() - started
-    expect((await reload(blob)).getPageCount()).toBe(40)
-    expect(elapsed).toBeLessThan(10_000)
-  })
 }

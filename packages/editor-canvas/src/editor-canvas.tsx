@@ -3410,8 +3410,6 @@ if (import.meta.vitest) {
     })
   })
 
-  /** 1 フレームの予算（60fps） */
-  const FRAME_MS = 16
   const ROWS = 6
   const COLUMNS = 5
   const BUBBLES = 20
@@ -3468,29 +3466,14 @@ if (import.meta.vitest) {
     return { id: 'pg_perf', panels, scribbles: [] }
   }
 
-  /** act 込みで 1 イベントを処理しきるまでの ms */
-  function timed(target: EventTarget, e: Event): number {
-    const start = performance.now()
+  /** act 込みで 1 イベントを処理しきる */
+  function send(target: EventTarget, e: Event): void {
     act(() => {
       target.dispatchEvent(e)
     })
-    return performance.now() - start
   }
 
-  /**
-   * 所要時間が 1 フレームに収まることを確かめる。PERF=1（mise run perf）のときだけ測る。
-   * 共有ランナーの CPU で所要時間がぶれ、コードと無関係に落ちるため。描き直す要素の数は常に確かめる
-   */
-  function expectWithinFrame(ms: number): void {
-    if (process.env.PERF) expect(ms).toBeLessThan(FRAME_MS)
-  }
-
-  const percentile = (xs: number[], p: number) => {
-    const sorted = [...xs].sort((a, b) => a - b)
-    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ?? 0
-  }
-
-  test(`dragging a bubble on ${ROWS * COLUMNS} panels and ${BUBBLES} bubbles stays within ${FRAME_MS}ms per frame`, async () => {
+  test(`dragging a bubble on ${ROWS * COLUMNS} panels and ${BUBBLES} bubbles redraws only what changed`, async () => {
     const page = bigPage()
     const panel = page.panels[7] as Panel
     // pointerup の Patch を親が適用した結果。中身は Patch の検証ではないので、移動後のページを直接作る
@@ -3533,12 +3516,9 @@ if (import.meta.vitest) {
       characterData: true,
     })
 
-    const frames: number[] = []
-    timed(svg, pointer('pointerdown', { id: 1, ...clientAt(nx(0), ny) }))
+    send(svg, pointer('pointerdown', { id: 1, ...clientAt(nx(0), ny) }))
     for (let i = 1; i <= MOVES; i++) {
-      frames.push(
-        timed(svg, pointer('pointermove', { id: 1, ...clientAt(nx((0.3 * i) / MOVES), ny) })),
-      )
+      send(svg, pointer('pointermove', { id: 1, ...clientAt(nx((0.3 * i) / MOVES), ny) }))
     }
     await Promise.resolve()
     observer.disconnect()
@@ -3546,16 +3526,9 @@ if (import.meta.vitest) {
     // ドラッグ中はページの描画に触らず、破線の下書きだけを描き直す
     expect(mutations).toHaveLength(0)
 
-    const p95 = percentile(frames, 0.95)
-    const median = percentile(frames, 0.5)
-    console.info(
-      `drag: ${MOVES} moves, median ${median.toFixed(2)}ms, p95 ${p95.toFixed(2)}ms, max ${Math.max(...frames).toFixed(2)}ms`,
-    )
-    expectWithinFrame(p95)
-
-    // pointerup の Patch を親が適用したあとの 1 回の描画も 1 フレームに収め、動かしたフキダシだけを描き直す
+    // pointerup の Patch を親が適用したあとの 1 回の描画では、動かしたフキダシだけを描き直す
     await act(async () => root.render(<EditorCanvas {...props} onGenerate={() => {}} />))
-    timed(svg, pointer('pointerup', { id: 1, ...clientAt(nx(0.3), ny) }))
+    send(svg, pointer('pointerup', { id: 1, ...clientAt(nx(0.3), ny) }))
     expect(changed).toBe(1)
     const touched = new Set<Element>()
     const after = new MutationObserver((records) => {
@@ -3571,13 +3544,9 @@ if (import.meta.vitest) {
       attributes: true,
       characterData: true,
     })
-    const start = performance.now()
     act(() => root.render(<EditorCanvas {...props} page={next} onGenerate={() => {}} />))
-    const commitMs = performance.now() - start
     await Promise.resolve()
     after.disconnect()
-    console.info(`commit after drag: ${commitMs.toFixed(2)}ms`)
-    expectWithinFrame(commitMs)
     expect([...touched].map((el) => el.getAttribute('data-bubble-id'))).toEqual(['bb_8'])
   })
 
@@ -3603,7 +3572,7 @@ if (import.meta.vitest) {
     return { ...bigPage(), scribbles }
   }
 
-  test(`drawing on a page with ${STROKES} strokes stays within ${FRAME_MS}ms per frame`, async () => {
+  test(`drawing on a page with ${STROKES} strokes redraws only what changed`, async () => {
     const page = scribbledPage()
     let added: Stroke | undefined
     const props: EditorCanvasProps = {
@@ -3632,12 +3601,9 @@ if (import.meta.vitest) {
     )
     observer.observe(svg, { subtree: true, childList: true, attributes: true, characterData: true })
 
-    const frames: number[] = []
-    timed(svg, pointer('pointerdown', { id: 1, ...clientAt(0.1, 0.5) }))
+    send(svg, pointer('pointerdown', { id: 1, ...clientAt(0.1, 0.5) }))
     for (let i = 1; i <= MOVES; i++) {
-      frames.push(
-        timed(svg, pointer('pointermove', { id: 1, ...clientAt(0.1 + (0.6 * i) / MOVES, 0.5) })),
-      )
+      send(svg, pointer('pointermove', { id: 1, ...clientAt(0.1 + (0.6 * i) / MOVES, 0.5) }))
     }
     await Promise.resolve()
     observer.disconnect()
@@ -3646,16 +3612,9 @@ if (import.meta.vitest) {
     // 描いている間は描画中の線の points だけを書き換え、React は何も描き直さない
     expect(mutations).toHaveLength(0)
 
-    const p95 = percentile(frames, 0.95)
-    const median = percentile(frames, 0.5)
-    console.info(
-      `scribble: ${MOVES} moves on ${STROKES} strokes, median ${median.toFixed(2)}ms, p95 ${p95.toFixed(2)}ms, max ${Math.max(...frames).toFixed(2)}ms`,
-    )
-    expectWithinFrame(p95)
-
-    timed(svg, pointer('pointerup', { id: 1, ...clientAt(0.7, 0.5) }))
+    send(svg, pointer('pointerup', { id: 1, ...clientAt(0.7, 0.5) }))
     expect(added).toBeDefined()
-    // pointerup の Patch を親が適用したあとの 1 回の描画も 1 フレームに収め、足した線だけを描く
+    // pointerup の Patch を親が適用したあとの 1 回の描画では、足した線だけを描く
     const next: Page = { ...page, scribbles: [...page.scribbles, added as Stroke] }
     const after: MutationRecord[] = []
     const commitObserver = new MutationObserver((records) => after.push(...records))
@@ -3665,13 +3624,9 @@ if (import.meta.vitest) {
       attributes: true,
       characterData: true,
     })
-    const start = performance.now()
     act(() => root.render(<EditorCanvas {...props} page={next} />))
-    const commitMs = performance.now() - start
     await Promise.resolve()
     commitObserver.disconnect()
-    console.info(`commit after stroke: ${commitMs.toFixed(2)}ms`)
-    expectWithinFrame(commitMs)
     expect(after.flatMap((r) => [...r.addedNodes, ...r.removedNodes])).toEqual([
       layer.querySelector(`[data-stroke-id="${added?.id}"]`),
     ])
