@@ -2,14 +2,32 @@ import type { Angle, Camera } from '@manga/schema'
 
 /**
  * 画像生成の画風。ネームは本原稿の下描きの前段なので、構図と芝居が読める線だけを描かせ、
- * 顔の造作、服、背景、陰影の描き込みは本原稿に残す
+ * 顔の造作、服、背景、陰影の描き込みは本原稿に残す。線を間引くうえ、ページを切り抜いたコマは解像度が落ちるので、
+ * 薄く揺れた線にはさせず、少ない線を濃くはっきり描かせる
  */
 export const NAME_STYLE =
-  'manga storyboard thumbnail (nemu), a quick rough sketch in loose grey pencil on white paper. Simple figures with round heads, a cross line for the face direction and just the eyes and mouth for the expression; the pose and gesture carry the acting. The setting as a horizon line or a few perspective lines, or blank. Hair and clothes as their silhouette only.'
+  'manga storyboard thumbnail (nemu), drawn in few, confident dark pencil lines on white paper. Simple figures with round heads, a cross line for the face direction and just the eyes and mouth for the expression; a clear outline of each figure carries the pose and gesture. Hair and clothes as their silhouette only.'
+
+/**
+ * 漫画家がコマごとにやる情報の間引き。画像生成はどのコマも端まで描き込み、書いていない人物や小物や背景を足すので、
+ * コマに書いたものだけを描かせ、主役を 1 つに絞らせ、余白を残させる。背景を描くかはコマごとの background の行で決める
+ */
+export const SPARSE_DRAWING =
+  'each panel holds only the characters, objects and setting its line names: its main subject drawn, the rest as simple shapes. Leave white space, and fewer things in a smaller panel.'
+
+/** 場面の最初のコマと引きのコマの背景。読者が場所を掴むのはここなので、場所の見分けがつく目印だけを描かせる */
+export const BACKGROUND_ESTABLISH =
+  'background: the few landmarks that identify the place, in simple lines'
+
+/** 寄りのコマの背景。場所は前のコマで伝わっているので描かせない */
+export const BACKGROUND_BLANK = 'background: blank'
+
+/** 場面の途中の中間の寄りの背景。人物の立つ位置が分かるだけの線に留めさせる */
+export const BACKGROUND_SUGGEST = 'background: a horizon line or a few perspective lines'
 
 /** 画風で抑えきれない描き込みと、配置図の白い領域（フキダシ）に入れられがちな文字を除く */
 export const NAME_NEGATIVE =
-  'color, shading, hatching, screentone, solid blacks, inked or clean line art, detailed background, detailed hair or clothing, finished illustration, text, letters, speech bubbles'
+  'color, shading, hatching, screentone, solid blacks, inked line art, detailed background, detailed hair or clothing, finished illustration, extra or background characters, crowds, cluttered composition, text, letters, speech bubbles'
 
 /** Panel.camera を画像生成に渡す呼び名 */
 export const CAMERA_SHOTS: Record<Camera, string> = {
