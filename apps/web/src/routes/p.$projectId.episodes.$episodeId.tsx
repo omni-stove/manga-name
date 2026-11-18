@@ -24,24 +24,19 @@ import { BackLink } from '../back-link'
 import { PeerBadge, usePeers } from '../collaboration-view'
 import collabStyles from '../collaboration-view.module.css'
 import common from '../common.module.css'
-import { TemplateSelect, useTemplateChoice } from '../layout-templates'
+import { AddPageDialog } from '../layout-templates'
 import { PageThumbnail } from '../page-thumbnail'
 import {
   ART_STATUS_LABELS,
-  addPagePatch,
   artStatus,
-  canAddSpread,
   canMovePage,
   canRemovePage,
   canSetStartsRight,
   movePagePatch,
   removeEpisodePatch,
-  removeLayoutTemplatePatch,
   removePagePatch,
   renameEpisodePatch,
-  resolveTemplate,
   startsRightPatch,
-  templateOptions,
 } from '../project-ops'
 import { RemoveEpisodeDialog } from '../remove-episode-dialog'
 import { GearIcon } from '../side-nav'
@@ -57,10 +52,10 @@ const projectRoute = getRouteApi('/p/$projectId')
 
 /**
  * 1 話分の見出し、ページの追加と下書き、ページのカードを並べる。
- * ページの追加では登録したコマ割りもテンプレートに選べ、選んでいるときは確認を経てその登録を消せる。
- * 見開きのページも足せ、テンプレートによらず紙面いっぱいの枠なしのコマが 1 つ入る。1 ページ目は左ページで、歯車のエピソード設定の「右ページから始める」で右にできる。
+ * ページの追加はダイアログ（AddPageDialog）でコマ割りや見開きを見比べて選ぶ。見開きには紙面いっぱいの枠なしのコマが 1 つ入る。
+ * 1 ページ目は左ページで、歯車のエピソード設定の「右ページから始める」で右にできる。
  * カードにはノンブルと左右を出し、見開きは 2 枚分の幅で並べる。
- * 見開きを始められない位置への見開きの追加と、見開きを割る移動、削除、始まりの切り替えはできない
+ * 見開きを割る移動、削除、始まりの切り替えはできない
  */
 function EpisodePages() {
   const { projectId, episodeId } = Route.useParams()
@@ -70,12 +65,9 @@ function EpisodePages() {
   const project = useProject(store)
   const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
-  const [template, setTemplate] = useTemplateChoice(project)
-  const [spread, setSpread] = useState(false)
+  const [addingPage, setAddingPage] = useState(false)
   const [editingSettings, setEditingSettings] = useState(false)
   const [removingEpisode, setRemovingEpisode] = useState(false)
-  /** 確認中の登録したコマ割り */
-  const [removingTemplate, setRemovingTemplate] = useState<{ id: string; name: string }>()
   /** 確認中のページの id と、確認の文言に出すノンブル */
   const [removingPage, setRemovingPage] = useState<{ id: string; label: string }>()
   const navigate = useNavigate()
@@ -83,10 +75,6 @@ function EpisodePages() {
   // 開いている間に Undo や他の人の操作でエピソードが消えることがある
   if (!episode) return <EpisodeNotFound projectId={projectId} />
   const pages = episode.pages
-  const registeredTemplate = templateOptions(project).find(
-    (o) => o.registered && o.value === template,
-  )
-  const spreadAvailable = canAddSpread(project, episode.id)
 
   return (
     <YStack gap={8}>
@@ -130,39 +118,8 @@ function EpisodePages() {
           {error}
         </Typography>
       )}
-      <XStack
-        as="form"
-        wrap
-        gap={12}
-        className={common.toolbar}
-        onSubmit={(e) => {
-          e.preventDefault()
-          apply(
-            m.web_episode_add_page(),
-            (p) =>
-              addPagePatch(p, resolveTemplate(p, template), episode.id, spread && spreadAvailable)
-                .patch,
-          )
-        }}
-      >
-        <TemplateSelect project={project} value={template} onChange={setTemplate} />
-        <Checkbox
-          label={m.web_episode_spread()}
-          checked={spread && spreadAvailable}
-          disabled={!spreadAvailable}
-          title={spreadAvailable ? undefined : m.web_episode_spread_unavailable()}
-          onChange={(e) => setSpread(e.currentTarget.checked)}
-        />
-        {registeredTemplate && (
-          <RemoveButton
-            size="small"
-            label={m.web_episode_remove_template()}
-            onClick={() =>
-              setRemovingTemplate({ id: registeredTemplate.value, name: registeredTemplate.label })
-            }
-          />
-        )}
-        <Button type="submit" variant="primary">
+      <XStack wrap gap={12} className={common.toolbar}>
+        <Button variant="primary" onClick={() => setAddingPage(true)}>
           {m.web_episode_add_page()}
         </Button>
         <Button
@@ -177,6 +134,15 @@ function EpisodePages() {
           {m.web_draft_title()}
         </Button>
       </XStack>
+      {addingPage && (
+        <AddPageDialog
+          project={project}
+          episodeId={episode.id}
+          apply={apply}
+          onAdded={() => setAddingPage(false)}
+          onClose={() => setAddingPage(false)}
+        />
+      )}
       {pages.length === 0 && <Typography tone="muted">{m.web_episode_no_pages()}</Typography>}
       <ol className={`${common.cards} ${styles.pages}`}>
         {pageSlots(episode).map((slot) => {
@@ -274,20 +240,6 @@ function EpisodePages() {
           )
         })}
       </ol>
-      {removingTemplate && (
-        <ConfirmDialog
-          title={m.web_episode_remove_template()}
-          message={m.web_episode_remove_template_confirm({ name: removingTemplate.name })}
-          confirmLabel={m.remove()}
-          onConfirm={() => {
-            apply(m.web_episode_remove_template(), (p) =>
-              removeLayoutTemplatePatch(p, removingTemplate.id),
-            )
-            setRemovingTemplate(undefined)
-          }}
-          onCancel={() => setRemovingTemplate(undefined)}
-        />
-      )}
       {removingPage && (
         <ConfirmDialog
           title={m.web_episode_remove_page()}

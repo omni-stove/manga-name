@@ -1,6 +1,7 @@
 import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
 import {
+  addPage,
   FIXTURE_PROJECT,
   importProject,
   openExportDialog,
@@ -13,12 +14,11 @@ test('3 ページを PDF に書き出し、見開きでは右綴じの奇数ペ�
   page,
 }) => {
   await importProject(page, FIXTURE_PROJECT)
-  const addPage = page.getByRole('button', { name: m.web_episode_add_page() })
-  await addPage.click()
+  await addPage(page)
   await expect(
     page.getByRole('link', { name: m.web_episode_page_number({ number: 2 }) }),
   ).toBeVisible()
-  await addPage.click()
+  await addPage(page)
   await openPage(page, 3)
 
   // 3 ページ目だけ絵を入れ、見開きの左右を画像の明るさで見分ける

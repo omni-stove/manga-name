@@ -23,6 +23,7 @@ import {
   panelActing,
   panelCharacterIds,
   StrengthSchema,
+  sceneHeading,
   VectorKindSchema,
   wantsArt,
 } from '@manga/schema'
@@ -30,6 +31,9 @@ import type { z } from 'zod'
 import { critiqueSystem } from './critique.prompt'
 import {
   ANGLE_SHOTS,
+  BACKGROUND_BLANK,
+  BACKGROUND_ESTABLISH,
+  BACKGROUND_SUGGEST,
   BEAT_PANEL,
   CAMERA_SHOTS,
   CHARACTER_ART_TAIL,
@@ -41,6 +45,7 @@ import {
   PAGE_ART_HEAD,
   PANEL_ART_TAIL,
   PLACEMENT_GUIDE,
+  SPARSE_DRAWING,
 } from './image.prompt'
 import { suggestLayoutSystem } from './layout.prompt'
 import { lineFields } from './lines.prompt'
@@ -126,7 +131,27 @@ const shotOf = (panel: Pick<Panel, 'camera' | 'angle'>) =>
     .join(', ')
 
 /**
- * コマの中身を表す行。舞台（コマが属するシーン）、カメラ（寄りと角度）、「間」、指示メモ、登場キャラ、芝居、焦点（重い順）、誘導線、ヒント。空の行も含む。
+ * コマの背景の行。場面の見出しがこのコマにあるか、引き（long 以上）なら場所を描かせ、寄り（close_up 以上と insert）なら描かせず、
+ * それ以外は線数本に留めさせる。寄りの指定が無ければ中間とみなす
+ */
+function backgroundOf(panel: Panel): string {
+  if (sceneHeading(panel) !== undefined) return BACKGROUND_ESTABLISH
+  switch (panel.camera) {
+    case 'extreme_long':
+    case 'long':
+      return BACKGROUND_ESTABLISH
+    case 'close_up':
+    case 'extreme_close_up':
+    case 'insert':
+      return BACKGROUND_BLANK
+    default:
+      return BACKGROUND_SUGGEST
+  }
+}
+
+/**
+ * コマの中身を表す行。舞台（コマが属するシーン。背景を描かないコマでは省く）、背景、カメラ（寄りと角度）、「間」、指示メモ、
+ * 登場キャラ、芝居、焦点（重い順）、誘導線、ヒント。空の行も含む。
  * `appearance` が false なら登場キャラは名前だけにする
  */
 function panelContent(
@@ -137,8 +162,10 @@ function panelContent(
 ): (string | undefined)[] {
   const focusByWeight = [...panel.focusPoints].sort((a, b) => b.weight - a.weight)
   const shot = shotOf(panel)
+  const background = backgroundOf(panel)
   return [
-    context.scene && `setting: ${context.scene}`,
+    background !== BACKGROUND_BLANK && context.scene ? `setting: ${context.scene}` : undefined,
+    background,
     shot && `camera: ${shot}`,
     panel.beat && BEAT_PANEL,
     panel.note,
@@ -171,6 +198,7 @@ function panelArt(req: PanelArtPromptRequest): { prompt: string; negative: strin
   return {
     prompt: joinLines([
       NAME_STYLE,
+      SPARSE_DRAWING,
       ...(panelCharacters(panel, characters).length > 0
         ? [req.characterRefs?.length ? CHARACTER_REF_GUIDE : undefined, characterDesign(settings)]
         : []),
@@ -188,7 +216,7 @@ export type PageArtPromptRequest = Omit<PageArtRequest, 'layoutPng' | 'reference
 const formatSpan = (from: number, size: number) => `${from.toFixed(2)}-${(from + size).toFixed(2)}`
 
 /**
- * ページ全体の画像生成プロンプト。画風、配置図の説明、
+ * ページ全体の画像生成プロンプト。画風、配置図の説明、情報の間引き、
  * ページに登場キャラがいてキャラの参照画像を送るときだけ CHARACTER_REF_GUIDE、
  * ページに登場キャラがいれば共通のデザインの行、ページの登場キャラの外見、
  * コマごとの行（読み順の番号とページ内の範囲、その後に panelArt と同じ中身を名前だけのキャラで）、
@@ -214,6 +242,7 @@ function pageArt(req: PageArtPromptRequest): { prompt: string; negative: string 
     prompt: joinLines([
       NAME_STYLE,
       PAGE_ART_HEAD,
+      SPARSE_DRAWING,
       ...(cast.length > 0
         ? [req.characterRefs?.length ? CHARACTER_REF_GUIDE : undefined, characterDesign(settings)]
         : []),
@@ -511,12 +540,39 @@ if (import.meta.vitest) {
       .prompt.split('\n')
     const setting = lines.indexOf('setting: 放課後・屋上')
     expect(setting).toBeGreaterThan(0)
-    expect(lines[setting + 1]).toBe('camera: long shot')
-    expect(lines[setting + 2]).toBe(BEAT_PANEL)
+    expect(lines[setting + 1]).toBe(BACKGROUND_ESTABLISH)
+    expect(lines[setting + 2]).toBe('camera: long shot')
+    expect(lines[setting + 3]).toBe(BEAT_PANEL)
 
     const plain = prompts.panelArt({ project, page, panelId: 'pn_1' }).prompt
     expect(plain).not.toContain('setting: ')
     expect(plain).not.toContain(BEAT_PANEL)
+  })
+
+  test('the background line follows the scene start and the camera, and a blank background drops the setting', () => {
+    const page = project.episodes[0]?.pages[0] as Page
+    const ids = [...page.panels].sort((a, b) => a.order - b.order).map((p) => p.id)
+    const [opening, wide, close, middle] = ids as [ID, ID, ID, ID]
+    const shots: Record<ID, Partial<Panel>> = {
+      [opening]: { scene: '放課後・屋上', camera: 'bust' },
+      [wide]: { camera: 'long' },
+      [close]: { camera: 'close_up' },
+      [middle]: { camera: undefined },
+    }
+    const shot: Page = {
+      ...page,
+      panels: page.panels.map((p) => ({ ...p, ...shots[p.id] })),
+    }
+    const scenes = Object.fromEntries(ids.map((id) => [id, '放課後・屋上']))
+    const panelLines = prompts
+      .pageArt({ project, page: shot, scenes })
+      .prompt.split('\n')
+      .filter((l) => l.startsWith('panel '))
+    expect(panelLines[0]).toContain(`setting: 放課後・屋上; ${BACKGROUND_ESTABLISH}; `)
+    expect(panelLines[1]).toContain(`setting: 放課後・屋上; ${BACKGROUND_ESTABLISH}; `)
+    expect(panelLines[2]).toContain(`): ${BACKGROUND_BLANK}; `)
+    expect(panelLines[2]).not.toContain('setting: ')
+    expect(panelLines[3]).toContain(`setting: 放課後・屋上; ${BACKGROUND_SUGGEST}; `)
   })
 
   test('panelArt and pageArt put the camera and the angle on the camera line', () => {
@@ -579,7 +635,7 @@ if (import.meta.vitest) {
       hints: { [panel.id]: 'ヒント' },
     })
     const lines = prompt.split('\n')
-    expect(lines.slice(0, 2)).toEqual([NAME_STYLE, PAGE_ART_HEAD])
+    expect(lines.slice(0, 3)).toEqual([NAME_STYLE, PAGE_ART_HEAD, SPARSE_DRAWING])
     expect(lines.filter((l) => l.startsWith('characters: '))).toHaveLength(1)
     const panelLines = lines.filter((l) => l.startsWith('panel '))
     expect(panelLines.map((l) => Number(l.split(' ')[1]))).toEqual(
@@ -618,7 +674,8 @@ if (import.meta.vitest) {
     expect(prompt.split('\n')).toEqual([
       NAME_STYLE,
       PAGE_ART_HEAD,
-      'panel 1 (x 0.00-1.00, y 0.00-1.00)',
+      SPARSE_DRAWING,
+      `panel 1 (x 0.00-1.00, y 0.00-1.00): ${BACKGROUND_SUGGEST}`,
       PANEL_ART_TAIL,
     ])
   })
@@ -658,12 +715,12 @@ if (import.meta.vitest) {
     const panelLines = prompts
       .panelArt({ project: { ...project, settings }, page, panelId: 'pn_1', characterRefs })
       .prompt.split('\n')
-    expect(panelLines.slice(1, 3)).toEqual([CHARACTER_REF_GUIDE, design])
+    expect(panelLines.slice(2, 4)).toEqual([CHARACTER_REF_GUIDE, design])
     const pageLines = prompts
       .pageArt({ project: { ...project, settings }, page, characterRefs })
       .prompt.split('\n')
-    expect(pageLines.slice(2, 4)).toEqual([CHARACTER_REF_GUIDE, design])
-    expect(pageLines[4]?.startsWith('characters: ')).toBe(true)
+    expect(pageLines.slice(3, 5)).toEqual([CHARACTER_REF_GUIDE, design])
+    expect(pageLines[5]?.startsWith('characters: ')).toBe(true)
 
     expect(
       prompts.panelArt({ project: { ...project, settings }, page, panelId: 'pn_1' }).prompt,

@@ -1,6 +1,7 @@
 import { m } from '@manga/i18n'
 import { expect, type Page, test } from '@playwright/test'
 import {
+  addPage,
   clickInsidePanel,
   comparePng,
   FIXTURE_PROJECT,
@@ -27,10 +28,7 @@ test('新しいテンプレートで足したページに新しい効果・フ�
   page,
 }) => {
   await importProject(page, FIXTURE_PROJECT)
-  await page
-    .getByLabel(m.layout_template())
-    .selectOption({ label: m.web_page_template_3rows_split_middle() })
-  await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+  await addPage(page, m.web_page_template_3rows_split_middle())
   await openPage(page, 2)
   const plainPng = await exportAs(page, 'png')
   const [plainSheet] = await readPdfSheets(await exportAs(page, 'pdf'))
