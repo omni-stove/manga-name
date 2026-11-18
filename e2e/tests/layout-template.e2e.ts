@@ -1,6 +1,7 @@
 import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
 import {
+  addPage,
   clickInsidePanel,
   FIXTURE_EPISODE,
   FIXTURE_PROJECT,
@@ -13,7 +14,6 @@ test('組み込みのテンプレートを選んでページを足すと、そ�
   page,
 }) => {
   await importProject(page, FIXTURE_PROJECT)
-  const template = page.getByLabel(m.layout_template())
   const builtIns = [
     { label: m.web_page_template_one_panel(), panels: 1 },
     { label: m.web_page_template_3rows_split_middle(), panels: 4 },
@@ -22,8 +22,7 @@ test('組み込みのテンプレートを選んでページを足すと、そ�
     { label: m.web_page_template_inset(), panels: 3 },
   ]
   for (const [i, { label, panels }] of builtIns.entries()) {
-    await template.selectOption({ label })
-    await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+    await addPage(page, label)
     await expect(
       page.getByRole('listitem').filter({ hasText: m.web_episode_page_number({ number: i + 2 }) }),
     ).toContainText(m.web_episode_page_summary({ panels }))
@@ -56,20 +55,24 @@ test('ページのコマ割りをテンプレートに登録し、そのテン�
   ).toBeVisible()
 
   await page.getByRole('link', { name: FIXTURE_EPISODE }).click()
-  const template = page.getByLabel(m.layout_template())
-  await template.selectOption({ label: '6 コマの基本' })
-  await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+  await addPage(page, '6 コマの基本')
   const added = page
     .getByRole('listitem')
     .filter({ hasText: m.web_episode_page_number({ number: 2 }) })
   await expect(added).toContainText(m.web_episode_page_summary({ panels: 6 }))
 
-  await page.getByRole('button', { name: m.web_episode_remove_template() }).click()
+  await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+  const adding = page.getByRole('dialog', { name: m.web_episode_add_page() })
+  await adding
+    .getByRole('button', { name: m.web_layout_template_remove_named({ name: '6 コマの基本' }) })
+    .click()
   const dialog = page.getByRole('dialog', { name: m.web_episode_remove_template() })
   await expect(dialog).toContainText(
     m.web_episode_remove_template_confirm({ name: '6 コマの基本' }),
   )
   await dialog.getByRole('button', { name: m.remove() }).click()
-  await expect(template.locator('option', { hasText: '6 コマの基本' })).toHaveCount(0)
-  await expect(template).toHaveValue('3rows')
+  await expect(adding.getByRole('radio', { name: '6 コマの基本' })).toHaveCount(0)
+  await expect(
+    adding.getByRole('radio', { name: m.web_page_template_3rows(), exact: true }),
+  ).toBeChecked()
 })
