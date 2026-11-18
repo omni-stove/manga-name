@@ -244,8 +244,10 @@ function addArtPatch(project: Project, pageId: ID, panelId: ID, art: PanelArt): 
 }
 
 /**
- * コマの生成をまとめる。`generate` は 1 コマ分で、
- * 配置図 → 参考画像の切り抜き → 登場キャラの参照画像 → 前回の絵（修正指示つきのとき）→ 診断のヒント → コマが属するシーン →
+ * コマの生成をまとめる。`generate` は 1 コマ分で、修正指示なしのときはページ全体を 1 回で生成し（`runPage`）、
+ * そのコマの分だけ切り抜いて入れる。他のコマには触らない。
+ * 修正指示つきのときは前の絵を渡す必要があるのでコマ単位で生成する:
+ * 配置図 → 参考画像の切り抜き → 登場キャラの参照画像 → 前回の絵 → 診断のヒント → コマが属するシーン →
  * ImageProvider → putAsset → applyPatch(ai)。
  * `generateAll` はページごとに、ページ全体を 1 回で生成してコマごとに切り抜く（`runPage`）。
  * 生成は store の外で進め、結果だけを Patch で入れるので Undo で生成前に戻せる。アセットは残る。
@@ -692,7 +694,7 @@ if (import.meta.vitest) {
       expect(notify).not.toHaveBeenCalled()
     })
 
-    test('generates the whole page in one call and puts only this panel\'s crop in', async () => {
+    test("generates the whole page in one call and puts only this panel's crop in", async () => {
       const calls = { page: 0, panel: 0 }
       const fake = createFakeImageProvider()
       const { generate, generation, store } = setup({
