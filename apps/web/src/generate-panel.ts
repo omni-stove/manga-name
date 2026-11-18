@@ -1088,6 +1088,10 @@ if (import.meta.vitest) {
     test('a panel being generated on its own is busy and gets no crop', async () => {
       let release = () => {}
       let held = false
+      let entered = () => {}
+      const reached = new Promise<void>((resolve) => {
+        entered = resolve
+      })
       const fake = createFakeImageProvider()
       const { generation, store, generate } = setup({
         async generatePageArt(req) {
@@ -1096,12 +1100,15 @@ if (import.meta.vitest) {
             held = true
             await new Promise<void>((resolve) => {
               release = resolve
+              entered()
             })
           }
           return fake.generatePageArt(req)
         },
       })
       const single = generate()
+      // 一括生成の呼び出しが先に止められないよう、単独の生成が止まるのを待つ
+      await reached
       expect(await generation.generateAll(all(store))).toMatchObject({ done: 5, busy: 1 })
       expect(pagePanels(store).find((p) => p.id === panelId)?.arts).toHaveLength(0)
       release()

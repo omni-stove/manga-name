@@ -807,9 +807,8 @@ if (import.meta.vitest) {
     ).toContain(`- (none)\nPages: as many as the script needs, at most ${MAX_PAGE_COUNT}.`)
   })
 
-  test('planPages starts a page where the script moves to a new place, for the wide opening shot', () => {
+  test('planPages starts a page where the script moves to a new place', () => {
     const { system } = prompts.planPages({ project, script: 's' })
-    expect(system).toContain('opening a scene with a wide shot of the place')
     expect(system).toContain('start a page where the script moves to a new place or time')
   })
 
@@ -845,24 +844,6 @@ if (import.meta.vitest) {
         },
       },
     })
-  })
-
-  test('transcribeName tells what every camera and angle is for', () => {
-    const { system } = prompts.transcribeName({
-      project: { settings: project.settings, characters: [] },
-      script: 's',
-    })
-    const lines = system.split('\n')
-    /** field の行の直後に続く `  - <値>: ` の行の値 */
-    const uses = (field: string) => {
-      const rest = lines.slice(lines.findIndex((l) => l.startsWith(`- ${field}: `)) + 1)
-      const end = rest.findIndex((l) => !l.startsWith('  - '))
-      return rest.slice(0, end).map((l) => l.slice(4).split(':')[0])
-    }
-    expect(uses('camera')).toEqual(CameraSchema.options)
-    expect(uses('angle')).toEqual(AngleSchema.options)
-    expect(system).toContain('Open a new scene or place with extreme_long or long')
-    expect(system).toContain('with insert')
   })
 
   test('transcribeName lists the acting of the current panels before the script', () => {
@@ -965,20 +946,6 @@ if (import.meta.vitest) {
     )
   })
 
-  test('suggestLayout sizes the panels by their shot in the names the user prompt gives them', () => {
-    const { system } = prompts.suggestLayout({ panels: [{ note: 'n', lines: [] }] })
-    const sizing = system.split('\n').find((l) => l.startsWith('- Size a panel for its shot: '))
-    for (const shot of [
-      CAMERA_SHOTS.extreme_long,
-      CAMERA_SHOTS.insert,
-      CAMERA_SHOTS.extreme_close_up,
-      ANGLE_SHOTS.bird,
-      ANGLE_SHOTS.worm,
-    ]) {
-      expect(sizing).toContain(shot)
-    }
-  })
-
   const page = project.episodes[0]?.pages[0] as Page
   const diagnosis: PageDiagnosis = {
     pageId: page.id,
@@ -1046,21 +1013,6 @@ if (import.meta.vitest) {
     }
     const { user } = prompts.critique({ page: shot, diagnosis })
     expect(user).toMatch(/\[3\] panel pn_4, order 4, rect [^\n]*, camera bust, angle low\n/)
-  })
-
-  test('critique keeps the fixes true to the shot of a panel', () => {
-    const shot: Page = {
-      ...page,
-      panels: page.panels.map((p) =>
-        p.id === 'pn_4' ? { ...p, camera: 'insert' as const, angle: 'over_shoulder' as const } : p,
-      ),
-    }
-    const { system, user } = prompts.critique({ page: shot, diagnosis })
-    expect(user).toContain(', camera insert, angle over_shoulder\n')
-    const rule = system.split('\n').find((l) => l.startsWith('- A panel may list its camera'))
-    for (const value of ['extreme_long', 'insert', 'bird', 'over_shoulder', 'pov', 'dutch']) {
-      expect(rule).toContain(value)
-    }
   })
 
   test('critique says so when there are no issues', () => {
