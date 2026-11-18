@@ -1,8 +1,13 @@
 import { m } from '@manga/i18n'
 import { BUBBLE_SHAPES } from '@manga/inspector'
-import type { Character, PlanLine } from '@manga/schema'
+import { AVAILABLE_BUBBLE_SHAPES, type Character, type PlanLine } from '@manga/schema'
 import { Input, Select, XStack } from '@manga/ui'
 import styles from './line-editor.module.css'
+
+// PlanLine の形は LLM に選ばせる形に限られ、外れた形の下書きは NameDraftSchema に断られて消えるので、それだけを出す
+const PLAN_SHAPES = BUBBLE_SHAPES.filter((s) =>
+  (AVAILABLE_BUBBLE_SHAPES as readonly string[]).includes(s.value),
+)
 
 /** セリフ 1 つの話し手、形、本文の欄 */
 export function LineEditor({
@@ -41,7 +46,7 @@ export function LineEditor({
         value={line.shape}
         onChange={(e) => onChange({ ...line, shape: e.currentTarget.value as PlanLine['shape'] })}
       >
-        {BUBBLE_SHAPES.map((s) => (
+        {PLAN_SHAPES.map((s) => (
           <option key={s.value} value={s.value}>
             {s.label}
           </option>

@@ -154,6 +154,37 @@ describe('PUT /v1/projects/:id', () => {
     expect(await chunkCount()).toBe(1)
   })
 
+  test('a v31 project is saved with its angled cameras moved to the angle', async () => {
+    const { project, etag } = await create()
+    const [episode] = fixtures.samplePage01.episodes
+    const [page] = episode?.pages ?? []
+    const [pn1, pn2, ...rest] = page?.panels ?? []
+    if (!episode || !page || !pn1 || !pn2) throw new Error('fixture has no two panels')
+    const old = {
+      ...fixtures.samplePage01,
+      id: project.id,
+      schemaVersion: 31,
+      episodes: [
+        {
+          ...episode,
+          pages: [{ ...page, panels: [{ ...pn1, camera: 'low_angle' }, pn2, ...rest] }],
+        },
+      ],
+    }
+    const res = await call(`/v1/projects/${project.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(old),
+      headers: { 'if-match': etag },
+    })
+    expect(res.status).toBe(200)
+    const got = (await (await call(`/v1/projects/${project.id}`)).json()) as Project
+    expect(got.schemaVersion).toBe(33)
+    const panel = got.episodes[0]?.pages[0]?.panels[0]
+    expect(panel?.angle).toBe('low')
+    expect(panel).not.toHaveProperty('camera')
+    expect(got.episodes[0]?.pages[0]?.panels[1]?.camera).toBe(pn2.camera)
+  })
+
   test('409 when If-Match is stale, keeping the newer version', async () => {
     const { project, etag } = await create()
     const saved = await put({ ...project, title: 'first' }, etag)

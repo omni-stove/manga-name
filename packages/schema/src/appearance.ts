@@ -1,4 +1,9 @@
-import type { Fill, Page, Panel, Point } from './project'
+import { crosshatch } from './effects/crosshatch'
+import { flowers } from './effects/flowers'
+import { radialCenter } from './effects/radial-center'
+import { sparkle } from './effects/sparkle'
+import { verticalLines } from './effects/vertical-lines'
+import type { Fill, FocusPoint, Page, Panel, Point, Rect } from './project'
 
 /** 1 ページの幅に対する比率。見開きでも 1 ページ分の幅に対してとり、1 ページのときと同じ見た目にする */
 const ROUND_RADIUS = 0.025
@@ -11,6 +16,19 @@ const SOFT_STEPS = 12
 const ROUND_SEGMENTS = 8
 const WAVE_SEGMENTS = 12
 const CLOUD_SEGMENTS = 10
+/** 集中線を入れない楕円の半径の、コマの幅と高さに対する比。短い方の半径が短辺の 0.3 倍になる */
+const FOCUS_CLEAR = 0.3
+/** 集中線の根元が楕円から外へずれる最大の量。楕円の半径に対する比で、内側の端をそろえず揃いすぎて見えないようにする */
+const FOCUS_RAGGED = 0.4
+const FOCUS_SPACING = 0.012
+const FOCUS_WIDTH = 0.005
+const SPEED_SPACING = 0.009
+const SPEED_WIDTH = 0.003
+const FLASH_SPACING = 0.02
+const FLASH_WIDTH = 0.012
+/** ベタフラの線の長さの下限。焦点から最も遠い角までの長さに対する比で、短い線の先に黒い地を残す */
+const FLASH_SHORTEST = 0.45
+const MIN_EFFECT_LINES = 24
 
 type Frame = Panel['frame']
 
@@ -166,6 +184,183 @@ export function softEdgeStrokes(unit: number): { width: number; alpha: number }[
 }
 
 /**
+ * コマの地を黒で塗るか。黒塗りのコマとベタフラのコマが黒い。地を塗る所、効果線の色、
+ * 地を持たないフキダシのセリフを白抜きにするかの判定は、どれもこの関数で黒いかを決める
+ */
+export const blackPanel = (panel: Pick<Panel, 'fill' | 'effect'>): boolean =>
+  panel.fill === 'black' || panel.effect === 'beta_flash'
+
+/** 効果線の色。黒い地のコマでは黒い線が見えないので白にする */
+export const effectInk = (panel: Pick<Panel, 'fill' | 'effect'>): string =>
+  blackPanel(panel) ? '#fff' : '#000'
+
+/**
+ * コマの効果線を、塗りつぶす多角形の列で返す。box はコマの rect を描く先の単位にした矩形、unit は 1 ページの幅で、
+ * 返す頂点も同じ単位。線はコマの輪郭の外まで伸びるので、呼び出し側が輪郭で切る。effect が無ければ空。
+ * 線のばらつきは Math.random ではなくコマの id を種にした擬似乱数でとるので、同じ Panel と同じ box からは同じ線が出る。
+ *
+ * - focus_lines: 焦点（weight が最大のもの、無ければコマの中心）へ向かう、外が太く中心で尖る三角形。
+ *   中心のまわりの楕円（FOCUS_CLEAR）には入れない
+ * - speed_lines: 両端が尖る細長い菱形を平行に並べる。向きは speed か motion のベクトルのうち strong のもの
+ *   （無ければ最初のもの）の from から to、ベクトルが無ければ横
+ * - beta_flash: focus_lines と同じ中心から外へ伸び、根元が太く先が尖る三角形。長さを不揃いにし、
+ *   中心のまわりは線が重なって白く抜ける。黒い地の上に effectInk の白で塗る
+ * - vertical_lines: コマの上の縁から垂れる細い縦線。長さを不揃いにし、下へ行くほど疎らにする
+ * - crosshatch: 交差する短い線の網。焦点（focus_lines と同じ中心）のまわりを空け、コマの縁ほど濃くする
+ * - vertical_lines、crosshatch、sparkle、flowers の形は effects/ の同じ名前のファイルが決める
+ */
+export function effectLines(
+  panel: Pick<Panel, 'id' | 'effect' | 'focusPoints' | 'vectors'>,
+  box: Rect,
+  unit: number,
+): Point[][] {
+  if (box.w <= 0 || box.h <= 0 || panel.effect === undefined) return []
+  const random = seededRandom(panel.id)
+  switch (panel.effect) {
+    case 'focus_lines':
+      return focusLines(panel, box, unit, random)
+    case 'speed_lines':
+      return speedLines(panel, box, unit, random)
+    case 'beta_flash':
+      return betaFlash(panel, box, unit, random)
+    case 'vertical_lines':
+      return verticalLines(panel, box, unit, random)
+    case 'crosshatch':
+      return crosshatch(panel, box, unit, random)
+    case 'sparkle':
+      return sparkle(panel, box, unit, random)
+    case 'flowers':
+      return flowers(panel, box, unit, random)
+  }
+}
+
+/**
+ * LLM の書き起こしとコマ割り提案に選ばせる効果。画面ではすべての効果を選べるが、縦線・カケアミ・キラキラ・花は
+ * プロンプトに使い分けをまだ教えていないので、LLM にはこの一覧に限って返させる
+ */
+export const AVAILABLE_PANEL_EFFECTS = [
+  'focus_lines',
+  'speed_lines',
+  'beta_flash',
+] as const satisfies readonly NonNullable<Panel['effect']>[]
+
+function focusLines(
+  panel: Pick<Panel, 'focusPoints'>,
+  box: Rect,
+  unit: number,
+  random: () => number,
+): Point[][] {
+  const { c, reach } = radialCenter(panel, box)
+  const rx = box.w * FOCUS_CLEAR
+  const ry = box.h * FOCUS_CLEAR
+  const count = Math.max(
+    MIN_EFFECT_LINES,
+    Math.round((2 * (box.w + box.h)) / (unit * FOCUS_SPACING)),
+  )
+  const lines: Point[][] = []
+  for (let i = 0; i < count; i++) {
+    const angle = (2 * Math.PI * (i + (random() - 0.5) * 0.8)) / count
+    const ragged = 1 + FOCUS_RAGGED * random()
+    const half = (unit * FOCUS_WIDTH * (0.4 + random())) / 2
+    const dx = Math.cos(angle)
+    const dy = Math.sin(angle)
+    const inner = ragged / Math.hypot(dx / rx, dy / ry)
+    if (inner >= reach) continue
+    const outer = { x: c.x + dx * reach, y: c.y + dy * reach }
+    lines.push([
+      { x: c.x + dx * inner, y: c.y + dy * inner },
+      { x: outer.x - dy * half, y: outer.y + dx * half },
+      { x: outer.x + dy * half, y: outer.y - dx * half },
+    ])
+  }
+  return lines
+}
+
+function speedLines(
+  panel: Pick<Panel, 'vectors'>,
+  box: Rect,
+  unit: number,
+  random: () => number,
+): Point[][] {
+  const moves = panel.vectors.filter((v) => v.kind === 'speed' || v.kind === 'motion')
+  const vector = moves.find((v) => v.strength === 'strong') ?? moves[0]
+  const vx = vector ? (vector.to.x - vector.from.x) * box.w : 1
+  const vy = vector ? (vector.to.y - vector.from.y) * box.h : 0
+  const len = Math.hypot(vx, vy)
+  const u = len > 0 ? { x: vx / len, y: vy / len } : { x: 1, y: 0 }
+  const n = { x: -u.y, y: u.x }
+  const corners = [box.x, box.x + box.w].flatMap((x) =>
+    [box.y, box.y + box.h].map((y) => ({ x, y })),
+  )
+  const along = corners.map((p) => p.x * u.x + p.y * u.y)
+  const across = corners.map((p) => p.x * n.x + p.y * n.y)
+  const [aMin, aMax] = [Math.min(...along), Math.max(...along)]
+  const [nMin, nMax] = [Math.min(...across), Math.max(...across)]
+  const span = aMax - aMin
+  const spacing = unit * SPEED_SPACING
+  const lines: Point[][] = []
+  for (let offset = nMin + spacing * random(); offset < nMax; ) {
+    const length = span * (0.35 + 0.6 * random())
+    const start = aMin + (span - length) * random()
+    const half = (unit * SPEED_WIDTH * (0.4 + random())) / 2
+    const at = (a: number, side: number) => ({
+      x: u.x * a + n.x * (offset + side),
+      y: u.y * a + n.y * (offset + side),
+    })
+    const middle = start + length / 2
+    lines.push([at(start, 0), at(middle, half), at(start + length, 0), at(middle, -half)])
+    offset += spacing * (0.5 + random())
+  }
+  return lines
+}
+
+function betaFlash(
+  panel: Pick<Panel, 'focusPoints'>,
+  box: Rect,
+  unit: number,
+  random: () => number,
+): Point[][] {
+  const { c, reach } = radialCenter(panel, box)
+  const count = Math.max(
+    MIN_EFFECT_LINES,
+    Math.round((2 * (box.w + box.h)) / (unit * FLASH_SPACING)),
+  )
+  return Array.from({ length: count }, (_, i) => {
+    const angle = (2 * Math.PI * (i + (random() - 0.5) * 0.8)) / count
+    const length = reach * (FLASH_SHORTEST + (1 - FLASH_SHORTEST) * random())
+    const half = (unit * FLASH_WIDTH * (0.4 + random())) / 2
+    const dx = Math.cos(angle)
+    const dy = Math.sin(angle)
+    return [
+      { x: c.x - dy * half, y: c.y + dx * half },
+      { x: c.x + dx * length, y: c.y + dy * length },
+      { x: c.x + dy * half, y: c.y - dx * half },
+    ]
+  })
+}
+
+/** 文字列から種を作る 0 以上 1 未満の擬似乱数列（FNV-1a で種を作り mulberry32 で回す）。どの環境でも同じ列になる */
+function seededRandom(seed: string): () => number {
+  let state = 2166136261
+  for (let i = 0; i < seed.length; i++) state = Math.imul(state ^ seed.charCodeAt(i), 16777619)
+  return () => {
+    state = (state + 0x6d2b79f5) | 0
+    let t = Math.imul(state ^ (state >>> 15), 1 | state)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/**
+ * コマの絵に掛ける色調。コマの tone があればそれを、無ければページの tone をとり、none と省略は undefined（掛けない）を返す。
+ * 色調を掛けた絵を描く所は、どれもこの関数で色調を決める
+ */
+export const panelTone = (page: Pick<Page, 'tone'>, panel: Pick<Panel, 'tone'>): Page['tone'] => {
+  const tone = panel.tone ?? page.tone
+  return tone === 'none' ? undefined : tone
+}
+
+/**
  * 色調ごとの色の行列。SVG の feColorMatrix と同じ 4×5 の並びで、オフセットは 0〜1 の値。
  * エディタは feColorMatrix に、レンダラは画素ごとの計算にこの行列を渡し、同じ色にする
  */
@@ -183,6 +378,7 @@ export const TONE_MATRICES: Record<NonNullable<Page['tone']>, readonly number[]>
 
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
+  const { PanelEffectSchema } = await import('./project')
   const square: Point[] = [
     { x: 0, y: 0 },
     { x: 1, y: 0 },
@@ -252,6 +448,152 @@ if (import.meta.vitest) {
     expect(opacityAt(SOFT_STEPS)).toBeCloseTo(1)
     expect(opacityAt(SOFT_STEPS / 2)).toBeCloseTo(0.5)
     expect(strokes.at(-1)?.width).toBeCloseTo(2 * SOFT_DEPTH)
+  })
+
+  test('panelTone overrides the page tone with the panel tone and none removes it', () => {
+    expect(panelTone({}, {})).toBeUndefined()
+    expect(panelTone({ tone: 'sepia' }, {})).toBe('sepia')
+    expect(panelTone({ tone: 'sepia' }, { tone: 'faded' })).toBe('faded')
+    expect(panelTone({ tone: 'sepia' }, { tone: 'none' })).toBeUndefined()
+    expect(panelTone({}, { tone: 'sepia' })).toBe('sepia')
+    expect(panelTone({}, { tone: 'none' })).toBeUndefined()
+  })
+
+  const effectPanel = (
+    effect: Panel['effect'],
+    rest: Partial<Pick<Panel, 'focusPoints' | 'vectors'>> = {},
+  ): Pick<Panel, 'id' | 'effect' | 'focusPoints' | 'vectors'> => ({
+    id: 'pn_fx',
+    effect,
+    focusPoints: [],
+    vectors: [],
+    ...rest,
+  })
+  const focus = (id: string, x: number, y: number, weight: number): FocusPoint => ({
+    id,
+    kind: 'face',
+    label: id,
+    pos: { x, y },
+    weight,
+  })
+  const vector = (
+    kind: Panel['vectors'][number]['kind'],
+    strength: 'strong' | 'weak',
+    to: Point,
+  ): Panel['vectors'][number] => ({ id: `v_${kind}`, kind, from: { x: 0, y: 0 }, to, strength })
+  const box: Rect = { x: 10, y: 20, w: 100, h: 50 }
+
+  test('effectLines draws nothing without an effect or with an empty box', () => {
+    expect(effectLines(effectPanel(undefined), box, 100)).toEqual([])
+    expect(effectLines(effectPanel('focus_lines'), { ...box, w: 0 }, 100)).toEqual([])
+  })
+
+  test('effectLines gives the same lines for the same panel and different lines for another id', () => {
+    for (const effect of PanelEffectSchema.options) {
+      const a = effectLines(effectPanel(effect), box, 100)
+      expect(a.length).toBeGreaterThanOrEqual(MIN_EFFECT_LINES / 2)
+      expect(effectLines(effectPanel(effect), box, 100)).toEqual(a)
+      expect(effectLines({ ...effectPanel(effect), id: 'pn_other' }, box, 100)).not.toEqual(a)
+    }
+  })
+
+  test('focus lines point at the heaviest focus and keep out of the ellipse around it', () => {
+    const panel = effectPanel('focus_lines', {
+      focusPoints: [focus('light', 0.2, 0.2, 0.3), focus('heavy', 0.7, 0.6, 0.9)],
+    })
+    const c = { x: box.x + 0.7 * box.w, y: box.y + 0.6 * box.h }
+    const lines = effectLines(panel, box, 100)
+    expect(lines.length).toBeGreaterThanOrEqual(MIN_EFFECT_LINES)
+    for (const [tip, a, b] of lines as [Point, Point, Point][]) {
+      // 根元の 2 点の中点と先端を結ぶ線は中心を通る
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+      const cross = (tip.x - c.x) * (mid.y - c.y) - (tip.y - c.y) * (mid.x - c.x)
+      expect(Math.abs(cross)).toBeLessThan(1e-6)
+      const ex = (tip.x - c.x) / (box.w * FOCUS_CLEAR)
+      const ey = (tip.y - c.y) / (box.h * FOCUS_CLEAR)
+      expect(ex * ex + ey * ey).toBeGreaterThanOrEqual(1 - 1e-9)
+    }
+  })
+
+  test('focus lines centre on the panel when it has no focus', () => {
+    const lines = effectLines(effectPanel('focus_lines'), box, 100)
+    const c = { x: box.x + box.w / 2, y: box.y + box.h / 2 }
+    const [tip, a, b] = lines[0] as [Point, Point, Point]
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+    expect((tip.x - c.x) * (mid.y - c.y) - (tip.y - c.y) * (mid.x - c.x)).toBeCloseTo(0, 6)
+  })
+
+  const directionOf = (line: Point[]) => {
+    const [start, , end] = line as [Point, Point, Point]
+    return Math.atan2(end.y - start.y, end.x - start.x)
+  }
+
+  test('speed lines run along the strong speed or motion vector, then the first, then sideways', () => {
+    const strong = effectPanel('speed_lines', {
+      vectors: [
+        vector('gaze', 'strong', { x: 0, y: 1 }),
+        vector('speed', 'weak', { x: 1, y: 0 }),
+        vector('motion', 'strong', { x: 1, y: 1 }),
+      ],
+    })
+    // box の中の正規化座標なので、(1, 1) は box の対角の向き
+    const diagonal = Math.atan2(box.h, box.w)
+    for (const line of effectLines(strong, box, 100)) {
+      expect(directionOf(line)).toBeCloseTo(diagonal, 6)
+    }
+    const first = effectPanel('speed_lines', {
+      vectors: [vector('speed', 'weak', { x: 0, y: 1 }), vector('motion', 'weak', { x: 1, y: 0 })],
+    })
+    for (const line of effectLines(first, box, 100)) {
+      expect(directionOf(line)).toBeCloseTo(Math.PI / 2, 6)
+    }
+    const gazeOnly = effectPanel('speed_lines', {
+      vectors: [vector('gaze', 'strong', { x: 0, y: 1 })],
+    })
+    const sideways = effectLines(gazeOnly, box, 100)
+    expect(sideways.length).toBeGreaterThan(0)
+    for (const line of sideways) expect(directionOf(line)).toBeCloseTo(0, 6)
+  })
+
+  test('speed lines spread across the whole box', () => {
+    const ys = effectLines(effectPanel('speed_lines'), box, 100).map((l) => (l[0] as Point).y)
+    expect(Math.min(...ys)).toBeLessThan(box.y + box.h * 0.1)
+    expect(Math.max(...ys)).toBeGreaterThan(box.y + box.h * 0.9)
+  })
+
+  test('beta flash wedges spread from the heaviest focus and taper outward to uneven lengths', () => {
+    const panel = effectPanel('beta_flash', {
+      focusPoints: [focus('light', 0.2, 0.2, 0.3), focus('heavy', 0.7, 0.6, 0.9)],
+    })
+    const c = { x: box.x + 0.7 * box.w, y: box.y + 0.6 * box.h }
+    const lines = effectLines(panel, box, 100)
+    expect(lines.length).toBeGreaterThanOrEqual(MIN_EFFECT_LINES)
+    const lengths = (lines as [Point, Point, Point][]).map(([a, tip, b]) => {
+      // 根元の 2 点の中点が中心にあり、根元の幅は線の長さより十分に短い
+      expect((a.x + b.x) / 2).toBeCloseTo(c.x, 6)
+      expect((a.y + b.y) / 2).toBeCloseTo(c.y, 6)
+      const length = Math.hypot(tip.x - c.x, tip.y - c.y)
+      expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeLessThan(length / 2)
+      return length
+    })
+    expect(Math.max(...lengths) - Math.min(...lengths)).toBeGreaterThan(10)
+  })
+
+  test('beta flash centres on the panel when it has no focus', () => {
+    const [a, , b] = effectLines(effectPanel('beta_flash'), box, 100)[0] as [Point, Point, Point]
+    expect((a.x + b.x) / 2).toBeCloseTo(box.x + box.w / 2, 6)
+    expect((a.y + b.y) / 2).toBeCloseTo(box.y + box.h / 2, 6)
+  })
+
+  test('a black fill and a beta flash make the panel black and the effect ink white', () => {
+    expect(blackPanel({})).toBe(false)
+    expect(blackPanel({ effect: 'focus_lines' })).toBe(false)
+    expect(blackPanel({ fill: 'black' })).toBe(true)
+    expect(blackPanel({ effect: 'beta_flash' })).toBe(true)
+    expect(effectInk({})).toBe('#000')
+    expect(effectInk({ effect: 'speed_lines' })).toBe('#000')
+    expect(effectInk({ fill: 'black' })).toBe('#fff')
+    expect(effectInk({ effect: 'beta_flash' })).toBe('#fff')
   })
 
   test('hasFrameLine is false only for none and soft', () => {

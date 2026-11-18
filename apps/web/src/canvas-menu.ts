@@ -1,13 +1,25 @@
 import {
+  detachBubblePatch,
   fitBubblesPatch,
+  joinBubblesPatch,
+  joinCandidates,
+  removeLastTailPatch,
   type Selection,
   type SplitAxis,
   splitPanelPatch,
   type Tool,
 } from '@manga/editor-canvas'
 import { m } from '@manga/i18n'
-import { BUBBLE_SHAPES, FOCUS_KINDS } from '@manga/inspector'
-import { type Bubble, type Page, type Patch, type ProjectSettings, pageSizeOf } from '@manga/schema'
+import { BUBBLE_SHAPES, FOCUS_KINDS, FOCUS_MARKS } from '@manga/inspector'
+import {
+  type Bubble,
+  focusMark,
+  hasTail,
+  type Page,
+  type Patch,
+  type ProjectSettings,
+  pageSizeOf,
+} from '@manga/schema'
 import type { ContextMenuItem, SegmentedOption } from '@manga/ui'
 import { findBubble, findFocus, findPanel, findVector } from './inspector-ops'
 
@@ -19,6 +31,8 @@ export interface ElementMenuContext {
   settings: Pick<ProjectSettings, 'pageSize' | 'direction'>
   /** 出してよいツール。キーの表記もここから引く */
   tools: readonly SegmentedOption<Tool>[]
+  /** 今のツール */
+  tool: Tool
   /** `target` の要素 root の Patch を当てる */
   edit(label: string, target: Target, patch: Patch): void
   /** 当てる時点のページから page root の Patch を組んで当てる */
@@ -27,6 +41,8 @@ export interface ElementMenuContext {
   setTool(tool: Tool): void
   /** フキダシの形を選ぶメニューに切り替える */
   openShapes(): void
+  /** フキダシをつなぐ相手を選ぶメニューに切り替える */
+  openJoins(): void
 }
 
 /** 並びの中で、order が `order` のすぐ前とすぐ後の要素の order。端なら undefined */
@@ -126,6 +142,10 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
       }
     }
     return [
+      // 他のツールではコマを押すとフキダシや焦点を置くことになり、コマをドラッグで動かせるのは select ツールだけなので、そこへ切り替える
+      ...(found.panel.locked || ctx.tool === 'select'
+        ? []
+        : toolItem('select', m.web_canvas_menu_panel_move())),
       // ハンドルでのリサイズと頂点の移動は panel ツールにしか無いので、そこへ切り替える
       ...(found.panel.locked ? [] : toolItem('panel', m.web_canvas_menu_panel_resize())),
       split('vertical', m.web_canvas_menu_panel_split_vertical()),
@@ -149,11 +169,33 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
     const found = findBubble(ctx.page, target.id)
     if (!found) return []
     const shape = BUBBLE_SHAPES.find((s) => s.value === found.bubble.shape)
+    const removeTail = removeLastTailPatch(found.bubble)
+    const detach = (page: Page) => detachBubblePatch(page, target.id)
     return [
       {
         label: m.web_canvas_menu_bubble_shape({ shape: shape?.label ?? found.bubble.shape }),
         onSelect: ctx.openShapes,
       },
+      {
+        label: m.web_canvas_menu_bubble_join(),
+        disabled: joinCandidates(ctx.page, target.id).length === 0,
+        onSelect: ctx.openJoins,
+      },
+      {
+        label: m.web_canvas_menu_bubble_detach(),
+        disabled: detach(ctx.page).length === 0,
+        onSelect: () => ctx.editPage(m.web_canvas_menu_history_detach_bubble(), detach),
+      },
+      // しっぽを描かない形では、残っているしっぽを消しても見た目が変わらないので出さない
+      ...(hasTail(found.bubble.shape)
+        ? [
+            {
+              label: m.web_canvas_menu_bubble_remove_tail(),
+              disabled: removeTail.length === 0,
+              onSelect: () => move(m.web_canvas_menu_bubble_remove_tail(), removeTail),
+            },
+          ]
+        : []),
       'separator',
       ...orderItems(
         { earlier: m.web_canvas_menu_bubble_earlier(), later: m.web_canvas_menu_bubble_later() },
@@ -169,6 +211,7 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
   if (target.kind === 'focus') {
     const found = findFocus(ctx.page, target.id)
     if (!found) return []
+    const mark = focusMark(found.focus)
     return [
       ...FOCUS_KINDS.map((k) => ({
         label: k.label,
@@ -179,6 +222,20 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
             { op: 'replace', path: '/kind', value: k.value },
           ]),
       })),
+      ...(found.focus.kind === 'mark'
+        ? [
+            'separator' as const,
+            ...FOCUS_MARKS.map((k) => ({
+              label: k.label,
+              checked: k.value === mark,
+              onSelect: () =>
+                k.value !== mark &&
+                ctx.edit(m.web_canvas_menu_history_change_focus_mark(), target, [
+                  { op: 'add', path: '/mark', value: k.value },
+                ]),
+            })),
+          ]
+        : []),
       'separator',
       lock(found.focus.locked),
       remove,
@@ -205,6 +262,31 @@ export function shapeMenuItems(
   }))
 }
 
+/** つなぐ相手の項目に出すセリフの字数。超えた分は … で切る */
+const JOIN_TEXT_LENGTH = 12
+
+/** フキダシ bubble をつなぐ相手を選ぶ項目。相手は同じコマの joinCandidates で、順番とセリフの頭で見分ける */
+export function joinMenuItems(
+  bubble: Pick<Bubble, 'id'>,
+  ctx: Pick<ElementMenuContext, 'page' | 'editPage'>,
+): ContextMenuItem[] {
+  return joinCandidates(ctx.page, bubble.id).map((other) => {
+    const text = [...other.text.replace(/\s+/g, ' ').trim()]
+    const cut = text.length > JOIN_TEXT_LENGTH
+    const head = cut ? `${text.slice(0, JOIN_TEXT_LENGTH).join('')}…` : text.join('')
+    return {
+      label:
+        head === ''
+          ? m.web_canvas_menu_bubble_join_to_blank({ order: other.order })
+          : m.web_canvas_menu_bubble_join_to({ order: other.order, text: head }),
+      onSelect: () =>
+        ctx.editPage(m.web_canvas_menu_history_join_bubbles(), (page) =>
+          joinBubblesPatch(page, bubble.id, other.id),
+        ),
+    }
+  })
+}
+
 if (import.meta.vitest) {
   const { describe, expect, test, vi } = import.meta.vitest
   const { fixtures } = await import('@manga/schema')
@@ -219,11 +301,13 @@ if (import.meta.vitest) {
       { value: 'panel', label: 'コマ', shortcut: 'p' },
       { value: 'bubble', label: 'フキダシ', shortcut: 'b' },
     ],
+    tool: 'select',
     edit: vi.fn(),
     editPage: vi.fn(),
     remove: vi.fn(),
     setTool: vi.fn(),
     openShapes: vi.fn(),
+    openJoins: vi.fn(),
     ...overrides,
   })
   const item = (items: MenuItems, label: string) => {
@@ -259,6 +343,20 @@ if (import.meta.vitest) {
       expect(ctx.remove).toHaveBeenCalledWith({ kind: 'panel', id: panel.id })
       item(items, m.web_canvas_menu_panel_resize()).onSelect()
       expect(ctx.setTool).toHaveBeenCalledWith('panel')
+    })
+
+    test('a panel offers the select tool to move it only from another tool', () => {
+      const panel = page.panels[0]
+      if (!panel) throw new Error('fixture にコマがない')
+      const target = { kind: 'panel', id: panel.id } as const
+      expect(() =>
+        item(elementMenuItems(target, contextOf()), m.web_canvas_menu_panel_move()),
+      ).toThrow()
+      const ctx = contextOf({ tool: 'bubble' })
+      const move = item(elementMenuItems(target, ctx), m.web_canvas_menu_panel_move())
+      expect(move.shortcut).toBe('v')
+      move.onSelect()
+      expect(ctx.setTool).toHaveBeenCalledWith('select')
     })
 
     test('splitting a panel builds the patch from the page at the time it is applied', () => {
@@ -298,6 +396,112 @@ if (import.meta.vitest) {
       expect(ctx.openShapes).toHaveBeenCalled()
     })
 
+    test('a bubble removes its last touched tail, and offers nothing to remove without tails', () => {
+      const ctx = contextOf()
+      item(
+        elementMenuItems({ kind: 'bubble', id: 'bb_3' }, ctx),
+        m.web_canvas_menu_bubble_remove_tail(),
+      ).onSelect()
+      expect(ctx.edit).toHaveBeenCalledWith(
+        m.web_canvas_menu_bubble_remove_tail(),
+        { kind: 'bubble', id: 'bb_3' },
+        [{ op: 'remove', path: '/tails' }],
+      )
+
+      const withBubble = (bubble: Partial<Bubble>) => ({
+        ...page,
+        panels: page.panels.map((p) => ({
+          ...p,
+          bubbles: p.bubbles.map((b) => (b.id === 'bb_3' ? { ...b, ...bubble } : b)),
+        })),
+      })
+      const two = [
+        { x: 0.1, y: 0.9 },
+        { x: 0.9, y: 0.9 },
+      ]
+      const twoCtx = contextOf({ page: withBubble({ tails: two }) })
+      item(
+        elementMenuItems({ kind: 'bubble', id: 'bb_3' }, twoCtx),
+        m.web_canvas_menu_bubble_remove_tail(),
+      ).onSelect()
+      expect(twoCtx.edit).toHaveBeenCalledWith(
+        m.web_canvas_menu_bubble_remove_tail(),
+        { kind: 'bubble', id: 'bb_3' },
+        [{ op: 'remove', path: '/tails/1' }],
+      )
+
+      const bare = elementMenuItems(
+        { kind: 'bubble', id: 'bb_3' },
+        contextOf({ page: withBubble({ tails: undefined }) }),
+      )
+      expect(item(bare, m.web_canvas_menu_bubble_remove_tail()).disabled).toBe(true)
+      const narration = elementMenuItems(
+        { kind: 'bubble', id: 'bb_3' },
+        contextOf({ page: withBubble({ shape: 'narration' }) }),
+      )
+      expect(() => item(narration, m.web_canvas_menu_bubble_remove_tail())).toThrow()
+    })
+
+    test('a bubble opens the menu to join another of its panel, and detaches a joined one', () => {
+      // bb_3 は pn_3 のただ 1 つのフキダシ
+      const lone = elementMenuItems({ kind: 'bubble', id: 'bb_3' }, contextOf())
+      expect(item(lone, m.web_canvas_menu_bubble_join()).disabled).toBe(true)
+      expect(item(lone, m.web_canvas_menu_bubble_detach()).disabled).toBe(true)
+
+      const pair = (joinedTo?: string): Page => ({
+        ...page,
+        panels: page.panels.map((p) => {
+          const first = p.bubbles[0]
+          if (p.id !== 'pn_3' || !first) return p
+          const next = { ...first, id: 'bb_3b', order: 2, text: '  続けて\n喋る  ', joinedTo }
+          return { ...p, bubbles: [first, next] }
+        }),
+      })
+      const ctx = contextOf({ page: pair() })
+      const items = elementMenuItems({ kind: 'bubble', id: 'bb_3' }, ctx)
+      expect(item(items, m.web_canvas_menu_bubble_detach()).disabled).toBe(true)
+      item(items, m.web_canvas_menu_bubble_join()).onSelect()
+      expect(ctx.openJoins).toHaveBeenCalled()
+
+      const joins = joinMenuItems({ id: 'bb_3' }, ctx)
+      expect(joins.map((j) => j.label)).toEqual([
+        m.web_canvas_menu_bubble_join_to({ order: 2, text: '続けて 喋る' }),
+      ])
+      joins[0]?.onSelect()
+      const [label, build] = vi.mocked(ctx.editPage).mock.calls[0] ?? []
+      expect(label).toBe(m.web_canvas_menu_history_join_bubbles())
+      expect(build?.(pair())).toEqual([
+        { op: 'add', path: '/panels/2/bubbles/0/joinedTo', value: 'bb_3b' },
+      ])
+
+      const joinedCtx = contextOf({ page: pair('bb_3') })
+      const joined = elementMenuItems({ kind: 'bubble', id: 'bb_3' }, joinedCtx)
+      expect(item(joined, m.web_canvas_menu_bubble_join()).disabled).toBe(true)
+      item(joined, m.web_canvas_menu_bubble_detach()).onSelect()
+      const [detachLabel, detach] = vi.mocked(joinedCtx.editPage).mock.calls[0] ?? []
+      expect(detachLabel).toBe(m.web_canvas_menu_history_detach_bubble())
+      expect(detach?.(pair('bb_3'))).toEqual([
+        { op: 'remove', path: '/panels/2/bubbles/1/joinedTo' },
+      ])
+    })
+
+    test('joinMenuItems cuts a long line and names a blank one', () => {
+      const withText = (text: string): Page => ({
+        ...page,
+        panels: page.panels.map((p) => {
+          const first = p.bubbles[0]
+          if (p.id !== 'pn_3' || !first) return p
+          return { ...p, bubbles: [first, { ...first, id: 'bb_3b', order: 2, text }] }
+        }),
+      })
+      const label = (text: string) =>
+        joinMenuItems({ id: 'bb_3' }, contextOf({ page: withText(text) }))[0]?.label
+      expect(label('あいうえおかきくけこさしすせそ')).toBe(
+        m.web_canvas_menu_bubble_join_to({ order: 2, text: 'あいうえおかきくけこさし…' }),
+      )
+      expect(label('  ')).toBe(m.web_canvas_menu_bubble_join_to_blank({ order: 2 }))
+    })
+
     test('locking toggles the locked flag of the element', () => {
       const ctx = contextOf()
       item(
@@ -329,6 +533,43 @@ if (import.meta.vitest) {
         { kind: 'bubble', id: 'bb_3' },
         [{ op: 'remove', path: '/locked' }],
       )
+    })
+
+    test('a focus switches its kind to a mark, and a mark switches its mark', () => {
+      const target = { kind: 'focus', id: 'fp_2_vial' } as const
+      const ctx = contextOf()
+      const items = elementMenuItems(target, ctx)
+      expect(() => item(items, m.focus_point_mark_anger())).toThrow()
+      item(items, m.focus_point_kind_mark()).onSelect()
+      expect(ctx.edit).toHaveBeenCalledWith(m.web_canvas_menu_history_change_focus_kind(), target, [
+        { op: 'replace', path: '/kind', value: 'mark' },
+      ])
+
+      const asMark = (mark?: 'sigh'): Page => ({
+        ...page,
+        panels: page.panels.map((p) => ({
+          ...p,
+          focusPoints: p.focusPoints.map((f) =>
+            f.id === target.id ? { ...f, kind: 'mark' as const, mark } : f,
+          ),
+        })),
+      })
+      const markCtx = contextOf({ page: asMark() })
+      const marks = elementMenuItems(target, markCtx)
+      expect(item(marks, m.focus_point_kind_mark()).checked).toBe(true)
+      // mark を持たない漫符は汗として描くので、汗に印を付ける
+      expect(item(marks, m.focus_point_mark_sweat()).checked).toBe(true)
+      item(marks, m.focus_point_mark_sweat()).onSelect()
+      expect(markCtx.edit).not.toHaveBeenCalled()
+      item(marks, m.focus_point_mark_anger()).onSelect()
+      expect(markCtx.edit).toHaveBeenCalledWith(
+        m.web_canvas_menu_history_change_focus_mark(),
+        target,
+        [{ op: 'add', path: '/mark', value: 'anger' }],
+      )
+      const sigh = elementMenuItems(target, contextOf({ page: asMark('sigh') }))
+      expect(item(sigh, m.focus_point_mark_sigh()).checked).toBe(true)
+      expect(item(sigh, m.focus_point_mark_sweat()).checked).toBe(false)
     })
 
     test('an element that is gone has no items', () => {

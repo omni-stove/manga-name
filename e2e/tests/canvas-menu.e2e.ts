@@ -1,6 +1,6 @@
 import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
-import { FIXTURE_PROJECT, importProject, openPage, panelInspector } from './app'
+import { FIXTURE_PROJECT, importProject, openPage, panelInspector, selectTool } from './app'
 
 test('キャンバスの何も無いところを右クリックしてメニューから操作できる', async ({ page }) => {
   await importProject(page, FIXTURE_PROJECT)
@@ -58,6 +58,26 @@ test('コマを右クリックして分割し、サイズを変えるハンド�
   await expect(page.locator('[data-handle]')).toHaveCount(8)
 })
 
+test('フキダシのツールのままコマを右クリックして、コマを動かせる選択ツールに戻せる', async ({
+  page,
+}) => {
+  await importProject(page, FIXTURE_PROJECT)
+  await openPage(page, 1)
+  const tools = page.getByRole('group', { name: m.web_editor_tools() })
+  await page.keyboard.press('b')
+  await expect(tools.getByRole('radio', { name: m.bubble() })).toBeChecked()
+
+  const box = await page.locator('[data-panel-id]').first().boundingBox()
+  if (!box) throw new Error('panel is not rendered')
+  await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.3, { button: 'right' })
+  await page
+    .getByRole('menu', { name: m.web_editor_menu_panel() })
+    .getByRole('menuitem', { name: m.web_canvas_menu_panel_move() })
+    .click()
+  await expect(tools.getByRole('radio', { name: m.web_editor_tool_select() })).toBeChecked()
+  await expect(panelInspector(page)).toBeVisible()
+})
+
 test('フキダシを右クリックして形を変えられる', async ({ page }) => {
   await importProject(page, FIXTURE_PROJECT)
   await openPage(page, 1)
@@ -89,6 +109,46 @@ test('フキダシを右クリックして形を変えられる', async ({ page 
   await shapes.getByRole('menuitemradio', { name: m.bubble_shape_shout() }).click()
   await expect(shapes).toBeHidden()
   await expect(bubble).toHaveAttribute('data-shape', 'shout')
+})
+
+test('フキダシにしっぽを足して 2 本にし、右クリックから最後に触ったしっぽを消せる', async ({
+  page,
+}) => {
+  await importProject(page, FIXTURE_PROJECT)
+  await openPage(page, 1)
+  await page
+    .getByRole('group', { name: m.web_editor_layers() })
+    .getByLabel(m.web_editor_layer_hints())
+    .uncheck()
+  await selectTool(page, m.bubble())
+
+  // フィクスチャの bb_3 はしっぽを 1 本持つ
+  const bubble = page.locator('.ec-bubble[data-bubble-id="bb_3"]')
+  const box = await bubble.boundingBox()
+  if (!box) throw new Error('bubble is not rendered')
+  const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  await page.mouse.click(center.x, center.y)
+  const tips = page.locator('[data-tail-handle="set"]')
+  await expect(tips).toHaveCount(1)
+
+  const add = await page.locator('[data-tail-handle="unset"]').boundingBox()
+  if (!add) throw new Error('the handle to add a tail is not rendered')
+  const from = { x: add.x + add.width / 2, y: add.y + add.height / 2 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(from.x + 30, from.y + 40, { steps: 8 })
+  await page.mouse.up()
+  await expect(tips).toHaveCount(2)
+  // しっぽ 2 本と本体を白で塗る
+  await expect(bubble.locator('path[fill="#fff"]:not([stroke])')).toHaveCount(3)
+
+  await page.mouse.click(center.x, center.y, { button: 'right' })
+  await page
+    .getByRole('menu', { name: m.web_editor_menu_bubble() })
+    .getByRole('menuitem', { name: m.web_canvas_menu_bubble_remove_tail() })
+    .click()
+  await expect(tips).toHaveCount(1)
+  await expect(bubble.locator('path[fill="#fff"]:not([stroke])')).toHaveCount(2)
 })
 
 test('選んだコマは、右クリックしなくてもインスペクタからロックと削除ができる', async ({ page }) => {

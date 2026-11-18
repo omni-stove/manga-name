@@ -136,7 +136,7 @@ export function PageThumbnail({
           {panel.frame !== 'none' && (
             <polygon points={outlinePoints(panel, w, h)} className={styles.ground} />
           )}
-          {panel.artId !== undefined && (
+          {currentArt(panel) !== undefined && (
             <PanelArt panel={panel} w={w} h={h} resolveAsset={resolveAsset} />
           )}
           <polygon

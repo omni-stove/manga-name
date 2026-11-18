@@ -4,7 +4,8 @@ import type { Backend } from './types'
 export const FONT_FAMILY = 'Noto Sans JP'
 const MINCHO_FAMILY = 'Noto Serif JP'
 const ROUNDED_FAMILY = 'M PLUS Rounded 1c'
-type Family = typeof FONT_FAMILY | typeof MINCHO_FAMILY | typeof ROUNDED_FAMILY
+const HAND_FAMILY = 'Yomogi'
+type Family = typeof FONT_FAMILY | typeof MINCHO_FAMILY | typeof ROUNDED_FAMILY | typeof HAND_FAMILY
 
 // どれも Google Fonts から取った SIL OFL 1.1 のフォント。ライセンスは fonts/OFL*.txt
 const FONTS: Record<Family, { url: URL; weight?: string }> = {
@@ -12,6 +13,7 @@ const FONTS: Record<Family, { url: URL; weight?: string }> = {
   [FONT_FAMILY]: { url: new URL('../fonts/NotoSansJP.ttf', import.meta.url), weight: '100 900' },
   [MINCHO_FAMILY]: { url: new URL('../fonts/NotoSerifJP.ttf', import.meta.url), weight: '200 900' },
   [ROUNDED_FAMILY]: { url: new URL('../fonts/MPLUSRounded1c.ttf', import.meta.url) },
+  [HAND_FAMILY]: { url: new URL('../fonts/Yomogi.ttf', import.meta.url) },
 }
 
 /**
@@ -23,6 +25,7 @@ const TYPEFACES: Record<NonNullable<Bubble['typeface']>, { family: Family; weigh
   bold: { family: FONT_FAMILY, weight: 700 },
   mincho: { family: MINCHO_FAMILY, weight: 400 },
   rounded: { family: ROUNDED_FAMILY, weight: 400 },
+  hand: { family: HAND_FAMILY, weight: 400 },
 }
 
 /** Canvas の font に書く値 */
@@ -54,17 +57,31 @@ export async function loadFonts(
     FONT_FAMILY,
     ...Array.from(typefaces, (t) => TYPEFACES[t].family),
   ])
-  await Promise.all(
-    Array.from(families, (family) => {
-      let loading = registered.get(family)
-      if (!loading) {
-        const { url, weight } = FONTS[family]
-        loading = getBackend().then((backend) => backend.registerFont(family, url, weight))
-        registered.set(family, loading)
-      }
-      return loading
-    }),
-  )
+  await Promise.all(Array.from(families, register))
+}
+
+/**
+ * `typeface` の書体が使うフォントだけを登録する。ブラウザでは document.fonts に入るので、編集画面の SVG も同じ字形で描ける。
+ * loadFonts と違い Noto Sans JP は読み込まない
+ */
+export function loadTypefaceFont(typeface: NonNullable<Bubble['typeface']>): Promise<void> {
+  return register(TYPEFACES[typeface].family)
+}
+
+function register(family: Family): Promise<void> {
+  let loading = registered.get(family)
+  if (!loading) {
+    const { url, weight } = FONTS[family]
+    loading = getBackend()
+      .then((backend) => backend.registerFont(family, url, weight))
+      .catch((e: unknown) => {
+        // 通信の失敗で読めなかったフォントを、次の呼び出しで読み直す
+        registered.delete(family)
+        throw e
+      })
+    registered.set(family, loading)
+  }
+  return loading
 }
 
 async function importNodeBackend(): Promise<Backend> {

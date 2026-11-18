@@ -1,0 +1,25 @@
+{
+  "name": "@manga/collab",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config ../../vitest.config.ts"
+  },
+  "dependencies": {
+    "@manga/schema": "workspace:*",
+    "immer": "^11.0.0",
+    "lib0": "^0.2.114",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.27",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

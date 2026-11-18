@@ -186,15 +186,16 @@ if (import.meta.vitest) {
       const panel = panelOf(2)
       const patch = panelPatch(sample, pageId, panel.id, [
         { op: 'add', path: '/note', value: 'n' },
-        { op: 'add', path: '/camera', value: 'low_angle' },
+        { op: 'add', path: '/angle', value: 'low' },
       ])
       expect(patch).toEqual([
         { op: 'add', path: '/episodes/0/pages/0/panels/2/note', value: 'n' },
-        { op: 'add', path: '/episodes/0/pages/0/panels/2/camera', value: 'low_angle' },
+        { op: 'add', path: '/episodes/0/pages/0/panels/2/angle', value: 'low' },
       ])
       const store = storeOf()
       store.applyPatch(patch)
       expect(store.get().episodes[0]?.pages[0]?.panels[2]?.note).toBe('n')
+      expect(store.get().episodes[0]?.pages[0]?.panels[2]?.angle).toBe('low')
     })
 
     test('replace /order swaps with the panel that holds that order', () => {

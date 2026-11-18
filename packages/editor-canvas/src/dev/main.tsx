@@ -1,10 +1,13 @@
 import {
   type FocusKind,
+  FocusKindSchema,
   fixtures,
   type ID,
   type Page,
   PageDiagnosisSchema,
   type Patch,
+  pageTurns,
+  type ReadingDirection,
 } from '@manga/schema'
 import '@manga/ui/tokens.css'
 import '@manga/ui/base.css'
@@ -36,6 +39,23 @@ function withFixtureArts(page: Page): Page {
       ],
       artId: `art_${panel.id}`,
     })),
+  }
+}
+
+/** ペンが無くても筆圧の描き方を見られるよう、入りと抜きで細くなる波線を足したページ */
+function withPressureSample(page: Page): Page {
+  const n = 80
+  const points = Array.from({ length: n }, (_, i) => ({
+    x: 0.15 + (0.7 * i) / (n - 1),
+    y: 0.9 + 0.03 * Math.sin((i / (n - 1)) * Math.PI * 4),
+  }))
+  const pressure = points.map((_, i) => Math.round(Math.sin((i / (n - 1)) * Math.PI) * 100) / 100)
+  return {
+    ...page,
+    scribbles: [
+      ...page.scribbles,
+      { id: `st_pressure_${page.scribbles.length}`, points, pressure, width: 0.002, color: 'ink' },
+    ],
   }
 }
 
@@ -84,6 +104,17 @@ function Playground() {
     frames: true,
   })
 
+  // めくりの印を確かめるため、表示中のページを 4 ページのエピソードのうち slot 番目に置いたことにする
+  const [direction, setDirection] = useState<ReadingDirection>(project.settings.direction)
+  const [startsRight, setStartsRight] = useState(false)
+  const [slot, setSlot] = useState(0)
+  const { spread: _spread, ...single } = page
+  const episodePages = [0, 1, 2, 3].map((i) => (i === slot ? page : { ...single, id: `turn_${i}` }))
+  const turn = pageTurns(
+    { pages: episodePages, ...(startsRight ? { startsRight } : {}) },
+    direction,
+  ).get(page.id)
+
   const toggleGenerating = (id: ID) =>
     setGenerating((prev) => {
       const next = new Set(prev)
@@ -96,6 +127,9 @@ function Playground() {
       <div style={{ display: 'flex', gap: 12, padding: 8, alignItems: 'center' }}>
         <button type="button" onClick={() => setPage(withFixtureArts(page))}>
           フィクスチャ画像を入れる
+        </button>
+        <button type="button" onClick={() => setPage(withPressureSample(page))}>
+          筆圧の見本を入れる
         </button>
         <button type="button" onClick={() => setPage(samplePage)}>
           リセット
@@ -117,7 +151,7 @@ function Playground() {
         </select>
         {tool === 'focus' && (
           <select value={focusKind} onChange={(e) => setFocusKind(e.target.value as FocusKind)}>
-            {(['face', 'keyObject', 'sfx'] as const).map((k) => (
+            {FocusKindSchema.options.map((k) => (
               <option key={k} value={k}>
                 {k}
               </option>
@@ -132,6 +166,36 @@ function Playground() {
           />
           hints
         </label>
+        <select
+          value={direction}
+          onChange={(e) => setDirection(e.target.value as ReadingDirection)}
+        >
+          <option value="rtl">右綴じ</option>
+          <option value="ltr">左綴じ</option>
+        </select>
+        <label>
+          <input
+            type="checkbox"
+            checked={startsRight}
+            onChange={(e) => setStartsRight(e.target.checked)}
+          />
+          startsRight
+        </label>
+        <select value={slot} onChange={(e) => setSlot(Number(e.target.value))}>
+          {[0, 1, 2, 3].map((i) => (
+            <option key={i} value={i}>
+              {i + 1} ページ目
+            </option>
+          ))}
+        </select>
+        <label>
+          <input
+            type="checkbox"
+            checked={page.spread === true}
+            onChange={(e) => setPage(e.target.checked ? { ...single, spread: true } : single)}
+          />
+          見開き
+        </label>
         <span>
           ホイールでズーム、Space + ドラッグでパン。クリックで選択、Delete で削除、矢印キーで移動。
           panel ツールはドラッグで作成、ハンドルでリサイズ、ボタンで分割、「結合」ボタンか Shift +
@@ -143,9 +207,10 @@ function Playground() {
       <div style={{ flex: 1, minHeight: 0 }}>
         <EditorCanvas
           page={page}
-          settings={project.settings}
+          settings={{ ...project.settings, direction }}
           characters={project.characters}
           diagnosis={page === samplePage ? sampleDiagnosis : null}
+          turn={turn}
           selection={selection}
           tool={tool}
           focusKind={focusKind}

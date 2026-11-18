@@ -1,6 +1,41 @@
 import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
-import { FIXTURE_EPISODE, FIXTURE_PROJECT, importProject, openPage } from './app'
+import {
+  clickInsidePanel,
+  FIXTURE_EPISODE,
+  FIXTURE_PROJECT,
+  importProject,
+  openPage,
+  panelInspector,
+} from './app'
+
+test('組み込みのテンプレートを選んでページを足すと、そのコマ割りのページができ、インセットの小さいコマを選べる', async ({
+  page,
+}) => {
+  await importProject(page, FIXTURE_PROJECT)
+  const template = page.getByLabel(m.layout_template())
+  const builtIns = [
+    { label: m.web_page_template_one_panel(), panels: 1 },
+    { label: m.web_page_template_3rows_split_middle(), panels: 4 },
+    { label: m.web_page_template_3rows_split_top(), panels: 5 },
+    { label: m.web_page_template_diagonal(), panels: 5 },
+    { label: m.web_page_template_inset(), panels: 3 },
+  ]
+  for (const [i, { label, panels }] of builtIns.entries()) {
+    await template.selectOption({ label })
+    await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+    await expect(
+      page.getByRole('listitem').filter({ hasText: m.web_episode_page_number({ number: i + 2 }) }),
+    ).toContainText(m.web_episode_page_summary({ panels }))
+  }
+
+  await openPage(page, builtIns.length + 1)
+  // 描く順の 0 番目は紙面いっぱいの下敷き、1 番目が読み始めの小さいコマ
+  await clickInsidePanel(page, 1)
+  await expect(
+    panelInspector(page).getByText(m.inspector_panel_title({ order: 2 }), { exact: true }),
+  ).toBeVisible()
+})
 
 test('ページのコマ割りをテンプレートに登録し、そのテンプレートでページを足して、確認を経て登録を消せる', async ({
   page,

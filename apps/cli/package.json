@@ -1,0 +1,27 @@
+{
+  "name": "@manga/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "manga": "./bin/manga.js"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config ../../vitest.config.ts"
+  },
+  "dependencies": {
+    "@manga/ai": "workspace:*",
+    "@manga/collab": "workspace:*",
+    "@manga/i18n": "workspace:*",
+    "@manga/schema": "workspace:*",
+    "tsx": "^4.20.0",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.27"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -114,6 +114,12 @@ description = "workers/api on :8787 with local D1/R2, ENVIRONMENT=development an
 depends = ["db-migrate"]
 run = "pnpm --filter @manga/api exec wrangler dev --port 8787 --var ENVIRONMENT:development --var ALLOWED_COUNTRIES:"
 
+[cli]
+description = "The manga CLI (apps/cli): login, list projects, and plan a plot into a new episode of a project; run with no arguments for usage"
+# 渡したプロットのパスを呼んだ場所から読めるよう、呼んだディレクトリで走らせる
+dir = "{{cwd}}"
+run = "{{config_root}}/apps/cli/bin/manga.js"
+
 [db-migrate]
 description = "Apply workers/api D1 migrations to the local database"
 dir = "workers/api"

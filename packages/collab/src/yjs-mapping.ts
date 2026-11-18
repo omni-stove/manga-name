@@ -1,5 +1,9 @@
+import { migrate, type Project, parseProject } from '@manga/schema'
 import type { Patch as ImmerPatch } from 'immer'
 import * as Y from 'yjs'
+
+/** Project を置く Y.Doc の共有型の名前 */
+export const PROJECT_ROOT = 'project'
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -144,6 +148,34 @@ export function applyYEvents(
       throw new Error(`Y event at /${event.path.join('/')} does not match the project shape`)
     }
   }
+}
+
+/**
+ * `doc` の PROJECT_ROOT にある Project を返す。空なら `initial` を書いてそれを返す。
+ * 古い版は移行して返し、`writeBackVersion` なら移行した版と内容も書き戻す。書き込みは `origin` のトランザクションにする。
+ * ProjectSchema を通らなければ throw する
+ */
+export function openProjectDoc(
+  doc: Y.Doc,
+  initial: Project,
+  options: { origin: unknown; writeBackVersion: boolean },
+): Project {
+  const root = doc.getMap<unknown>(PROJECT_ROOT)
+  if (root.size === 0) {
+    doc.transact(
+      () => writeYMap(root, initial as unknown as Record<string, unknown>),
+      options.origin,
+    )
+    return initial
+  }
+  const stored = root.toJSON()
+  const project = parseProject(stored)
+  if (options.writeBackVersion && stored.schemaVersion !== project.schemaVersion) {
+    // ProjectSchema が読み捨てる古いキーまで消さないよう、parse 前の移行結果との差だけを書く
+    const migrated = migrate(stored) as Record<string, unknown>
+    doc.transact(() => writeYChanges(root, stored, migrated), options.origin)
+  }
+  return project
 }
 
 if (import.meta.vitest) {

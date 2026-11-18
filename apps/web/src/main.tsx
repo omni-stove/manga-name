@@ -109,11 +109,21 @@ auth.subscribe(() => {
 })
 
 if (platform === 'desktop') {
-  import('./desktop/shell')
-    .then(({ startDesktopShell }) => startDesktopShell({ router, library }))
+  // アプリメニューはアプリに 1 つで、最後に張ったウィンドウの router に項目の操作が届くので、脚本のウィンドウでは張らない
+  Promise.all([import('./desktop/shell'), import('./desktop/windows')])
+    .then(([{ startDesktopShell }, { isMainWindow, listenEdit }]) =>
+      isMainWindow() ? startDesktopShell({ router, library }) : listenEdit({ router, library }),
+    )
     .catch((e: unknown) => toasts.push(m.web_menu_build_failed({ reason: errorMessage(e) })))
-  import('./desktop/deep-link')
-    .then(({ startDeepLinks }) => startDeepLinks({ router, auth }))
+  // deep link のトークンは一度しか使えず、起動時の link も読み直すので、脚本のウィンドウでは受けない
+  import('./desktop/windows')
+    .then(({ isMainWindow }) =>
+      isMainWindow()
+        ? import('./desktop/deep-link').then(({ startDeepLinks }) =>
+            startDeepLinks({ router, auth }),
+          )
+        : undefined,
+    )
     .catch((e: unknown) => toasts.push(m.web_desktop_start_failed({ reason: errorMessage(e) })))
 }
 

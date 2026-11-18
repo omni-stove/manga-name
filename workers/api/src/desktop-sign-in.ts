@@ -1,18 +1,28 @@
 import { type Context, Hono } from 'hono'
+import { ApiException } from './api-error'
 import { AUTH_BASE_PATH, getAuth } from './auth'
 import type { Env } from './env'
 
 /** Desktop が受ける deep link の scheme。apps/desktop の tauri.conf.json の deep-link と揃える */
 const DESKTOP_SCHEME = 'manganame'
 
+/** `port` の値が 1024〜65535 の整数ならその数、無いか違えば null */
+function loopbackPort(value: string | undefined): number | null {
+  const port = Number(value)
+  return value !== undefined && Number.isInteger(port) && port >= 1024 && port <= 65535
+    ? port
+    : null
+}
+
 /**
- * Desktop のログインの口。Google は WebView の中での OAuth を断るので、Desktop は OS のブラウザでここを開く。
+ * Desktop と CLI のログインの口。Google は WebView の中での OAuth を断るので、Desktop は OS のブラウザでここを開く。
  *
  * - `GET /v1/desktop-sign-in?invite=<token>` は Google のログイン画面へ転送する。OAuth の state の Cookie をこのブラウザに置く。
  *   `invite` は招待リンクのトークンで、Web の signIn の `inviteToken` と同じく未登録のユーザーの登録に使う。
- * - Google から戻ると `GET /v1/desktop-sign-in/done` に着き、`manganame://auth?token=<one-time token>` へ転送する。
- *   Desktop はそのトークンを `POST /v1/auth/one-time-token/verify` でセッションに換える。
- *   ログインできなかったときは validateSignUp の値を、セッションが無ければ `no_session` を `manganame://auth?error=<code>` で返す。
+ *   `port` を付けると、戻り先を Desktop の deep link ではなく `http://127.0.0.1:<port>/` にする（CLI が待ち受ける）。1024〜65535 以外は 400。
+ * - Google から戻ると `GET /v1/desktop-sign-in/done` に着き、`manganame://auth?token=<one-time token>`（`port` 付きなら
+ *   `http://127.0.0.1:<port>/?token=...`）へ転送する。受け手はそのトークンを `POST /v1/auth/one-time-token/verify` でセッションに換える。
+ *   ログインできなかったときは validateSignUp の値を、セッションが無ければ `no_session` を `?error=<code>` で返す。
  */
 export function createDesktopSignInApp() {
   const app = new Hono<{ Bindings: Env }>()
@@ -23,14 +33,19 @@ export function createDesktopSignInApp() {
 
   app.get('/', async (c) => {
     const invite = c.req.query('invite')
-    const done = new URL('/v1/desktop-sign-in/done', c.req.url).toString()
+    const port = c.req.query('port')
+    if (port !== undefined && loopbackPort(port) === null) {
+      throw new ApiException('invalid_request', { detail: 'port must be 1024-65535' })
+    }
+    const done = new URL('/v1/desktop-sign-in/done', c.req.url)
+    if (port !== undefined) done.searchParams.set('port', port)
     const res = await auth(c, '/sign-in/social', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         provider: 'google',
-        callbackURL: done,
-        errorCallbackURL: done,
+        callbackURL: done.toString(),
+        errorCallbackURL: done.toString(),
         ...(invite !== undefined && invite !== '' && { additionalData: { inviteToken: invite } }),
       }),
     })
@@ -42,7 +57,9 @@ export function createDesktopSignInApp() {
   })
 
   app.get('/done', async (c) => {
-    const back = new URL(`${DESKTOP_SCHEME}://auth`)
+    const port = loopbackPort(c.req.query('port'))
+    // 127.0.0.1 に限るのは、トークンをこの端末の外へ転送させないため
+    const back = new URL(port === null ? `${DESKTOP_SCHEME}://auth` : `http://127.0.0.1:${port}/`)
     const error = c.req.query('error')
     if (error !== undefined) {
       back.searchParams.set('error', error)
