@@ -51,7 +51,9 @@ export function useBreakoutTool(opts: Options) {
 
   const pointAt = (e: ReactPointerEvent<SVGSVGElement>): Point | null => {
     const mm = clientToPage(opts.view, boxOf(e.currentTarget), { x: e.clientX, y: e.clientY })
-    return mm && { x: mm.x / opts.width, y: mm.y / opts.height }
+    if (mm === null) return null
+    const p = { x: mm.x / opts.width, y: mm.y / opts.height }
+    return p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1 ? null : p
   }
   const finish = (points: readonly Point[] | null) => {
     if (draft && points) {

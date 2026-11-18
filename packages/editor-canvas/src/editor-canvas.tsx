@@ -468,7 +468,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         draft={bubbleTool.draft ?? move.bubbleDraft}
         handleSize={bubbleTool.handleSize}
       />
-      {breakoutTool.draft && (
+      {breakoutTool.draft && breakoutTool.draft.points.length > 0 && (
         <BreakoutToolLayer
           draft={breakoutTool.draft}
           width={pageW}
