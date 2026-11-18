@@ -141,8 +141,10 @@ const migrations: Record<number, (json: Record<string, unknown>) => Record<strin
   // v33 は Panel.camera・Panel.angle・Panel.effect・Bubble.shape・FocusPoint.kind の値と、FocusPoint.mark、
   // Page.hashira を足しただけ。版を上げる理由は v6 と同じ
   32: (json) => ({ ...json, schemaVersion: 33 }),
-  // v34 は Page.fills を足しただけ。版を上げる理由は v2 と同じ
+  // v34 は Panel.breakout を足しただけ。版を上げる理由は v2 と同じ
   33: (json) => ({ ...json, schemaVersion: 34 }),
+  // v35 は Page.fills を足しただけ。版を上げる理由は v2 と同じ
+  34: (json) => ({ ...json, schemaVersion: 35 }),
 }
 
 /**
@@ -171,28 +173,28 @@ export function migrate(json: unknown): unknown {
 if (import.meta.vitest) {
   const { expect, test } = import.meta.vitest
 
-  test('migrate v34 → v34 is a no-op', () => {
-    const json = { schemaVersion: 34, title: 't' }
+  test('migrate v35 → v35 is a no-op', () => {
+    const json = { schemaVersion: 35, title: 't' }
     expect(migrate(json)).toBe(json)
   })
 
-  test('migrate v1 → v34 only bumps the version of a project without cameras', () => {
-    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 34, title: 't' })
+  test('migrate v1 → v35 only bumps the version of a project without cameras', () => {
+    expect(migrate({ schemaVersion: 1, title: 't' })).toEqual({ schemaVersion: 35, title: 't' })
   })
 
-  test('migrate v17 → v34 only bumps the version of bubbles without a tail and leaves them white', () => {
+  test('migrate v17 → v35 only bumps the version of bubbles without a tail and leaves them white', () => {
     const bubbles = [{ id: 'bb', shape: 'normal' }]
     const json = { schemaVersion: 17, episodes: [{ pages: [{ panels: [{ bubbles }] }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
   })
 
-  test('migrate v18 → v34 only bumps the version and leaves the panels without an effect', () => {
+  test('migrate v18 → v35 only bumps the version and leaves the panels without an effect', () => {
     const panels = [{ id: 'a', frame: 'cloud', camera: 'long' }]
     const json = { schemaVersion: 18, episodes: [{ pages: [{ overlay: 'gray', panels }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
   })
 
-  test('migrate v19 → v34 turns the single tail into the first of the tails', () => {
+  test('migrate v19 → v35 turns the single tail into the first of the tails', () => {
     const bubbles = [
       { id: 'a', tail: { x: 0.1, y: 0.9 } },
       { id: 'b' },
@@ -203,7 +205,7 @@ if (import.meta.vitest) {
     const json = { schemaVersion: 19, episodes: [{ pages: [{ panels }] }] }
     const migrated = migrate(json)
     expect(migrated).toEqual({
-      schemaVersion: 34,
+      schemaVersion: 35,
       episodes: [
         {
           pages: [
@@ -229,95 +231,95 @@ if (import.meta.vitest) {
     expect(migrated).not.toHaveProperty([...first, 'tail'])
   })
 
-  test('migrate v20 → v34 only bumps the version and leaves the panels without acting', () => {
+  test('migrate v20 → v35 only bumps the version and leaves the panels without acting', () => {
     const panels = [{ id: 'a', note: 'n', cast: ['chr_a'] }]
     expect(migrate({ schemaVersion: 20, episodes: [{ pages: [{ panels }] }] })).toEqual({
-      schemaVersion: 34,
+      schemaVersion: 35,
       episodes: [{ pages: [{ panels }] }],
     })
   })
 
-  test('migrate v21 → v34 keeps the page tone and leaves the panels without a tone', () => {
+  test('migrate v21 → v35 keeps the page tone and leaves the panels without a tone', () => {
     const pages = [{ tone: 'sepia', panels: [{ id: 'a', frame: 'cloud' }] }]
     const json = { schemaVersion: 21, episodes: [{ pages }] }
-    expect(migrate(json)).toEqual({ schemaVersion: 34, episodes: [{ pages }] })
+    expect(migrate(json)).toEqual({ schemaVersion: 35, episodes: [{ pages }] })
   })
 
-  test('migrate v22 → v34 only bumps the version and keeps the bubble shapes', () => {
+  test('migrate v22 → v35 only bumps the version and keeps the bubble shapes', () => {
     const bubbles = [
       { id: 'a', shape: 'narration' },
       { id: 'b', shape: 'thought' },
     ]
     const json = { schemaVersion: 22, episodes: [{ pages: [{ panels: [{ bubbles }] }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
   })
 
-  test('migrate v23 → v34 only bumps the version and keeps the typefaces of the bubbles', () => {
+  test('migrate v23 → v35 only bumps the version and keeps the typefaces of the bubbles', () => {
     const bubbles = [
       { id: 'bb_1', shape: 'narration' },
       { id: 'bb_2', shape: 'normal', typeface: 'rounded' },
     ]
     const json = { schemaVersion: 23, episodes: [{ pages: [{ panels: [{ bubbles }] }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
   })
 
-  test('migrate v24 → v34 only bumps the version and gives the panels no scene or beat', () => {
+  test('migrate v24 → v35 only bumps the version and gives the panels no scene or beat', () => {
     const panels = [{ id: 'pn', note: 'n' }]
     const json = { schemaVersion: 24, episodes: [{ pages: [{ panels }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
   })
 
-  test('migrate v25 → v34 only bumps the version and leaves the dialogue vertical', () => {
+  test('migrate v25 → v35 only bumps the version and leaves the dialogue vertical', () => {
     const bubbles = [{ id: 'bb', shape: 'normal', text: 'あ' }]
     const json = { schemaVersion: 25, episodes: [{ pages: [{ panels: [{ bubbles }] }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
   })
 
-  test('migrate v26 → v34 only bumps the version and keeps the effects of the panels', () => {
+  test('migrate v26 → v35 only bumps the version and keeps the effects of the panels', () => {
     const panels = [
       { id: 'pn_1', effect: 'focus_lines' },
       { id: 'pn_2', effect: 'speed_lines', fill: 'black' },
       { id: 'pn_3' },
     ]
     const json = { schemaVersion: 26, episodes: [{ pages: [{ panels }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
   })
 
-  test('migrate v27 → v34 only bumps the version and leaves the bubbles unjoined', () => {
+  test('migrate v27 → v35 only bumps the version and leaves the bubbles unjoined', () => {
     const bubbles = [
       { id: 'bb_1', order: 1, tails: [{ x: 0.1, y: 0.9 }] },
       { id: 'bb_2', order: 2 },
     ]
     const json = { schemaVersion: 27, episodes: [{ pages: [{ panels: [{ bubbles }] }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
   })
 
-  test('migrate v28 → v34 only bumps the version and keeps sfx focus points as the default lettering', () => {
+  test('migrate v28 → v35 only bumps the version and keeps sfx focus points as the default lettering', () => {
     const focusPoints = [
       { id: 'fp', kind: 'sfx', label: 'ドン', pos: { x: 0.5, y: 0.5 }, weight: 1 },
     ]
     const json = { schemaVersion: 28, episodes: [{ pages: [{ panels: [{ focusPoints }] }] }] }
     const migrated = migrate(json)
-    expect(migrated).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrated).toEqual({ ...json, schemaVersion: 35 })
     const focus = ['episodes', 0, 'pages', 0, 'panels', 0, 'focusPoints', 0]
     for (const key of ['rotation', 'typeface', 'scale']) {
       expect(migrated).not.toHaveProperty([...focus, key])
     }
   })
 
-  test('migrate v29 → v34 only bumps the version and leaves the scribbles without pressure', () => {
+  test('migrate v29 → v35 only bumps the version and leaves the scribbles without pressure', () => {
     const scribbles = [{ id: 'st', points: [{ x: 0.1, y: 0.2 }], width: 2, color: 'ink' }]
     const json = { schemaVersion: 29, episodes: [{ pages: [{ scribbles }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
   })
 
-  test('migrate v30 → v34 only bumps the version and leaves every panel with art', () => {
+  test('migrate v30 → v35 only bumps the version and leaves every panel with art', () => {
     const panels = [{ id: 'pn', bubbles: [], arts: [] }]
     const json = { schemaVersion: 30, episodes: [{ pages: [{ panels }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
   })
 
-  test('migrate v31 → v34 moves the angles of the camera to the angle and keeps the shot sizes', () => {
+  test('migrate v31 → v35 moves the angles of the camera to the angle and keeps the shot sizes', () => {
     const panels = [
       { id: 'a', camera: 'low_angle', note: 'n' },
       { id: 'b', camera: 'high_angle' },
@@ -328,7 +330,7 @@ if (import.meta.vitest) {
     const json = { schemaVersion: 31, episodes: [{ pages: [{ panels }] }] }
     const migrated = migrate(json)
     expect(migrated).toEqual({
-      schemaVersion: 34,
+      schemaVersion: 35,
       episodes: [
         {
           pages: [
@@ -348,7 +350,7 @@ if (import.meta.vitest) {
     expect(migrated).not.toHaveProperty(['episodes', 0, 'pages', 0, 'panels', 0, 'camera'])
   })
 
-  test('migrate v32 → v34 only bumps the version and keeps the cameras, angles, effects, shapes and focus points', () => {
+  test('migrate v32 → v35 only bumps the version and keeps the cameras, angles, effects, shapes and focus points', () => {
     const focusPoints = [
       { id: 'fp', kind: 'sfx', label: 'ドン', pos: { x: 0.5, y: 0.5 }, weight: 1 },
     ]
@@ -358,16 +360,21 @@ if (import.meta.vitest) {
     ]
     const json = { schemaVersion: 32, episodes: [{ pages: [{ panels }] }] }
     const migrated = migrate(json)
-    expect(migrated).toEqual({ ...json, schemaVersion: 34 })
+    expect(migrated).toEqual({ ...json, schemaVersion: 35 })
     expect(migrated).not.toHaveProperty(['episodes', 0, 'pages', 0, 'hashira'])
   })
 
-  test('migrate v33 → v34 only bumps the version and leaves the pages without fills', () => {
-    const json = { schemaVersion: 33, episodes: [{ pages: [{ panels: [], scribbles: [] }] }] }
-    expect(migrate(json)).toEqual({ ...json, schemaVersion: 34 })
+  test('migrate v33 → v35 only bumps the version and keeps the art inside the panels', () => {
+    const json = { schemaVersion: 33, episodes: [{ pages: [{ panels: [{ id: 'pn' }] }] }] }
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
   })
 
-  test('migrate v12 → v34 turns the suggested camera names into values and moves the rest to the note', () => {
+  test('migrate v34 → v35 only bumps the version and leaves the pages without fills', () => {
+    const json = { schemaVersion: 34, episodes: [{ pages: [{ panels: [], scribbles: [] }] }] }
+    expect(migrate(json)).toEqual({ ...json, schemaVersion: 35 })
+  })
+
+  test('migrate v12 → v35 turns the suggested camera names into values and moves the rest to the note', () => {
     const panels = [
       { id: 'a', camera: 'ロング' },
       { id: 'b', camera: ' あおり ' },
@@ -378,7 +385,7 @@ if (import.meta.vitest) {
     ]
     const json = { schemaVersion: 12, episodes: [{ pages: [{ panels }] }] }
     expect(migrate(json)).toEqual({
-      schemaVersion: 34,
+      schemaVersion: 35,
       episodes: [
         {
           pages: [
@@ -399,7 +406,7 @@ if (import.meta.vitest) {
   })
 
   test('migrate rejects unknown, newer or missing versions and non-objects', () => {
-    expect(() => migrate({ schemaVersion: 35 })).toThrow()
+    expect(() => migrate({ schemaVersion: 36 })).toThrow()
     expect(() => migrate({ schemaVersion: 0 })).toThrow()
     expect(() => migrate({})).toThrow()
     expect(() => migrate(null)).toThrow()

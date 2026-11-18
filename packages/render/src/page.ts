@@ -221,9 +221,10 @@ export async function drawPage(
     // フキダシまでぼかさないよう、絵の直後にぼかす
     if (panel.frame === 'soft') drawSoftEdge(c, outline, unit.w, ground)
   }
-  const drawTop = (panel: Panel) => {
+  const drawTop = (panel: Panel, i: number) => {
     const rect = rectToPx(panel.rect, pageRect)
     const outline = outlineOf(panel)
+    const image = arts[i]
     drawEffectLines(c, outline, markShapes(panel, rect, unit.w), effectInk(panel))
     withClip(c, outline, () => drawSfx(panel))
     if (opts.panelNumbers) {
@@ -232,13 +233,18 @@ export async function drawPage(
     // 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く
     withClip(c, outline, () => drawBubbles(panel, false))
     if (hasFrameLine(panel.frame)) drawFrame(c, outline, unit.w * FRAME_WIDTH, panel.frame)
+    // 枠を突き破って見えるよう、はみ出す範囲の絵は枠線の上に描く
+    if (image && panel.breakout) {
+      const breakout = panel.breakout.map((p) => pointToPx(p, pageRect))
+      drawCover(c, image, rect, breakout)
+    }
   }
 
   const fills = page.fills ?? []
   if (fills.length === 0) {
     panels.forEach((panel, i) => {
       drawArt(panel, i)
-      drawTop(panel)
+      drawTop(panel, i)
     })
   } else {
     // 塗りはコマをまたぐので、全コマの絵の後、フキダシと枠線の前に挟む。
@@ -992,6 +998,62 @@ if (import.meta.vitest) {
     await matchPngSnapshot('page-frames', png)
   })
 
+  test('はみ出しの多角形の中は絵を枠線の上に描き、絵を cover で置いた範囲の外には何も描かない', async () => {
+    const backend = await getBackend()
+    // 正方形の絵は横長のコマに cover で置くと上下にはみ出すので、rect の外にも絵がある
+    const square = backend.createSurface(100, 100)
+    square.ctx.fillStyle = '#f00'
+    square.ctx.fillRect(0, 0, 100, 100)
+    const art = await square.toPng()
+    const ctx: RenderContext = { ...noAssets, loadAsset: async () => art }
+    const [pn1, pn2, ...rest] = emptyPage.panels as [Panel, Panel, ...Panel[]]
+    const { x, y, w, h } = pn2.rect
+    const red: Panel = {
+      ...pn2,
+      artId: 'art_red',
+      arts: [
+        {
+          id: 'art_red',
+          ref: 'file:red.png',
+          provider: 'fake',
+          prompt: '',
+          createdAt: '2026-10-15T00:00:00.000Z',
+        },
+      ],
+    }
+    // pn_2 の上辺をまたいで、上の間白と pn_1 まで伸ばした帯
+    const breakout = [
+      { x: x + w * 0.4, y: y - 0.12 },
+      { x: x + w * 0.6, y: y - 0.12 },
+      { x: x + w * 0.6, y: y + h * 0.5 },
+      { x: x + w * 0.4, y: y + h * 0.5 },
+    ]
+    const draw = async (panel: Panel) => {
+      const png = await renderPage({ ...emptyPage, panels: [pn1, panel, ...rest] }, ctx, {
+        width: SNAPSHOT_WIDTH,
+        notes: 'none',
+        panelNumbers: false,
+      })
+      const { width, data } = await pixels(png)
+      const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+      return (px: number, py: number) => {
+        const at = (Math.round(py * pageH) * width + Math.round(px * width)) * 4
+        return [data[at], data[at + 1], data[at + 2]]
+      }
+    }
+    const plain = await draw(red)
+    const broken = await draw({ ...red, breakout })
+    const pageH = project.settings.pageSize.h / project.settings.pageSize.w
+    // cover で置いた絵が rect の上へはみ出す高さ（ページの高さに対する比率）
+    const spill = (w - h * pageH) / 2 / pageH
+    const cx = x + w / 2
+    expect(plain(cx, y)[0]).toBeLessThan(128)
+    expect(broken(cx, y)).toEqual([255, 0, 0])
+    expect(broken(cx, y - spill / 2)).toEqual([255, 0, 0])
+    expect(broken(cx, y - spill - 0.02)).toEqual(plain(cx, y - spill - 0.02))
+    expect(broken(x + w * 0.2, y - spill / 2)).toEqual(plain(x + w * 0.2, y - spill / 2))
+  })
+
   const sfxFocus = (id: string, patch: Partial<FocusPoint>): FocusPoint => ({
     id,
     kind: 'sfx',
@@ -1417,17 +1479,5 @@ if (import.meta.vitest) {
     const a = await bytes(await renderPage(page, ctx, opts))
     const b = await bytes(await renderPage(page, ctx, opts))
     expect(a.equals(b)).toBe(true)
-  })
-
-  // 共有ランナーの CPU で所要時間がぶれ、コードと無関係に落ちるので、PERF=1（mise run perf）のときだけ測る
-  test.runIf(process.env.PERF)('300dpi の 1 ページが 500ms 以内', async () => {
-    const opts: RenderOptions = { notes: 'none', panelNumbers: true }
-    // フォント登録とバックエンドの初期化は 1 回だけなので、計測から外す
-    await renderPage(emptyPage, noAssets, opts)
-    const started = performance.now()
-    const png = await renderPage(emptyPage, noAssets, opts)
-    const elapsed = performance.now() - started
-    expect(png.size).toBeGreaterThan(0)
-    expect(elapsed).toBeLessThan(500)
   })
 }

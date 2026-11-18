@@ -1,9 +1,16 @@
 import { m } from '@manga/i18n'
-import { type Episode, type PageSlot, pageCharacterIds, pageSlots } from '@manga/schema'
+import {
+  type Episode,
+  type PageSlot,
+  type Project,
+  pageCharacterIds,
+  pageSlots,
+} from '@manga/schema'
 import {
   Button,
   Checkbox,
   ConfirmDialog,
+  Dialog,
   IconButton,
   Input,
   RemoveButton,
@@ -14,32 +21,25 @@ import {
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BackLink } from '../back-link'
-import { BatchOptions, useBatchGeneration } from '../batch-generation'
 import { PeerBadge, usePeers } from '../collaboration-view'
 import collabStyles from '../collaboration-view.module.css'
 import common from '../common.module.css'
-import { Icon } from '../history-buttons'
-import { TemplateSelect, useTemplateChoice } from '../layout-templates'
+import { AddPageDialog } from '../layout-templates'
 import { PageThumbnail } from '../page-thumbnail'
 import {
   ART_STATUS_LABELS,
-  addPagePatch,
   artStatus,
-  canAddSpread,
   canMovePage,
   canRemovePage,
   canSetStartsRight,
   movePagePatch,
   removeEpisodePatch,
-  removeLayoutTemplatePatch,
   removePagePatch,
   renameEpisodePatch,
-  resolveTemplate,
   startsRightPatch,
-  templateOptions,
 } from '../project-ops'
 import { RemoveEpisodeDialog } from '../remove-episode-dialog'
-import type { ProjectStore } from '../store/project-store-types'
+import { GearIcon } from '../side-nav'
 import { useAssetResolver } from '../use-asset-resolver'
 import { useApplyPatch, useProject } from '../use-project'
 import styles from './pages.module.css'
@@ -51,11 +51,11 @@ export const Route = createFileRoute('/p/$projectId/episodes/$episodeId')({
 const projectRoute = getRouteApi('/p/$projectId')
 
 /**
- * 1 話分の見出し、ページの追加と下書きと一括生成、ページのカードを並べる。
- * ページの追加では登録したコマ割りもテンプレートに選べ、選んでいるときは確認を経てその登録を消せる。
- * 見開きのページも足せ、テンプレートによらず紙面いっぱいの枠なしのコマが 1 つ入る。1 ページ目は左ページで、「右ページから始める」で右にできる。
+ * 1 話分の見出し、ページの追加と下書き、ページのカードを並べる。
+ * ページの追加はダイアログ（AddPageDialog）でコマ割りや見開きを見比べて選ぶ。見開きには紙面いっぱいの枠なしのコマが 1 つ入る。
+ * 1 ページ目は左ページで、歯車のエピソード設定の「右ページから始める」で右にできる。
  * カードにはノンブルと左右を出し、見開きは 2 枚分の幅で並べる。
- * 見開きを始められない位置への見開きの追加と、見開きを割る移動、削除、始まりの切り替えはできない
+ * 見開きを割る移動、削除、始まりの切り替えはできない
  */
 function EpisodePages() {
   const { projectId, episodeId } = Route.useParams()
@@ -65,11 +65,9 @@ function EpisodePages() {
   const project = useProject(store)
   const peers = usePeers(collab)
   const { apply, error } = useApplyPatch(store)
-  const [template, setTemplate] = useTemplateChoice(project)
-  const [spread, setSpread] = useState(false)
+  const [addingPage, setAddingPage] = useState(false)
+  const [editingSettings, setEditingSettings] = useState(false)
   const [removingEpisode, setRemovingEpisode] = useState(false)
-  /** 確認中の登録したコマ割り */
-  const [removingTemplate, setRemovingTemplate] = useState<{ id: string; name: string }>()
   /** 確認中のページの id と、確認の文言に出すノンブル */
   const [removingPage, setRemovingPage] = useState<{ id: string; label: string }>()
   const navigate = useNavigate()
@@ -77,11 +75,6 @@ function EpisodePages() {
   // 開いている間に Undo や他の人の操作でエピソードが消えることがある
   if (!episode) return <EpisodeNotFound projectId={projectId} />
   const pages = episode.pages
-  const registeredTemplate = templateOptions(project).find(
-    (o) => o.registered && o.value === template,
-  )
-  const spreadAvailable = canAddSpread(project, episode.id)
-  const startsRight = episode.startsRight === true
 
   return (
     <YStack gap={8}>
@@ -89,11 +82,26 @@ function EpisodePages() {
         <BackLink to="/p/$projectId" params={{ projectId }}>
           {m.web_episode_list()}
         </BackLink>
-        <XStack gap={12} justify="between">
-          <EpisodeTitle episode={episode} apply={apply} />
-          <RemoveButton label={m.web_episode_remove()} onClick={() => setRemovingEpisode(true)} />
+        <XStack gap={4}>
+          <Typography variant="heading">{episode.title}</Typography>
+          <IconButton label={m.web_episode_settings()} onClick={() => setEditingSettings(true)}>
+            <GearIcon />
+          </IconButton>
         </XStack>
       </YStack>
+      {editingSettings && (
+        <EpisodeSettingsDialog
+          project={project}
+          episode={episode}
+          apply={apply}
+          error={error}
+          onRemove={() => {
+            setEditingSettings(false)
+            setRemovingEpisode(true)
+          }}
+          onClose={() => setEditingSettings(false)}
+        />
+      )}
       {removingEpisode && (
         <RemoveEpisodeDialog
           episode={episode}
@@ -110,39 +118,8 @@ function EpisodePages() {
           {error}
         </Typography>
       )}
-      <XStack
-        as="form"
-        wrap
-        gap={12}
-        className={common.toolbar}
-        onSubmit={(e) => {
-          e.preventDefault()
-          apply(
-            m.web_episode_add_page(),
-            (p) =>
-              addPagePatch(p, resolveTemplate(p, template), episode.id, spread && spreadAvailable)
-                .patch,
-          )
-        }}
-      >
-        <TemplateSelect project={project} value={template} onChange={setTemplate} />
-        <Checkbox
-          label={m.web_episode_spread()}
-          checked={spread && spreadAvailable}
-          disabled={!spreadAvailable}
-          title={spreadAvailable ? undefined : m.web_episode_spread_unavailable()}
-          onChange={(e) => setSpread(e.currentTarget.checked)}
-        />
-        {registeredTemplate && (
-          <RemoveButton
-            size="small"
-            label={m.web_episode_remove_template()}
-            onClick={() =>
-              setRemovingTemplate({ id: registeredTemplate.value, name: registeredTemplate.label })
-            }
-          />
-        )}
-        <Button type="submit" variant="primary">
+      <XStack wrap gap={12} className={common.toolbar}>
+        <Button variant="primary" onClick={() => setAddingPage(true)}>
           {m.web_episode_add_page()}
         </Button>
         <Button
@@ -157,25 +134,15 @@ function EpisodePages() {
           {m.web_draft_title()}
         </Button>
       </XStack>
-      <XStack wrap gap={12} className={common.toolbar}>
-        <Checkbox
-          label={m.web_episode_starts_right()}
-          checked={startsRight}
-          disabled={!canSetStartsRight(project, episode.id, !startsRight)}
-          title={
-            canSetStartsRight(project, episode.id, !startsRight)
-              ? undefined
-              : m.web_episode_spread_breaks()
-          }
-          onChange={(e) => {
-            const next = e.currentTarget.checked
-            apply(m.web_episode_starts_right_history(), (p) =>
-              startsRightPatch(p, episode.id, next),
-            )
-          }}
+      {addingPage && (
+        <AddPageDialog
+          project={project}
+          episodeId={episode.id}
+          apply={apply}
+          onAdded={() => setAddingPage(false)}
+          onClose={() => setAddingPage(false)}
         />
-      </XStack>
-      <EpisodeBatch episode={episode} projectId={projectId} store={store} />
+      )}
       {pages.length === 0 && <Typography tone="muted">{m.web_episode_no_pages()}</Typography>}
       <ol className={`${common.cards} ${styles.pages}`}>
         {pageSlots(episode).map((slot) => {
@@ -273,20 +240,6 @@ function EpisodePages() {
           )
         })}
       </ol>
-      {removingTemplate && (
-        <ConfirmDialog
-          title={m.web_episode_remove_template()}
-          message={m.web_episode_remove_template_confirm({ name: removingTemplate.name })}
-          confirmLabel={m.remove()}
-          onConfirm={() => {
-            apply(m.web_episode_remove_template(), (p) =>
-              removeLayoutTemplatePatch(p, removingTemplate.id),
-            )
-            setRemovingTemplate(undefined)
-          }}
-          onCancel={() => setRemovingTemplate(undefined)}
-        />
-      )}
       {removingPage && (
         <ConfirmDialog
           title={m.web_episode_remove_page()}
@@ -303,6 +256,80 @@ function EpisodePages() {
   )
 }
 
+/**
+ * エピソード全体の設定。タイトルと始まりの左右は保存でまとめて 1 回の Undo になり、キャンセルでは変えない。
+ * 削除はここからだけ押せ、押すとこの dialog を閉じて削除の確認に移る
+ */
+function EpisodeSettingsDialog({
+  project,
+  episode,
+  apply,
+  error,
+  onRemove,
+  onClose,
+}: {
+  project: Project
+  episode: Episode
+  apply: ReturnType<typeof useApplyPatch>['apply']
+  error: string | undefined
+  onRemove(): void
+  onClose(): void
+}) {
+  const [title, setTitle] = useState(episode.title)
+  const [startsRight, setStartsRight] = useState(episode.startsRight === true)
+  const canToggle = canSetStartsRight(project, episode.id, !startsRight)
+  return (
+    <Dialog
+      title={m.web_episode_settings()}
+      onClose={onClose}
+      onSubmit={() => {
+        if (
+          apply(m.web_episode_settings_history(), (p) => [
+            ...renameEpisodePatch(p, episode.id, title),
+            ...startsRightPatch(p, episode.id, startsRight),
+          ])
+        )
+          onClose()
+      }}
+      actions={
+        <>
+          <Button onClick={onClose}>{m.cancel()}</Button>
+          <Button type="submit" variant="primary">
+            {m.save()}
+          </Button>
+        </>
+      }
+    >
+      <YStack gap={16}>
+        <Input
+          label={m.episode_title()}
+          required
+          value={title}
+          onChange={(e) => setTitle(e.currentTarget.value)}
+          autoFocus
+        />
+        <Checkbox
+          label={m.web_episode_starts_right()}
+          checked={startsRight}
+          disabled={!canToggle}
+          title={canToggle ? undefined : m.web_episode_spread_breaks()}
+          onChange={(e) => setStartsRight(e.currentTarget.checked)}
+        />
+        {error && (
+          <Typography tone="alert" role="alert">
+            {error}
+          </Typography>
+        )}
+        <XStack>
+          <Button variant="danger" onClick={onRemove}>
+            {m.web_episode_remove()}
+          </Button>
+        </XStack>
+      </YStack>
+    </Dialog>
+  )
+}
+
 /** カードに出すノンブル。見開きは 2 つのノンブルを並べる */
 function slotLabel({ number, side }: PageSlot): string {
   return side === 'spread'
@@ -315,68 +342,6 @@ const SIDE_LABELS = {
   right: m.web_episode_page_side_right,
 } as const
 
-/** 話の名前の見出し。横の鉛筆の「名前を変更」で入力欄に替わり、保存すると反映する */
-function EpisodeTitle({
-  episode,
-  apply,
-}: {
-  episode: Episode
-  apply: ReturnType<typeof useApplyPatch>['apply']
-}) {
-  const [editing, setEditing] = useState(false)
-  const [title, setTitle] = useState(episode.title)
-  if (!editing) {
-    return (
-      <XStack gap={4}>
-        <Typography variant="heading">{episode.title}</Typography>
-        <IconButton
-          size="small"
-          label={m.web_episode_rename()}
-          onClick={() => {
-            setTitle(episode.title)
-            setEditing(true)
-          }}
-        >
-          <Icon>
-            <path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4" />
-          </Icon>
-        </IconButton>
-      </XStack>
-    )
-  }
-  return (
-    <XStack
-      as="form"
-      wrap
-      gap={8}
-      onSubmit={(e) => {
-        e.preventDefault()
-        if (apply(m.web_episode_rename_history(), (p) => renameEpisodePatch(p, episode.id, title)))
-          setEditing(false)
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') setEditing(false)
-      }}
-    >
-      <Input
-        label={m.episode_title()}
-        hideLabel
-        required
-        value={title}
-        onChange={(e) => setTitle(e.currentTarget.value)}
-        // 「名前を変更」を押した直後に打ち始められるようにする
-        autoFocus
-      />
-      <Button type="submit" size="small" variant="primary">
-        {m.save()}
-      </Button>
-      <Button size="small" variant="ghost" onClick={() => setEditing(false)}>
-        {m.cancel()}
-      </Button>
-    </XStack>
-  )
-}
-
 function EpisodeNotFound({ projectId }: { projectId: string }) {
   return (
     <YStack as="section" gap={16} align="start">
@@ -385,33 +350,5 @@ function EpisodeNotFound({ projectId }: { projectId: string }) {
         {m.web_episode_back_to_list()}
       </Link>
     </YStack>
-  )
-}
-
-/** エピソードのページを全部まとめて生成する */
-function EpisodeBatch({
-  episode,
-  projectId,
-  store,
-}: {
-  episode: Episode
-  projectId: string
-  store: ProjectStore
-}) {
-  const { generation } = Route.useRouteContext()
-  const batch = useBatchGeneration({
-    generation,
-    store,
-    projectId,
-    scope: `episode/${episode.id}`,
-    pageIds: episode.pages.map((page) => page.id),
-  })
-  return (
-    <XStack wrap gap={12} className={common.toolbar}>
-      <Button disabled={batch.running || episode.pages.length === 0} onClick={batch.start}>
-        {batch.running ? m.generating() : m.web_episode_generate_all()}
-      </Button>
-      <BatchOptions batch={batch} />
-    </XStack>
   )
 }

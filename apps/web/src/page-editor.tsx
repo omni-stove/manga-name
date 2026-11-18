@@ -384,6 +384,9 @@ export function PageEditor({
   const [inspectorWidth, setInspectorWidth] = useStoredWidth('manga.inspector.width')
   const [scriptWidth, setScriptWidth] = useStoredWidth('manga.script.width')
   const [menu, setMenu] = useState<OpenMenu | null>(null)
+  // 描いている途中でページを移ったら、移った先のコマに頂点を置かないよう、どのページのコマかを持つ
+  const [breakoutFor, setBreakoutFor] = useState<{ pageId: ID; panelId: ID } | null>(null)
+  const breakoutPanelId = breakoutFor?.pageId === pageId ? breakoutFor.panelId : null
   const [registeringLayout, setRegisteringLayout] = useState(false)
   const [addingPage, setAddingPage] = useState(false)
   const canUndo = useStore(store.state, (s) => s.canUndo)
@@ -655,6 +658,7 @@ export function PageEditor({
     setTool,
     openShapes: () => menu && setMenu({ ...menu, sub: 'shapes' }),
     openJoins: () => menu && setMenu({ ...menu, sub: 'joins' }),
+    drawBreakout: (panelId: ID) => setBreakoutFor({ pageId, panelId }),
   }
   const subOf =
     menuTarget?.kind === 'bubble' && menu?.sub
@@ -981,6 +985,8 @@ export function PageEditor({
             onGenerate={generate}
             resolveAsset={resolveAsset}
             onContextMenu={can('canvas') ? setMenu : undefined}
+            breakoutPanelId={canEdit ? breakoutPanelId : null}
+            onBreakoutEnd={() => setBreakoutFor(null)}
           />
         </div>
         <Sidebar

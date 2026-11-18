@@ -1,6 +1,7 @@
 import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
 import {
+  addPage,
   arts,
   clickInsidePanel,
   createProject,
@@ -30,7 +31,7 @@ test('ログインしてクラウドに保存し、別のブラウザで開く�
 
   await signIn(a)
   await createProject(a, title)
-  await a.getByRole('button', { name: m.web_episode_add_page() }).click()
+  await addPage(a)
   await openPage(a, 1)
 
   await selectTool(a, m.bubble())

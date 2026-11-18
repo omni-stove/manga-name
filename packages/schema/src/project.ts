@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SFX_SCALE_MAX, SFX_SCALE_MIN } from './sfx-lettering'
 
-export const SCHEMA_VERSION = 34 as const
+export const SCHEMA_VERSION = 35 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -257,6 +257,11 @@ const PanelBaseSchema = z.object({
   order,
   rect: RectSchema,
   shape: z.array(PointSchema).min(3).optional(),
+  /**
+   * 絵を枠の外へはみ出させる範囲（ページの正規化座標の多角形）。絵はコマの輪郭に加えてこの中にも、枠線より上に描く。
+   * 絵を cover で置く範囲はコマの rect のままなので、多角形のうち絵の外の部分には何も描かない
+   */
+  breakout: z.array(PointSchema).min(3).optional(),
   fill: PanelFillSchema.optional(),
   /** 枠線。省略は実線の枠 */
   frame: PanelFrameSchema.optional(),

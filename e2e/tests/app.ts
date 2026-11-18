@@ -49,6 +49,22 @@ export async function openEpisode(page: Page, title: string): Promise<void> {
   await expect(page.getByRole('button', { name: m.web_episode_add_page() })).toBeVisible()
 }
 
+/**
+ * 「ページを追加」のダイアログを開き、名前が layout のコマ割り（既定は 3 段）か見開きを選んで足す。
+ * 開くボタンが dialog の外の画面にあるときに使う
+ */
+export async function addPage(
+  page: Page,
+  layout: string = m.web_page_template_3rows(),
+): Promise<void> {
+  await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+  const dialog = page.getByRole('dialog', { name: m.web_episode_add_page() })
+  await dialog.getByText(layout, { exact: true }).click()
+  await expect(dialog.getByRole('radio', { name: layout, exact: true })).toBeChecked()
+  await dialog.getByRole('button', { name: m.web_episode_add_page() }).click()
+  await expect(dialog).toBeHidden()
+}
+
 /** エピソードのページ一覧から n ページ目のエディタを開く */
 export async function openPage(page: Page, n: number): Promise<void> {
   await page.getByRole('link', { name: m.web_episode_page_number({ number: n }) }).click()

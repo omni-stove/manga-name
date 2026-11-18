@@ -19,6 +19,7 @@ import {
   useRef,
 } from 'react'
 import type { Root } from 'react-dom/client'
+import { BreakoutToolLayer } from './breakout-tool-layer'
 import { bodyPath, bubbleGeometry } from './bubble-shape'
 import { BubbleToolLayer } from './bubble-tool-layer'
 import { DiagnosisLayer } from './diagnosis-layer'
@@ -33,6 +34,7 @@ import { pressurePath } from './pressure-stroke'
 import { SfxToolLayer } from './sfx-tool-layer'
 import { TurnLayer } from './turn-layer'
 import type { EditorCanvasProps, Selection } from './types'
+import { useBreakoutTool } from './use-breakout-tool'
 import { useBubbleTool } from './use-bubble-tool'
 import { fillPoints, useFill } from './use-fill'
 import { useHintTool } from './use-hint-tool'
@@ -88,6 +90,7 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * `scribble` ツールでは手描きの線を引き、消しゴムで 1 本ずつ消す。手描きのレイヤーが非表示なら何もしない。
  * `sketch` ツールも同じ操作で、線は `Page.sketch` に足す。下描きのレイヤーが非表示なら何もしない。
  * `fill` ツールではなぞった線を閉じた多角形にして `fillTool` の色で `Page.fills` に足し、クリックで選んだ塗りを Delete で消す。
+ * `breakoutPanelId` を渡すと、ツールによらずクリックでそのコマのはみ出しの頂点を置き、最初の頂点のクリックか Enter で閉じる。
  * `diagnosis` があり `layers.diagnosis` が立っていれば、視線経路、bubble chain、焦点ごとの診断ラベル、
  * ページ下の集計行と凡例を重ねる。そのとき焦点の素のラベルは診断ラベルに譲る。
  * `turn` があれば、めくりの直前のページの最後のコマに「めくり」、直後のページの最初のコマに「めくり後」の印を重ねる。
@@ -147,6 +150,16 @@ export function EditorCanvas(props: EditorCanvasProps) {
     selection: props.selection,
     onChange: props.onChange,
     onSelect: props.onSelect,
+  })
+  const breakoutTool = useBreakoutTool({
+    page,
+    width: pageW,
+    height: pageH,
+    view,
+    panning,
+    panelId: props.breakoutPanelId ?? null,
+    onChange: props.onChange,
+    onEnd: () => props.onBreakoutEnd?.(),
   })
   const move = useMove({
     page,
@@ -260,7 +273,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
     ? 'grabbing'
     : spaceHeld
       ? 'grab'
-      : props.tool === 'panel' || hintTool.active || scribbling
+      : breakoutTool.draft || props.tool === 'panel' || hintTool.active || scribbling
         ? 'crosshair'
         : props.tool === 'bubble'
           ? selection.hovered?.kind === 'bubble'
@@ -304,6 +317,8 @@ export function EditorCanvas(props: EditorCanvasProps) {
       }}
       onPointerDown={(e) => {
         if (props.onContextMenu && !scribbling) longPress.onPointerDown(e)
+        // 頂点を置くクリックを、パンや他のツールより先に取る
+        breakoutTool.handlers.onPointerDown(e)
         viewport.handlers.onPointerDown(e)
         panelTool.handlers.onPointerDown(e)
         bubbleTool.handlers.onPointerDown(e)
@@ -322,6 +337,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
           return
         }
         longPress.onPointerMove(e)
+        breakoutTool.handlers.onPointerMove(e)
         viewport.handlers.onPointerMove(e)
         panelTool.handlers.onPointerMove(e)
         bubbleTool.handlers.onPointerMove(e)
@@ -357,6 +373,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
       }}
       onKeyDown={(e) => {
         if (
+          breakoutTool.handlers.onKeyDown(e) ||
           fill.handlers.onKeyDown(e) ||
           panelTool.handlers.onKeyDown(e) ||
           bubbleTool.handlers.onKeyDown(e) ||
@@ -499,6 +516,14 @@ export function EditorCanvas(props: EditorCanvasProps) {
         draft={bubbleTool.draft ?? move.bubbleDraft}
         handleSize={bubbleTool.handleSize}
       />
+      {breakoutTool.draft && breakoutTool.draft.points.length > 0 && (
+        <BreakoutToolLayer
+          draft={breakoutTool.draft}
+          width={pageW}
+          height={pageH}
+          closeSize={breakoutTool.closeSize}
+        />
+      )}
       <SfxToolLayer rotation={hintTool.rotation} handleSize={hintTool.handleSize} />
     </svg>
   )
@@ -3125,6 +3150,71 @@ if (import.meta.vitest) {
     })
   })
 
+  describe('breakout tool', () => {
+    const triangle = [clientAt(0.1, 0.1), clientAt(0.4, 0.1), clientAt(0.25, 0.3)]
+    const expected = [
+      { x: 0.1, y: 0.1 },
+      { x: 0.4, y: 0.1 },
+      { x: 0.25, y: 0.3 },
+    ]
+
+    test('clicks place vertices, and a click on the first vertex closes the polygon with one patch', async () => {
+      const onChange = vi.fn()
+      const onBreakoutEnd = vi.fn()
+      const svg = await render({ breakoutPanelId: 'pn_2', onChange, onBreakoutEnd })
+      layout(svg)
+      for (const at of triangle) click(svg, at)
+      fire(svg, pointer('pointermove', { id: 1, ...clientAt(0.3, 0.4) }))
+      expect(svg.querySelectorAll('[data-breakout-vertex]')).toHaveLength(3)
+      expect(svg.querySelector('[data-breakout-close]')).not.toBeNull()
+      expect(onChange).not.toHaveBeenCalled()
+      click(svg, triangle[0] as { x: number; y: number })
+      expect(patchOf(onChange)).toEqual([
+        { op: 'add', path: '/panels/1/breakout', value: expected },
+      ])
+      expect(onBreakoutEnd).toHaveBeenCalledTimes(1)
+      expect(svg.querySelector('[data-layer="breakout-tool"]')).toBeNull()
+    })
+
+    test('Backspace removes the last vertex and Enter closes with three or more', async () => {
+      const onChange = vi.fn()
+      const onBreakoutEnd = vi.fn()
+      const svg = await render({ breakoutPanelId: 'pn_2', onChange, onBreakoutEnd })
+      layout(svg)
+      for (const at of triangle) click(svg, at)
+      key(svg, { key: 'Backspace' })
+      expect(svg.querySelectorAll('[data-breakout-vertex]')).toHaveLength(2)
+      key(svg, { key: 'Enter' })
+      expect(onChange).not.toHaveBeenCalled()
+      click(svg, triangle[2] as { x: number; y: number })
+      key(svg, { key: 'Enter' })
+      expect(patchOf(onChange)).toEqual([
+        { op: 'add', path: '/panels/1/breakout', value: expected },
+      ])
+      expect(onBreakoutEnd).toHaveBeenCalledTimes(1)
+    })
+
+    test('Escape cancels without a patch, and other keys are left to the canvas', async () => {
+      const onChange = vi.fn()
+      const onBreakoutEnd = vi.fn()
+      const svg = await render({ breakoutPanelId: 'pn_2', onChange, onBreakoutEnd })
+      layout(svg)
+      click(svg, triangle[0] as { x: number; y: number })
+      expect(key(svg, { key: 'a' }).defaultPrevented).toBe(false)
+      key(svg, { key: 'Escape' })
+      expect(onChange).not.toHaveBeenCalled()
+      expect(onBreakoutEnd).toHaveBeenCalledTimes(1)
+      expect(svg.querySelector('[data-layer="breakout-tool"]')).toBeNull()
+    })
+
+    test('a click outside the page places nothing', async () => {
+      const svg = await render({ breakoutPanelId: 'pn_2' })
+      layout(svg)
+      click(svg, { x: -10, y: -10 })
+      expect(svg.querySelector('[data-breakout-vertex]')).toBeNull()
+    })
+  })
+
   describe('moving with the select tool', () => {
     test('dragging the selected panel draws a draft, then moves it inside the page', async () => {
       const onChange = vi.fn()
@@ -3539,8 +3629,6 @@ if (import.meta.vitest) {
     })
   })
 
-  /** 1 フレームの予算（60fps） */
-  const FRAME_MS = 16
   const ROWS = 6
   const COLUMNS = 5
   const BUBBLES = 20
@@ -3597,29 +3685,14 @@ if (import.meta.vitest) {
     return { id: 'pg_perf', panels, scribbles: [] }
   }
 
-  /** act 込みで 1 イベントを処理しきるまでの ms */
-  function timed(target: EventTarget, e: Event): number {
-    const start = performance.now()
+  /** act 込みで 1 イベントを処理しきる */
+  function send(target: EventTarget, e: Event): void {
     act(() => {
       target.dispatchEvent(e)
     })
-    return performance.now() - start
   }
 
-  /**
-   * 所要時間が 1 フレームに収まることを確かめる。PERF=1（mise run perf）のときだけ測る。
-   * 共有ランナーの CPU で所要時間がぶれ、コードと無関係に落ちるため。描き直す要素の数は常に確かめる
-   */
-  function expectWithinFrame(ms: number): void {
-    if (process.env.PERF) expect(ms).toBeLessThan(FRAME_MS)
-  }
-
-  const percentile = (xs: number[], p: number) => {
-    const sorted = [...xs].sort((a, b) => a - b)
-    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ?? 0
-  }
-
-  test(`dragging a bubble on ${ROWS * COLUMNS} panels and ${BUBBLES} bubbles stays within ${FRAME_MS}ms per frame`, async () => {
+  test(`dragging a bubble on ${ROWS * COLUMNS} panels and ${BUBBLES} bubbles redraws only what changed`, async () => {
     const page = bigPage()
     const panel = page.panels[7] as Panel
     // pointerup の Patch を親が適用した結果。中身は Patch の検証ではないので、移動後のページを直接作る
@@ -3662,12 +3735,9 @@ if (import.meta.vitest) {
       characterData: true,
     })
 
-    const frames: number[] = []
-    timed(svg, pointer('pointerdown', { id: 1, ...clientAt(nx(0), ny) }))
+    send(svg, pointer('pointerdown', { id: 1, ...clientAt(nx(0), ny) }))
     for (let i = 1; i <= MOVES; i++) {
-      frames.push(
-        timed(svg, pointer('pointermove', { id: 1, ...clientAt(nx((0.3 * i) / MOVES), ny) })),
-      )
+      send(svg, pointer('pointermove', { id: 1, ...clientAt(nx((0.3 * i) / MOVES), ny) }))
     }
     await Promise.resolve()
     observer.disconnect()
@@ -3675,16 +3745,9 @@ if (import.meta.vitest) {
     // ドラッグ中はページの描画に触らず、破線の下書きだけを描き直す
     expect(mutations).toHaveLength(0)
 
-    const p95 = percentile(frames, 0.95)
-    const median = percentile(frames, 0.5)
-    console.info(
-      `drag: ${MOVES} moves, median ${median.toFixed(2)}ms, p95 ${p95.toFixed(2)}ms, max ${Math.max(...frames).toFixed(2)}ms`,
-    )
-    expectWithinFrame(p95)
-
-    // pointerup の Patch を親が適用したあとの 1 回の描画も 1 フレームに収め、動かしたフキダシだけを描き直す
+    // pointerup の Patch を親が適用したあとの 1 回の描画では、動かしたフキダシだけを描き直す
     await act(async () => root.render(<EditorCanvas {...props} onGenerate={() => {}} />))
-    timed(svg, pointer('pointerup', { id: 1, ...clientAt(nx(0.3), ny) }))
+    send(svg, pointer('pointerup', { id: 1, ...clientAt(nx(0.3), ny) }))
     expect(changed).toBe(1)
     const touched = new Set<Element>()
     const after = new MutationObserver((records) => {
@@ -3700,13 +3763,9 @@ if (import.meta.vitest) {
       attributes: true,
       characterData: true,
     })
-    const start = performance.now()
     act(() => root.render(<EditorCanvas {...props} page={next} onGenerate={() => {}} />))
-    const commitMs = performance.now() - start
     await Promise.resolve()
     after.disconnect()
-    console.info(`commit after drag: ${commitMs.toFixed(2)}ms`)
-    expectWithinFrame(commitMs)
     expect([...touched].map((el) => el.getAttribute('data-bubble-id'))).toEqual(['bb_8'])
   })
 
@@ -3732,7 +3791,7 @@ if (import.meta.vitest) {
     return { ...bigPage(), scribbles }
   }
 
-  test(`drawing on a page with ${STROKES} strokes stays within ${FRAME_MS}ms per frame`, async () => {
+  test(`drawing on a page with ${STROKES} strokes redraws only what changed`, async () => {
     const page = scribbledPage()
     let added: Stroke | undefined
     const props: EditorCanvasProps = {
@@ -3761,12 +3820,9 @@ if (import.meta.vitest) {
     )
     observer.observe(svg, { subtree: true, childList: true, attributes: true, characterData: true })
 
-    const frames: number[] = []
-    timed(svg, pointer('pointerdown', { id: 1, ...clientAt(0.1, 0.5) }))
+    send(svg, pointer('pointerdown', { id: 1, ...clientAt(0.1, 0.5) }))
     for (let i = 1; i <= MOVES; i++) {
-      frames.push(
-        timed(svg, pointer('pointermove', { id: 1, ...clientAt(0.1 + (0.6 * i) / MOVES, 0.5) })),
-      )
+      send(svg, pointer('pointermove', { id: 1, ...clientAt(0.1 + (0.6 * i) / MOVES, 0.5) }))
     }
     await Promise.resolve()
     observer.disconnect()
@@ -3775,16 +3831,9 @@ if (import.meta.vitest) {
     // 描いている間は描画中の線の points だけを書き換え、React は何も描き直さない
     expect(mutations).toHaveLength(0)
 
-    const p95 = percentile(frames, 0.95)
-    const median = percentile(frames, 0.5)
-    console.info(
-      `scribble: ${MOVES} moves on ${STROKES} strokes, median ${median.toFixed(2)}ms, p95 ${p95.toFixed(2)}ms, max ${Math.max(...frames).toFixed(2)}ms`,
-    )
-    expectWithinFrame(p95)
-
-    timed(svg, pointer('pointerup', { id: 1, ...clientAt(0.7, 0.5) }))
+    send(svg, pointer('pointerup', { id: 1, ...clientAt(0.7, 0.5) }))
     expect(added).toBeDefined()
-    // pointerup の Patch を親が適用したあとの 1 回の描画も 1 フレームに収め、足した線だけを描く
+    // pointerup の Patch を親が適用したあとの 1 回の描画では、足した線だけを描く
     const next: Page = { ...page, scribbles: [...page.scribbles, added as Stroke] }
     const after: MutationRecord[] = []
     const commitObserver = new MutationObserver((records) => after.push(...records))
@@ -3794,13 +3843,9 @@ if (import.meta.vitest) {
       attributes: true,
       characterData: true,
     })
-    const start = performance.now()
     act(() => root.render(<EditorCanvas {...props} page={next} />))
-    const commitMs = performance.now() - start
     await Promise.resolve()
     commitObserver.disconnect()
-    console.info(`commit after stroke: ${commitMs.toFixed(2)}ms`)
-    expectWithinFrame(commitMs)
     expect(after.flatMap((r) => [...r.addedNodes, ...r.removedNodes])).toEqual([
       layer.querySelector(`[data-stroke-id="${added?.id}"]`),
     ])

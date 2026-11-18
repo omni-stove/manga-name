@@ -1,6 +1,7 @@
 import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
 import {
+  addPage,
   arts,
   clickInsidePanel,
   createProject,
@@ -18,7 +19,7 @@ test('作成からコマ分割、フキダシ、生成、PNG 書き出しまで�
   page,
 }) => {
   await createProject(page, 'e2e シナリオ 1')
-  await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+  await addPage(page)
   await openPage(page, 1)
   await expect(inspector(page).getByText(m.web_editor_elements({ count: 6 }))).toBeVisible()
 
