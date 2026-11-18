@@ -9,6 +9,7 @@ import {
   currentArt,
   effectInk,
   effectLines,
+  FILL_COLORS,
   type FocusPoint,
   frameOutline,
   groundColor,
@@ -90,11 +91,13 @@ async function loadArt(
 
 /**
  * ページ 1 枚を PNG に合成する。同じ Page と同じアセットからは同じバイト列が出る。
+ * 手描きの塗り（Page.fills）はコマの絵と効果線の上、漫符・描き文字・フキダシ・枠線の下に、コマの輪郭で切らずに描く。
+ * 灰色の塗りは乗算で重ねる。
  * sfx の焦点の label は、絵の上、フキダシと枠線の下に、コマの輪郭で切った描き文字として、焦点ごとの傾き・書体・大きさで描く。
  * mark の焦点は、描き文字の下にコマの輪郭で切った漫符（markShapes）として、効果線と同じ色で描く。
  * 紙面全体に重ねるトーンは、フキダシと間白まで描いた後に乗算で重ねる。
  * 柱（Page.hashira）は、トーンを重ねた後に hashiraArea の余白の中央へ縦書きで書く。折り返さず、改行で列を分ける。
- * face と keyObject の焦点、ベクトル、診断、参考画像、手描きは描かない。
+ * face と keyObject の焦点、ベクトル、診断、参考画像、手描きの線は描かない。
  */
 export async function renderPage(
   page: Page,
@@ -196,13 +199,15 @@ export async function drawPage(
     }
   }
 
-  panels.forEach((panel, i) => {
-    const rect = rectToPx(panel.rect, pageRect)
-    const outline = frameOutline(
+  const outlineOf = (panel: Panel) =>
+    frameOutline(
       panelOutline(panel).map((p) => pointToPx(p, pageRect)),
       panel.frame,
       unit.w,
     )
+  const drawArt = (panel: Panel, i: number) => {
+    const rect = rectToPx(panel.rect, pageRect)
+    const outline = outlineOf(panel)
     const image = arts[i]
     // 枠ありのコマは、下に敷いた枠なしのコマの絵を隠すよう白い地を持つ
     if (blackPanel(panel)) fillOutline(c, outline, '#000')
@@ -215,6 +220,11 @@ export async function drawPage(
     drawEffectLines(c, outline, effectLines(panel, rect, unit.w), effectInk(panel))
     // フキダシまでぼかさないよう、絵の直後にぼかす
     if (panel.frame === 'soft') drawSoftEdge(c, outline, unit.w, ground)
+  }
+  const drawTop = (panel: Panel, i: number) => {
+    const rect = rectToPx(panel.rect, pageRect)
+    const outline = outlineOf(panel)
+    const image = arts[i]
     drawEffectLines(c, outline, markShapes(panel, rect, unit.w), effectInk(panel))
     withClip(c, outline, () => drawSfx(panel))
     if (opts.panelNumbers) {
@@ -228,7 +238,30 @@ export async function drawPage(
       const breakout = panel.breakout.map((p) => pointToPx(p, pageRect))
       drawCover(c, image, rect, breakout)
     }
-  })
+  }
+
+  const fills = page.fills ?? []
+  if (fills.length === 0) {
+    panels.forEach((panel, i) => {
+      drawArt(panel, i)
+      drawTop(panel, i)
+    })
+  } else {
+    // 塗りはコマをまたぐので、全コマの絵の後、フキダシと枠線の前に挟む。
+    // 塗りの無いページまで分けないのは、枠ありのコマが下敷きのコマのフキダシを隠す重なりを崩さないため
+    panels.forEach(drawArt)
+    for (const fill of fills) {
+      c.save()
+      if (fill.color === 'gray') c.globalCompositeOperation = 'multiply'
+      fillOutline(
+        c,
+        fill.points.map((p) => pointToPx(p, pageRect)),
+        FILL_COLORS[fill.color],
+      )
+      c.restore()
+    }
+    panels.forEach(drawTop)
+  }
 
   // はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く
   for (const panel of panels) drawBubbles(panel, true)
@@ -910,6 +943,39 @@ if (import.meta.vitest) {
     expect(worst).toBeLessThanOrEqual(1)
     const margin = (Math.round(plain.height / 2) * plain.width + plain.width - 2) * 4
     expect(toned.data[margin]).toBe(255)
+  })
+
+  test('手描きの塗りは間白にかかっても切らずに描き、灰色は乗算で重ね、枠線はその上に引く', async () => {
+    const box = (x: number, y: number, w: number, h: number) => [
+      { x, y },
+      { x: x + w, y },
+      { x: x + w, y: y + h },
+      { x, y: y + h },
+    ]
+    const page: Page = {
+      ...emptyPage,
+      fills: [
+        { id: 'fl_black', points: box(0.3, 0.3, 0.4, 0.15), color: 'black' },
+        { id: 'fl_gray', points: box(0.3, 0.86, 0.4, 0.1), color: 'gray' },
+      ],
+    }
+    const png = await renderPage(page, noAssets, {
+      width: SNAPSHOT_WIDTH,
+      notes: 'none',
+      panelNumbers: false,
+    })
+    const { width, data } = await pixels(png)
+    const pageH = Math.round((width * project.settings.pageSize.h) / project.settings.pageSize.w)
+    const at = (x: number, y: number) =>
+      data[(Math.round(y * pageH) * width + Math.round(x * width)) * 4]
+    // pn_2 と pn_3 の隙間、pn_5 と pn_6 の隙間
+    expect(at(0.49, 0.4)).toBe(0)
+    const gray = Number.parseInt(OVERLAY_COLORS.gray.slice(1, 3), 16)
+    expect(Math.abs((at(0.49, 0.9) ?? 0) - gray)).toBeLessThanOrEqual(1)
+    // pn_5 の左辺の枠線は灰色の塗りの上でも黒い
+    expect(at(0.5, 0.9)).toBeLessThan(128)
+    // 塗りの外は白のまま
+    expect(at(0.49, 0.5)).toBe(255)
   })
 
   test('枠の種類: 角丸、波線、破線、二重線、ぼかし、雲形を黒い地とセピアのページで描く', async () => {

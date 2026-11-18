@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SFX_SCALE_MAX, SFX_SCALE_MIN } from './sfx-lettering'
 
-export const SCHEMA_VERSION = 34 as const
+export const SCHEMA_VERSION = 35 as const
 
 export const IdSchema = z.string().min(1)
 export const IsoDateSchema = z.iso.datetime()
@@ -229,6 +229,13 @@ export const PanelActingSchema = z.object({
   text: z.string(),
 })
 
+/** 手描きの塗り。points はページ座標の閉じた多角形。black はベタ、gray はトーン */
+export const FillSchema = z.object({
+  id: IdSchema,
+  points: z.array(PointSchema).min(3),
+  color: z.enum(['black', 'gray']),
+})
+
 type RefineCtx = z.RefinementCtx
 type Path = (string | number)[]
 
@@ -353,6 +360,8 @@ const PageBaseSchema = z.object({
   scribbles: z.array(StrokeSchema),
   /** 原作者の下描き。コメント用の scribbles と分け、コマとフキダシへの変換元にする */
   sketch: z.array(StrokeSchema).optional(),
+  /** ベタとトーンの塗り。コマの絵の上、フキダシと枠線の下に描き、コマの輪郭では切らない */
+  fills: z.array(FillSchema).optional(),
   note: z.string().optional(),
   /** このページに当たる脚本の原文（ト書きとセリフ）。`note` は作業のメモで、脚本とは分けて持つ */
   script: z.string().optional(),
@@ -470,6 +479,7 @@ export type Strength = z.infer<typeof StrengthSchema>
 export type Vector = z.infer<typeof VectorSchema>
 export type ReferenceImage = z.infer<typeof ReferenceImageSchema>
 export type Stroke = z.infer<typeof StrokeSchema>
+export type Fill = z.infer<typeof FillSchema>
 export type PanelActing = z.infer<typeof PanelActingSchema>
 export type Panel = z.infer<typeof PanelSchema>
 export type Page = z.infer<typeof PageSchema>

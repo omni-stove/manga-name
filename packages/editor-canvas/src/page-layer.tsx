@@ -12,6 +12,8 @@ import {
   currentArt,
   effectInk,
   effectLines,
+  FILL_COLORS,
+  type Fill,
   type FocusPoint,
   frameOutline,
   groundColor,
@@ -52,6 +54,7 @@ import {
 } from './bubble-text'
 import { type PagePoint, panelBox, panelPolygon, polygonPoints } from './hit-test'
 import type { Selection } from './types'
+import { fillPoints } from './use-fill'
 
 export const FONT_FAMILY = '"Noto Sans JP", sans-serif'
 /**
@@ -108,7 +111,8 @@ interface PageLayerProps {
 }
 
 /**
- * ページの白地、参考画像、コマ、生成画像、sfx の焦点の描き文字、フキダシ、紙面全体に重ねるトーンと柱を描く。
+ * ページの白地、参考画像、コマ、生成画像、sfx の焦点の描き文字、手描きの塗り、フキダシ、紙面全体に重ねるトーンと柱を描く。
+ * 塗りはコマの絵と効果線の上、漫符・描き文字・フキダシ・枠線の下に、コマの輪郭で切らずに描く。
  * ズームとパンとドラッグでは props が変わらないので、memo で再描画を飛ばす。コマ、フキダシ、オーバーレイもそれぞれ memo し、編集や選択の変更では
  * 変わった要素だけを描き直す
  */
@@ -122,6 +126,36 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
   const unit = page.spread ? width / 2 : width
   const toneIdOf = (tone: Page['tone']) => tone && `${props.idPrefix}-tone-${tone}`
   const tones = [...new Set(page.panels.flatMap((panel) => panelTone(page, panel) ?? []))]
+  const fills = page.fills ?? NO_FILLS
+  const panelView = (panel: Panel, i: number, part?: PanelPart) => {
+    const { selection } = props
+    return (
+      <PanelView
+        key={panel.id}
+        part={part}
+        panel={panel}
+        width={width}
+        height={height}
+        direction={props.direction}
+        frame={frame}
+        artRef={props.showArt ? currentArt(panel)?.ref : undefined}
+        resolveAsset={props.resolveAsset}
+        generating={props.generating.has(panel.id)}
+        selected={isSelected(selection, 'panel', panel.id)}
+        // 他のコマのフキダシを選んでもこのコマを描き直さないよう、自分のフキダシのときだけ渡す
+        selectedBubble={
+          selection?.kind === 'bubble' && panel.bubbles.some((b) => b.id === selection.id)
+            ? selection.id
+            : undefined
+        }
+        clipId={`${props.idPrefix}-clip-${part ?? ''}${i}`}
+        opaque={opaque && panel.frame !== 'none'}
+        unit={unit}
+        ground={ground}
+        toneId={toneIdOf(panelTone(page, panel))}
+      />
+    )
+  }
   return (
     <g data-layer="page">
       {tones.map((tone) => (
@@ -148,35 +182,17 @@ export const PageLayer = memo(function PageLayer(props: PageLayerProps) {
           height={height}
         />
       )}
-      {panels.map((panel, i) => {
-        const ref = currentArt(panel)?.ref
-        const { selection } = props
-        return (
-          <PanelView
-            key={panel.id}
-            panel={panel}
-            width={width}
-            height={height}
-            direction={props.direction}
-            frame={frame}
-            artRef={props.showArt ? ref : undefined}
-            resolveAsset={props.resolveAsset}
-            generating={props.generating.has(panel.id)}
-            selected={isSelected(selection, 'panel', panel.id)}
-            // 他のコマのフキダシを選んでもこのコマを描き直さないよう、自分のフキダシのときだけ渡す
-            selectedBubble={
-              selection?.kind === 'bubble' && panel.bubbles.some((b) => b.id === selection.id)
-                ? selection.id
-                : undefined
-            }
-            clipId={`${props.idPrefix}-clip-${i}`}
-            opaque={opaque && panel.frame !== 'none'}
-            unit={unit}
-            ground={ground}
-            toneId={toneIdOf(panelTone(page, panel))}
-          />
-        )
-      })}
+      {fills.length === 0 ? (
+        panels.map((panel, i) => panelView(panel, i))
+      ) : (
+        // 塗りはコマをまたぐので、全コマの絵の後、フキダシと枠線の前に挟む。
+        // 塗りの無いページまで分けないのは、枠ありのコマが下敷きのコマのフキダシを隠す重なりを崩さないため
+        <>
+          {panels.map((panel, i) => panelView(panel, i, 'art'))}
+          <FillsView fills={fills} width={width} height={height} />
+          {panels.map((panel, i) => panelView(panel, i, 'top'))}
+        </>
+      )}
       {/* はみ出したフキダシを後ろのコマが隠さないよう、全コマの後に描く。重なりの前後はレンダラと同じくコマの重なり順 */}
       {panels.map((panel) =>
         overflowGroups(panel, true).map((group) => (
@@ -242,6 +258,41 @@ function frameDash(frame: Panel['frame'], selected: boolean): string | undefined
   return hasFrameLine(frame) ? undefined : '4 3'
 }
 
+// fills が無いページで毎回新しい空配列を作らない
+const NO_FILLS: Fill[] = []
+
+/** 手描きの塗り。灰色は乗算で重ね、下の絵の線を残す */
+const FillsView = memo(function FillsView({
+  fills,
+  width,
+  height,
+}: {
+  fills: Fill[]
+  width: number
+  height: number
+}) {
+  return (
+    <g data-layer="fills" pointerEvents="none">
+      {fills.map((fill) => (
+        <polygon
+          key={fill.id}
+          data-fill-id={fill.id}
+          data-fill-color={fill.color}
+          points={fillPoints(fill.points, width, height)}
+          fill={FILL_COLORS[fill.color]}
+          style={fill.color === 'gray' ? { mixBlendMode: 'multiply' } : undefined}
+        />
+      ))}
+    </g>
+  )
+})
+
+/**
+ * コマのどこまでを描くか。art は地、絵、ぼかしまで、top はコマ番号、フキダシ、枠線。省略は両方。
+ * ページの塗りを絵とフキダシの間に挟むときに分けて描く
+ */
+type PanelPart = 'art' | 'top'
+
 /** 効果線の多角形の列を、1 つの path の d 属性にする */
 const effectPath = (lines: readonly (readonly PagePoint[])[]): string =>
   lines.map((line) => `M${line.map((p) => `${p.x},${p.y}`).join('L')}Z`).join('')
@@ -257,6 +308,7 @@ const overflowGroups = (panel: Panel, overflow: boolean) =>
   bubbleGroups(panel.bubbles).filter((group) => (group[0]?.overflow === true) === overflow)
 
 const PanelView = memo(function PanelView({
+  part,
   panel,
   width,
   height,
@@ -273,6 +325,7 @@ const PanelView = memo(function PanelView({
   ground,
   toneId,
 }: {
+  part: PanelPart | undefined
   panel: Panel
   width: number
   height: number
@@ -305,31 +358,40 @@ const PanelView = memo(function PanelView({
       <Placeholder panel={panel} rect={rect} error={false} />
     </g>
   )
+  const art = part !== 'top'
+  const top = part !== 'art'
   return (
-    <g className="ec-panel" data-panel-id={panel.id} data-generating={generating || undefined}>
+    <g
+      className="ec-panel"
+      data-panel-id={panel.id}
+      data-panel-part={part}
+      data-generating={generating || undefined}
+    >
       <clipPath id={clipId}>
         <polygon points={points} />
       </clipPath>
-      {blackPanel(panel) ? (
-        <polygon points={points} fill="#000" data-panel-fill="black" />
-      ) : (
-        opaque && <polygon points={points} fill="#fff" data-panel-fill="white" />
-      )}
-      {artRef === undefined ? (
-        placeholder
-      ) : (
-        <Suspense fallback={placeholder}>
-          <PanelArt
-            key={artRef}
-            panel={panel}
-            rect={rect}
-            clipId={clipId}
-            toneId={toneId}
-            loaded={loadAsset(resolveAsset, artRef)}
-          />
-        </Suspense>
-      )}
-      {panel.effect && (
+      {art &&
+        (blackPanel(panel) ? (
+          <polygon points={points} fill="#000" data-panel-fill="black" />
+        ) : (
+          opaque && <polygon points={points} fill="#fff" data-panel-fill="white" />
+        ))}
+      {art &&
+        (artRef === undefined ? (
+          placeholder
+        ) : (
+          <Suspense fallback={placeholder}>
+            <PanelArt
+              key={artRef}
+              panel={panel}
+              rect={rect}
+              clipId={clipId}
+              toneId={toneId}
+              loaded={loadAsset(resolveAsset, artRef)}
+            />
+          </Suspense>
+        ))}
+      {art && panel.effect && (
         <path
           d={effectPath(effectLines(panel, rect, unit))}
           fill={effectInk(panel)}
@@ -337,7 +399,7 @@ const PanelView = memo(function PanelView({
           data-panel-effect={panel.effect}
         />
       )}
-      {panel.frame === 'soft' && (
+      {art && panel.frame === 'soft' && (
         <g clipPath={`url(#${clipId})`} data-soft-edge="">
           {softEdgeStrokes(unit).map(({ width: w, alpha }) => (
             <polygon
@@ -352,7 +414,7 @@ const PanelView = memo(function PanelView({
           ))}
         </g>
       )}
-      {marks.length > 0 && (
+      {top && marks.length > 0 && (
         <path
           d={effectPath(marks)}
           fill={effectInk(panel)}
@@ -360,48 +422,51 @@ const PanelView = memo(function PanelView({
           data-panel-marks=""
         />
       )}
-      {sfx.length > 0 && (
+      {top && sfx.length > 0 && (
         <g clipPath={`url(#${clipId})`}>
           {sfx.map((focus) => (
             <SfxView key={focus.id} focus={focus} panel={rect} />
           ))}
         </g>
       )}
-      <PanelNumber order={panel.order} outline={outline} locked={panel.locked === true} />
-      {scene !== undefined && (
+      {top && <PanelNumber order={panel.order} outline={outline} locked={panel.locked === true} />}
+      {top && scene !== undefined && (
         <g clipPath={`url(#${clipId})`}>
           <SceneLabel heading={scene} outline={outline} direction={direction} />
         </g>
       )}
       {/* 枠の外に出た部分をコマの輪郭で切り、切り口に枠線が重なるよう枠より先に描く */}
-      {overflowGroups(panel, false).map((group) => (
-        <BubbleGroupView
-          key={group[0]?.id}
-          group={group}
-          panelRect={panel.rect}
-          width={width}
-          height={height}
-          frame={frame}
-          selectedId={selectedBubble}
-          clipId={clipId}
-          onBlack={blackPanel(panel) || (panel.frame === 'none' && ground === '#000')}
-        />
-      ))}
+      {top &&
+        overflowGroups(panel, false).map((group) => (
+          <BubbleGroupView
+            key={group[0]?.id}
+            group={group}
+            panelRect={panel.rect}
+            width={width}
+            height={height}
+            frame={frame}
+            selectedId={selectedBubble}
+            clipId={clipId}
+            onBlack={blackPanel(panel) || (panel.frame === 'none' && ground === '#000')}
+          />
+        ))}
       {/* 枠線を引かないコマは出力に枠線が出ないが、選んで動かせるよう作業用の点線で輪郭を見せる */}
-      <polygon
-        data-panel-frame={panel.frame ?? ''}
-        points={points}
-        fill="none"
-        stroke="#000"
-        strokeDasharray={frameDash(panel.frame, selected)}
-        style={selected || !line ? { stroke: GUIDE } : undefined}
-        data-selected={selected || undefined}
-        strokeWidth={selected ? 2 : panel.frame === 'double' ? 3 : 1}
-        strokeLinejoin="miter"
-        vectorEffect="non-scaling-stroke"
-      />
+      {top && (
+        <polygon
+          data-panel-frame={panel.frame ?? ''}
+          points={points}
+          fill="none"
+          stroke="#000"
+          strokeDasharray={frameDash(panel.frame, selected)}
+          style={selected || !line ? { stroke: GUIDE } : undefined}
+          data-selected={selected || undefined}
+          strokeWidth={selected ? 2 : panel.frame === 'double' ? 3 : 1}
+          strokeLinejoin="miter"
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
       {/* 二重線は太い線の中央を白で抜く。選択中は選択色の 1 本にする */}
-      {panel.frame === 'double' && !selected && (
+      {top && panel.frame === 'double' && !selected && (
         <polygon
           points={points}
           fill="none"
@@ -411,7 +476,7 @@ const PanelView = memo(function PanelView({
           vectorEffect="non-scaling-stroke"
         />
       )}
-      {panel.breakout && (
+      {top && panel.breakout && (
         <Breakout
           breakout={panel.breakout}
           width={width}
