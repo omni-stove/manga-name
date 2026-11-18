@@ -76,7 +76,8 @@ const SHAPE_STYLE: Record<Shape, { tail: boolean; box: boolean }> = {
 }
 
 /**
- * 画面で選べる形と生成に選ばせる形。cold と weak は描けるが、インスペクタと生成へのつなぎ込みでまとめて足す
+ * LLM の書き起こしとページ割りに選ばせる形。画面ではすべての形を選べるが、cold と weak はプロンプトに
+ * 使い分けをまだ教えていないので、LLM にはこの一覧に限って返させる
  */
 export const AVAILABLE_BUBBLE_SHAPES = [
   'normal',
@@ -392,7 +393,7 @@ if (import.meta.vitest) {
     'weak',
   ] as const
 
-  test('cold and weak are not offered yet, but draw their own body', () => {
+  test('cold and weak are not offered to the LLM, but draw their own body', () => {
     const available: readonly Shape[] = AVAILABLE_BUBBLE_SHAPES
     expect(SHAPES.filter((s) => !available.includes(s))).toEqual(['cold', 'weak'])
     expect(bubbleOutline('cold', g).body).not.toEqual(bubbleOutline('normal', g).body)

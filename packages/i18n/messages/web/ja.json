@@ -164,6 +164,7 @@
   "web_canvas_menu_history_join_bubbles": "フキダシをつなぐ",
   "web_canvas_menu_history_detach_bubble": "フキダシを切り離す",
   "web_canvas_menu_history_change_focus_kind": "焦点の種別を変更",
+  "web_canvas_menu_history_change_focus_mark": "漫符の種類を変更",
   "web_canvas_menu_history_change_bubble_shape": "フキダシの形を変更",
   "web_canvas_menu_lock": "位置をロック",
   "web_canvas_menu_history_lock": "位置をロック",

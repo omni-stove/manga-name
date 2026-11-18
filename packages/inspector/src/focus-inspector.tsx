@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 import { m } from '@manga/i18n'
 import {
-  AVAILABLE_FOCUS_KINDS,
   BubbleTypefaceSchema,
   type FocusKind,
+  FocusKindSchema,
+  type FocusMark,
+  FocusMarkSchema,
   type FocusPoint,
   FocusPointSchema,
   type FocusStatus,
+  focusMark,
   type Patch,
   SFX_SCALE_MAX,
   SFX_SCALE_MIN,
@@ -27,9 +30,13 @@ const KIND_LABELS: Record<FocusKind, () => string> = {
   mark: m.focus_point_kind_mark,
 }
 
-/** 選べる焦点の種類と、画面での呼び名 */
+/** 焦点の種類と、画面での呼び名 */
 export const FOCUS_KINDS: readonly { value: FocusKind; label: string }[] =
-  AVAILABLE_FOCUS_KINDS.map((kind) => option(kind, KIND_LABELS[kind]))
+  FocusKindSchema.options.map((kind) => option(kind, KIND_LABELS[kind]))
+
+/** 漫符の種類と、画面での呼び名 */
+export const FOCUS_MARKS: readonly { value: FocusMark; label: string }[] =
+  FocusMarkSchema.options.map((mark) => option(mark, m[`focus_point_mark_${mark}` as const]))
 
 const STATUS_LABELS: Record<FocusStatus, () => string> = {
   ok: m.focus_status_ok,
@@ -75,19 +82,38 @@ function SfxLabelPresets({ focus, onChange }: Pick<FocusInspectorProps, 'focus' 
 
 const isRotation = (n: number) => FocusPointSchema.shape.rotation.safeParse(n).success
 
-/** sfx の焦点にだけ出す、描き文字の傾き・書体・大きさの欄 */
+/** 紙面に描く焦点（描き文字と漫符）の傾きの欄 */
+function RotationField({ focus, onChange }: Pick<FocusInspectorProps, 'focus' | 'onChange'>) {
+  return (
+    <NumberField
+      label={m.focus_point_rotation()}
+      value={focus.rotation ?? 0}
+      min={-180}
+      step={1}
+      isValid={isRotation}
+      onCommit={(n) => onChange(optionalNumber('/rotation', focus.rotation, n, 0))}
+    />
+  )
+}
+
+/** mark の焦点にだけ出す、漫符の種類の欄。mark を持たない焦点は focusMark の既定を選んだ形で出す */
+function MarkField({ focus, onChange }: Pick<FocusInspectorProps, 'focus' | 'onChange'>) {
+  const current = focusMark(focus)
+  return (
+    <SelectField
+      label={m.focus_point_mark()}
+      value={current}
+      options={FOCUS_MARKS}
+      onCommit={(v) => v !== current && onChange([{ op: 'add', path: '/mark', value: v }])}
+    />
+  )
+}
+
+/** sfx の焦点にだけ出す、描き文字の書体・大きさの欄 */
 function SfxFields({ focus, onChange }: Pick<FocusInspectorProps, 'focus' | 'onChange'>) {
   const scale = focus.scale ?? 1
   return (
     <>
-      <NumberField
-        label={m.focus_point_rotation()}
-        value={focus.rotation ?? 0}
-        min={-180}
-        step={1}
-        isValid={isRotation}
-        onCommit={(n) => onChange(optionalNumber('/rotation', focus.rotation, n, 0))}
-      />
       <SelectField
         label={m.focus_point_typeface()}
         value={focus.typeface ?? ''}
@@ -126,6 +152,7 @@ export function FocusInspector({ focus, characters, diagnosis, onChange }: Focus
         options={FOCUS_KINDS}
         onCommit={(v) => v !== focus.kind && onChange(replace('/kind', v))}
       />
+      {focus.kind === 'mark' && <MarkField focus={focus} onChange={onChange} />}
       <TextField
         label={m.focus_point_label()}
         value={focus.label}
@@ -146,6 +173,9 @@ export function FocusInspector({ focus, characters, diagnosis, onChange }: Focus
           />
         )}
       </Field>
+      {(focus.kind === 'sfx' || focus.kind === 'mark') && (
+        <RotationField focus={focus} onChange={onChange} />
+      )}
       {focus.kind === 'sfx' && <SfxFields focus={focus} onChange={onChange} />}
       <SelectField
         label={m.character()}
@@ -205,9 +235,11 @@ if (import.meta.vitest) {
         <FocusInspector focus={focus} characters={project.characters} onChange={onChange} />,
       )
       const kind = selectLabelled(container, m.focus_point_kind())
-      expect([...kind.options].map((o) => o.value)).toEqual(['face', 'keyObject', 'sfx'])
+      expect([...kind.options].map((o) => o.value)).toEqual(['face', 'keyObject', 'sfx', 'mark'])
       await choose(kind, 'sfx')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/kind', value: 'sfx' }])
+      await choose(kind, 'mark')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/kind', value: 'mark' }])
 
       await act(async () => setValue(inputLabelled(container, m.focus_point_label()), 'E'))
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/label', value: 'E' }])
@@ -233,7 +265,42 @@ if (import.meta.vitest) {
       expect(container.querySelectorAll('input[type="range"]')).toHaveLength(1)
       const labels = Array.from(container.querySelectorAll('label'), (l) => l.textContent)
       expect(labels.join()).not.toContain(m.focus_point_typeface())
+      expect(labels.join()).not.toContain(m.focus_point_mark())
       expect(container.querySelector('[role="group"]')).toBeNull()
+    })
+
+    test('a mark focus picks its mark and rotation, without the lettering fields', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const mark = { ...focus, kind: 'mark' as const, label: '' }
+      const props = { characters: project.characters, onChange }
+      const { container, root } = await render(<FocusInspector focus={mark} {...props} />)
+      const labels = Array.from(container.querySelectorAll('label'), (l) => l.textContent).join()
+      expect(labels).not.toContain(m.focus_point_typeface())
+      expect(labels).not.toContain(m.focus_point_scale())
+      expect(container.querySelector('[role="group"]')).toBeNull()
+
+      const select = () => selectLabelled(container, m.focus_point_mark())
+      expect([...select().options].map((o) => [o.value, o.textContent])).toEqual([
+        ['sweat', m.focus_point_mark_sweat()],
+        ['anger', m.focus_point_mark_anger()],
+        ['question', m.focus_point_mark_question()],
+        ['exclaim', m.focus_point_mark_exclaim()],
+        ['sigh', m.focus_point_mark_sigh()],
+      ])
+      // mark を持たない漫符は汗として描くので、汗を選んだ形で出す
+      expect(select().value).toBe('sweat')
+      await choose(select(), 'anger')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/mark', value: 'anger' }])
+
+      await act(async () =>
+        root.render(<FocusInspector focus={{ ...mark, mark: 'sigh' }} {...props} />),
+      )
+      expect(select().value).toBe('sigh')
+      await choose(select(), 'question')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/mark', value: 'question' }])
+
+      await act(async () => setValue(inputLabelled(container, m.focus_point_rotation()), '45'))
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/rotation', value: 45 }])
     })
 
     test('an sfx label takes a preset lettering or free text', async () => {

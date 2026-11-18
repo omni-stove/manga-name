@@ -4,8 +4,8 @@ import { sfxPoint } from './sfx-ops'
 import type { SfxRotation } from './use-hint-tool'
 
 /**
- * `focus` ツールで選んだ描き文字の UI。描き文字を囲む破線の枠と、その上端から伸ばした回転のハンドルを、
- * 描き文字と同じ傾きで出す。ドラッグ中は回した後の傾きで出す
+ * `focus` ツールで選んだ描き文字か漫符の UI。それを囲む破線の枠と、その上端から伸ばした回転のハンドルを、
+ * 描き文字か漫符と同じ傾きで出す。ドラッグ中は回した後の傾きで出す
  */
 export function SfxToolLayer({
   rotation,

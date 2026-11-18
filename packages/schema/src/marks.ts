@@ -1,4 +1,4 @@
-import type { FocusKind, FocusMark, FocusPoint, Panel, Point, Rect } from './project'
+import type { FocusMark, FocusPoint, Panel, Point, Rect } from './project'
 
 /** 漫符の種類の既定 */
 export const DEFAULT_MARK: FocusMark = 'sweat'
@@ -6,16 +6,6 @@ export const DEFAULT_MARK: FocusMark = 'sweat'
 /** 漫符の大きさ。コマの短辺に対する比率で、weight 0 で MIN、1 で MAX */
 const MARK_SIZE_MIN = 0.1
 const MARK_SIZE_MAX = 0.3
-
-/**
- * 画面で選べる焦点の種類。生成のための印で紙面に描かない face と keyObject、紙面に描ける sfx を並べる。
- * mark は漫符の種類を選ぶ欄がまだ無く、選んでも汗しか描けないので並べない
- */
-export const AVAILABLE_FOCUS_KINDS = [
-  'face',
-  'keyObject',
-  'sfx',
-] as const satisfies readonly FocusKind[]
 
 /** 漫符の種類。指定が無ければ DEFAULT_MARK */
 export function focusMark(focus: Pick<FocusPoint, 'mark'>): FocusMark {

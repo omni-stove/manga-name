@@ -171,8 +171,19 @@ function shortcutsOf<T extends string>(
 
 // 診断の経路はコマ単位の centre sweep で、読者の目が実際に追うコマ内の顔などを見ていないので、
 // 読み順 OK や miss は評価として当てにならない。LLM に評価させるのも費用に見合わない。
-// そのため診断レイヤー、読み順と焦点の集計、診断の問題、AI に相談を出さない。生成プロンプトのヒントは残す
+// そのため診断レイヤー、読み順と焦点の集計、経路に基づく診断の問題、AI に相談を出さない。生成プロンプトのヒントは残す
 const GAZE_EVALUATION = false
+
+// セリフの字数・コマ数・寄りの並びは診断の経路を使わずに数えるので、GAZE_EVALUATION が無くても一覧に出す
+const PATHLESS_ISSUES: ReadonlySet<Issue['code']> = new Set([
+  'TOO_MUCH_TEXT',
+  'PANEL_COUNT',
+  'MONOTONOUS_CAMERA',
+])
+
+/** 診断の一覧に出す Issue */
+const shownIssues = (issues: readonly Issue[]): readonly Issue[] =>
+  GAZE_EVALUATION ? issues : issues.filter((issue) => PATHLESS_ISSUES.has(issue.code))
 
 const layerOptions = (): readonly { key: keyof Layers; label: string }[] => [
   { key: 'reference', label: m.web_editor_layer_reference() },
@@ -401,6 +412,7 @@ export function PageEditor({
   const foundPage = found?.page
   useTypefaceFonts(foundPage)
   const diagnosis = foundPage ? diagnosePage(foundPage, project.settings) : null
+  const issues = diagnosis ? shownIssues(diagnosis.issues) : []
   // 提案の Patch だけを持ち、ゴーストは今のページに当てて作る。ホバー中に編集されても古いページを描かない
   const [preview, setPreview] = useState<Patch | null>(null)
   const ghostPage = foundPage && preview ? previewPage(foundPage, preview) : undefined
@@ -1024,31 +1036,31 @@ export function PageEditor({
                 />
               </Area>
             </fieldset>
-            {GAZE_EVALUATION && diagnosis && (
+            {diagnosis && (
               <details open data-section="issues">
-                <summary>
-                  {m.web_editor_diagnosis_issues({ count: diagnosis.issues.length })}
-                </summary>
+                <summary>{m.web_editor_diagnosis_issues({ count: issues.length })}</summary>
                 <IssueList
-                  issues={diagnosis.issues}
+                  issues={issues}
                   onFocus={(issue) => {
                     const target = issueTarget(page, issue)
                     if (target) setSelection(target)
                   }}
                 />
-                <CritiquePanel
-                  key={pageId}
-                  store={store}
-                  page={page}
-                  pageId={pageId}
-                  pageSize={pageSizeOf(page, project.settings.pageSize)}
-                  diagnosis={diagnosis}
-                  llmProvider={llmProvider}
-                  canEdit={canEdit}
-                  generating={generating}
-                  onPreview={setPreview}
-                  onGenerate={generate}
-                />
+                {GAZE_EVALUATION && (
+                  <CritiquePanel
+                    key={pageId}
+                    store={store}
+                    page={page}
+                    pageId={pageId}
+                    pageSize={pageSizeOf(page, project.settings.pageSize)}
+                    diagnosis={diagnosis}
+                    llmProvider={llmProvider}
+                    canEdit={canEdit}
+                    generating={generating}
+                    onPreview={setPreview}
+                    onGenerate={generate}
+                  />
+                )}
               </details>
             )}
           </div>

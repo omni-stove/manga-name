@@ -1,4 +1,11 @@
-import { type FocusPoint, type ID, type Page, type Patch, sfxFontSize } from '@manga/schema'
+import {
+  type FocusPoint,
+  type ID,
+  markSize,
+  type Page,
+  type Patch,
+  sfxFontSize,
+} from '@manga/schema'
 import type { Box } from './bubble-shape'
 import { layoutUnbroken } from './bubble-text'
 import { findFocus } from './hint-ops'
@@ -26,6 +33,21 @@ export function sfxFrame(focus: FocusPoint, panel: Box): SfxFrame {
     cy: panel.y + focus.pos.y * panel.h,
     w: layout.thickness,
     h: rows * fontSize,
+    rotation: focus.rotation ?? 0,
+  }
+}
+
+/**
+ * コマ panel（ページ座標の矩形）に置いた漫符の枠。漫符は焦点の位置を中心に回すので、そこを中心にした
+ * markSize の正方形にする。ため息は焦点の位置から右へ伸びるので枠からはみ出す
+ */
+export function markFrame(focus: FocusPoint, panel: Box): SfxFrame {
+  const size = markSize(focus, panel.w, panel.h)
+  return {
+    cx: panel.x + focus.pos.x * panel.w,
+    cy: panel.y + focus.pos.y * panel.h,
+    w: size,
+    h: size,
     rotation: focus.rotation ?? 0,
   }
 }
@@ -92,6 +114,15 @@ if (import.meta.vitest) {
     const twoColumns = sfxFrame(focus({ label: 'ザッ\nザザッ' }), panel)
     expect(twoColumns.h).toBeCloseTo(12)
     expect(twoColumns.w).toBeCloseTo(4 + 0.8 + 4)
+  })
+
+  test('markFrame is a square of the mark size centred on the focus', () => {
+    // 短辺 50mm の 0.1 から 0.3 を weight で決め、weight 0.5 で 10mm
+    const frame = markFrame(focus({ kind: 'mark', label: '', weight: 0.5, rotation: -45 }), panel)
+    expect(frame).toMatchObject({ cx: 60, cy: 40, rotation: -45 })
+    expect(frame.w).toBeCloseTo(10)
+    expect(frame.h).toBeCloseTo(10)
+    expect(markFrame(focus({ kind: 'mark', weight: 0 }), panel).w).toBeCloseTo(5)
   })
 
   test('sfxRotateHandle sits above the frame and turns with it', () => {

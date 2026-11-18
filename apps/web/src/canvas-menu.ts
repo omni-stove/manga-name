@@ -10,9 +10,10 @@ import {
   type Tool,
 } from '@manga/editor-canvas'
 import { m } from '@manga/i18n'
-import { BUBBLE_SHAPES, FOCUS_KINDS } from '@manga/inspector'
+import { BUBBLE_SHAPES, FOCUS_KINDS, FOCUS_MARKS } from '@manga/inspector'
 import {
   type Bubble,
+  focusMark,
   hasTail,
   type Page,
   type Patch,
@@ -210,6 +211,7 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
   if (target.kind === 'focus') {
     const found = findFocus(ctx.page, target.id)
     if (!found) return []
+    const mark = focusMark(found.focus)
     return [
       ...FOCUS_KINDS.map((k) => ({
         label: k.label,
@@ -220,6 +222,20 @@ export function elementMenuItems(target: Target, ctx: ElementMenuContext): MenuI
             { op: 'replace', path: '/kind', value: k.value },
           ]),
       })),
+      ...(found.focus.kind === 'mark'
+        ? [
+            'separator' as const,
+            ...FOCUS_MARKS.map((k) => ({
+              label: k.label,
+              checked: k.value === mark,
+              onSelect: () =>
+                k.value !== mark &&
+                ctx.edit(m.web_canvas_menu_history_change_focus_mark(), target, [
+                  { op: 'add', path: '/mark', value: k.value },
+                ]),
+            })),
+          ]
+        : []),
       'separator',
       lock(found.focus.locked),
       remove,
@@ -517,6 +533,43 @@ if (import.meta.vitest) {
         { kind: 'bubble', id: 'bb_3' },
         [{ op: 'remove', path: '/locked' }],
       )
+    })
+
+    test('a focus switches its kind to a mark, and a mark switches its mark', () => {
+      const target = { kind: 'focus', id: 'fp_2_vial' } as const
+      const ctx = contextOf()
+      const items = elementMenuItems(target, ctx)
+      expect(() => item(items, m.focus_point_mark_anger())).toThrow()
+      item(items, m.focus_point_kind_mark()).onSelect()
+      expect(ctx.edit).toHaveBeenCalledWith(m.web_canvas_menu_history_change_focus_kind(), target, [
+        { op: 'replace', path: '/kind', value: 'mark' },
+      ])
+
+      const asMark = (mark?: 'sigh'): Page => ({
+        ...page,
+        panels: page.panels.map((p) => ({
+          ...p,
+          focusPoints: p.focusPoints.map((f) =>
+            f.id === target.id ? { ...f, kind: 'mark' as const, mark } : f,
+          ),
+        })),
+      })
+      const markCtx = contextOf({ page: asMark() })
+      const marks = elementMenuItems(target, markCtx)
+      expect(item(marks, m.focus_point_kind_mark()).checked).toBe(true)
+      // mark を持たない漫符は汗として描くので、汗に印を付ける
+      expect(item(marks, m.focus_point_mark_sweat()).checked).toBe(true)
+      item(marks, m.focus_point_mark_sweat()).onSelect()
+      expect(markCtx.edit).not.toHaveBeenCalled()
+      item(marks, m.focus_point_mark_anger()).onSelect()
+      expect(markCtx.edit).toHaveBeenCalledWith(
+        m.web_canvas_menu_history_change_focus_mark(),
+        target,
+        [{ op: 'add', path: '/mark', value: 'anger' }],
+      )
+      const sigh = elementMenuItems(target, contextOf({ page: asMark('sigh') }))
+      expect(item(sigh, m.focus_point_mark_sigh()).checked).toBe(true)
+      expect(item(sigh, m.focus_point_mark_sweat()).checked).toBe(false)
     })
 
     test('an element that is gone has no items', () => {

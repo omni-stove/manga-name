@@ -3,7 +3,6 @@ import { getLocale, m } from '@manga/i18n'
 import {
   type Angle,
   AngleSchema,
-  AVAILABLE_PANEL_EFFECTS,
   type Bubble,
   type Camera,
   CameraSchema,
@@ -12,6 +11,7 @@ import {
   type ID,
   type Panel,
   type PanelArt,
+  PanelEffectSchema,
   PanelFrameSchema,
   PanelSchema,
   PanelToneSchema,
@@ -67,7 +67,9 @@ const TONES: readonly { value: NonNullable<Panel['tone']> | ''; label: string }[
 
 const EFFECTS: readonly { value: NonNullable<Panel['effect']> | ''; label: string }[] = [
   option('', m.none),
-  ...AVAILABLE_PANEL_EFFECTS.map((effect) => option(effect, m[`panel_effect_${effect}` as const])),
+  ...PanelEffectSchema.options.map((effect) =>
+    option(effect, m[`panel_effect_${effect}` as const]),
+  ),
 ]
 
 const isOrder = (n: number) => PanelSchema.shape.order.safeParse(n).success
@@ -961,6 +963,10 @@ if (import.meta.vitest) {
         'focus_lines',
         'speed_lines',
         'beta_flash',
+        'vertical_lines',
+        'crosshatch',
+        'sparkle',
+        'flowers',
       ])
       await choose(select(), 'focus_lines')
       expect(onChange).toHaveBeenLastCalledWith([
@@ -981,6 +987,10 @@ if (import.meta.vitest) {
       expect(onChange).toHaveBeenLastCalledWith([
         { op: 'add', path: '/effect', value: 'beta_flash' },
       ])
+      for (const effect of ['vertical_lines', 'crosshatch', 'sparkle', 'flowers'] as const) {
+        await choose(select(), effect)
+        expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/effect', value: effect }])
+      }
       await choose(select(), '')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/effect' }])
     })
