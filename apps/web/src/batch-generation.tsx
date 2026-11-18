@@ -10,7 +10,7 @@ interface BatchScope {
   generation: PanelGeneration
   store: ProjectStore
   projectId: ID
-  /** `generateAll` の scope。ページなら `page/<id>`、エピソードなら `episode/<id>` */
+  /** `generateAll` の scope。ページなら `page/<id>` */
   scope: string
   pageIds: readonly ID[]
 }

@@ -1,6 +1,6 @@
-import type { ID, Page } from '@manga/schema'
+import { bubbleGroups, type ID, type Page } from '@manga/schema'
 import { getBackend, loadFonts } from './backend'
-import { bubbleGeometry, fillBubble } from './bubble'
+import { bubbleGeometry, fillBubble, joinedGeometry } from './bubble'
 import type { PxRect } from './geometry'
 import { withClip } from './panel'
 import { drawPlacement, hasPlacement } from './placement'
@@ -37,9 +37,14 @@ export async function renderLayoutPng(
   c.fillStyle = GRAY
   c.fillRect(0, 0, width, height)
   const outline = (panel.shape ?? []).map((p) => ({ x: p.x * width, y: p.y * height }))
-  for (const bubble of panel.bubbles) {
-    const fill = () => fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff')
-    if (bubble.overflow || outline.length === 0) fill()
+  for (const group of bubbleGroups(panel.bubbles)) {
+    const fill = () => {
+      for (const bubble of group) {
+        const joined = joinedGeometry(bubble, panel.bubbles, rect)
+        fillBubble(c, bubble.shape, bubbleGeometry(bubble, rect), '#fff', joined)
+      }
+    }
+    if (group[0]?.overflow || outline.length === 0) fill()
     else withClip(c, outline, fill)
   }
 
@@ -118,12 +123,20 @@ if (import.meta.vitest) {
     expect(at(0.6, 0.4 + (0.09 * 0.2) / 0.37)).toEqual([0x2f, 0x9e, 0x6a])
   })
 
-  test('焦点も誘導線も無いコマには印を描かない', async () => {
+  test('漫符のほかに焦点も誘導線も無いコマには印を描かない', async () => {
     const page = fixtures.samplePage01.episodes[0]?.pages[0] as Page
+    const mark = {
+      id: 'fp_mark',
+      kind: 'mark' as const,
+      label: '汗',
+      pos: { x: 0.4, y: 0.5 },
+      weight: 1,
+      mark: 'sweat' as const,
+    }
     const bare: Page = {
       ...page,
       panels: page.panels.map((p) =>
-        p.id === 'pn_6' ? { ...p, focusPoints: [], vectors: [] } : p,
+        p.id === 'pn_6' ? { ...p, focusPoints: [mark], vectors: [] } : p,
       ),
     }
     const png = await renderLayoutPng(bare, 'pn_6', { width: 400 })

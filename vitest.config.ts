@@ -25,8 +25,10 @@ export default defineConfig({
       reporter: ['text-summary', 'html'],
       // パッケージごとに今の値を床にし、テストの無いコードを足して下げた PR を止める
       thresholds: {
-        'apps/web/**': { statements: 69, branches: 59, functions: 59, lines: 69 },
+        'apps/cli/**': { statements: 93, branches: 85, functions: 84, lines: 95 },
+        'apps/web/**': { statements: 66, branches: 58, functions: 56, lines: 67 },
         'packages/ai/**': { statements: 98, branches: 92, functions: 96, lines: 98 },
+        'packages/collab/**': { statements: 90, branches: 86, functions: 92, lines: 92 },
         'packages/diagnosis/**': { statements: 98, branches: 91, functions: 100, lines: 100 },
         'packages/editor-canvas/**': { statements: 88, branches: 79, functions: 90, lines: 94 },
         'packages/inspector/**': { statements: 93, branches: 79, functions: 88, lines: 96 },

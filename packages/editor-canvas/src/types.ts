@@ -4,6 +4,7 @@ import type {
   ID,
   Page,
   PageDiagnosis,
+  PageTurn,
   Patch,
   ProjectSettings,
 } from '@manga/schema'
@@ -52,6 +53,8 @@ export interface EditorCanvasProps {
    * 元の位置と提案の位置の両方で破線で重ねる。操作は受けない
    */
   ghostPage?: Page
+  /** ページがめくりの直前・直後か（`pageTurns`）。渡すとめくりの印を重ねる */
+  turn?: PageTurn
   selection: Selection
   tool: Tool
   /** `tool === 'scribble'` のときの色か消しゴム。既定は ink */

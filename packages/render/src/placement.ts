@@ -5,11 +5,13 @@ import { alphabeticY } from './text'
 
 type Ctx = CanvasRenderingContext2D
 
-// 生成プロンプトがこの色の名前で印の意味を説明するので、エディタのテーマに合わせず固定する
-const FOCUS_COLORS: Record<FocusKind, string> = {
+// 生成プロンプトがこの色の名前で印の意味を説明するので、エディタのテーマに合わせず固定する。
+// 漫符は生成した絵の上に描き足す小さな印で、絵に場所を空けさせる要が無いので配置図に出さない
+const FOCUS_COLORS: Record<FocusKind, string | undefined> = {
   face: '#1a8fd6',
   keyObject: '#e0901e',
   sfx: '#8e5bd6',
+  mark: undefined,
 }
 const VECTOR_COLOR = '#2f9e6a'
 
@@ -25,13 +27,13 @@ const HEAD_HALF = 1.2
 const LABEL_SIZE = 3
 const LABEL_GAP = 1
 
-/** 焦点か誘導線があるか。無いコマには配置の印を描かない */
+/** 配置図に出す焦点か誘導線があるか。無いコマには配置の印を描かない */
 export const hasPlacement = (panel: Panel): boolean =>
-  panel.focusPoints.length > 0 || panel.vectors.length > 0
+  panel.focusPoints.some((f) => FOCUS_COLORS[f.kind] !== undefined) || panel.vectors.length > 0
 
 /**
  * コマの配置の印を描く。誘導線は緑の矢印（strong は太く）、焦点は種別の色の円で半径は weight に比例し、
- * 中心に点、円の横にラベルを白で縁取って置く。`rect` はコマを囲む矩形（px）、`mm` は 1mm の px 数。
+ * 中心に点、円の横にラベルを白で縁取って置く。漫符の焦点は描かない。`rect` はコマを囲む矩形（px）、`mm` は 1mm の px 数。
  * 印は `rect` の外へは出さない。ラベルを描くので、呼ぶ前に loadFonts を済ませておく
  */
 export function drawPlacement(ctx: Ctx, panel: Panel, rect: PxRect, mm: number): void {
@@ -53,9 +55,10 @@ export function drawPlacement(ctx: Ctx, panel: Panel, rect: PxRect, mm: number):
   ctx.font = `${fontPx}px "${FONT_FAMILY}"`
   ctx.lineJoin = 'round'
   for (const focus of panel.focusPoints) {
+    const color = FOCUS_COLORS[focus.kind]
+    if (color === undefined) continue
     const c = at(focus.pos)
     const r = Math.max(MIN_RADIUS, FOCUS_RADIUS * focus.weight) * mm
-    const color = FOCUS_COLORS[focus.kind]
     ctx.strokeStyle = color
     ctx.fillStyle = color
     ctx.lineWidth = Math.max(1, CIRCLE_WIDTH * mm)

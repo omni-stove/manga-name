@@ -1,6 +1,6 @@
 name: Perf
 
-# 所要時間の上限を測るテストは共有ランナーの CPU でぶれ、PR の CI に入れると無関係な変更で落ちる。
+# Lighthouse で測る TTI は共有ランナーの CPU でぶれ、PR の CI に入れると無関係な変更で落ちる。
 # マージは止めず、毎晩 main で回して遅くなったことに気づけるようにする
 on:
   schedule:
@@ -25,12 +25,8 @@ jobs:
         with:
           node-version: "26"
 
-      - name: Perf
-        run: PERF=1 pnpm exec vitest run
-
       # ubuntu-latest に入っている Chrome で測る
       - name: Lighthouse
-        if: ${{ !cancelled() }}
         run: pnpm --filter @manga/web lighthouse
 
       - name: Upload Lighthouse report

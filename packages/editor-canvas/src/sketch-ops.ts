@@ -411,7 +411,7 @@ if (import.meta.vitest) {
       const [first, second] = [...panel.bubbles].sort((a, b) => a.order - b.order)
       expect(first?.pos.x).toBeGreaterThan(second?.pos.x ?? 1)
       expect(first).toMatchObject({ text: '', shape: 'normal' })
-      expect(first?.tail).toBeUndefined()
+      expect(first?.tails).toBeUndefined()
       expect((first?.size.w ?? 0) * panel.rect.w * SIZE.w).toBeCloseTo(20, 0)
     })
 

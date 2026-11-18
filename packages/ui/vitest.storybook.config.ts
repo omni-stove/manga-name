@@ -12,7 +12,8 @@ export default defineConfig({
       enabled: true,
       headless: true,
       provider: playwright(),
-      instances: [{ browser: 'chromium' }],
+      // 既定の 414×896 だと幅の上限（画面の半分）がサイドバーの既定幅より狭くなる
+      instances: [{ browser: 'chromium', viewport: { width: 1280, height: 800 } }],
     },
   },
 })

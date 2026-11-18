@@ -1,12 +1,12 @@
 import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
-import { FIXTURE_PROJECT, importProject, openPage } from './app'
+import { addPage, FIXTURE_PROJECT, importProject, openPage } from './app'
 
 test('エディタのヘッダーで、キーでツールとペンを選び、前後のページへ移れ、ページを足せる', async ({
   page,
 }) => {
   await importProject(page, FIXTURE_PROJECT)
-  await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+  await addPage(page)
   await openPage(page, 1)
 
   const tools = page.getByRole('group', { name: m.web_editor_tools() })
