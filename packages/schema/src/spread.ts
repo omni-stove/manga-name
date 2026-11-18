@@ -41,6 +41,32 @@ export function pageSlots(episode: Pick<Episode, 'pages' | 'startsRight'>): Page
   })
 }
 
+/** ページがめくりの直前か直後か。見開きは両方になりうる */
+export interface PageTurn {
+  /** 次のページがめくった先にある */
+  before: boolean
+  /** 前のページからめくって来た */
+  after: boolean
+}
+
+/**
+ * ページごとのめくりの直前・直後。右綴じは左ページ、左綴じは右ページ、見開きはそれ自体がめくりの直前になる。
+ * 最後のページはめくる先が無いので直前にせず、最初のページはめくって来ないので直後にしない
+ */
+export function pageTurns(
+  episode: Pick<Episode, 'pages' | 'startsRight'>,
+  direction: ReadingDirection,
+): Map<ID, PageTurn> {
+  const turnSide = direction === 'rtl' ? 'left' : 'right'
+  const slots = pageSlots(episode)
+  const before = slots.map(
+    (s, i) => i < slots.length - 1 && (s.side === 'spread' || s.side === turnSide),
+  )
+  return new Map(
+    slots.map((s, i) => [s.page.id, { before: before[i] === true, after: before[i - 1] === true }]),
+  )
+}
+
 /** ノンブル number から見開きを始められるか。見開きは右綴じなら右ページ、左綴じなら左ページから始まる */
 export function spreadStartsAt(
   number: number,
@@ -93,6 +119,50 @@ if (import.meta.vitest) {
     test('startsRight puts page 1 on the right', () => {
       const slots = pageSlots({ pages: [page('a'), page('b')], startsRight: true })
       expect(slots.map((s) => s.side)).toEqual(['right', 'left'])
+    })
+  })
+
+  describe('pageTurns', () => {
+    const turns = (
+      episode: Pick<Episode, 'pages' | 'startsRight'>,
+      direction: ReadingDirection,
+    ): [string, boolean, boolean][] =>
+      [...pageTurns(episode, direction)].map(([id, t]) => [id, t.before, t.after])
+    const pages = [page('a'), page('b'), page('c'), page('d')]
+
+    test('rtl turns after each left page', () => {
+      expect(turns({ pages }, 'rtl')).toEqual([
+        ['a', true, false],
+        ['b', false, true],
+        ['c', true, false],
+        ['d', false, true],
+      ])
+    })
+
+    test('ltr turns after each right page', () => {
+      expect(turns({ pages }, 'ltr')).toEqual([
+        ['a', false, false],
+        ['b', true, false],
+        ['c', false, true],
+        ['d', false, false],
+      ])
+    })
+
+    test('startsRight flips the sides', () => {
+      expect(turns({ pages, startsRight: true }, 'rtl')).toEqual([
+        ['a', false, false],
+        ['b', true, false],
+        ['c', false, true],
+        ['d', false, false],
+      ])
+    })
+
+    test('a spread is itself before a turn', () => {
+      expect(turns({ pages: [page('a'), page('b', true), page('c')] }, 'rtl')).toEqual([
+        ['a', true, false],
+        ['b', true, true],
+        ['c', false, true],
+      ])
     })
   })
 
