@@ -2,8 +2,10 @@ import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
 import { createProject, FIXTURE_EPISODE, FIXTURE_PROJECT, importProject } from './app'
 
-test('エピソードは一覧と話の画面から、確認ダイアログを経て削除できる', async ({ page }) => {
+test('エピソードは一覧と話の画面の設定から、確認ダイアログを経て削除できる', async ({ page }) => {
   await importProject(page, FIXTURE_PROJECT)
+  const settings = page.getByRole('button', { name: m.web_episode_settings() })
+  await settings.click()
   await page.getByRole('button', { name: m.web_episode_remove() }).click()
   const dialog = page.getByRole('dialog', { name: m.web_episode_remove() })
   await expect(dialog).toContainText(
@@ -13,6 +15,7 @@ test('エピソードは一覧と話の画面から、確認ダイアログを�
   await expect(dialog).toBeHidden()
   await expect(page.getByRole('button', { name: m.web_episode_add_page() })).toBeVisible()
 
+  await settings.click()
   await page.getByRole('button', { name: m.web_episode_remove() }).click()
   await dialog.getByRole('button', { name: m.remove() }).click()
   await expect(page.getByText(m.web_episodes_empty())).toBeVisible()
