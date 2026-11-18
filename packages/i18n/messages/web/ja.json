@@ -260,6 +260,7 @@
   "web_page_count_guide_premiere": "初回増ページ",
   "web_page_count_guide_premiere_hint": "週刊の第 1 話は 45〜55 ページ前後",
   "web_layout_template_registered_group": "登録したコマ割り",
+  "web_layout_template_remove_named": "「{name}」を削除",
   "web_layout_template_register_title": "コマ割りをテンプレートに登録",
   "web_layout_template_registered": "「{name}」をテンプレートに登録しました",
   "web_layout_template_register": "登録",

@@ -1,0 +1,95 @@
+.dialog {
+  width: min(44rem, calc(100vw - 2rem));
+}
+
+/* 選択肢が多いと画面に収まらないので、ボタンを残して中だけ流す */
+.body {
+  max-height: calc(100vh - 14rem);
+  overflow-y: auto;
+}
+
+.group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.legend {
+  margin-bottom: var(--space-8);
+  font-size: var(--text-s);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+}
+
+.options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-8);
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+}
+
+.wide {
+  grid-column: span 2;
+}
+
+.option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  height: 100%;
+  padding: var(--space-8);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+  cursor: pointer;
+}
+
+.option:has(.radio:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.option:not(:has(.radio:disabled)):hover {
+  background: var(--surface-hover);
+}
+
+.option:has(.radio:checked) {
+  border-color: var(--guide);
+  box-shadow: 0 0 0 1px var(--guide);
+  background: var(--guide-tint);
+}
+
+.option:has(.radio:focus-visible) {
+  outline: 2px solid var(--guide);
+  outline-offset: 2px;
+}
+
+/* 見た目はカードの枠で示すので、ラジオは隠してキーボードと支援技術にだけ残す */
+.radio {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.preview {
+  display: block;
+}
+
+.label {
+  font-size: var(--text-s);
+  text-align: center;
+}
+
+.registered {
+  position: relative;
+}
+
+.remove {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+}

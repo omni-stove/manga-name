@@ -1,10 +1,17 @@
 import { m } from '@manga/i18n'
 import { expect, test } from '@playwright/test'
-import { FIXTURE_PROJECT, importProject, openPage, panelInspector, selectTool } from './app'
+import {
+  addPage,
+  FIXTURE_PROJECT,
+  importProject,
+  openPage,
+  panelInspector,
+  selectTool,
+} from './app'
 
 test('キャンバスの何も無いところを右クリックしてメニューから操作できる', async ({ page }) => {
   await importProject(page, FIXTURE_PROJECT)
-  await page.getByRole('button', { name: m.web_episode_add_page() }).click()
+  await addPage(page)
   await openPage(page, 1)
 
   const canvas = page.getByRole('application', { name: m.web_editor_canvas() })
