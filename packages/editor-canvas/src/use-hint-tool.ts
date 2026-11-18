@@ -15,8 +15,17 @@ import {
   moveFocusPatch,
   toPanelPoint,
 } from './hint-ops'
-import { type PagePoint, panelAt } from './hit-test'
+import { type PagePoint, panelAt, panelBox } from './hit-test'
+import {
+  markFrame,
+  rotateFocusPatch,
+  rotationAt,
+  type SfxFrame,
+  sfxFrame,
+  sfxRotateHandle,
+} from './sfx-ops'
 import type { Selection, Tool } from './types'
+import { HANDLE_RATIO } from './use-panel-tool'
 import { CLICK_SLOP, sameSelection } from './use-selection'
 import { capture } from './use-viewport'
 import { type ClientBox, clientToPage, type View } from './view'
@@ -43,6 +52,14 @@ export type HintDraft =
   | { kind: 'focus'; focusId: ID; pos: Point }
   | { kind: 'place'; panelId: ID; focusKind: FocusKind; pos: Point; weight: number }
   | { kind: 'vector'; panelId: ID; from: Point; to: Point }
+  | { kind: 'rotate'; focusId: ID; rotation: number }
+
+/** 回転のハンドルを出す、選択中の描き文字か漫符。frame はドラッグ中なら回した後の傾き */
+export interface SfxRotation {
+  focusId: ID
+  frame: SfxFrame
+  handle: PagePoint
+}
 
 type Pos = { x: number; y: number }
 
@@ -66,6 +83,39 @@ type Gesture =
       dragging: boolean
     }
   | { kind: 'vector'; pointerId: number; from: PagePoint; client: Pos; dragging: boolean }
+  | {
+      kind: 'rotate'
+      pointerId: number
+      focusId: ID
+      center: PagePoint
+      client: Pos
+      dragging: boolean
+    }
+
+/**
+ * 選択中の描き文字か漫符の回転のハンドル。ハンドルは枠の上端から handleSize の 2 倍離す。
+ * 選択が文字のある sfx の焦点でも mark の焦点でもないか、ロックしていれば undefined。ドラッグ中は draft の傾きで出す
+ */
+function sfxRotation(
+  page: Page,
+  width: number,
+  height: number,
+  selection: Selection,
+  draft: HintDraft | null,
+  handleSize: number,
+): SfxRotation | undefined {
+  if (selection?.kind !== 'focus') return undefined
+  const found = findFocus(page, selection.id)
+  const focus = found?.panel.focusPoints[found.index]
+  if (!found || !focus || focus.locked) return undefined
+  const lettered = focus.kind === 'sfx' && focus.label.trim() !== ''
+  if (!lettered && focus.kind !== 'mark') return undefined
+  const turning = draft?.kind === 'rotate' && draft.focusId === focus.id
+  const turned = turning ? { ...focus, rotation: draft.rotation } : focus
+  const box = panelBox(found.panel, width, height)
+  const frame = lettered ? sfxFrame(turned, box) : markFrame(turned, box)
+  return { focusId: focus.id, frame, handle: sfxRotateHandle(frame, handleSize * 2) }
+}
 
 function boxOf(el: Element): ClientBox {
   const r = el.getBoundingClientRect()
@@ -76,7 +126,8 @@ function boxOf(el: Element): ClientBox {
  * `focus` と `vector` ツールの操作。
  * `focus` はコマの上のクリックで既定の大きさの、ドラッグで押した点を中心に離した点までを半径にした大きさ
  * （weight）の `focusKind` の焦点を置いて選び、既存の焦点はドラッグで動かす。
- * 位置をロックした焦点は動かさない。
+ * 位置をロックした焦点は動かさない。選択中の焦点が描き文字のある sfx か mark で、ロックしていなければ、
+ * 描き文字か漫符の上に回転のハンドルを出し、そのドラッグで焦点を中心に傾ける。Shift を押している間は 15 度ずつ傾ける。
  * `vector` はコマの上のドラッグで始点から終点へのベクトルを作って選ぶ。動かずに離したときは何もせず、
  * クリックの選択は useSelection に任せる。
  * ドラッグ中は `draft` を描くだけで、Patch は pointerup で 1 回だけ出す。Escape でドラッグを取り消す
@@ -86,6 +137,11 @@ export function useHintTool(opts: Options) {
   const gesture = useRef<Gesture | null>(null)
   const active = opts.enabled && (opts.tool === 'focus' || opts.tool === 'vector')
   const tolerance = hintTolerance(opts.view)
+  const handleSize = opts.view.w * HANDLE_RATIO
+  const rotation =
+    active && opts.tool === 'focus'
+      ? sfxRotation(opts.page, opts.width, opts.height, opts.selection, draft, handleSize)
+      : undefined
 
   const pointAt = (e: ReactPointerEvent<SVGSVGElement>) =>
     clientToPage(opts.view, boxOf(e.currentTarget), { x: e.clientX, y: e.clientY })
@@ -122,6 +178,21 @@ export function useHintTool(opts: Options) {
       if (at === null) return
       const client = { x: e.clientX, y: e.clientY }
       if (opts.tool === 'focus') {
+        // ハンドルは他の焦点の上にも出るので、先に見る
+        if (
+          rotation &&
+          Math.hypot(at.x - rotation.handle.x, at.y - rotation.handle.y) <= handleSize
+        ) {
+          take(e, {
+            kind: 'rotate',
+            pointerId: e.pointerId,
+            focusId: rotation.focusId,
+            center: { x: rotation.frame.cx, y: rotation.frame.cy },
+            client,
+            dragging: false,
+          })
+          return
+        }
         const hit = hintAt(opts.page, opts.width, opts.height, at, tolerance)
         const hitFocus = hit?.kind === 'focus' ? findFocus(opts.page, hit.id) : undefined
         if (hit?.kind === 'focus' && hitFocus?.panel.focusPoints[hitFocus.index]?.locked) {
@@ -178,6 +249,14 @@ export function useHintTool(opts: Options) {
       const at = pointAt(e)
       if (at === null) return
       g.dragging = true
+      if (g.kind === 'rotate') {
+        setDraft({
+          kind: 'rotate',
+          focusId: g.focusId,
+          rotation: rotationAt(g.center, at, e.shiftKey),
+        })
+        return
+      }
       if (g.kind === 'place') {
         setDraft({
           kind: 'place',
@@ -229,6 +308,11 @@ export function useHintTool(opts: Options) {
       if (!g.dragging) return
       const at = pointAt(e)
       if (at === null) return
+      if (g.kind === 'rotate') {
+        const patch = rotateFocusPatch(opts.page, g.focusId, rotationAt(g.center, at, e.shiftKey))
+        if (patch.length > 0) opts.onChange(patch)
+        return
+      }
       if (g.kind === 'move') {
         const panel = findFocus(opts.page, g.focusId)?.panel
         if (!panel) return
@@ -254,5 +338,56 @@ export function useHintTool(opts: Options) {
     },
   }
 
-  return { draft: active ? draft : null, active, handlers }
+  return { draft: active ? draft : null, active, rotation, handleSize, handlers }
+}
+
+if (import.meta.vitest) {
+  const { describe, expect, test } = import.meta.vitest
+  const { fixtures } = await import('@manga/schema')
+  const base = fixtures.samplePage01.episodes[0]?.pages[0] as Page
+  const withFocus = (patch: Record<string, unknown>): Page => ({
+    ...base,
+    panels: base.panels.map((p) => ({
+      ...p,
+      focusPoints: p.focusPoints.map((f) =>
+        f.id === 'fp_2_vial' ? ({ ...f, kind: 'sfx', label: 'ドン', ...patch } as typeof f) : f,
+      ),
+    })),
+  })
+  const select: Selection = { kind: 'focus', id: 'fp_2_vial' }
+
+  describe('sfxRotation', () => {
+    test('is undefined unless a focus with a label is selected and unlocked', () => {
+      const page = withFocus({})
+      expect(sfxRotation(page, 210, 297, null, null, 2)).toBeUndefined()
+      expect(sfxRotation(page, 210, 297, { kind: 'focus', id: 'missing' }, null, 2)).toBeUndefined()
+      expect(sfxRotation(base, 210, 297, select, null, 2)).toBeUndefined()
+      expect(sfxRotation(withFocus({ label: ' ' }), 210, 297, select, null, 2)).toBeUndefined()
+      expect(sfxRotation(withFocus({ locked: true }), 210, 297, select, null, 2)).toBeUndefined()
+      const face = withFocus({ kind: 'face' })
+      expect(sfxRotation(face, 210, 297, select, null, 2)).toBeUndefined()
+    })
+
+    test('turns a mark around its focus even without a label, unless locked', () => {
+      const mark = sfxRotation(withFocus({ kind: 'mark', label: '' }), 210, 297, select, null, 2)
+      const pn2 = base.panels.find((p) => p.focusPoints.some((f) => f.id === 'fp_2_vial'))
+      const vial = pn2?.focusPoints.find((f) => f.id === 'fp_2_vial')
+      if (!pn2 || !vial) throw new Error('fixture に fp_2_vial がない')
+      expect(mark?.frame.cx).toBeCloseTo((pn2.rect.x + vial.pos.x * pn2.rect.w) * 210)
+      expect(mark?.frame.cy).toBeCloseTo((pn2.rect.y + vial.pos.y * pn2.rect.h) * 297)
+      expect(mark?.frame.w).toBe(mark?.frame.h)
+      const locked = withFocus({ kind: 'mark', label: '', locked: true })
+      expect(sfxRotation(locked, 210, 297, select, null, 2)).toBeUndefined()
+    })
+
+    test('uses the draft rotation only for the focus being turned', () => {
+      const page = withFocus({ rotation: 10 })
+      expect(sfxRotation(page, 210, 297, select, null, 2)?.frame.rotation).toBe(10)
+      const turn = (focusId: string): HintDraft => ({ kind: 'rotate', focusId, rotation: 50 })
+      expect(sfxRotation(page, 210, 297, select, turn('fp_2_vial'), 2)?.frame.rotation).toBe(50)
+      expect(sfxRotation(page, 210, 297, select, turn('other'), 2)?.frame.rotation).toBe(10)
+      const moving: HintDraft = { kind: 'focus', focusId: 'fp_2_vial', pos: { x: 0.5, y: 0.5 } }
+      expect(sfxRotation(page, 210, 297, select, moving, 2)?.frame.rotation).toBe(10)
+    })
+  })
 }

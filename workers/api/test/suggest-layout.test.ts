@@ -60,6 +60,19 @@ describe('POST /v1/ai/suggest-layout', () => {
     const { provider, calls } = scripted([async () => aiFixtures.layoutSuggestion])
     expect((await post(createApp({ llmProvider: () => provider }))).status).toBe(200)
     expect(calls).toEqual([request])
+    expect(request.panels.some((p) => (p.acting ?? []).length > 0)).toBe(true)
+    expect(request.panels.some((p) => p.angle !== undefined)).toBe(true)
+  })
+
+  test('accepts every camera and angle of a name panel', async () => {
+    const { provider, calls } = scripted([async () => aiFixtures.layoutSuggestion])
+    const panels = [
+      { note: '森の全景', camera: 'extreme_long', lines: [] },
+      { note: '目元', camera: 'extreme_close_up', angle: 'worm', lines: [] },
+      { note: '結晶のかけら', camera: 'insert', angle: 'over_shoulder', lines: [] },
+    ]
+    expect((await post(createApp({ llmProvider: () => provider }), { panels })).status).toBe(200)
+    expect(calls).toEqual([{ panels }])
   })
 
   test('400 on a body without name panels', async () => {
@@ -67,6 +80,13 @@ describe('POST /v1/ai/suggest-layout', () => {
     expect((await post(app, '{')).status).toBe(400)
     expect((await post(app, { panels: [] })).status).toBe(400)
     expect((await post(app, { panels: [{ note: '', lines: [] }] })).status).toBe(400)
+    const blankActing = [{ characterId: 'chr_e', text: '' }]
+    expect(
+      (await post(app, { panels: [{ note: 'n', lines: [], acting: blankActing }] })).status,
+    ).toBe(400)
+    // 角度は angle に分けたので、camera に角度を入れた要求は断る
+    const angledCamera = { panels: [{ note: 'n', lines: [], camera: 'low_angle' }] }
+    expect((await post(app, angledCamera)).status).toBe(400)
     expect((await usageRows()).results).toHaveLength(0)
   })
 

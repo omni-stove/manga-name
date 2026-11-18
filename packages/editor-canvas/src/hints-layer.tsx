@@ -10,6 +10,7 @@ const FOCUS_COLORS: Record<FocusKind, string> = {
   face: 'var(--hint-face)',
   keyObject: 'var(--hint-object)',
   sfx: 'var(--hint-sfx)',
+  mark: 'var(--hint-mark)',
 }
 const VECTOR_COLOR = 'var(--hint-vector)'
 

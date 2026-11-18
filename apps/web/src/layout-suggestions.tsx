@@ -1,6 +1,8 @@
 import type { LayoutSuggestionResponse, LlmProvider } from '@manga/ai'
 import { m } from '@manga/i18n'
 import {
+  AngleSchema,
+  AVAILABLE_PANEL_EFFECTS,
   CameraSchema,
   type Character,
   type ID,
@@ -13,6 +15,7 @@ import {
 } from '@manga/schema'
 import {
   Button,
+  Checkbox,
   ConfirmDialog,
   IconButton,
   Select,
@@ -60,14 +63,14 @@ interface LayoutSuggestionsProps {
 
 /**
  * 脚本からコマ割りまでを 2 段で提案する。
- * 「脚本からネームを書き起こす」でページの脚本を LlmProvider.transcribeName に送り、読む順のコマごとの描くもの、カメラ、
+ * 「脚本からネームを書き起こす」でページの脚本と今のコマの芝居を LlmProvider.transcribeName に送り、読む順のコマごとの描くもの、カメラ、
  * セリフを並べて、コマとセリフを足し引きし、セリフを隣のコマへ移して直せるようにする。
  * 「ネームを自分で書く」で空のコマ 1 つから書き始めることもでき、脚本が無くてもネームから先へ進める。
  * 直したネームはこのブラウザにページごとに残す。
  * 「脚本からコマ割りまで提案」は書き起こしたネームを直さずにそのままコマ割りの提案へ送る。描くものの空いたコマがあれば提案は送らない。
  * 「このネームでコマ割りを提案」でネームを LlmProvider.suggestLayout に送り、案ごとにネームを当てたコマ割りの縮図と狙いを並べる。
  * コマを足し引きすると、数の合わなくなった案は消す。
- * 「このコマ割りにする」でページのコマを案の枠にネームを当てたコマ（指示メモ、カメラ、フキダシつき）に置き換え、`source: 'ai'` の 1 手として入れる。
+ * 「このコマ割りにする」でページのコマを案の枠にネームを当てたコマ（指示メモ、カメラ、フキダシ、芝居つき）に置き換え、`source: 'ai'` の 1 手として入れる。
  * 今のコマに絵やフキダシがあれば確かめてから置き換え、位置をロックしたコマがあれば置き換えない。
  * ページを替えるときは key で作り直し、遅れて届いた応答は捨てる
  */
@@ -115,7 +118,7 @@ export function LayoutSuggestions({
     setApplyError(undefined)
     let panels: NamePanel[]
     try {
-      panels = (await llmProvider.transcribeName(nameRequest(project, script))).panels
+      panels = (await llmProvider.transcribeName(nameRequest(project, script, page))).panels
     } catch (e) {
       if (requestId.current === id) setTranscription({ status: 'error', error: e })
       return
@@ -375,6 +378,63 @@ function NameEditor({
                 </option>
               ))}
             </Select>
+            <Select
+              label={m.panel_angle()}
+              value={panel.angle ?? ''}
+              onChange={(e) => {
+                const angle = AngleSchema.safeParse(e.currentTarget.value)
+                editPanel(index, ({ angle: _, ...rest }) =>
+                  angle.success ? { ...rest, angle: angle.data } : rest,
+                )
+              }}
+            >
+              <option value="">{m.none()}</option>
+              {AngleSchema.options.map((angle) => (
+                <option key={angle} value={angle}>
+                  {m[`panel_angle_${angle}`]()}
+                </option>
+              ))}
+            </Select>
+            <XStack wrap>
+              <Checkbox
+                label={m.panel_no_art()}
+                checked={panel.noArt === true}
+                onChange={(e) => {
+                  const on = e.currentTarget.checked
+                  editPanel(index, ({ noArt: _, ...rest }) =>
+                    on ? { ...rest, noArt: true } : rest,
+                  )
+                }}
+              />
+              <Checkbox
+                label={m.panel_fill_black()}
+                checked={panel.fill === 'black'}
+                onChange={(e) => {
+                  const on = e.currentTarget.checked
+                  editPanel(index, ({ fill: _, ...rest }) =>
+                    on ? { ...rest, fill: 'black' } : rest,
+                  )
+                }}
+              />
+            </XStack>
+            <Select
+              label={m.panel_effect()}
+              value={panel.effect ?? ''}
+              onChange={(e) => {
+                const value = e.currentTarget.value
+                const effect = AVAILABLE_PANEL_EFFECTS.find((v) => v === value)
+                editPanel(index, ({ effect: _, ...rest }) =>
+                  effect === undefined ? rest : { ...rest, effect },
+                )
+              }}
+            >
+              <option value="">{m.none()}</option>
+              {AVAILABLE_PANEL_EFFECTS.map((effect) => (
+                <option key={effect} value={effect}>
+                  {m[`panel_effect_${effect}`]()}
+                </option>
+              ))}
+            </Select>
             {panel.lines.length === 0 && (
               <Typography variant="caption" tone="muted">
                 {m.web_draft_no_lines()}
@@ -512,6 +572,13 @@ if (import.meta.vitest) {
       }
       expect(markup).toContain(m.web_name_line_to_next_panel())
       expect(markup).toContain(m.web_name_line_to_previous_panel())
+    })
+
+    test('selects the camera and the angle of each panel', () => {
+      const markup = html([{ note: 'n', camera: 'bust', angle: 'high', lines: [] }])
+      expect(markup).toContain(m.panel_angle())
+      expect(markup).toMatch(/<option value="bust" selected="">/)
+      expect(markup).toMatch(/<option value="high" selected="">/)
     })
 
     test('says so for a panel without lines', () => {

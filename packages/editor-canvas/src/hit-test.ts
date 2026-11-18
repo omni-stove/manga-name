@@ -1,5 +1,6 @@
 import {
   type Bubble,
+  bubbleGroups,
   containsPoint,
   isBoxShape,
   type Page,
@@ -55,16 +56,21 @@ export function inBubble(bubble: Bubble, panel: Box, p: PagePoint): boolean {
  * overflow でないフキダシは、コマの輪郭で切られるか手前のコマに隠されて見えない所では当たらない。何も無ければ null
  */
 export function hitTest(page: Page, width: number, height: number, p: PagePoint): Selection {
-  const topFirst = (bubbles: Bubble[]) => [...bubbles].sort((a, b) => b.order - a.order)
+  // つないだ組は先頭のフキダシの overflow に従う（描画と同じ）
+  const topFirst = (bubbles: Bubble[], overflow: boolean) =>
+    bubbleGroups(bubbles)
+      .filter((group) => (group[0]?.overflow === true) === overflow)
+      .reverse()
+      .flatMap((group) => [...group].reverse())
   for (const panel of paintOrder(page.panels).reverse()) {
     const box = panelBox(panel, width, height)
-    const hit = topFirst(panel.bubbles).find((b) => b.overflow && inBubble(b, box, p))
+    const hit = topFirst(panel.bubbles, true).find((b) => inBubble(b, box, p))
     if (hit) return { kind: 'bubble', id: hit.id }
   }
   const panel = panelAt(page, width, height, p)
   if (panel === undefined) return null
   const box = panelBox(panel, width, height)
-  const hit = topFirst(panel.bubbles).find((b) => !b.overflow && inBubble(b, box, p))
+  const hit = topFirst(panel.bubbles, false).find((b) => inBubble(b, box, p))
   return hit ? { kind: 'bubble', id: hit.id } : { kind: 'panel', id: panel.id }
 }
 
@@ -115,6 +121,50 @@ if (import.meta.vitest) {
     expect(hitTest(edged(), w, h, inside)).toEqual({ kind: 'bubble', id: bubble.id })
     expect(hitTest(edged(), w, h, outside)).toBeNull()
     expect(hitTest(edged(true), w, h, outside)).toEqual({ kind: 'bubble', id: bubble.id })
+  })
+
+  test('hitTest follows the overflow of the first bubble of a joined group', () => {
+    const base = page.panels[0]?.bubbles[0] as Bubble
+    const head = { ...base, id: 'a', order: 1, pos: { x: 0.25, y: 0.5 }, size: { w: 0.3, h: 0.3 } }
+    const tail = {
+      ...base,
+      id: 'b',
+      order: 2,
+      pos: { x: 1, y: 0.5 },
+      size: { w: 0.4, h: 0.4 },
+      joinedTo: 'a',
+    }
+    const laid = (overflow: boolean): Page => ({
+      ...page,
+      panels: [
+        {
+          ...(page.panels[0] as Panel),
+          rect: { x: 0, y: 0, w: 0.5, h: 0.5 },
+          bubbles: [
+            { ...head, overflow },
+            { ...tail, overflow: !overflow },
+          ],
+        },
+      ],
+    })
+    const outside = { x: 0.55 * w, y: 0.25 * h }
+    expect(hitTest(laid(false), w, h, outside)).toBeNull()
+    expect(hitTest(laid(true), w, h, outside)).toEqual({ kind: 'bubble', id: 'b' })
+  })
+
+  test('hitTest picks a lone bubble over a later bubble of an earlier joined group', () => {
+    const base = page.panels[0]?.bubbles[0] as Bubble
+    const at = { pos: { x: 0.5, y: 0.5 }, size: { w: 0.4, h: 0.4 }, overflow: false }
+    const bubbles: Bubble[] = [
+      { ...base, ...at, id: 'a', order: 1 },
+      { ...base, ...at, id: 'b', order: 2 },
+      { ...base, ...at, id: 'c', order: 3, joinedTo: 'a' },
+    ]
+    const laid: Page = {
+      ...page,
+      panels: [{ ...(page.panels[0] as Panel), rect: { x: 0, y: 0, w: 1, h: 0.5 }, bubbles }],
+    }
+    expect(hitTest(laid, w, h, { x: 0.5 * w, y: 0.25 * h })).toEqual({ kind: 'bubble', id: 'b' })
   })
 
   test('hitTest follows the outline of a shaped panel', () => {

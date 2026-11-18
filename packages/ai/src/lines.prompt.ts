@@ -2,5 +2,5 @@
 export const lineFields = (where: 'on the page' | 'in the panel') => [
   `- lines: the lines of dialogue, inner monologue and narration that fall ${where}, in reading order, without the speaker name and brackets.`,
   '  - speakerId: the id of the listed character who says it. Omit it for narration or a speaker not listed.',
-  '  - shape: normal for speech, shout for shouting, thought for inner monologue, whisper for whispering, tremble for a shaky or frightened voice, electronic for a voice through a phone, TV, radio or machine, urchin for a flustered or startled inner voice, none for a murmur written straight on the art, narration for narration and captions.',
+  '  - shape: normal for speech, shout for shouting, thought for inner monologue, whisper for whispering, tremble for a shaky or frightened voice, electronic for a voice through a phone, TV, radio or machine, urchin for a flustered or startled inner voice, none for a murmur written straight on the art, narration for narration and captions, monologue for an inner voice or a telling to keep apart from narration in a plain box.',
 ]

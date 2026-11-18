@@ -167,6 +167,20 @@ if (import.meta.vitest) {
     expect(fitPanelBubbles({ ...panel, bubbles: [bubble] }, pageSize).bubbles[0]).toBe(bubble)
   })
 
+  test('a wide horizontal bubble fits and shrinks by its outline, and keeps its writing', () => {
+    const wide: Bubble = { ...bubble, writing: 'horizontal', size: { w: 0.6, h: 0.15 } }
+    expect(bubbleFits(wide, square)).toBe(true)
+    const out = { ...wide, pos: { x: 0.9, y: 0.5 } }
+    const moved = fitBubble(out, square)
+    // 半径 30mm と間 2mm で、中心は右端から 32mm
+    expect(moved.pos.x).toBeCloseTo(0.68)
+    expect(moved).toMatchObject({ writing: 'horizontal', size: wide.size })
+    const shrunk = fitBubble({ ...wide, size: { w: 1.2, h: 0.3 } }, square)
+    expect(shrunk.size.w / shrunk.size.h).toBeCloseTo(4, 1)
+    expect(shrunk.writing).toBe('horizontal')
+    expect(bubbleFits(shrunk, square)).toBe(true)
+  })
+
   test('a bubble too large for the frame shrinks with its aspect ratio', () => {
     const fitted = fitBubble({ ...bubble, size: { w: 1, h: 0.5 } }, square)
     expect(fitted.size.w).toBeCloseTo(0.96, 3)

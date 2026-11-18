@@ -9,6 +9,7 @@ import type {
   PageArtRequest,
   PageDiagnosis,
   PagePlanResponse,
+  PanelActing,
   PanelArtRequest,
   Project,
 } from '@manga/schema'
@@ -40,11 +41,21 @@ export interface PagePlanRequest {
   pageCount?: number
 }
 
+/** ネームの書き起こしに渡す、ページに今あるコマ 1 つの芝居 */
+export interface CurrentPanelActing {
+  /** コマの指示メモ（Panel.note）。どの場面の芝居かを LLM に示す */
+  note?: string
+  /** panelActing を通した芝居 */
+  acting: PanelActing[]
+}
+
 /** 1 ページの脚本からネームを書き起こす要求 */
 export interface NameDraftRequest {
   project: Pick<Project, 'settings' | 'characters'>
   /** ページの脚本（Page.script） */
   script: string
+  /** ページに今あるコマのうち芝居のあるもの。読む順。利用者が書いた芝居を書き起こしで引き継がせる */
+  current?: CurrentPanelActing[]
 }
 
 /** 1 ページのコマ割りの提案の要求 */

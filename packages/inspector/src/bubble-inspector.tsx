@@ -14,19 +14,12 @@ import section from './section.module.css'
 import type { BubbleInspectorProps } from './types'
 
 /** フキダシの形と、画面での呼び名 */
-export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[] = [
-  option('normal', m.bubble_shape_normal),
-  option('shout', m.bubble_shape_shout),
-  option('thought', m.bubble_shape_thought),
-  option('whisper', m.bubble_shape_whisper),
-  option('tremble', m.bubble_shape_tremble),
-  option('electronic', m.bubble_shape_electronic),
-  option('urchin', m.bubble_shape_urchin),
-  option('narration', m.bubble_shape_narration),
-  option('none', m.bubble_shape_none),
-]
+export const BUBBLE_SHAPES: readonly { value: Bubble['shape']; label: string }[] =
+  BubbleSchema.shape.shape.options.map((shape) =>
+    option(shape, m[`bubble_shape_${shape}` as const]),
+  )
 
-const typefaceLabel = (typeface: NonNullable<Bubble['typeface']>) =>
+export const typefaceLabel = (typeface: NonNullable<Bubble['typeface']>) =>
   m[`bubble_typeface_${typeface}` as const]()
 
 /** 書体の選択肢。空は書体を持たず形に合わせる */
@@ -78,6 +71,28 @@ export function BubbleInspector({ bubble, characters, onChange }: BubbleInspecto
         value={bubble.typeface ?? ''}
         options={typefaceOptions(bubble.shape)}
         onCommit={(v) => onChange(optionalString('/typeface', bubble.typeface, v))}
+      />
+      <Checkbox
+        label={m.bubble_writing_horizontal()}
+        checked={bubble.writing === 'horizontal'}
+        onChange={(e) =>
+          onChange(
+            e.target.checked
+              ? [{ op: 'add', path: '/writing', value: 'horizontal' }]
+              : [{ op: 'remove', path: '/writing' }],
+          )
+        }
+      />
+      <Checkbox
+        label={m.bubble_fill_black()}
+        checked={bubble.fill === 'black'}
+        onChange={(e) =>
+          onChange(
+            e.target.checked
+              ? [{ op: 'add', path: '/fill', value: 'black' }]
+              : [{ op: 'remove', path: '/fill' }],
+          )
+        }
       />
       <Checkbox
         label={m.bubble_overflow()}
@@ -135,6 +150,23 @@ if (import.meta.vitest) {
       ])
     })
 
+    test('the shape select offers every shape, including cold and weak', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const bubble = must(samplePanel.bubbles[0])
+      const { container } = await render(
+        <BubbleInspector bubble={bubble} characters={project.characters} onChange={onChange} />,
+      )
+      const select = selectLabelled(container, m.bubble_shape())
+      expect([...select.options].map((o) => o.value)).toEqual([...BubbleSchema.shape.shape.options])
+      for (const shape of ['cold', 'weak'] as const) {
+        expect(must([...select.options].find((o) => o.value === shape)).textContent).toBe(
+          m[`bubble_shape_${shape}`](),
+        )
+        await choose(select, shape)
+        expect(onChange).toHaveBeenLastCalledWith([{ op: 'replace', path: '/shape', value: shape }])
+      }
+    })
+
     test('allowing overflow adds it, and disallowing it removes it', async () => {
       const onChange = vi.fn<(patch: Patch) => void>()
       const bubble = must(samplePanel.bubbles[0])
@@ -154,6 +186,52 @@ if (import.meta.vitest) {
       expect(checkbox.checked).toBe(true)
       await act(async () => checkbox.click())
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/overflow' }])
+    })
+
+    test('the black bubble checkbox adds and removes fill', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const bubble = must(samplePanel.bubbles[0])
+      const props = { bubble, characters: project.characters, onChange }
+      const { container, root } = await render(<BubbleInspector {...props} />)
+      const checkbox = must(
+        [...container.querySelectorAll('label')]
+          .find((el) => el.textContent === m.bubble_fill_black())
+          ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+      )
+      expect(checkbox.checked).toBe(false)
+      await act(async () => checkbox.click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/fill', value: 'black' }])
+
+      await act(async () =>
+        root.render(<BubbleInspector {...props} bubble={{ ...bubble, fill: 'black' }} />),
+      )
+      expect(checkbox.checked).toBe(true)
+      await act(async () => checkbox.click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/fill' }])
+    })
+
+    test('the horizontal checkbox adds and removes writing', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const bubble = must(samplePanel.bubbles[0])
+      const props = { bubble, characters: project.characters, onChange }
+      const { container, root } = await render(<BubbleInspector {...props} />)
+      const checkbox = must(
+        [...container.querySelectorAll('label')]
+          .find((el) => el.textContent === m.bubble_writing_horizontal())
+          ?.querySelector<HTMLInputElement>('input[type="checkbox"]'),
+      )
+      expect(checkbox.checked).toBe(false)
+      await act(async () => checkbox.click())
+      expect(onChange).toHaveBeenLastCalledWith([
+        { op: 'add', path: '/writing', value: 'horizontal' },
+      ])
+
+      await act(async () =>
+        root.render(<BubbleInspector {...props} bubble={{ ...bubble, writing: 'horizontal' }} />),
+      )
+      expect(checkbox.checked).toBe(true)
+      await act(async () => checkbox.click())
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/writing' }])
     })
 
     test('the typeface select names the typeface of the shape, and adds and removes typeface', async () => {
@@ -177,6 +255,19 @@ if (import.meta.vitest) {
       expect(select().value).toBe('rounded')
       await choose(select(), '')
       expect(onChange).toHaveBeenLastCalledWith([{ op: 'remove', path: '/typeface' }])
+    })
+
+    test('the typeface select offers the hand-written typeface', async () => {
+      const onChange = vi.fn<(patch: Patch) => void>()
+      const bubble = { ...must(samplePanel.bubbles[0]), shape: 'whisper' as const }
+      const { container } = await render(
+        <BubbleInspector bubble={bubble} characters={project.characters} onChange={onChange} />,
+      )
+      const select = selectLabelled(container, m.bubble_typeface())
+      const hand = Array.from(select.options).find((o) => o.value === 'hand')
+      expect(hand?.textContent).toBe(m.bubble_typeface_hand())
+      await choose(select, 'hand')
+      expect(onChange).toHaveBeenLastCalledWith([{ op: 'add', path: '/typeface', value: 'hand' }])
     })
   })
 }

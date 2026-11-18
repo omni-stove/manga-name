@@ -67,7 +67,7 @@ if (import.meta.vitest) {
   const { afterEach, describe, expect, test, vi } = import.meta.vitest
   const Y = await import('yjs')
   const awarenessProtocol = await import('y-protocols/awareness')
-  const { createSyncProvider } = await import('./sync-provider')
+  const { createSyncProvider } = await import('@manga/collab')
 
   // tab-sync.worker は読み込んだときの self に onconnect を置くので、SharedWorker の代わりに受け取る入れ物を渡す
   const workerScope: { onconnect: ((e: { ports: MessagePort[] }) => void) | null } = {

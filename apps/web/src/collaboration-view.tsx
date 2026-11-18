@@ -1,3 +1,4 @@
+import type { SyncProviderState, SyncStatus } from '@manga/collab'
 import { m } from '@manga/i18n'
 import type { Project } from '@manga/schema'
 import { XStack } from '@manga/ui'
@@ -8,7 +9,6 @@ import styles from './collaboration-view.module.css'
 import type { Collaboration } from './project-library'
 import { findPage } from './project-ops'
 import type { Peer } from './store/presence'
-import type { SyncProviderState, SyncStatus } from './store/sync-provider'
 
 // useStore は毎回同じ順で呼ぶ必要があるので、共同編集でないときは空の store を読ませる
 const NO_PEERS = createStore<Peer[]>()(() => [])
