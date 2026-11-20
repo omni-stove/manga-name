@@ -3,6 +3,7 @@ import {
   type Character,
   createRowPanels,
   type ID,
+  innerFrameOf,
   type LayoutOption,
   NameDraftSchema,
   type NamePanel,
@@ -132,10 +133,12 @@ export function suggestedPanels(
       ...(panel.effect !== undefined && { effect: panel.effect }),
       ...(cast.length > 0 && { cast }),
       ...(acting.length > 0 && { acting }),
-      bubbles: lineBubbles(frame, lines, {
-        ...settings,
-        pageSize: pageSizeOf(page, settings.pageSize),
-      }),
+      bubbles: lineBubbles(
+        frame,
+        lines,
+        { ...settings, pageSize: pageSizeOf(page, settings.pageSize) },
+        innerFrameOf(page),
+      ),
     }
   })
 }

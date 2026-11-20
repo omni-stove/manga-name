@@ -8,6 +8,7 @@ import {
   type Page,
   type Panel,
   type Patch,
+  textBubbleSize,
 } from '@manga/schema'
 
 /** リサイズで許すフキダシの最小の幅と高さ（コマ内座標） */
@@ -41,8 +42,9 @@ export function findBubble(page: Page, bubbleId: ID): Found | undefined {
 }
 
 /**
- * コマ panel のコマ内座標 pos を中心に置く新しいフキダシ。size を省くと createBubble の既定の大きさ。
- * order はコマ内の最大の次。pageSize（mm）を渡すとコマの枠に収める
+ * コマ panel のコマ内座標 pos を中心に置く新しいフキダシ。order はコマ内の最大の次。
+ * pageSize（mm）を渡すとコマの枠に収め、size を省けばセリフの無いフキダシの textBubbleSize にする。
+ * どちらも無ければ createBubble の既定の大きさ
  */
 export function newBubble(
   panel: Panel,
@@ -55,7 +57,9 @@ export function newBubble(
     order: Math.max(0, ...panel.bubbles.map((b) => b.order)) + 1,
     ...(size && { size }),
   })
-  return pageSize ? fitBubble(created, { panel, pageSize }) : created
+  if (!pageSize) return created
+  const frame = { panel, pageSize }
+  return fitBubble(size ? created : { ...created, size: textBubbleSize(created, frame) }, frame)
 }
 
 /**
@@ -390,11 +394,13 @@ if (import.meta.vitest) {
     })
   })
 
-  test('createBubblePatch puts the new bubble inside the panel', () => {
+  test('createBubblePatch sizes the new bubble for blank vertical lines and puts it inside the panel', () => {
     const pageSize = { w: 182, h: 257 }
+    const panel = page.panels[2] as Panel
     const created = createBubblePatch(page, 'pn_3', { x: 0, y: 0 }, pageSize)
     const value = (created as { patch: { value: Bubble }[] }).patch[0]?.value as Bubble
-    expect(value.size).toEqual({ w: 0.3, h: 0.2 })
+    const mm = { w: value.size.w * panel.rect.w * 182, h: value.size.h * panel.rect.h * 257 }
+    expect(mm.h).toBeGreaterThan(mm.w)
     expect(bubbleFits(value, { panel: page.panels[2] as Panel, pageSize })).toBe(true)
   })
 
