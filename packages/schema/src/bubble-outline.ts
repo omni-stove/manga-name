@@ -380,8 +380,13 @@ export function bubbleReach(shape: Shape, rx: number, ry: number, n: Point): num
     tremble: TREMBLE_AMPLITUDE,
     urchin: URCHIN_GAP + URCHIN_LENGTH,
   }
-  const out = isBubbleMood(shape) ? moodReach(shape) : (extra[shape] ?? 0)
-  return Math.hypot(n.x * rx, n.y * ry) + unit * out
+  const base = Math.hypot(n.x * rx, n.y * ry)
+  let out = isBubbleMood(shape) ? moodReach(shape) : (extra[shape] ?? 0)
+  if (shape === 'normal' || shape === 'whisper') {
+    // 張り出しは軸の向きでは 0 で、45° で最大。軸に平行な辺に対する支持は楕円と同じ
+    out *= base > 0 ? (2 * Math.abs(n.x * rx) * Math.abs(n.y * ry)) / (base * base) : 0
+  }
+  return base + unit * out
 }
 
 if (import.meta.vitest) {
