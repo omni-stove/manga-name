@@ -195,13 +195,13 @@ export function textBubbleSize(
       longest = Math.max(longest, length / count)
     }
     const along = font * (Math.max(2, Math.ceil(longest)) + TEXT_PADDING.along)
-    const across =
-      font * (lines * thickness + (lines - 1) * (LINE_PITCH - 1) + TEXT_PADDING.across)
+    const across = font * (lines * thickness + (lines - 1) * (LINE_PITCH - 1) + TEXT_PADDING.across)
     const block = horizontal ? { w: along, h: across } : { w: across, h: along }
     return { w: (block.w / unit.w) * 2, h: (block.h / unit.h) * 2 }
   }
   const f = frameMm(frame)
-  const room = Math.max(...f.outline.map((p) => p[horizontal ? 'x' : 'y'])) -
+  const room =
+    Math.max(...f.outline.map((p) => p[horizontal ? 'x' : 'y'])) -
     Math.min(...f.outline.map((p) => p[horizontal ? 'x' : 'y'])) -
     FRAME_MARGIN_MM * 2
   let limit = horizontal ? LINE_CHARS.horizontal : LINE_CHARS.vertical

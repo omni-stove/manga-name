@@ -5,7 +5,6 @@ import {
   createPage,
   fitBubble,
   innerFrameOf,
-  textBubbleSize,
   type LayoutTemplate,
   type Page,
   type PagePlan,
@@ -14,6 +13,7 @@ import {
   type PlanLine,
   type Project,
   type Rect,
+  textBubbleSize,
 } from '@manga/schema'
 import type { PagePlanRequest } from './provider'
 
@@ -165,7 +165,9 @@ export function plannedPage(
     .join('\n')
   return {
     ...page,
-    panels: panelless ? page.panels : distributeLines(page.panels, plan.lines, project.settings, innerFrameOf(page)),
+    panels: panelless
+      ? page.panels
+      : distributeLines(page.panels, plan.lines, project.settings, innerFrameOf(page)),
     ...(note !== '' && { note }),
     ...(script !== '' && { script }),
     ...(plan.cast.length > 0 && { cast: plan.cast }),

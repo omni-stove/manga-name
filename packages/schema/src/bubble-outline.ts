@@ -370,7 +370,11 @@ export function clipTextBox<B extends { x: number; y: number; w: number; h: numb
 export function bubbleReach(shape: Shape, rx: number, ry: number, n: Point): number {
   if (isBoxShape(shape)) return Math.abs(n.x) * rx + Math.abs(n.y) * ry
   const unit = Math.min(rx, ry)
+  // 三次ベジェの 45° 方向の頂点は ((4 + 3k) / 8)·r。真円の支持 1 に対する超過分
+  const speechBulge = ((4 + 3 * SPEECH_KAPPA) * Math.SQRT2) / 8 - 1
   const extra: Partial<Record<Shape, number>> = {
+    normal: speechBulge,
+    whisper: speechBulge,
     // 二次ベジェの頂点は制御点の半分ほど外に出る
     thought: THOUGHT_BULGE / 2,
     tremble: TREMBLE_AMPLITUDE,
