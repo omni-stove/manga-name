@@ -4,6 +4,8 @@ import {
   createBubble,
   createPage,
   fitBubble,
+  innerFrameOf,
+  textBubbleSize,
   type LayoutTemplate,
   type Page,
   type PagePlan,
@@ -11,6 +13,7 @@ import {
   type Panel,
   type PlanLine,
   type Project,
+  type Rect,
 } from '@manga/schema'
 import type { PagePlanRequest } from './provider'
 
@@ -96,12 +99,14 @@ const BUBBLE_COLUMNS = 3
 
 /**
  * 1 コマのセリフを、読む順に読む向きの端から BUBBLE_COLUMNS 列ずつ並べたフキダシにする。
- * フキダシは fitBubble でコマの枠に収める
+ * フキダシの大きさはセリフから textBubbleSize で決め、fitBubble でコマの枠に収める。bounds（ページの
+ * 正規化座標、ふつうは内枠）を渡すと、コマのうちその内側に収める
  */
 export function lineBubbles(
   panel: Panel,
   lines: readonly PlanLine[],
   settings: Pick<Project['settings'], 'direction' | 'pageSize'>,
+  bounds?: Rect,
 ): Bubble[] {
   return lines.map((line, m) => {
     const column = (m % BUBBLE_COLUMNS) + 0.5
@@ -116,7 +121,8 @@ export function lineBubbles(
         y: 0.2 + Math.floor(m / BUBBLE_COLUMNS) * 0.3,
       },
     })
-    return fitBubble(bubble, { panel, pageSize: settings.pageSize })
+    const frame = { panel, pageSize: settings.pageSize, ...(bounds && { bounds }) }
+    return fitBubble({ ...bubble, size: textBubbleSize(bubble, frame) }, frame)
   })
 }
 
@@ -125,6 +131,7 @@ function distributeLines(
   panels: readonly Panel[],
   lines: readonly PlanLine[],
   settings: Pick<Project['settings'], 'direction' | 'pageSize'>,
+  bounds: Rect,
 ): Panel[] {
   const ordered = [...panels].sort((a, b) => a.order - b.order)
   const byPanel = new Map<Panel, PlanLine[]>()
@@ -134,7 +141,7 @@ function distributeLines(
   })
   return panels.map((panel) => ({
     ...panel,
-    bubbles: lineBubbles(panel, byPanel.get(panel) ?? [], settings),
+    bubbles: lineBubbles(panel, byPanel.get(panel) ?? [], settings, bounds),
   }))
 }
 
@@ -158,7 +165,7 @@ export function plannedPage(
     .join('\n')
   return {
     ...page,
-    panels: panelless ? page.panels : distributeLines(page.panels, plan.lines, project.settings),
+    panels: panelless ? page.panels : distributeLines(page.panels, plan.lines, project.settings, innerFrameOf(page)),
     ...(note !== '' && { note }),
     ...(script !== '' && { script }),
     ...(plan.cast.length > 0 && { cast: plan.cast }),

@@ -59,6 +59,11 @@ const TAIL_INSET = 0.5
 /** 連結フキダシの首の幅の半分。小さい方のフキダシの短い半径に対する比率 */
 const NECK_HALF_WIDTH = 0.18
 const KAPPA = 0.5522847498
+/**
+ * 普通のフキダシの制御点の長さ。真円を描く KAPPA だと幾何学的な楕円になり、手描きのフキダシより丸く見えるので、
+ * 肩を張らせて角の丸い四角に寄せる。外へ膨らむだけなので、楕円の内側に置くセリフやしっぽの付け根は変わらない
+ */
+const SPEECH_KAPPA = 0.68
 
 const SHAPE_STYLE: Record<Shape, { tail: boolean; box: boolean }> = {
   normal: { tail: true, box: false },
@@ -98,9 +103,9 @@ export const hasTail = (shape: Shape): boolean => SHAPE_STYLE[shape].tail
 /** 本体が楕円でなく、半径で囲む矩形そのものか */
 export const isBoxShape = (shape: Shape): boolean => SHAPE_STYLE[shape].box
 
-function ellipse(cx: number, cy: number, rx: number, ry: number): PathCommand[] {
-  const kx = rx * KAPPA
-  const ky = ry * KAPPA
+function ellipse(cx: number, cy: number, rx: number, ry: number, kappa = KAPPA): PathCommand[] {
+  const kx = rx * kappa
+  const ky = ry * kappa
   return [
     { op: 'M', x: cx + rx, y: cy },
     { op: 'C', x1: cx + rx, y1: cy + ky, x2: cx + kx, y2: cy + ry, x: cx, y: cy + ry },
@@ -137,6 +142,8 @@ function body(shape: Exclude<Shape, BubbleMood>, g: BubbleGeometry): PathCommand
   switch (shape) {
     case 'normal':
     case 'whisper':
+      return ellipse(g.cx, g.cy, g.rx, g.ry, SPEECH_KAPPA)
+    // 放射線を楕円の周から出すので、本体も楕円のままにする
     case 'urchin':
       return ellipse(g.cx, g.cy, g.rx, g.ry)
     case 'narration':
