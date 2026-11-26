@@ -5,6 +5,7 @@ import {
   convexHull,
   fitPanelBubbles,
   type ID,
+  innerFrameOf,
   intersectPolygons,
   mayOverlap,
   newId,
@@ -20,18 +21,20 @@ import {
   sideOf,
 } from '@manga/schema'
 
-/** コマの端を、他のコマの端とページの端へ吸い付ける距離（正規化座標） */
+/** 作るコマの端を、他のコマの端とページの端へ吸い付ける距離（正規化座標）。移動とリサイズは SnapReach で画面上の距離から決める */
 const SNAP_DISTANCE = 0.01
 /** 作成とリサイズで許すコマの最小の幅と高さ */
 const MIN_PANEL_SIZE = 0.02
 /** 分割で 2 つのコマの間に空ける幅。createPage のコマ間と同じ */
 const SPLIT_GUTTER = 0.02
-/** 頂点を他のコマの頂点へ吸い付ける距離。辺の吸い付けと同じ */
+/** 頂点を他のコマの頂点へ吸い付ける距離。作るコマの辺の吸い付けと同じ */
 const VERTEX_SNAP = SNAP_DISTANCE
 /** 縦か横からこの角度（度）以内の分割線は、縦か横にそろえる */
 const CUT_SNAP_DEGREES = 4
 /** 分割線の向きをそろえる先に数える、割るコマからの隙間（正規化座標）。コマ間の SPLIT_GUTTER より広く取る */
 const NEIGHBOUR_GAP = 0.05
+/** コマ間として吸い付け先に数える隙間の上限。これより広い隙間はコマを消した跡などの空きで、コマ間ではない */
+const GUTTER_LIMIT = 0.05
 // 0.51 - 0.5 が 0.010000000000000009 になるので、ちょうど SNAP_DISTANCE の差も吸い付ける
 const EPSILON = 1e-9
 
@@ -46,6 +49,12 @@ export interface Cut {
 
 /** リサイズのハンドル。動かす辺の方角 */
 export type Handle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+
+/** 移動とリサイズで辺を吸い付ける距離（正規化座標）。ページの縦横比があるので x と y で分ける */
+export interface SnapReach {
+  x: number
+  y: number
+}
 
 type Point = { x: number; y: number }
 
@@ -103,10 +112,10 @@ export function geometryOf(outline: readonly Point[]): { rect: Rect; shape?: Poi
 const outlinesOverlap = (a: readonly Point[], b: readonly Point[]) =>
   polygonArea(intersectPolygons(a, convexHull(b))) > EPSILON
 
-/** 0 から 1 の、v に最も近い target。SNAP_DISTANCE より遠ければ v のまま */
-function snapValue(v: number, targets: readonly number[]): number {
+/** 0 から 1 の、v に最も近い target。reach より遠ければ v のまま */
+function snapValue(v: number, targets: readonly number[], reach = SNAP_DISTANCE): number {
   let best = v
-  let bestDistance = SNAP_DISTANCE + EPSILON
+  let bestDistance = reach + EPSILON
   for (const t of targets) {
     const d = Math.abs(t - v)
     if (d <= bestDistance) {
@@ -129,6 +138,105 @@ function snapTargets(page: Page, except?: ID): { xs: number[]; ys: number[] } {
   return { xs, ys }
 }
 
+/** 区間 [a, a + aLength] と [b, b + bLength] が、端で接するだけでなく重なるか */
+const spansOverlap = (a: number, aLength: number, b: number, bLength: number) =>
+  Math.min(a + aLength, b + bLength) - Math.max(a, b) > EPSILON
+
+/**
+ * ページで使っているコマ間の幅。x は横に並ぶコマの間、y は縦に並ぶコマの間で、それぞれ 0.001 に丸めて重複を除く。
+ * コマごとに右隣と下隣の最も近いコマだけを見て、GUTTER_LIMIT より広い隙間は数えない。
+ * 動かしているコマも元の位置で数えるので、2 つしか並ばない段でも元の間隔へ戻せる
+ */
+function guttersOf(page: Page): { xs: number[]; ys: number[] } {
+  const xs = new Set<number>()
+  const ys = new Set<number>()
+  for (const a of page.panels) {
+    let right = Number.POSITIVE_INFINITY
+    let below = Number.POSITIVE_INFINITY
+    for (const b of page.panels) {
+      if (b === a) continue
+      if (spansOverlap(a.rect.y, a.rect.h, b.rect.y, b.rect.h)) {
+        const gap = b.rect.x - (a.rect.x + a.rect.w)
+        if (gap > EPSILON && gap < right) right = gap
+      }
+      if (spansOverlap(a.rect.x, a.rect.w, b.rect.x, b.rect.w)) {
+        const gap = b.rect.y - (a.rect.y + a.rect.h)
+        if (gap > EPSILON && gap < below) below = gap
+      }
+    }
+    if (right <= GUTTER_LIMIT + EPSILON) xs.add(round(right))
+    if (below <= GUTTER_LIMIT + EPSILON) ys.add(round(below))
+  }
+  return { xs: [...xs], ys: [...ys] }
+}
+
+/**
+ * コマ panelId を rect へ動かすか広げるときの吸い付け先。snapTargets に、ページの内枠と、
+ * rect と縦（横）に重なる隣のコマからページのコマ間だけ離れた位置を足し、ページの外は除く
+ */
+function edgeTargets(page: Page, panelId: ID, rect: Rect): { xs: number[]; ys: number[] } {
+  const { xs, ys } = snapTargets(page, panelId)
+  const frame = innerFrameOf(page)
+  xs.push(frame.x, frame.x + frame.w)
+  ys.push(frame.y, frame.y + frame.h)
+  const gutters = guttersOf(page)
+  for (const q of page.panels) {
+    if (q.id === panelId) continue
+    if (spansOverlap(q.rect.y, q.rect.h, rect.y, rect.h)) {
+      for (const g of gutters.xs) xs.push(q.rect.x - g, q.rect.x + q.rect.w + g)
+    }
+    if (spansOverlap(q.rect.x, q.rect.w, rect.x, rect.w)) {
+      for (const g of gutters.ys) ys.push(q.rect.y - g, q.rect.y + q.rect.h + g)
+    }
+  }
+  const onPage = (v: number) => v >= -EPSILON && v <= 1 + EPSILON
+  return { xs: xs.filter(onPage), ys: ys.filter(onPage) }
+}
+
+/** edges のどれかを targets のどれかにそろえる最も小さいずらし幅。reach 以内にそろう組が無ければ 0 */
+function snapShift(edges: readonly number[], targets: readonly number[], reach: number): number {
+  let shift = 0
+  let bestDistance = reach + EPSILON
+  for (const v of edges) {
+    for (const t of targets) {
+      const d = Math.abs(t - v)
+      if (d <= bestDistance) {
+        shift = t - v
+        bestDistance = d
+      }
+    }
+  }
+  return shift
+}
+
+/**
+ * コマ panelId を rect（動かした後の矩形。大きさは変えない）へ動かすとき、辺を吸い付けるために足すずらし幅。
+ * 左右の辺のうち吸い付け先に近い方を x で、上下の辺のうち近い方を y でそろえる。吸い付け先は隣のコマの辺、
+ * 隣のコマからページのコマ間だけ離れた位置、ページの内枠と端。reach より遠ければその軸は 0
+ */
+export function snapMoveOffset(
+  page: Page,
+  panelId: ID,
+  rect: Rect,
+  reach: SnapReach,
+): { dx: number; dy: number } {
+  const { xs, ys } = edgeTargets(page, panelId, rect)
+  return {
+    dx: snapShift([rect.x, rect.x + rect.w], xs, reach.x),
+    dy: snapShift([rect.y, rect.y + rect.h], ys, reach.y),
+  }
+}
+
+/** e の handle の辺を (x, y) へ動かした辺。反対の辺は固定し、幅と高さは MIN_PANEL_SIZE を下回らない */
+function dragEdges(e: Edges, handle: Handle, x: number, y: number): Edges {
+  const next = { ...e }
+  if (handle.includes('n')) next.top = Math.min(y, e.bottom - MIN_PANEL_SIZE)
+  if (handle.includes('s')) next.bottom = Math.max(y, e.top + MIN_PANEL_SIZE)
+  if (handle.includes('w')) next.left = Math.min(x, e.right - MIN_PANEL_SIZE)
+  if (handle.includes('e')) next.right = Math.max(x, e.left + MIN_PANEL_SIZE)
+  return next
+}
+
 /**
  * 正規化座標の 2 点を対角とする矩形。ページに収め、4 辺とも吸い付ける。
  * 小さすぎるかどうかは見ないので、ドラッグ中のプレビューにも使える
@@ -143,18 +251,27 @@ export function draftRect(page: Page, a: Point, b: Point): Rect {
 }
 
 /**
- * コマ panelId の handle を正規化座標の点 p へ動かした矩形。動かす辺だけを吸い付け、
- * 反対の辺は固定し、幅と高さは MIN_PANEL_SIZE を下回らない
+ * コマ panelId の handle を正規化座標の点 p へ動かした矩形。反対の辺は固定し、幅と高さは MIN_PANEL_SIZE を
+ * 下回らない。動かす辺だけを、reach 以内にある隣のコマの辺、隣のコマからページのコマ間だけ離れた位置、
+ * ページの内枠と端へ吸い付ける。reach が null なら吸い付けない
  */
-export function resizeRect(page: Page, panelId: ID, rect: Rect, handle: Handle, p: Point): Rect {
-  const { xs, ys } = snapTargets(page, panelId)
-  const e = edgesOf(rect)
-  const x = snapValue(clamp01(p.x), xs)
-  const y = snapValue(clamp01(p.y), ys)
-  if (handle.includes('n')) e.top = Math.min(y, e.bottom - MIN_PANEL_SIZE)
-  if (handle.includes('s')) e.bottom = Math.max(y, e.top + MIN_PANEL_SIZE)
-  if (handle.includes('w')) e.left = Math.min(x, e.right - MIN_PANEL_SIZE)
-  if (handle.includes('e')) e.right = Math.max(x, e.left + MIN_PANEL_SIZE)
+export function resizeRect(
+  page: Page,
+  panelId: ID,
+  rect: Rect,
+  handle: Handle,
+  p: Point,
+  reach: SnapReach | null,
+): Rect {
+  const start = edgesOf(rect)
+  let x = clamp01(p.x)
+  let y = clamp01(p.y)
+  if (reach !== null) {
+    const { xs, ys } = edgeTargets(page, panelId, rectOf(dragEdges(start, handle, x, y)))
+    x = snapValue(x, xs, reach.x)
+    y = snapValue(y, ys, reach.y)
+  }
+  const e = dragEdges(start, handle, x, y)
   return rectOf({
     left: Math.max(0, e.left),
     top: Math.max(0, e.top),
@@ -700,19 +817,80 @@ if (import.meta.vitest) {
     })
   })
 
+  /** 内枠の右端。0.912087... */
+  const frameRight = 1 - (1 - 150 / 182) / 2
+  const panelAt = (id: string, rect: Rect): Panel => ({ ...(page.panels[1] as Panel), id, rect })
+  // 上の段は a と b がコマ間 0.03 で並び、下の段の c とはコマ間 0.05 空く
+  const rows: Page = {
+    ...page,
+    panels: [
+      panelAt('a', { x: 0.1, y: 0.1, w: 0.35, h: 0.3 }),
+      panelAt('b', { x: 0.48, y: 0.1, w: 0.4, h: 0.3 }),
+      panelAt('c', { x: 0.1, y: 0.45, w: 0.7, h: 0.3 }),
+    ],
+  }
+  const reach = { x: 0.015, y: 0.015 }
+
+  describe('guttersOf', () => {
+    test('collects the gaps between neighbouring panels on each axis', () => {
+      expect(guttersOf(page)).toEqual({ xs: [0.02], ys: [0.015, 0.005] })
+      expect(guttersOf(rows)).toEqual({ xs: [0.03], ys: [0.05] })
+    })
+
+    test('ignores gaps wider than a gutter and panels that only touch', () => {
+      const apart: Page = {
+        ...page,
+        panels: [
+          panelAt('a', { x: 0, y: 0, w: 0.3, h: 0.5 }),
+          panelAt('b', { x: 0.6, y: 0, w: 0.4, h: 0.5 }),
+          panelAt('c', { x: 0, y: 0.5, w: 1, h: 0.5 }),
+        ],
+      }
+      expect(guttersOf(apart)).toEqual({ xs: [], ys: [] })
+    })
+  })
+
+  describe('snapMoveOffset', () => {
+    test('brings a panel back to the gutter the page uses', () => {
+      // b を 0.008 左へ寄せても、a の右端からコマ間 0.03 の 0.48 へ戻る
+      const { dx, dy } = snapMoveOffset(rows, 'b', { x: 0.472, y: 0.1, w: 0.4, h: 0.3 }, reach)
+      expect(dx).toBeCloseTo(0.008, 9)
+      expect(dy).toBe(0)
+    })
+
+    test('snaps the nearer side to the inner frame', () => {
+      const { dx } = snapMoveOffset(rows, 'b', { x: 0.505, y: 0.1, w: 0.4, h: 0.3 }, reach)
+      expect(dx).toBeCloseTo(frameRight - 0.905, 9)
+    })
+
+    test('leaves an axis alone when nothing is within reach', () => {
+      expect(snapMoveOffset(rows, 'b', { x: 0.55, y: 0.12, w: 0.4, h: 0.3 }, reach)).toEqual({
+        dx: 0,
+        dy: 0,
+      })
+    })
+
+    test('does not count the gutter from panels that are not beside it', () => {
+      // c は b と縦に重ならないので、c の右端 0.8 + 0.03 には吸い付かない
+      const { dx } = snapMoveOffset(rows, 'b', { x: 0.83, y: 0.1, w: 0.12, h: 0.1 }, reach)
+      expect(dx).toBe(0)
+    })
+  })
+
   describe('resizeRect', () => {
     const pn2 = page.panels[1] as Panel
+    const old = { x: 0.01, y: 0.01 }
 
     test('moves only the dragged edges and snaps them to other panels', () => {
       // pn_3 の右端 0.48 へ吸い付く。自分の左端 0.5 には吸い付かない
-      expect(resizeRect(page, 'pn_2', pn2.rect, 'w', { x: 0.485, y: 0.9 })).toEqual({
+      expect(resizeRect(page, 'pn_2', pn2.rect, 'w', { x: 0.485, y: 0.9 }, old)).toEqual({
         x: 0.48,
         y: 0.275,
         w: 0.52,
         h: 0.23,
       })
       // 下端は pn_3 の下端 0.505 より近い pn_4 の上端 0.51 へ
-      expect(resizeRect(page, 'pn_2', pn2.rect, 'se', { x: 0.9, y: 0.512 })).toEqual({
+      expect(resizeRect(page, 'pn_2', pn2.rect, 'se', { x: 0.9, y: 0.512 }, old)).toEqual({
         x: 0.5,
         y: 0.275,
         w: 0.4,
@@ -720,12 +898,31 @@ if (import.meta.vitest) {
       })
     })
 
+    test('snaps the dragged edge to the gutter and the inner frame', () => {
+      const b = (rows.panels[1] as Panel).rect
+      expect(resizeRect(rows, 'b', b, 'w', { x: 0.47, y: 0.2 }, reach)).toEqual(b)
+      expect(resizeRect(rows, 'b', b, 'e', { x: 0.905, y: 0.2 }, reach)).toEqual({
+        ...b,
+        w: Math.round((frameRight - 0.48) * 1000) / 1000,
+      })
+    })
+
+    test('does not snap without a reach', () => {
+      const b = (rows.panels[1] as Panel).rect
+      expect(resizeRect(rows, 'b', b, 'w', { x: 0.47, y: 0.2 }, null)).toEqual({
+        ...b,
+        x: 0.47,
+        w: 0.41,
+      })
+    })
+
     test('keeps the minimum size and the page bounds', () => {
-      expect(resizeRect(page, 'pn_2', pn2.rect, 'e', { x: 0.1, y: 0 })).toEqual({
+      expect(resizeRect(page, 'pn_2', pn2.rect, 'e', { x: 0.1, y: 0 }, old)).toEqual({
         ...pn2.rect,
         w: 0.02,
       })
-      expect(resizeRect(page, 'pn_2', pn2.rect, 'n', { x: 0, y: -1 }).y).toBe(0)
+      expect(resizeRect(page, 'pn_2', pn2.rect, 'n', { x: 0, y: -1 }, old).y).toBe(0)
+      expect(resizeRect(page, 'pn_2', pn2.rect, 'n', { x: 0, y: -1 }, null).y).toBe(0)
     })
   })
 

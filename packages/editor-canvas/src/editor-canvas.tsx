@@ -71,12 +71,14 @@ const IDLE_POINTER = { onPointerDown() {}, onPointerMove() {} }
  * ズームとパンは viewBox で表す。ページの外側は作業台の色（`--surface-desk`）。
  * クリックで選択、ホバーで強調、Delete で削除、矢印キーで 0.01 刻みの移動。
  * `select` ツールでは選択中のコマかフキダシをドラッグで動かす。
+ * 動かすコマとリサイズで引く辺は、画面上で 6px 以内なら隣のコマの辺、隣のコマからページのコマ間だけ離れた位置、
+ * ページの内枠と端に吸い付き、Alt を押している間は吸い付かない。
  * `panel` ツールと手描きの最中を除き、要素の無いところ（作業台とコマの外）のドラッグでページを動かす。
  * 右クリックは押した要素を選んでから `onContextMenu` に渡す。手描きの最中を除き、タッチの長押しも右クリックとして扱う。
  * `panel` ツールではドラッグでコマを作り、選択中のコマをハンドルでリサイズ、ボタンで縦横に分割、
  * 「線で分割」か Alt + ドラッグで引いた斜めの線で分割、「結合」か Shift + クリックで押したコマと結合する。多角形のコマは
  * 頂点をドラッグで動かし、矩形のコマも Alt + 隅のドラッグで頂点を動かせる。
- * 端は他のコマとページの端に 0.01 以内で吸い付き、頂点は他のコマの頂点にも吸い付く。
+ * 作るコマの端は他のコマとページの端に 0.01 以内で吸い付き、頂点は他のコマの頂点にも吸い付く。
  * `bubble` ツールではコマのクリックでフキダシを作り、ドラッグで移動、隅のハンドルでリサイズ、
  * しっぽごとの先端のドラッグでそのしっぽを動かし、しっぽを足すハンドルのドラッグでしっぽを増やす。セリフは縦書きで、収まらなければ末尾を省略記号にする。
  * Patch はページ root 基準で `onChange` に 1 操作 1 回出し、Undo / Redo は持たない。
@@ -1732,6 +1734,44 @@ if (import.meta.vitest) {
       ])
     })
 
+    test('a handle drag near the inner frame fits it, unless Alt is held after grabbing', async () => {
+      const onChange = vi.fn()
+      const svg = await render({
+        tool: 'panel',
+        onChange,
+        selection: { kind: 'panel', id: 'pn_3' },
+      })
+      layout(svg)
+      // pn_3 の右辺の中点から、内枠の右端 0.912 の 1.3mm（2.6px）手前まで
+      drag(svg, clientAt(0.48, 0.39), clientAt(0.905, 0.39))
+      expect(patchOf(onChange)).toEqual([
+        {
+          op: 'replace',
+          path: '/panels/2',
+          value: expect.objectContaining({
+            id: 'pn_3',
+            rect: { x: 0, y: 0.275, w: 0.912, h: 0.23 },
+          }),
+        },
+      ])
+
+      // 押す時の Alt は線での分割になるので、引き始めてから押す
+      onChange.mockClear()
+      fire(svg, pointer('pointerdown', { id: 1, ...clientAt(0.48, 0.39) }))
+      fire(svg, pointer('pointermove', { id: 1, ...clientAt(0.905, 0.39), altKey: true }))
+      fire(svg, pointer('pointerup', { id: 1, ...clientAt(0.905, 0.39), altKey: true }))
+      expect(patchOf(onChange)).toEqual([
+        {
+          op: 'replace',
+          path: '/panels/2',
+          value: expect.objectContaining({
+            id: 'pn_3',
+            rect: { x: 0, y: 0.275, w: 0.905, h: 0.23 },
+          }),
+        },
+      ])
+    })
+
     test('the split button splits with one patch and renumbers orders rtl', async () => {
       const onChange = vi.fn()
       const svg = await render({
@@ -3228,19 +3268,35 @@ if (import.meta.vitest) {
       const onSelect = vi.fn()
       const svg = await render({ onChange, onSelect, selection: { kind: 'panel', id: 'pn_2' } })
       layout(svg)
-      const to = clientAt(0.65, 0.4)
+      const to = clientAt(0.6, 0.4)
       drag(svg, clientAt(0.75, 0.4), to, { release: false })
       expect(svg.querySelector('[data-draft="pn_2"]')).not.toBeNull()
       expect(onChange).not.toHaveBeenCalled()
       fire(svg, pointer('pointerup', { id: 1, ...to }))
       expect(svg.querySelector('[data-draft]')).toBeNull()
-      expect(patchOf(onChange)).toEqual([{ op: 'replace', path: '/panels/1/rect/x', value: 0.4 }])
+      expect(patchOf(onChange)).toEqual([{ op: 'replace', path: '/panels/1/rect/x', value: 0.35 }])
       expect(onSelect).not.toHaveBeenCalled()
 
       // pn_2 は右端にあるので、右へは動かない
       onChange.mockClear()
       drag(svg, clientAt(0.75, 0.4), clientAt(0.9, 0.4))
       expect(onChange).not.toHaveBeenCalled()
+    })
+
+    test('a moved panel snaps to the inner frame within 6px, but not with Alt held', async () => {
+      const onChange = vi.fn()
+      const svg = await render({ onChange, selection: { kind: 'panel', id: 'pn_2' } })
+      layout(svg)
+      // 右端 0.9 は内枠の右端 0.912 まで 2.2mm（4.4px）
+      drag(svg, clientAt(0.75, 0.4), clientAt(0.65, 0.4))
+      expect(patchOf(onChange)).toEqual([{ op: 'replace', path: '/panels/1/rect/x', value: 0.412 }])
+
+      onChange.mockClear()
+      fire(svg, pointer('pointerdown', { id: 1, ...clientAt(0.75, 0.4), altKey: true }))
+      fire(svg, pointer('pointermove', { id: 1, ...clientAt(0.7, 0.4), altKey: true }))
+      fire(svg, pointer('pointermove', { id: 1, ...clientAt(0.65, 0.4), altKey: true }))
+      fire(svg, pointer('pointerup', { id: 1, ...clientAt(0.65, 0.4), altKey: true }))
+      expect(patchOf(onChange)).toEqual([{ op: 'replace', path: '/panels/1/rect/x', value: 0.4 }])
     })
 
     test('dragging the selected bubble moves it with its tail', async () => {

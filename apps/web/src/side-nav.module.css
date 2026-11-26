@@ -84,6 +84,29 @@
   white-space: nowrap;
 }
 
+/* 開いたナビでは名前が横に並んでいるので出さない */
+.tip {
+  display: none;
+}
+
+.nav[data-collapsed] .tip {
+  position: fixed;
+  z-index: 10;
+  display: block;
+  margin-left: var(--space-8);
+  padding: var(--space-4) var(--space-8);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: var(--text-s);
+  font-weight: normal;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
 .account {
   padding: var(--space-8) var(--space-8) 0;
   border-top: 1px solid var(--border);
