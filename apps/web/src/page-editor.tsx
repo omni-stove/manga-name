@@ -45,13 +45,11 @@ import {
 } from '@manga/schema'
 import { detectPlatform } from '@manga/storage'
 import {
-  Button,
   Checkbox,
   ContextMenu,
   type ContextMenuItem,
   IconButton,
   RemoveButton,
-  SegmentedControl,
   type SegmentedOption,
   Select,
   Sidebar,
@@ -60,9 +58,8 @@ import {
   YStack,
 } from '@manga/ui'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { useStore } from 'zustand'
-import { BackLink } from './back-link'
 import { BatchOptions, useBatchGeneration } from './batch-generation'
 import {
   type ElementMenuContext,
@@ -72,11 +69,13 @@ import {
   shapeMenuItems,
   toolMenuItems,
 } from './canvas-menu'
-import { CollaborationBar, PeerBadge, peerColor, usePeers } from './collaboration-view'
+import { PeerBadge, peerColor, usePeers } from './collaboration-view'
 import { previewPage } from './critique'
 import { CritiquePanel } from './critique-panel'
 import { chooseExportFolder, loadExportFolder, writePageFiles } from './desktop/export-folder'
 import { receiveDroppedReference } from './dropped-reference'
+import { Area, type EditorArea } from './editor-area'
+import { EditorHeader, NEXT_PAGE_KEY, PREV_PAGE_KEY } from './editor-header'
 import {
   type ClipboardElement,
   parseElement,
@@ -94,7 +93,7 @@ import {
   usesHint,
   usesReference,
 } from './generate-panel'
-import { HistoryButtons, Icon, MOD } from './history-buttons'
+import { MOD } from './history-buttons'
 import {
   bubblePatch,
   findBubble,
@@ -120,7 +119,6 @@ import { findPage, pagePatch } from './project-ops'
 import { firstFile, referencePatch, toReferenceImage } from './reference-image'
 import { errorMessage } from './route-error'
 import { saveFile } from './save-file'
-import { SaveStatusIndicator } from './save-status'
 import { ROLE_LABELS } from './sharing'
 import type { Peer } from './store/presence'
 import type { WebProjectStore } from './store/project-store-types'
@@ -163,9 +161,6 @@ const fillToolOptions = (): readonly SegmentedOption<FillTool>[] => [
 
 const focusKindOptions = (): readonly SegmentedOption<FocusKind>[] =>
   FOCUS_KINDS.map((k, i) => ({ value: k.value, label: k.label, shortcut: String(i + 1) }))
-
-const PREV_PAGE_KEY = '['
-const NEXT_PAGE_KEY = ']'
 
 /** 選択肢のキーから、その値を選ぶ操作への対応を作る */
 function shortcutsOf<T extends string>(
@@ -215,21 +210,6 @@ const ALL_LAYERS: Layers = {
   frames: true,
 }
 
-/**
- * 編集画面のうち、まとめて使えるようにしたり止めたりする領域。
- * `navigation` はページ送り、`canvas` はキャンバスの操作と参考画像の取り込み、`inspector` は要素一覧と要素とページの編集とページの脚本、
- * `generate` は「このページを全部生成」と「生成済みも含める」
- */
-export type EditorArea =
-  | 'navigation'
-  | 'history'
-  | 'tools'
-  | 'layers'
-  | 'export'
-  | 'canvas'
-  | 'inspector'
-  | 'generate'
-
 export interface PageEditorProps {
   projectId: ID
   pageId: ID
@@ -244,16 +224,6 @@ export interface PageEditorProps {
   onLayersChange?: (layers: Layers) => void
   /** ページを書き出して保存した */
   onExport?: () => void
-}
-
-/** `open` でなければ中身を見た目そのままで押せなくし、フォーカスも当てない */
-function Area({ open, children }: { open: boolean; children: ReactNode }) {
-  if (open) return children
-  return (
-    <fieldset disabled inert className={styles.locked}>
-      {children}
-    </fieldset>
-  )
 }
 
 type Apply = (label: string, build: (project: Project) => Patch) => boolean
@@ -707,168 +677,34 @@ export function PageEditor({
   }
   return (
     <YStack as="section" gap={0} className={styles.editor}>
-      <XStack as="header" gap={20} rowGap={12} wrap className={styles.toolbar}>
-        <Typography as="span" variant="label" tone="muted">
-          {project.title || m.untitled()}
-        </Typography>
-        <Area open={can('navigation')}>
-          <BackLink
-            to="/p/$projectId/episodes/$episodeId"
-            params={{ projectId, episodeId: episode.id }}
-          >
-            {episode.title}
-          </BackLink>
-          <XStack as="span" gap={2} role="group" aria-label={m.web_editor_page_navigation()}>
-            <IconButton
-              size="small"
-              label={m.web_editor_prev_page()}
-              title={m.web_editor_prev_page_title({ key: PREV_PAGE_KEY })}
-              aria-keyshortcuts={PREV_PAGE_KEY}
-              disabled={!prevPage}
-              onClick={() => prevPage && openPage(prevPage.id)}
-            >
-              <Icon>
-                <path d="m15 6-6 6 6 6" />
-              </Icon>
-            </IconButton>
-            <Select
-              label={m.page()}
-              hideLabel
-              value={pageId}
-              className={styles.pageSelect}
-              onChange={(e) => openPage(e.target.value)}
-            >
-              {episode.pages.map((p, i) => (
-                <option key={p.id} value={p.id}>
-                  {m.web_editor_page_option({ index: i + 1, total: episode.pages.length })}
-                </option>
-              ))}
-            </Select>
-            <IconButton
-              size="small"
-              label={m.web_editor_next_page()}
-              title={m.web_editor_next_page_title({ key: NEXT_PAGE_KEY })}
-              aria-keyshortcuts={NEXT_PAGE_KEY}
-              disabled={!nextPage}
-              onClick={() => nextPage && openPage(nextPage.id)}
-            >
-              <Icon>
-                <path d="m9 6 6 6-6 6" />
-              </Icon>
-            </IconButton>
-            {canEdit && (
-              <IconButton
-                size="small"
-                label={m.web_episode_add_page()}
-                onClick={() => setAddingPage(true)}
-              >
-                <Icon>
-                  <path d="M12 5v14M5 12h14" />
-                </Icon>
-              </IconButton>
-            )}
-          </XStack>
-        </Area>
-        <CollaborationBar collab={collab} project={project} />
-        {!canEdit && (
-          <Typography as="span" tone="muted">
-            {ROLE_LABELS[role]}
-          </Typography>
-        )}
-        <Area open={can('history')}>
-          <HistoryButtons store={store} />
-        </Area>
-        <Area open={can('tools')}>
-          <XStack as="span" gap={20} rowGap={12} wrap data-area="tools">
-            <SegmentedControl
-              label={m.web_editor_tools()}
-              value={tool}
-              options={tools}
-              onChange={(t) => setTool(t)}
-            />
-            {tool === 'scribble' && (
-              <SegmentedControl
-                label={m.web_editor_pen()}
-                value={scribbleTool}
-                options={scribbleTools}
-                onChange={(t) => setScribbleTool(t)}
-              />
-            )}
-            {tool === 'sketch' && (
-              <>
-                <SegmentedControl
-                  label={m.web_editor_pen()}
-                  value={sketchTool}
-                  options={sketchTools}
-                  onChange={(t) => setSketchTool(t)}
-                />
-                <Button size="small" disabled={!page.sketch?.length} onClick={convertSketch}>
-                  {m.web_editor_convert_sketch()}
-                </Button>
-              </>
-            )}
-            {tool === 'fill' && (
-              <SegmentedControl
-                label={m.web_editor_fill_color()}
-                value={fillTool}
-                options={fillTools}
-                onChange={(t) => setFillTool(t)}
-              />
-            )}
-            {tool === 'focus' && (
-              <SegmentedControl
-                label={m.web_editor_focus_kind()}
-                value={focusKind}
-                options={focusKindOptions()}
-                onChange={(k) => setFocusKind(k)}
-              />
-            )}
-          </XStack>
-        </Area>
-        <Area open={can('layers')}>
-          <XStack role="group" aria-label={m.web_editor_layers()} data-area="layers">
-            <Typography as="span" variant="label" tone="muted" aria-hidden>
-              {m.web_editor_layers()}
-            </Typography>
-            {layerOptions().map((l) => (
-              <Checkbox
-                key={l.key}
-                label={l.label}
-                checked={layers[l.key]}
-                onChange={(e) => {
-                  const next = { ...layers, [l.key]: e.target.checked }
-                  setLayers(next)
-                  onLayersChange?.(next)
-                }}
-              />
-            ))}
-          </XStack>
-        </Area>
-        <XStack as="span" gap={6} className={styles.actions}>
-          <SaveStatusIndicator store={store} />
-          <Area open={can('export')}>
-            {typeof exporting === 'object' ? (
-              <XStack as="span" className={styles.exportProgress} role="status">
-                {m.web_editor_exporting({ done: exporting.done, total: exporting.total })}
-                <progress
-                  aria-label={m.web_editor_export_progress()}
-                  value={exporting.done}
-                  max={exporting.total}
-                />
-              </XStack>
-            ) : (
-              <Button
-                size="small"
-                variant="primary"
-                data-guide="export"
-                onClick={() => setExporting('dialog')}
-              >
-                {m.web_editor_export()}
-              </Button>
-            )}
-          </Area>
-        </XStack>
-      </XStack>
+      <EditorHeader
+        projectId={projectId}
+        project={project}
+        episode={episode}
+        pageId={pageId}
+        prevPageId={prevPage?.id}
+        nextPageId={nextPage?.id}
+        onOpenPage={openPage}
+        onAddPage={canEdit ? () => setAddingPage(true) : undefined}
+        collab={collab}
+        roleLabel={canEdit ? undefined : ROLE_LABELS[role]}
+        store={store}
+        can={can}
+        tool={{ options: tools, value: tool, onChange: setTool }}
+        scribbleTool={{ options: scribbleTools, value: scribbleTool, onChange: setScribbleTool }}
+        sketchTool={{ options: sketchTools, value: sketchTool, onChange: setSketchTool }}
+        fillTool={{ options: fillTools, value: fillTool, onChange: setFillTool }}
+        focusKind={{ options: focusKindOptions(), value: focusKind, onChange: setFocusKind }}
+        onConvertSketch={page.sketch?.length ? convertSketch : undefined}
+        layerOptions={layerOptions()}
+        layers={layers}
+        onLayersChange={(next) => {
+          setLayers(next)
+          onLayersChange?.(next)
+        }}
+        exportProgress={typeof exporting === 'object' ? exporting : undefined}
+        onExport={() => setExporting('dialog')}
+      />
       {menu && openMenu && (
         <ContextMenu
           // 形のメニューに切り替えたら付け直し、最初の項目にフォーカスを移す

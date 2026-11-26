@@ -4,20 +4,6 @@
   margin: calc(-1 * var(--space-16));
 }
 
-.toolbar {
-  padding: var(--space-6) var(--space-16);
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-chrome);
-}
-
-.actions {
-  margin-left: auto;
-}
-
-.exportProgress {
-  font-variant-numeric: tabular-nums;
-}
-
 .error {
   padding: var(--space-6) var(--space-16);
   background: var(--alert-tint);
@@ -49,14 +35,10 @@
   display: contents;
 }
 
-/* Area で止めた領域。囲む枠を描かず、中身を止める前と同じ並びに置く */
-.locked {
-  display: contents;
-}
-
+/* .inspectorFields の子の fieldset は Area で止めた領域だけ。Area のクラスは別のモジュールにあるので要素で選ぶ */
 .inspector > details,
 .inspectorFields > details,
-.inspectorFields > .locked > details {
+.inspectorFields > fieldset > details {
   margin-top: var(--space-12);
   padding-top: var(--space-12);
   border-top: 1px solid var(--border);
@@ -64,7 +46,7 @@
 
 .inspector > details > summary,
 .inspectorFields > details > summary,
-.inspectorFields > .locked > details > summary {
+.inspectorFields > fieldset > details > summary {
   margin-bottom: var(--space-8);
   cursor: pointer;
   font-weight: var(--weight-bold);
@@ -137,12 +119,4 @@
   list-style: none;
   margin: var(--space-8) 0;
   padding: 0;
-}
-
-/* 部品の既定は幅いっぱいなので、ヘッダーの中では中身の幅に縮める */
-select.pageSelect {
-  width: auto;
-  min-height: var(--control-s);
-  padding-block: 0;
-  font-size: var(--text-s);
 }

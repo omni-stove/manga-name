@@ -1,0 +1,21 @@
+.toolbar {
+  padding: var(--space-6) var(--space-16);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-chrome);
+}
+
+.actions {
+  margin-left: auto;
+}
+
+.exportProgress {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 部品の既定は幅いっぱいなので、ヘッダーの中では中身の幅に縮める */
+select.pageSelect {
+  width: auto;
+  min-height: var(--control-s);
+  padding-block: 0;
+  font-size: var(--text-s);
+}
