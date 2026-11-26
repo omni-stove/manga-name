@@ -8,3 +8,21 @@
   min-width: 0;
   padding: var(--space-16);
 }
+
+/* ナビが画面の下に固定され列から抜けるので 1 列にし、本文の最後がナビの下に隠れないよう、ナビの高さだけ下を空ける */
+@media (max-width: 767px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .main {
+    padding-bottom: calc(
+      var(--space-16) +
+      var(--hit) +
+      2 *
+      var(--space-6) +
+      1px +
+      env(safe-area-inset-bottom)
+    );
+  }
+}

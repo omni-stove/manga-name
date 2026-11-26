@@ -12,6 +12,30 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * スマホの幅で折り返すと、詰められた切り替えボタンやチェックボックスの日本語が 1 文字ずつ縦に折れる。
+ * ツールとレイヤーはそれぞれ全幅の 1 行に置き、はみ出した分は横にスクロールさせる
+ */
+@media (max-width: 767px) {
+  .toolbar {
+    padding-inline: var(--space-12);
+  }
+
+  .toolbar .strip {
+    flex: 1 0 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    /* フォーカスの輪がスクロール領域の縁で切れないよう内側に余白を取る */
+    padding: var(--space-4) var(--space-2);
+    white-space: nowrap;
+    scrollbar-width: thin;
+  }
+
+  .toolbar .strip > * {
+    flex: none;
+  }
+}
+
 /* 部品の既定は幅いっぱいなので、ヘッダーの中では中身の幅に縮める */
 select.pageSelect {
   width: auto;

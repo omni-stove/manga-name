@@ -113,3 +113,56 @@
   margin-top: var(--space-8);
   color: var(--text-muted);
 }
+
+/*
+ * スマホの幅では左の帯が本文の幅を削るので、画面の下に固定したアイコンの横並びにする。
+ * 開いた幅は覚えたままでも名前を並べる余地が無いので、開閉ボタン・作品名・アカウントは出さず、名前は畳んだときと同じく読み上げだけに残す。
+ * YStack の縦並びは ui のモジュールで決まり読み込み順に頼れないので、要素名まで含めて選ぶ
+ */
+@media (max-width: 767px) {
+  nav.nav,
+  nav.nav[data-collapsed] {
+    position: fixed;
+    inset: auto 0 0;
+    /* 案内の覆い（z-index 5）より下、キャンバスより上に置く */
+    z-index: 4;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    width: auto;
+    height: auto;
+    padding: var(--space-6) var(--space-8) calc(var(--space-6) + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-top: 1px solid var(--border);
+    overflow: auto hidden;
+  }
+
+  .nav .head,
+  .nav .project,
+  .nav .account {
+    display: none;
+  }
+
+  .nav .list,
+  .nav .footer {
+    flex-direction: row;
+    margin: 0;
+  }
+
+  .nav .item,
+  .nav[data-collapsed] .item {
+    justify-content: center;
+    min-width: var(--hit);
+    min-height: var(--hit);
+    padding: 0;
+  }
+
+  .nav .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
