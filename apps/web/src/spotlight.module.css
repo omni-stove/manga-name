@@ -30,19 +30,48 @@
   box-shadow: var(--shadow);
 }
 
-.tip::before {
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-6);
+}
+
+/* 吹き出しの地の色の上でも読めるよう、ボタンの既定の色を吹き出しの文字の色にする */
+.tip .dismiss {
+  pointer-events: auto;
+  color: inherit;
+}
+
+.tip[data-side]::before {
   content: "";
   position: absolute;
-  top: calc(-1 * var(--space-6));
-  left: calc(var(--arrow-x) - var(--space-6));
   border: var(--space-6) solid transparent;
+}
+
+.tip[data-side="below"]::before {
+  top: calc(-1 * var(--space-6));
+  left: calc(var(--arrow) - var(--space-6));
   border-top: 0;
   border-bottom-color: var(--guide);
 }
 
-.tip[data-above]::before {
-  top: auto;
+.tip[data-side="above"]::before {
   bottom: calc(-1 * var(--space-6));
-  border-top: var(--space-6) solid var(--guide);
+  left: calc(var(--arrow) - var(--space-6));
   border-bottom: 0;
+  border-top-color: var(--guide);
+}
+
+.tip[data-side="right"]::before {
+  left: calc(-1 * var(--space-6));
+  top: calc(var(--arrow) - var(--space-6));
+  border-left: 0;
+  border-right-color: var(--guide);
+}
+
+.tip[data-side="left"]::before {
+  right: calc(-1 * var(--space-6));
+  top: calc(var(--arrow) - var(--space-6));
+  border-right: 0;
+  border-left-color: var(--guide);
 }

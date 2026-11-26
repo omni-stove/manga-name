@@ -126,7 +126,8 @@ export function tourEditorAreas(step: TourStep | undefined): ReadonlySet<EditorA
 /**
  * オンボーディングの案内。今の手順で押す所だけを残して画面をぼかし、吹き出しで指す。
  * 案内で作ったプロジェクトを開いている間はその中身を見て、終えた手順を次に進める。
- * 締めくくりのあとにプロジェクト一覧へ戻ったとき、またはプロジェクトを作る前に案内の外の画面へ移ったときに案内を終える
+ * 吹き出しの「案内を終える」か Esc を押したとき、締めくくりのあとにプロジェクト一覧へ戻ったとき、
+ * またはプロジェクトを作る前に案内の外の画面へ移ったときに案内を終え、ぼかしと編集画面で使える領域の制限を外す
  */
 export function TourGuide() {
   const progress = useStore(tour.state)
@@ -155,7 +156,12 @@ export function TourGuide() {
     <>
       {inProject && <Advance store={opened.store} />}
       {guide && (
-        <Spotlight target={guide.target} keep={guide.keep ?? NO_KEEP}>
+        <Spotlight
+          target={guide.target}
+          keep={guide.keep ?? NO_KEEP}
+          dismissLabel={m.web_tour_skip()}
+          onDismiss={tour.finish}
+        >
           {progress.step !== 'done' && (
             <strong>
               {m.web_tour_count({

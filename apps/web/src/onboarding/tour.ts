@@ -50,6 +50,10 @@ export interface Tour {
   /** `project` を見て、終えた手順を先に進める */
   advance(project: Project): void
   report(event: TourEvent): void
+  /**
+   * 案内を今の手順で終える。案内で作ったプロジェクトとその中身は残し、進み具合は忘れるので、
+   * 次に「はじめに」を開くと最初の手順から始める
+   */
   finish(): void
 }
 
@@ -334,6 +338,20 @@ if (import.meta.vitest) {
     expect(createTour(storage).state.getState()).toEqual({ step: 'character', projectId: 'p' })
     first.finish()
     expect(createTour(storage).state.getState()).toBeNull()
+  })
+
+  test('途中で終えたあと開き直すと、案内で作ったプロジェクトがあっても最初の手順から始める', () => {
+    const storage = memoryStorage()
+    const tour = createTour(storage)
+    const project = drafted()
+    tour.start()
+    tour.created(project.id)
+    tour.advance(project)
+    expect(tour.state.getState()?.step).toBe('panels')
+    tour.finish()
+    expect(createTour(storage).state.getState()).toBeNull()
+    tour.resume(project)
+    expect(tour.state.getState()).toEqual({ step: 'project' })
   })
 
   test('開き直したとき、プロジェクトが消えていれば最初から、済んでいない手順があればそこから', () => {
