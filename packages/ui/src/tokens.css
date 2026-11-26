@@ -2,6 +2,7 @@
  * 色は「出力に出るものは墨、出ないものは色」で分ける。
  * - paper / ink: PNG と PDF に出るもの。packages/render と同じ値で、テーマで変えない
  * - guide: 選択、ガイド、コマ番号など、作業用で出力に出ないもの（青鉛筆の水色）
+ * - frame: タチキリ枠、仕上がり線、内枠。出力に出ないが常に見えているので、選択の guide と紛れないよう無彩色にする
  * - alert: 診断の warning、エラー、未入力など、直すべきもの（朱）
  * - chrome: 紙の周りの UI。色を持たせず、ダークで変わるのはここだけ
  * コンポーネントは役割の変数だけを参照し、--_ で始まる原色は参照しない。
@@ -30,6 +31,11 @@
   --guide-soft: #8fd0f2;
   --guide-tint: color-mix(in srgb, var(--guide) 14%, transparent);
   --on-guide: #fff;
+
+  /* 紙の上と机の上に引くのでテーマで変えない。タチキリ枠は机の明暗どちらの上でも見える濃さにする */
+  --frame-trim: #555;
+  --frame-inner: #8a8a8a;
+  --frame-bleed: #a3a3a3;
 
   /* 焦点と誘導線。種類の見分けがつくよう、guide と alert から色相を離す */
   --hint-face: var(--guide);

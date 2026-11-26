@@ -2422,6 +2422,13 @@ if (import.meta.vitest) {
       expect(frame('bleed')).toEqual([-3, -3, 188, 263])
       expect(frame('trim')).toEqual([0, 0, 182, 257])
       expect(frame('inner').map((v) => Math.round(v * 10) / 10)).toEqual([16, 18.5, 150, 220])
+      const strokes = ['bleed', 'trim', 'inner'].map(
+        (name) =>
+          must(svg.querySelector<SVGElement>(`[data-layer="frames"] [data-frame="${name}"]`)).style
+            .stroke,
+      )
+      expect(strokes).not.toContain('var(--guide)')
+      expect(new Set(strokes).size).toBe(3)
 
       const hidden = await render({ layers: { ...defaults.layers, frames: false } })
       expect(hidden.querySelector('[data-layer="frames"]')).toBeNull()
