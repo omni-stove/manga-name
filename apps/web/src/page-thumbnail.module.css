@@ -1,7 +1,9 @@
 /* 紙は成果物の見え方なので、テーマに関係なく白地に墨で描く */
 
+/* viewBox の比だけでは縦の flex に高さを詰められ、ページの下が欠けるので、比を明示し縮ませない */
 .thumbnail {
   display: block;
+  flex: none;
   width: 100%;
   height: auto;
 }
