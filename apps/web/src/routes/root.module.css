@@ -17,7 +17,12 @@
 
   .main {
     padding-bottom: calc(
-      var(--space-16) + var(--hit) + 2 * var(--space-6) + 1px + env(safe-area-inset-bottom)
+      var(--space-16) +
+      var(--hit) +
+      2 *
+      var(--space-6) +
+      1px +
+      env(safe-area-inset-bottom)
     );
   }
 }

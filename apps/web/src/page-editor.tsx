@@ -1313,7 +1313,7 @@ if (import.meta.vitest) {
 
   test('pageAspectStyle passes the page ratio, doubled in width for a spread', () => {
     const size = { w: 182, h: 257 }
-    expect(pageAspectStyle(pageSizeOf({ spread: false }, size))).toEqual({
+    expect(pageAspectStyle(pageSizeOf({}, size))).toEqual({
       '--page-aspect': '182 / 257',
     })
     expect(pageAspectStyle(pageSizeOf({ spread: true }, size))).toEqual({

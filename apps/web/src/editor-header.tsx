@@ -161,14 +161,7 @@ export function EditorHeader({
         <HistoryButtons store={store} />
       </Area>
       <Area open={can('tools')}>
-        <XStack
-          as="span"
-          gap={20}
-          rowGap={12}
-          wrap
-          className={styles.strip}
-          data-area="tools"
-        >
+        <XStack as="span" gap={20} rowGap={12} wrap className={styles.strip} data-area="tools">
           <SegmentedControl
             label={m.web_editor_tools()}
             value={tool.value}
