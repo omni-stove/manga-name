@@ -171,6 +171,11 @@ export function LayoutSuggestions({
   const transcribing = transcription.status === 'loading'
   const loading = suggestion.status === 'loading'
   const busy = transcribing || loading
+  const transcribeDisabled = !canEdit || busy || script === ''
+  const writeDisabled = !canEdit || busy
+  // 押せないボタンを主ボタンの見た目にすると、どこから始めればよいかを取り違える
+  const transcribePrimary = name === undefined && !transcribeDisabled
+  const writePrimary = script === '' && !writeDisabled
   return (
     <YStack
       as="section"
@@ -181,8 +186,8 @@ export function LayoutSuggestions({
       <XStack wrap>
         <Button
           size="small"
-          variant={name === undefined ? 'primary' : 'secondary'}
-          disabled={!canEdit || busy || script === ''}
+          variant={transcribePrimary ? 'primary' : 'secondary'}
+          disabled={transcribeDisabled}
           onClick={() => void transcribe('edit')}
         >
           {transcribing
@@ -194,7 +199,7 @@ export function LayoutSuggestions({
         <Button
           size="small"
           variant="secondary"
-          disabled={!canEdit || busy || script === ''}
+          disabled={transcribeDisabled}
           onClick={() => void transcribe('suggest')}
         >
           {m.web_name_transcribe_and_suggest()}
@@ -202,8 +207,9 @@ export function LayoutSuggestions({
         {name === undefined && (
           <Button
             size="small"
-            variant="secondary"
-            disabled={!canEdit || busy}
+            variant={writePrimary ? 'primary' : 'secondary'}
+            className={script === '' ? styles.lead : undefined}
+            disabled={writeDisabled}
             onClick={() => setName([{ note: '', lines: [] }])}
           >
             {m.web_name_write()}
