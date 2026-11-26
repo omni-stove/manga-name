@@ -55,6 +55,17 @@
   background: color-mix(in srgb, var(--alert), #000 12%);
 }
 
+.dangerGhost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--alert);
+}
+
+.dangerGhost:hover:not(:disabled),
+.dangerGhost:focus-visible {
+  background: var(--alert-tint);
+}
+
 .small {
   min-height: var(--control-s);
   padding: 0 var(--space-8);

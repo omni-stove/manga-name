@@ -18,6 +18,8 @@ export const Ghost: Story = { args: { variant: 'ghost' } }
 
 export const Danger: Story = { args: { variant: 'danger', children: '削除' } }
 
+export const DangerGhost: Story = { args: { variant: 'dangerGhost', children: '削除' } }
+
 export const Small: Story = { args: { size: 'small' } }
 
 export const Disabled: Story = { args: { disabled: true } }
@@ -30,6 +32,16 @@ export const Icon: StoryObj<typeof IconButton> = {
 export const Remove: StoryObj<typeof RemoveButton> = {
   render: (args) => <RemoveButton {...args} />,
   args: { label: '削除', size: 'small', onClick: fn() },
+}
+
+export const RemoveMedium: typeof Remove = {
+  ...Remove,
+  args: { ...Remove.args, size: 'medium' },
+}
+
+export const RemoveDisabled: typeof Remove = {
+  ...Remove,
+  args: { ...Remove.args, disabled: true },
 }
 
 // 操作後のフォーカスやホバーが見た目に残るので、見た目のストーリーとは分ける
