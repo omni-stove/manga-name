@@ -28,11 +28,13 @@ import {
   reshapePanelPatch,
   resizePanelPatch,
   resizeRect,
+  type SnapReach,
   type SplitAxis,
   snapCut,
   splitPanelPatch,
 } from './panel-ops'
 import type { Selection, Tool } from './types'
+import { snapReachOf } from './use-move'
 import { CLICK_SLOP } from './use-selection'
 import { capture } from './use-viewport'
 import { type ClientBox, clientToPage, type View } from './view'
@@ -114,7 +116,8 @@ function boxOf(el: Element): ClientBox {
 
 /**
  * `panel` ツールの操作。何も無いところやコマの上のドラッグで矩形のコマを作り、作ったコマを選ぶ。
- * 選択中のコマはハンドルのドラッグでリサイズし（位置をロックしたコマはリサイズも頂点の移動もさせない）、`toggleMerge` の後か Shift を押しながら別のコマを押すと
+ * 選択中のコマはハンドルのドラッグでリサイズし（位置をロックしたコマはリサイズも頂点の移動もさせない。
+ * 引いた辺は useMove の移動と同じく吸い付け、引き始めた後に Alt を押している間は吸い付けない）、`toggleMerge` の後か Shift を押しながら別のコマを押すと
  * そのコマと結合する。
  * 多角形のコマは頂点のドラッグで頂点を動かし、矩形のコマも Alt を押しながら隅を引けば頂点を動かす。
  * 縦横の分割は `split` で行う。`startCut` の後か Alt を押しながらのドラッグで線を引くと、
@@ -147,12 +150,21 @@ export function usePanelTool(opts: Options) {
     locked
       ? constrainCut(opts.page, g.panelId, { from: g.from, to }, opts.width, opts.height)
       : snapCut({ from: g.from, to }, opts.width, opts.height)
-  /** リサイズか頂点の移動で点 p まで引いたときのコマの輪郭 */
-  const reshaped = (g: Extract<Gesture, { kind: 'resize' | 'vertex' }>, p: Pos): Point[] => {
+  /** リサイズか頂点の移動で点 p まで引いたときのコマの輪郭。リサイズの辺は reach があれば吸い付ける */
+  const reshaped = (
+    g: Extract<Gesture, { kind: 'resize' | 'vertex' }>,
+    p: Pos,
+    reach: SnapReach | null,
+  ): Point[] => {
     if (g.kind === 'vertex') return moveVertex(opts.page, g.panelId, g.index, p)
     const shape = opts.page.panels.find((q) => q.id === g.panelId)?.shape
-    return panelOutline({ rect: resizeRect(opts.page, g.panelId, g.start, g.handle, p), shape })
+    return panelOutline({
+      rect: resizeRect(opts.page, g.panelId, g.start, g.handle, p, reach),
+      shape,
+    })
   }
+  const reachOf = (e: ReactPointerEvent<SVGSVGElement>) =>
+    snapReachOf(opts.view, e, opts.width, opts.height)
   const end = () => {
     gesture.current = null
     setDraft(null)
@@ -240,7 +252,7 @@ export function usePanelTool(opts: Options) {
       if (g.kind === 'resize' || g.kind === 'vertex') {
         const at = pointAt(e)
         if (at === null) return
-        setDraft({ kind: 'outline', outline: reshaped(g, at.n), panelId: g.panelId })
+        setDraft({ kind: 'outline', outline: reshaped(g, at.n, reachOf(e)), panelId: g.panelId })
         return
       }
       const moved = Math.hypot(e.clientX - g.client.x, e.clientY - g.client.y)
@@ -305,9 +317,9 @@ export function usePanelTool(opts: Options) {
           ? resizePanelPatch(
               opts.page,
               g.panelId,
-              resizeRect(opts.page, g.panelId, g.start, g.handle, at.n),
+              resizeRect(opts.page, g.panelId, g.start, g.handle, at.n, reachOf(e)),
             )
-          : reshapePanelPatch(opts.page, g.panelId, reshaped(g, at.n))
+          : reshapePanelPatch(opts.page, g.panelId, reshaped(g, at.n, null))
       commit(patch)
     },
     onPointerCancel(e: ReactPointerEvent<SVGSVGElement>) {
