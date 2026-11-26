@@ -87,6 +87,9 @@ export function ContextMenu({ label, x, y, items, onClose }: ContextMenuProps) {
     enabled[(at + step + enabled.length) % enabled.length]?.focus()
   }
 
+  // 印の欄を持つ項目が一つでもあれば、ほかの項目にも同じ幅の空欄を置き、ラベルの左端をそろえる
+  const hasCheck = items.some((item) => item !== 'separator' && item.checked !== undefined)
+
   return (
     <div
       ref={ref}
@@ -117,7 +120,7 @@ export function ContextMenu({ label, x, y, items, onClose }: ContextMenuProps) {
             }}
           >
             <span>
-              {item.checked !== undefined && (
+              {hasCheck && (
                 <span aria-hidden className={styles.check}>
                   {item.checked ? '✓' : ''}
                 </span>
