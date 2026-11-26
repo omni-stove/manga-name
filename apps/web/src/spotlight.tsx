@@ -23,7 +23,7 @@ export interface Box {
 }
 
 /** 吹き出しが `target` のどちら側にあるか。矢印はその逆の辺から `target` へ向ける */
-export type Side = 'below' | 'above' | 'right' | 'left'
+type Side = 'below' | 'above' | 'right' | 'left'
 
 export interface TipPlacement {
   left: number
