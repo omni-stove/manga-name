@@ -17,6 +17,11 @@
   background: var(--surface-raised);
 }
 
+/* 脚本が空のときは書き起こしの 2 つが押せないので、押せる「ネームを自分で書く」を先頭に出す */
+.lead {
+  order: -1;
+}
+
 .thumbnail {
   flex: none;
   width: 5rem;
