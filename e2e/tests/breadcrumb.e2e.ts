@@ -42,11 +42,7 @@ test('プロジェクト配下の画面に作品名から今の画面までの�
   await page.getByRole('link', { name: m.character(), exact: true }).click()
   await expectTrail(page, [FIXTURE_PROJECT_TITLE, m.web_characters_title()])
   await page.getByRole('button', { name: m.web_characters_add() }).click()
-  await expectTrail(page, [
-    FIXTURE_PROJECT_TITLE,
-    m.web_characters_title(),
-    m.web_characters_add(),
-  ])
+  await expectTrail(page, [FIXTURE_PROJECT_TITLE, m.web_characters_title(), m.web_characters_add()])
   await breadcrumb(page).getByRole('link', { name: m.web_characters_title() }).click()
   await expectTrail(page, [FIXTURE_PROJECT_TITLE, m.web_characters_title()])
   await expect(page.getByRole('button', { name: m.web_characters_add() })).toBeVisible()
