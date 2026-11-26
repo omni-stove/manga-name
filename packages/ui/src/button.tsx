@@ -2,10 +2,13 @@ import type { ButtonHTMLAttributes } from 'react'
 import styles from './button.module.css'
 import { cx } from './cx'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dangerGhost'
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /** 既定は secondary。primary は画面に 1 つの主操作、danger は削除など戻せない操作 */
+  /**
+   * 既定は secondary。primary は画面に 1 つの主操作、danger は削除など戻せない操作の実行、
+   * dangerGhost は一覧に並ぶ削除の入口のように、戻せない操作へ進むが目立たせたくないもの
+   */
   variant?: Variant
   size?: 'medium' | 'small'
 }
@@ -50,10 +53,13 @@ export function IconButton({ label, variant = 'ghost', className, ...rest }: Ico
   )
 }
 
-/** 削除用のゴミ箱アイコンのボタン。戻せない操作なので danger で出す */
+/**
+ * 削除用のゴミ箱アイコンのボタン。塗りのない赤いアイコンで出す。
+ * 押した先の確認ダイアログの実行ボタンは danger で出すこと
+ */
 export function RemoveButton(props: Omit<IconButtonProps, 'variant' | 'children'>) {
   return (
-    <IconButton variant="danger" {...props}>
+    <IconButton variant="dangerGhost" {...props}>
       <svg
         viewBox="0 0 24 24"
         fill="none"
