@@ -3289,9 +3289,7 @@ if (import.meta.vitest) {
       layout(svg)
       // 右端 0.9 は内枠の右端 0.912 まで 2.2mm（4.4px）
       drag(svg, clientAt(0.75, 0.4), clientAt(0.65, 0.4))
-      expect(patchOf(onChange)).toEqual([
-        { op: 'replace', path: '/panels/1/rect/x', value: 0.412 },
-      ])
+      expect(patchOf(onChange)).toEqual([{ op: 'replace', path: '/panels/1/rect/x', value: 0.412 }])
 
       onChange.mockClear()
       fire(svg, pointer('pointerdown', { id: 1, ...clientAt(0.75, 0.4), altKey: true }))
