@@ -40,6 +40,9 @@ export async function importProject(page: Page, file: string): Promise<void> {
   await openEpisode(page, FIXTURE_EPISODE)
 }
 
+/** FIXTURE_PROJECT の作品名 */
+export const FIXTURE_PROJECT_TITLE = 'sample'
+
 /** FIXTURE_PROJECT の 1 話目の題 */
 export const FIXTURE_EPISODE = 'sample episode'
 

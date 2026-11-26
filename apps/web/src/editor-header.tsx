@@ -11,7 +11,7 @@ import {
   Typography,
   XStack,
 } from '@manga/ui'
-import { BackLink } from './back-link'
+import { Breadcrumb, projectTrail } from './breadcrumb'
 import { CollaborationBar } from './collaboration-view'
 import { Area, type EditorArea } from './editor-area'
 import styles from './editor-header.module.css'
@@ -64,7 +64,7 @@ export interface EditorHeaderProps {
 }
 
 /**
- * 編集画面の上に並べるヘッダー。作品名、エピソードへ戻るリンクとページ送り、共同編集者、Undo と Redo、ツール、レイヤー、
+ * 編集画面の上に並べるヘッダー。作品名 › 話の題 › ページのパンくずとページ送り、共同編集者、Undo と Redo、ツール、レイヤー、
  * 保存状態、書き出し。`can` で止めた領域は見た目そのままで押せなくする
  */
 export function EditorHeader({
@@ -94,16 +94,8 @@ export function EditorHeader({
 }: EditorHeaderProps) {
   return (
     <XStack as="header" gap={20} rowGap={12} wrap className={styles.toolbar}>
-      <Typography as="span" variant="label" tone="muted">
-        {project.title || m.untitled()}
-      </Typography>
       <Area open={can('navigation')}>
-        <BackLink
-          to="/p/$projectId/episodes/$episodeId"
-          params={{ projectId, episodeId: episode.id }}
-        >
-          {episode.title}
-        </BackLink>
+        <Breadcrumb items={projectTrail(project, projectId, { kind: 'page', pageId })} />
         <XStack as="span" gap={2} role="group" aria-label={m.web_editor_page_navigation()}>
           <IconButton
             size="small"

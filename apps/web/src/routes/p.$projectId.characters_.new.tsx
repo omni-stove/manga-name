@@ -2,7 +2,6 @@ import { m } from '@manga/i18n'
 import { Button, FileDrop, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, getRouteApi, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import { BackLink } from '../back-link'
 import { REFERENCE_ACCEPT } from '../file-picker'
 import { addCharacterPatch, type CharacterFields } from '../project-ops'
 import { toCharacterImage } from '../reference-image'
@@ -85,14 +84,9 @@ function NewCharacter() {
 
   return (
     <YStack gap={12}>
-      <YStack as="header" gap={4} align="start">
-        <BackLink to="/p/$projectId/characters" params={{ projectId }}>
-          {m.web_characters_title()}
-        </BackLink>
-        <Typography as="h1" variant="heading">
-          {m.web_characters_add()}
-        </Typography>
-      </YStack>
+      <Typography as="h1" variant="heading">
+        {m.web_characters_add()}
+      </Typography>
       <form
         className={styles.add}
         data-guide="character-form"

@@ -1,8 +1,14 @@
 import { m } from '@manga/i18n'
 import { Typography, XStack, YStack } from '@manga/ui'
-import { createFileRoute, Link, notFound, Outlet, useParams } from '@tanstack/react-router'
-import { useState } from 'react'
-import { BackLinkSlot } from '../back-link'
+import {
+  createFileRoute,
+  Link,
+  notFound,
+  Outlet,
+  useMatches,
+  useParams,
+} from '@tanstack/react-router'
+import { Breadcrumb, type ProjectScreen, projectTrail } from '../breadcrumb'
 import { CollaborationBar } from '../collaboration-view'
 import { SaveStatusIndicator } from '../save-status'
 import { useProject } from '../use-project'
@@ -18,24 +24,45 @@ export const Route = createFileRoute('/p/$projectId')({
   notFoundComponent: ProjectNotFound,
 })
 
+/** プロジェクト配下の画面を、ツールバーのパンくず・共同編集者・保存状態と一緒に出す */
 function ProjectLayout() {
+  const { projectId } = Route.useParams()
   const { store, collab } = Route.useLoaderData()
   const project = useProject(store)
-  const [backLinkSlot, setBackLinkSlot] = useState<HTMLElement | null>(null)
+  const screen = useProjectScreen()
   return (
     <section>
       <XStack wrap gap={24} rowGap={8} className={styles.toolbar}>
-        <span ref={setBackLinkSlot} className={styles.backLink} />
+        <Breadcrumb items={projectTrail(project, projectId, screen)} />
         <CollaborationBar collab={collab} project={project} />
         <XStack as="span" gap={6} className={styles.actions}>
           <SaveStatusIndicator store={store} />
         </XStack>
       </XStack>
-      <BackLinkSlot value={backLinkSlot}>
-        <Outlet />
-      </BackLinkSlot>
+      <Outlet />
     </section>
   )
+}
+
+/**
+ * 開いている子の画面。各画面がパンくずを自分で描くと、ツールバーへ portal するまで初回の描画に出ないので、
+ * 子のルートから親が決める
+ */
+function useProjectScreen(): ProjectScreen {
+  const routeId = useMatches({ select: (matches) => matches.at(-1)?.routeId })
+  const { episodeId } = useParams({ strict: false })
+  switch (routeId) {
+    case '/p/$projectId/episodes/$episodeId':
+      return { kind: 'episode', episodeId: episodeId ?? '' }
+    case '/p/$projectId/episodes/$episodeId_/draft':
+      return { kind: 'draft', episodeId: episodeId ?? '' }
+    case '/p/$projectId/characters':
+      return { kind: 'characters' }
+    case '/p/$projectId/characters_/new':
+      return { kind: 'newCharacter' }
+    default:
+      return { kind: 'episodes' }
+  }
 }
 
 function ProjectNotFound() {

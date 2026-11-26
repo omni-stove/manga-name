@@ -1,0 +1,33 @@
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-s);
+  color: var(--text-muted);
+}
+
+.item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.current {
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
