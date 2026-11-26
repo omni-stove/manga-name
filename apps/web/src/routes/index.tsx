@@ -132,7 +132,19 @@ function CloudOnlyCards({
   ))
 }
 
+/** 手元にもクラウドにも 1 件も無いときだけ、案内と空で作る入口を出す */
 function NoProjects({ cloudOnly }: { cloudOnly: Promise<ProjectSummary[]> }) {
+  const navigate = useNavigate()
   if (use(cloudOnly).length > 0) return null
-  return <Typography tone="muted">{m.web_projects_empty()}</Typography>
+  return (
+    <YStack gap={12} align="start">
+      <Typography tone="muted">{m.web_projects_empty_lead()}</Typography>
+      <XStack wrap gap={8}>
+        <Button variant="primary" onClick={() => void navigate({ to: '/onboarding' })}>
+          {m.web_projects_start_tour()}
+        </Button>
+        <Button onClick={() => void navigate({ to: '/new' })}>{m.web_projects_start_blank()}</Button>
+      </XStack>
+    </YStack>
+  )
 }
