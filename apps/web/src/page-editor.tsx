@@ -543,8 +543,18 @@ export function PageEditor({
     if (applied) toasts.push(m.web_editor_sketch_converted(converted))
   }
   const undoItems: ContextMenuItem[] = [
-    { label: 'Undo', shortcut: `${MOD}Z`, disabled: !canUndo, onSelect: () => store.undo() },
-    { label: 'Redo', shortcut: `${MOD}Shift+Z`, disabled: !canRedo, onSelect: () => store.redo() },
+    {
+      label: m.web_history_undo(),
+      shortcut: `${MOD}Z`,
+      disabled: !canUndo,
+      onSelect: () => store.undo(),
+    },
+    {
+      label: m.web_history_redo(),
+      shortcut: `${MOD}Shift+Z`,
+      disabled: !canRedo,
+      onSelect: () => store.redo(),
+    },
   ]
   const clipboardFailed = (e: unknown) =>
     toasts.push(m.web_editor_clipboard_failed({ reason: errorMessage(e) }))
