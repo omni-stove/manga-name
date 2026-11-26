@@ -1,7 +1,7 @@
 import { m } from '@manga/i18n'
 import { Button, IconButton, Typography, XStack, YStack } from '@manga/ui'
 import { Link, type LinkProps, useMatch } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useOpenedProject } from './settings-dialog'
 import styles from './side-nav.module.css'
 import type { WebProjectStore } from './store/project-store-types'
@@ -131,11 +131,42 @@ function NavItem({
   /** オンボーディングの案内が吹き出しを向けるときの目印 */
   guide?: string
 }) {
+  const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const [anchor, setAnchor] = useState<DOMRect>()
+  const place = (target: HTMLElement) => setAnchor(target.getBoundingClientRect())
   return (
     <li>
-      <Link {...link} className={styles.item} title={label} data-guide={guide}>
+      <Link
+        {...link}
+        className={styles.item}
+        data-guide={guide}
+        onMouseEnter={(e) => {
+          place(e.currentTarget)
+          setHovered(true)
+        }}
+        onMouseLeave={() => setHovered(false)}
+        onFocus={(e) => {
+          // クリックでもフォーカスは移るので、キーボードで移ったときだけ出す。でないとマウスを離しても名前が残る
+          if (!e.currentTarget.matches(':focus-visible')) return
+          place(e.currentTarget)
+          setFocused(true)
+        }}
+        onBlur={() => setFocused(false)}
+      >
         {icon}
         <span className={styles.label}>{label}</span>
+        {(hovered || focused) && anchor && (
+          // 名前は .label で読み上げられるので、吹き出しは読み上げから外す。
+          // ナビは縦にスクロールする箱で横にはみ出す分が切れるため、fixed で箱の外に出す
+          <span
+            aria-hidden
+            className={styles.tip}
+            style={{ top: anchor.top + anchor.height / 2, left: anchor.right }}
+          >
+            {label}
+          </span>
+        )}
       </Link>
     </li>
   )
