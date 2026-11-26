@@ -121,6 +121,7 @@ export function PageThumbnail({
   return (
     <svg
       className={styles.thumbnail}
+      style={{ aspectRatio: `${w} / ${h}` }}
       viewBox={`0 0 ${w} ${h}`}
       role="img"
       aria-label={m.web_thumbnail_layout()}
