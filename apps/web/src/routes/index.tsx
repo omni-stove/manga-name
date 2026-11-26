@@ -143,7 +143,9 @@ function NoProjects({ cloudOnly }: { cloudOnly: Promise<ProjectSummary[]> }) {
         <Button variant="primary" onClick={() => void navigate({ to: '/onboarding' })}>
           {m.web_projects_start_tour()}
         </Button>
-        <Button onClick={() => void navigate({ to: '/new' })}>{m.web_projects_start_blank()}</Button>
+        <Button onClick={() => void navigate({ to: '/new' })}>
+          {m.web_projects_start_blank()}
+        </Button>
       </XStack>
     </YStack>
   )
