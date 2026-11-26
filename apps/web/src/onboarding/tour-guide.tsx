@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { useStore } from 'zustand'
-import type { EditorArea } from '../page-editor'
+import type { EditorArea } from '../editor-area'
 import { useOpenedProject } from '../settings-dialog'
 import { Spotlight } from '../spotlight'
 import type { WebProjectStore } from '../store/project-store-types'

@@ -1,0 +1,4 @@
+/* Area で止めた領域。囲む枠を描かず、中身を止める前と同じ並びに置く */
+.locked {
+  display: contents;
+}
