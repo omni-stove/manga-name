@@ -321,12 +321,14 @@ function PlanList({
           <YStack gap={8}>
             <TextArea
               label={m.web_draft_flow()}
+              hint={m.web_draft_flow_hint()}
               rows={3}
               value={p.note}
               onChange={(e) => editPlan(index, () => ({ note: e.target.value }))}
             />
             <TextArea
               label={m.web_draft_page_script()}
+              hint={m.web_draft_page_script_hint()}
               rows={4}
               value={p.script}
               onChange={(e) => editPlan(index, () => ({ script: e.target.value }))}
