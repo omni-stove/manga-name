@@ -153,7 +153,7 @@ export function EditorHeader({
         <HistoryButtons store={store} />
       </Area>
       <Area open={can('tools')}>
-        <XStack as="span" gap={20} rowGap={12} wrap data-area="tools">
+        <XStack as="span" gap={20} rowGap={12} wrap className={styles.strip} data-area="tools">
           <SegmentedControl
             label={m.web_editor_tools()}
             value={tool.value}
@@ -200,7 +200,12 @@ export function EditorHeader({
         </XStack>
       </Area>
       <Area open={can('layers')}>
-        <XStack role="group" aria-label={m.web_editor_layers()} data-area="layers">
+        <XStack
+          role="group"
+          aria-label={m.web_editor_layers()}
+          className={styles.strip}
+          data-area="layers"
+        >
           <Typography as="span" variant="label" tone="muted" aria-hidden>
             {m.web_editor_layers()}
           </Typography>

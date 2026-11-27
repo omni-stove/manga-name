@@ -58,7 +58,7 @@ import {
   YStack,
 } from '@manga/ui'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { useEffect, useEffectEvent, useState } from 'react'
+import { type CSSProperties, useEffect, useEffectEvent, useState } from 'react'
 import { useStore } from 'zustand'
 import { BatchOptions, useBatchGeneration } from './batch-generation'
 import {
@@ -299,6 +299,14 @@ function issueTarget(page: Page, issue: Issue): Selection {
     return { kind: 'panel', id: issue.panelId }
   }
   return null
+}
+
+/**
+ * キャンバスの枠に渡す、ページ（見開きなら 2 ページ分）の縦横比。
+ * 狭い画面ではキャンバスの高さを画面から決められないので、この比で幅から高さを決める
+ */
+function pageAspectStyle(size: { w: number; h: number }): CSSProperties {
+  return { '--page-aspect': `${size.w} / ${size.h}` } as CSSProperties
 }
 
 /**
@@ -797,6 +805,7 @@ export function PageEditor({
           role="application"
           aria-label={m.web_editor_canvas()}
           data-area="canvas"
+          style={pageAspectStyle(pageSizeOf(page, project.settings.pageSize))}
           inert={!can('canvas')}
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes('Files')) e.preventDefault()
@@ -1297,4 +1306,18 @@ export function PageNotFound() {
       )}
     </YStack>
   )
+}
+
+if (import.meta.vitest) {
+  const { expect, test } = import.meta.vitest
+
+  test('pageAspectStyle passes the page ratio, doubled in width for a spread', () => {
+    const size = { w: 182, h: 257 }
+    expect(pageAspectStyle(pageSizeOf({}, size))).toEqual({
+      '--page-aspect': '182 / 257',
+    })
+    expect(pageAspectStyle(pageSizeOf({ spread: true }, size))).toEqual({
+      '--page-aspect': '364 / 257',
+    })
+  })
 }

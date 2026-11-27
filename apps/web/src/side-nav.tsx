@@ -10,7 +10,7 @@ import { useProject } from './use-project'
 import { useStoredFlag } from './use-stored-flag'
 
 /**
- * 画面の左に縦に並べるナビゲーション。プロジェクト一覧、開いているプロジェクトのエピソード・キャラクター・設定、
+ * 画面の左に縦に並べるナビゲーション。幅 767px 以下では画面の下にアイコンだけを横に並べたバーになる。プロジェクト一覧、開いているプロジェクトのエピソード・キャラクター・設定、
  * アプリ設定とアカウントを並べる。設定は画面を移らず、今の画面の上にダイアログで開く。既定はアイコンだけの細い帯に畳んでおき、上端のボタンで名前付きの幅に開く。
  * 開閉はブラウザに覚えておき、次に開いたときも同じ幅にする
  */
@@ -28,7 +28,7 @@ export function SideNav() {
       className={styles.nav}
       data-collapsed={collapsed || undefined}
     >
-      <XStack justify={collapsed ? 'center' : 'between'}>
+      <XStack justify={collapsed ? 'center' : 'between'} className={styles.head}>
         {!collapsed && (
           <Link to="/" className={styles.brand}>
             manga

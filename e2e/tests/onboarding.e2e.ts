@@ -106,3 +106,27 @@ test('「はじめに」は作る順に 1 手順ずつ案内し、終えた手�
   // 案内で作ったプロジェクトは自分のプロジェクトとして一覧に残る
   await expect(page.getByText('はじめての作品')).toBeVisible()
 })
+
+test('「はじめに」は吹き出しのボタンか Esc で途中で終えられ、作ったプロジェクトを残し、次は最初から案内する', async ({
+  page,
+}) => {
+  await page.goto('/onboarding')
+  await expectStep(page, 1, m.web_tour_project())
+  await page.keyboard.press('Escape')
+  await expect(tip(page)).toHaveCount(0)
+
+  await page.goto('/onboarding')
+  await expectStep(page, 1, m.web_tour_project())
+  await page.getByLabel(m.project_title()).fill('途中でやめる作品')
+  await page.getByRole('button', { name: m.web_new_project_create(), exact: true }).click()
+  await expectStep(page, 2, m.web_tour_character_open())
+  await tip(page).getByRole('button', { name: m.web_tour_skip() }).click()
+  await expect(tip(page)).toHaveCount(0)
+  // ぼかしが消え、案内が指していなかったリンクも押せる
+  await page.getByRole('link', { name: m.web_project_list() }).click()
+  await expect(page.getByText('途中でやめる作品')).toBeVisible()
+
+  await page.getByRole('link', { name: m.web_nav_onboarding() }).click()
+  await expect(page).toHaveURL(/\/new$/)
+  await expectStep(page, 1, m.web_tour_project())
+})
