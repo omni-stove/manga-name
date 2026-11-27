@@ -2,7 +2,7 @@ import { m } from '@manga/i18n'
 import { Button, FileDrop, Input, Typography, XStack, YStack } from '@manga/ui'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { BackLink } from '../back-link'
+import { Breadcrumb } from '../breadcrumb'
 import { tour } from '../onboarding/tour'
 import { parseProjectFile } from '../project-file'
 import { errorMessage } from '../route-error'
@@ -38,7 +38,12 @@ function NewProject() {
   return (
     <YStack as="section" gap={16}>
       <YStack as="header" gap={4} align="start">
-        <BackLink to="/">{m.web_project_list()}</BackLink>
+        <Breadcrumb
+          items={[
+            { label: m.web_project_list(), link: { to: '/' } },
+            { label: m.web_new_project_title() },
+          ]}
+        />
         <Typography variant="title">{m.web_new_project_title()}</Typography>
       </YStack>
       <form

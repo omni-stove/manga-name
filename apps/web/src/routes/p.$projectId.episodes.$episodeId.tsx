@@ -1,11 +1,5 @@
 import { m } from '@manga/i18n'
-import {
-  type Episode,
-  type PageSlot,
-  type Project,
-  pageCharacterIds,
-  pageSlots,
-} from '@manga/schema'
+import { type Episode, type Project, pageCharacterIds, pageSlots } from '@manga/schema'
 import {
   Button,
   Checkbox,
@@ -20,7 +14,7 @@ import {
 } from '@manga/ui'
 import { createFileRoute, getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { BackLink } from '../back-link'
+import { slotLabel } from '../breadcrumb'
 import { PeerBadge, usePeers } from '../collaboration-view'
 import collabStyles from '../collaboration-view.module.css'
 import common from '../common.module.css'
@@ -78,17 +72,12 @@ function EpisodePages() {
 
   return (
     <YStack gap={8}>
-      <YStack as="header" gap={4}>
-        <BackLink to="/p/$projectId" params={{ projectId }}>
-          {m.web_episode_list()}
-        </BackLink>
-        <XStack gap={4}>
-          <Typography variant="heading">{episode.title}</Typography>
-          <IconButton label={m.web_episode_settings()} onClick={() => setEditingSettings(true)}>
-            <GearIcon />
-          </IconButton>
-        </XStack>
-      </YStack>
+      <XStack as="header" gap={4}>
+        <Typography variant="heading">{episode.title}</Typography>
+        <IconButton label={m.web_episode_settings()} onClick={() => setEditingSettings(true)}>
+          <GearIcon />
+        </IconButton>
+      </XStack>
       {editingSettings && (
         <EpisodeSettingsDialog
           project={project}
@@ -328,13 +317,6 @@ function EpisodeSettingsDialog({
       </YStack>
     </Dialog>
   )
-}
-
-/** カードに出すノンブル。見開きは 2 つのノンブルを並べる */
-function slotLabel({ number, side }: PageSlot): string {
-  return side === 'spread'
-    ? m.web_episode_spread_number({ from: number, to: number + 1 })
-    : m.web_episode_page_number({ number })
 }
 
 const SIDE_LABELS = {

@@ -131,6 +131,29 @@ if (import.meta.vitest) {
     expect(html).toContain(m.web_episode_add_page())
   })
 
+  test('プロジェクト配下の画面とエディタは、作品名から今の画面までのパンくずを初回の描画から出す', async () => {
+    const episode = project.episodes[0]
+    const nav = `aria-label="${m.web_breadcrumb()}"`
+    const current = (label: string | undefined) =>
+      new RegExp(`aria-current="page"[^>]*>${label}</span></li></ol></nav>`)
+
+    const list = await render(library, `/p/${projectId}`)
+    expect(list).toContain(nav)
+    expect(list).toMatch(current(project.title))
+
+    const draft = await render(library, `/p/${projectId}/episodes/${episodeId}/draft`)
+    expect(draft).toContain(`href="/p/${projectId}/episodes/${episodeId}"`)
+    expect(draft).toMatch(current(m.web_draft_title()))
+
+    const newCharacter = await render(library, `/p/${projectId}/characters/new`)
+    expect(newCharacter).toContain(`href="/p/${projectId}/characters"`)
+    expect(newCharacter).toMatch(current(m.web_characters_add()))
+
+    const editor = await render(library, `/p/${projectId}/pages/${pageId}`)
+    expect(editor).toContain(episode?.title)
+    expect(editor).toMatch(current(m.web_episode_page_number({ number: 1 })))
+  })
+
   test('知らないプロジェクトとエピソードとページは見つからない旨を出す', async () => {
     expect(await render(library, '/p/nope')).toContain(m.web_not_found_project())
     expect(await render(library, `/p/${projectId}/episodes/nope`)).toContain(

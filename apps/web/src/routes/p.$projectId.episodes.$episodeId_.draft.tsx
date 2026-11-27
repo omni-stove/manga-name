@@ -20,7 +20,6 @@ import {
 } from '@manga/ui'
 import { createFileRoute, getRouteApi, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import { BackLink } from '../back-link'
 import common from '../common.module.css'
 import { TemplateSelect, useTemplateChoice } from '../layout-templates'
 import { LineEditor } from '../line-editor'
@@ -74,7 +73,6 @@ function ScriptDraft() {
 
   useEffect(() => () => running.current?.abort(), [])
 
-  const episode = project.episodes.find((e) => e.id === episodeId)
   const backToEpisode = () =>
     navigate({ to: '/p/$projectId/episodes/$episodeId', params: { projectId, episodeId } })
 
@@ -136,14 +134,9 @@ function ScriptDraft() {
 
   return (
     <YStack gap={12}>
-      <YStack as="header" gap={4} align="start">
-        <BackLink to="/p/$projectId/episodes/$episodeId" params={{ projectId, episodeId }}>
-          {episode?.title ?? m.web_draft_episode_fallback()}
-        </BackLink>
-        <Typography as="h1" variant="heading">
-          {m.web_draft_title()}
-        </Typography>
-      </YStack>
+      <Typography as="h1" variant="heading">
+        {m.web_draft_title()}
+      </Typography>
       <div className={styles.layout} data-guide="draft-plan">
         <YStack
           as="form"

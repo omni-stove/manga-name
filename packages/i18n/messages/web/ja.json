@@ -384,7 +384,6 @@
   "web_character_reference_generate_failed": "参照画像を生成できませんでした",
   "web_character_reference_hint": "選ばなければ名前と外見から生成します",
   "web_character_adding": "追加中…",
-  "web_episode_list": "エピソード一覧",
   "web_episode_remove": "エピソードを削除",
   "web_episode_add_page": "ページを追加",
   "web_episode_remove_template": "テンプレートを削除",
